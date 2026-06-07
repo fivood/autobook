@@ -536,6 +536,7 @@
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
           availableFonts={[
+            LocalFont.NOTOSANSSC,
             LocalFont.NOTOSERIFJP,
             LocalFont.KZUDMINCHO,
             LocalFont.SERIF
@@ -563,14 +564,14 @@
       <input
         type="text"
         class={inputClasses}
-        placeholder="Noto Serif JP"
+        placeholder="Noto Sans SC"
         bind:value={fontFamilyGroupOne}
       />
     </SettingsItemGroup>
     <SettingsItemGroup title="字体（组 2）">
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
-          availableFonts={[LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.NOTOSANSSC, LocalFont.SANSSERIF]}
+          availableFonts={[LocalFont.NOTOSANSSC, LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF]}
           bind:fontValue={fontFamilyGroupTwo}
         />
         {#if fontCacheSupported}
@@ -593,12 +594,12 @@
       <input
         type="text"
         class={inputClasses}
-        placeholder="Noto Sans JP"
+        placeholder="Noto Sans SC"
         bind:value={fontFamilyGroupTwo}
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Font Weight"
+      title="字重"
       tooltip={'设置字重，留空使用默认'}
     >
       <input
@@ -640,7 +641,7 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Paragraph Indentation"
+      title="段落首行缩进"
       tooltip="段落首行缩进（rem）"
     >
       <input
@@ -677,7 +678,7 @@
       </SettingsItemGroup>
     {/if}
     <SettingsItemGroup
-      title={verticalMode ? 'Reader Left/right margin' : 'Reader Top/bottom margin'}
+      title={verticalMode ? '阅读区左右边距' : '阅读区上下边距'}
     >
       <SettingsDimensionPopover
         slot="header"
@@ -708,7 +709,7 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Swipe Threshold"
+      title="滑动阈值"
       tooltip={'触发翻页所需的滑动距离'}
     >
       <input
@@ -764,7 +765,7 @@
       </SettingsItemGroup>
     {/if}
     <SettingsItemGroup
-      title="Prioritize Reader Styles"
+      title="优先阅读器样式"
       tooltip={'开启后，对边距/对齐等规则添加 !important，与书内样式冲突时更易生效'}
     >
       <ButtonToggleGroup
@@ -773,7 +774,7 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Enable Text Justification"
+      title="两端对齐"
       tooltip={'开启后两端对齐段落文字'}
     >
       <ButtonToggleGroup
@@ -782,13 +783,13 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Enable Pretty Text Wrap"
+      title="美化换行"
       tooltip={'在支持的浏览器中启用 pretty 换行样式'}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTextWrapPretty} />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Paragraph Margin Mode"
+      title="段落间距模式"
       tooltip={'切到手动模式可指定段落间距值'}
     >
       <ButtonToggleGroup
@@ -798,7 +799,7 @@
     </SettingsItemGroup>
     {#if wakeLockSupported}
       <SettingsItemGroup
-        title="Enable Screen Lock"
+        title="屏幕常亮"
         tooltip={'开启后请求屏幕常亮（WakeLock），防止屏幕变暗或锁屏'}
       >
         <ButtonToggleGroup
@@ -832,13 +833,13 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Close Confirmation"
+      title="关闭确认"
       tooltip={'开启后，存在未保存改动时关闭/刷新阅读器标签前会确认'}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={confirmClose} />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Manual Bookmark"
+      title="仅手动书签"
       tooltip={'开启后，通过菜单离开阅读器时不会将当前位置加为书签'}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
@@ -851,7 +852,7 @@
     </SettingsItemGroup>
     {#if blurImage}
       <SettingsItemGroup
-        title="Blur Mode"
+        title="模糊范围"
         tooltip="选择模糊所有图片，还是仅模糊目录之后的图片"
       >
         <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
@@ -916,7 +917,7 @@
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={avoidPageBreak} />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="Selection to Bookmark"
+        title="选中即书签"
         tooltip={'开启后，书签会落在当前/上次选中文本附近段落，而不是页首'}
       >
         <ButtonToggleGroup
@@ -925,7 +926,7 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="Tap to Flip"
+        title="点击翻页"
         tooltip="在两侧保留小边缘区域，点击可翻页"
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTapEdgeToFlip} />
