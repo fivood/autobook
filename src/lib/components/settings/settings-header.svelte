@@ -11,14 +11,17 @@
   const settingItems = [
     {
       label: 'Reader',
+      displayLabel: '阅读器',
       icon: faBookOpenReader
     },
     {
       label: 'Data',
+      displayLabel: '数据',
       icon: faDatabase
     },
     {
       label: 'Statistics',
+      displayLabel: '统计',
       icon: faClock
     }
   ];
@@ -35,7 +38,7 @@
           on:click={() => (activeSettings = settingItem.label)}
         >
           <Fa class="mb-1" icon={settingItem.icon} />
-          {settingItem.label}
+          {settingItem.displayLabel}
           <Ripple />
         </button>
       {/each}

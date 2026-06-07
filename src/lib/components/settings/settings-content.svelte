@@ -215,74 +215,74 @@
   const optionsForFuriganaStyle: ToggleOption<FuriganaStyle>[] = [
     {
       id: FuriganaStyle.Hide,
-      text: 'Hide'
+      text: '隐藏'
     },
     {
       id: FuriganaStyle.Partial,
-      text: 'Partial'
+      text: '部分'
     },
     {
       id: FuriganaStyle.Toggle,
-      text: 'Toggle'
+      text: '点击切换'
     },
     {
       id: FuriganaStyle.Full,
-      text: 'Full'
+      text: '完整'
     }
   ];
 
   const optionsForWritingMode: ToggleOption<WritingMode>[] = [
     {
       id: 'horizontal-tb',
-      text: 'Horizontal'
+      text: '横排'
     },
     {
       id: 'vertical-rl',
-      text: 'Vertical'
+      text: '竖排'
     }
   ];
 
   const optionsForVerticalTextOrientation: ToggleOption<VerticalTextOrientation>[] = [
     {
       id: 'mixed',
-      text: 'Mixed'
+      text: '混合'
     },
     {
       id: 'upright',
-      text: 'Upright'
+      text: '正立'
     }
   ];
 
   const optionsForTextMarginMode: ToggleOption<TextMarginMode>[] = [
     {
       id: 'auto',
-      text: 'Auto'
+      text: '自动'
     },
     {
       id: 'manual',
-      text: 'Manual'
+      text: '手动'
     }
   ];
 
   const optionsForViewMode: ToggleOption<ViewMode>[] = [
     {
       id: ViewMode.Continuous,
-      text: 'Continuous'
+      text: '滚动'
     },
     {
       id: ViewMode.Paginated,
-      text: 'Paginated'
+      text: '分页'
     }
   ];
 
   const optionsForBlurMode: ToggleOption<BlurMode>[] = [
     {
       id: BlurMode.ALL,
-      text: 'All'
+      text: '全部'
     },
     {
       id: BlurMode.AFTER_TOC,
-      text: 'After ToC'
+      text: '目录之后'
     }
   ];
 
@@ -293,11 +293,11 @@
     },
     {
       id: ImportHTMLFixMode.STANDARD,
-      text: 'Standard'
+      text: '标准'
     },
     {
       id: ImportHTMLFixMode.EXTENDED,
-      text: 'Extended'
+      text: '扩展'
     }
   ];
 
@@ -308,26 +308,26 @@
     },
     {
       id: AutoReplicationType.Up,
-      text: 'Up'
+      text: '上传'
     },
     {
       id: AutoReplicationType.Down,
-      text: 'Down'
+      text: '下载'
     },
     {
       id: AutoReplicationType.All,
-      text: 'All'
+      text: '双向'
     }
   ];
 
   const optionsForReplicationSaveBehavior: ToggleOption<ReplicationSaveBehavior>[] = [
     {
       id: ReplicationSaveBehavior.NewOnly,
-      text: 'New Only'
+      text: '仅新增'
     },
     {
       id: ReplicationSaveBehavior.Overwrite,
-      text: 'Overwrite'
+      text: '覆盖'
     }
   ];
 
@@ -338,33 +338,33 @@
     },
     {
       id: TrackerAutoPause.MODERATE,
-      text: 'Moderate'
+      text: '适度'
     },
     {
       id: TrackerAutoPause.STRICT,
-      text: 'Strict'
+      text: '严格'
     }
   ];
 
   const optionsForTrackerSkipThresholdAction: ToggleOption<TrackerSkipThresholdAction>[] = [
     {
       id: TrackerSkipThresholdAction.IGNORE,
-      text: 'Ignore'
+      text: '忽略'
     },
     {
       id: TrackerSkipThresholdAction.PAUSE,
-      text: 'Pause Tracker'
+      text: '暂停统计'
     }
   ];
 
   const optionsForMergeMode: ToggleOption<MergeMode>[] = [
     {
       id: MergeMode.MERGE,
-      text: 'Merge'
+      text: '合并'
     },
     {
       id: MergeMode.REPLACE,
-      text: 'Replace'
+      text: '覆盖'
     }
   ];
 
@@ -398,70 +398,67 @@
 
   $: verticalTextOrientationTooltip =
     verticalTextOrientation === 'mixed'
-      ? 'Rotates the characters of horizontal scripts 90° clockwise'
-      : 'Lays out the characters of horizontal scripts naturally (upright), as well as the glyphs for vertical scripts.';
-  $: autoBookmarkTooltip = `If enabled sets a bookmark after ${autoBookmarkTime} seconds without scrolling/page change`;
+      ? '横向文字字符顺时针旋转 90°'
+      : '横向文字字符正立排版，竖向字符也正立显示。';
+  $: autoBookmarkTooltip = `开启后，超过 ${autoBookmarkTime} 秒未滚动/翻页将自动加书签`;
   $: wakeLockSupported = browser && 'wakeLock' in navigator;
   $: verticalMode = writingMode === 'vertical-rl';
   $: fontCacheSupported = browser && 'caches' in window;
   $: switch (furiganaStyle) {
     case FuriganaStyle.Hide:
-      furiganaStyleTooltip = 'Always hidden';
+      furiganaStyleTooltip = '始终隐藏';
       break;
     case FuriganaStyle.Toggle:
-      furiganaStyleTooltip = 'Hidden by default, can be toggled on click';
+      furiganaStyleTooltip = '默认隐藏，点击可切换显示';
       break;
     case FuriganaStyle.Full:
-      furiganaStyleTooltip = 'Hidden by default, show on hover or click';
+      furiganaStyleTooltip = '默认隐藏，悬停或点击时显示';
       break;
     default:
-      furiganaStyleTooltip = 'Display furigana as grayed out text';
+      furiganaStyleTooltip = '以灰色显示振假名';
       break;
   }
   $: avoidPageBreakTooltip = avoidPageBreak
-    ? 'Avoids breaking words/sentences into different pages'
-    : 'Allow words/sentences to break into different pages';
+    ? '避免单词/句子被拆分到不同页面'
+    : '允许单词/句子在分页处被拆分';
   $: persistentStorageTooltip = persistentStorage
-    ? 'Reader uses higher storage limit for local data'
-    : 'Uses lower temporary storage for local data.\nMay require bookmark or notification permissions for enablement';
+    ? '阅读器使用更高的本地存储配额'
+    : '使用较低的临时存储配额。\n启用可能需要书签或通知权限';
   $: switch (importHTMLFixMode) {
     case ImportHTMLFixMode.OFF:
-      importHTMLFixModeTooltip = 'Imports epub files as is';
+      importHTMLFixModeTooltip = '原样导入 EPUB 文件';
       break;
     case ImportHTMLFixMode.EXTENDED:
-      importHTMLFixModeTooltip =
-        'Applies additional fixes for epub imports like removing control characters, replacing html entities etc.';
+      importHTMLFixModeTooltip = '对 EPUB 导入应用更多修正：去除控制字符、替换 HTML 实体等';
       break;
     default:
-      importHTMLFixModeTooltip =
-        'Applies fixes for epub imports like wrong self closing elements etc.';
+      importHTMLFixModeTooltip = '对 EPUB 导入做基础修正：错误的自闭合标签等';
       break;
   }
   $: cacheStorageDataTooltip = cacheStorageData
-    ? 'Storage data is cached. Saves network traffic/latency but requires to reload current/open a new tab to retrieve data changes'
-    : 'Storage data is refetched on every action. May consume more network traffic/latency but ensures current data';
+    ? '缓存存储数据。可省网络流量与延迟，但读取最新数据需刷新或新开标签'
+    : '每次操作都重新拉取数据。流量与延迟较高，但保证数据最新';
   $: replicationSaveBehaviorTooltip =
     replicationSaveBehavior === ReplicationSaveBehavior.Overwrite
-      ? 'Data will always be overwritten'
-      : 'Data will only be written if none exist on target, no time data is present or if target data is older';
+      ? '总是覆盖目标数据'
+      : '仅当目标无数据、无时间戳或目标数据更旧时才写入';
   $: switch (autoReplication) {
     case AutoReplicationType.Up:
-      autoReplicationTypeTooltip =
-        'Updated data will be exported to sync target when reading once per minute';
+      autoReplicationTypeTooltip = '阅读时每分钟将更新数据导出到同步目标';
       break;
     case AutoReplicationType.Down:
-      autoReplicationTypeTooltip = 'Data will be imported from sync target when opening a book';
+      autoReplicationTypeTooltip = '打开书时从同步目标导入数据';
       break;
     case AutoReplicationType.All:
-      autoReplicationTypeTooltip = 'Data will be synced in both directions';
+      autoReplicationTypeTooltip = '双向同步';
       break;
     default:
-      autoReplicationTypeTooltip = 'No automatic import/export of data';
+      autoReplicationTypeTooltip = '关闭自动导入/导出';
       break;
   }
   $: showExternalPlaceholderToolTip = showExternalPlaceholder
-    ? 'Placeholder data for external books is shown in the browser source manager'
-    : 'Placeholder data for external books is hidden';
+    ? '在浏览器源管理器中显示外部书籍的占位数据'
+    : '隐藏外部书籍的占位数据';
 
   $: startOfDayHours = `${`${startDayHoursForTracker}`.padStart(2, '0')}:00`;
 
@@ -469,15 +466,13 @@
 
   $: switch (trackerAutoPause) {
     case TrackerAutoPause.OFF:
-      trackerAutoPauseTooltip = 'Tracker does not auto pause except for certain reader events';
+      trackerAutoPauseTooltip = '除特定阅读事件外，统计不会自动暂停';
       break;
     case TrackerAutoPause.STRICT:
-      trackerAutoPauseTooltip =
-        'Tracker will auto pause on certain reader events and any kind of site focus loss (e. g. dictionary popup)';
+      trackerAutoPauseTooltip = '阅读事件或任何站点失焦（如词典弹窗）时统计都会自动暂停';
       break;
     default:
-      trackerAutoPauseTooltip =
-        'Tracker will auto pause on certain reader events and when the reader tab loses focus';
+      trackerAutoPauseTooltip = '阅读事件或阅读标签失焦时统计自动暂停';
       break;
   }
 
@@ -497,7 +492,7 @@
 <div class="grid grid-cols-1 items-center sm:grid-cols-2 sm:gap-6 lg:md:gap-8 lg:grid-cols-3">
   {#if activeSettings === 'Reader'}
     <div class="lg:col-span-2">
-      <SettingsItemGroup title="Theme">
+      <SettingsItemGroup title="主题">
         <ButtonToggleGroup
           options={optionsForTheme}
           bind:selectedOptionId={selectedTheme}
@@ -533,11 +528,11 @@
       </SettingsItemGroup>
     </div>
     <div class="h-full">
-      <SettingsItemGroup title="View mode">
+      <SettingsItemGroup title="阅读视图">
         <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
       </SettingsItemGroup>
     </div>
-    <SettingsItemGroup title="Font family (Group 1)">
+    <SettingsItemGroup title="字体（组 1）">
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
           availableFonts={[
@@ -572,7 +567,7 @@
         bind:value={fontFamilyGroupOne}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Font family (Group 2)">
+    <SettingsItemGroup title="字体（组 2）">
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
           availableFonts={[LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.NOTOSANSSC, LocalFont.SANSSERIF]}
@@ -604,7 +599,7 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Font Weight"
-      tooltip={'Sets a font weight - leave empty to fallback to default'}
+      tooltip={'设置字重，留空使用默认'}
     >
       <input
         type="number"
@@ -627,10 +622,10 @@
         }}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Font size">
+    <SettingsItemGroup title="字号">
       <input type="number" class={inputClasses} step="1" min="1" bind:value={fontSize} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Line Height">
+    <SettingsItemGroup title="行高">
       <input
         type="number"
         class={inputClasses}
@@ -646,7 +641,7 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Paragraph Indentation"
-      tooltip="# of rem added as text indentation of new paragraphs"
+      tooltip="段落首行缩进（rem）"
     >
       <input
         type="number"
@@ -664,7 +659,7 @@
       />
     </SettingsItemGroup>
     {#if textMarginMode === 'manual'}
-      <SettingsItemGroup title="Paragraph Margins" tooltip="# of rem added as margin to paragraphs">
+      <SettingsItemGroup title="段落间距" tooltip="段落间距（rem）">
         <input
           type="number"
           class={inputClasses}
@@ -698,7 +693,7 @@
         bind:value={firstDimensionMargin}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={verticalMode ? 'Reader Max height' : 'Reader Max width'}>
+    <SettingsItemGroup title={verticalMode ? '阅读区最大高度' : '阅读区最大宽度'}>
       <SettingsDimensionPopover
         slot="header"
         isVertical={verticalMode}
@@ -714,7 +709,7 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Swipe Threshold"
-      tooltip={'Distance which you need to swipe in order trigger a navigation'}
+      tooltip={'触发翻页所需的滑动距离'}
     >
       <input
         type="number"
@@ -730,7 +725,7 @@
       />
     </SettingsItemGroup>
     {#if autoBookmark}
-      <SettingsItemGroup title="Auto Bookmark Time" tooltip={'Time in s for Auto Bookmark'}>
+      <SettingsItemGroup title="自动书签延时" tooltip={'触发自动书签的秒数'}>
         <input
           type="number"
           step="1"
@@ -745,23 +740,23 @@
         />
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title="Writing mode">
+    <SettingsItemGroup title="排版方向">
       <ButtonToggleGroup options={optionsForWritingMode} bind:selectedOptionId={writingMode} />
     </SettingsItemGroup>
     {#if verticalMode}
       <SettingsItemGroup
         title="Enable Font Kerning"
-        tooltip={'Can lead to better visual balance for vertical spacing of text if font and browser supports it'}
+        tooltip={'在字体与浏览器支持时，竖排间距视觉更平衡'}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontKerning} />
       </SettingsItemGroup>
       <SettingsItemGroup
         title="Enable VPAL"
-        tooltip={'Can lead to more natural spacing for vertically laid-out text if font and browser supports it'}
+        tooltip={'在字体与浏览器支持时，竖排文字间距更自然'}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontVPAL} />
       </SettingsItemGroup>
-      <SettingsItemGroup title="Text Orientation" tooltip={verticalTextOrientationTooltip}>
+      <SettingsItemGroup title="文字方向" tooltip={verticalTextOrientationTooltip}>
         <ButtonToggleGroup
           options={optionsForVerticalTextOrientation}
           bind:selectedOptionId={verticalTextOrientation}
@@ -770,7 +765,7 @@
     {/if}
     <SettingsItemGroup
       title="Prioritize Reader Styles"
-      tooltip={'When enabled the "important" declaration is added to certain rules like margins or justification which makes it more likely to be applied in case of conflicting book styles'}
+      tooltip={'开启后，对边距/对齐等规则添加 !important，与书内样式冲突时更易生效'}
     >
       <ButtonToggleGroup
         options={optionsForToggle}
@@ -779,7 +774,7 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Enable Text Justification"
-      tooltip={'When enabled the reader adds styles to justify text content of paragraphs'}
+      tooltip={'开启后两端对齐段落文字'}
     >
       <ButtonToggleGroup
         options={optionsForToggle}
@@ -788,13 +783,13 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Enable Pretty Text Wrap"
-      tooltip={'When enabled the reader adds the pretty text wrap style to supported browsers'}
+      tooltip={'在支持的浏览器中启用 pretty 换行样式'}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTextWrapPretty} />
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Paragraph Margin Mode"
-      tooltip={'When set to manual it allows to specify a margin value which should be applied to paragraphs'}
+      tooltip={'切到手动模式可指定段落间距值'}
     >
       <ButtonToggleGroup
         options={optionsForTextMarginMode}
@@ -804,7 +799,7 @@
     {#if wakeLockSupported}
       <SettingsItemGroup
         title="Enable Screen Lock"
-        tooltip={'When enabled the reader site attempts to request a WakeLock that prevents device screens from dimming or locking'}
+        tooltip={'开启后请求屏幕常亮（WakeLock），防止屏幕变暗或锁屏'}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -812,25 +807,25 @@
         />
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title="Show Character Counter">
+    <SettingsItemGroup title="显示字数">
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showCharacterCounter} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Show Percentage">
+    <SettingsItemGroup title="显示百分比">
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showPercentage} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Show Footer Chapter Characters">
+    <SettingsItemGroup title="页脚显示章节字数">
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={showFooterChapterCharacterCounter}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Show Footer Chapter Percentage">
+    <SettingsItemGroup title="页脚显示章节百分比">
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={showFooterChapterPercentage}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Disable Wheel Navigation">
+    <SettingsItemGroup title="禁用滚轮翻页">
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={disableWheelNavigation}
@@ -838,35 +833,35 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Close Confirmation"
-      tooltip={`When enabled asks for confirmation on closing/reloading a reader tab and unsaved changes were detected`}
+      tooltip={'开启后，存在未保存改动时关闭/刷新阅读器标签前会确认'}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={confirmClose} />
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Manual Bookmark"
-      tooltip={'If enabled current position will not be bookmarked when leaving the reader via menu elements'}
+      tooltip={'开启后，通过菜单离开阅读器时不会将当前位置加为书签'}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Auto Bookmark" tooltip={autoBookmarkTooltip}>
+    <SettingsItemGroup title="自动书签" tooltip={autoBookmarkTooltip}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Blur image">
+    <SettingsItemGroup title="图片模糊">
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
     </SettingsItemGroup>
     {#if blurImage}
       <SettingsItemGroup
         title="Blur Mode"
-        tooltip="Determines if all or only images after the table of contents will be blurred"
+        tooltip="选择模糊所有图片，还是仅模糊目录之后的图片"
       >
         <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title="Hide furigana">
+    <SettingsItemGroup title="隐藏振假名">
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
     </SettingsItemGroup>
     {#if hideFurigana}
-      <SettingsItemGroup title="Hide furigana style" tooltip={furiganaStyleTooltip}>
+      <SettingsItemGroup title="振假名样式" tooltip={furiganaStyleTooltip}>
         <ButtonToggleGroup
           options={optionsForFuriganaStyle}
           bind:selectedOptionId={furiganaStyle}
@@ -876,7 +871,7 @@
     {#if statisticsEnabled}
       <SettingsItemGroup
         title="Custom Point pauses Tracker"
-        tooltip={'When enabled the tracker will auto pause and unpause while setting a custom reading point'}
+        tooltip={'开启后，设置自定义阅读点时统计会自动暂停/恢复'}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -887,7 +882,7 @@
     {#if viewMode === ViewMode.Continuous}
       <SettingsItemGroup
         title="Custom Reading Point"
-        tooltip={'Allows to set a persistent custom point in the reader from which the current progress and bookmark is calculated when enabled'}
+        tooltip={'开启后可在阅读器中设置固定起算点，进度和书签从该点开始计算'}
       >
         <div class="flex items-center">
           <ButtonToggleGroup
@@ -910,19 +905,19 @@
           {/if}
         </div>
       </SettingsItemGroup>
-      <SettingsItemGroup title="Auto position on resize">
+      <SettingsItemGroup title="窗口变化时自动定位">
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={autoPositionOnResize}
         />
       </SettingsItemGroup>
     {:else}
-      <SettingsItemGroup title="Avoid Page Break" tooltip={avoidPageBreakTooltip}>
+      <SettingsItemGroup title="避免分页打断" tooltip={avoidPageBreakTooltip}>
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={avoidPageBreak} />
       </SettingsItemGroup>
       <SettingsItemGroup
         title="Selection to Bookmark"
-        tooltip={'When enabled bookmarks will be placed to a near paragraph of current/previous selected text instead of page start'}
+        tooltip={'开启后，书签会落在当前/上次选中文本附近段落，而不是页首'}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -931,18 +926,18 @@
       </SettingsItemGroup>
       <SettingsItemGroup
         title="Tap to Flip"
-        tooltip="Reserves small margins on the left and right on which you can tap to turn pages"
+        tooltip="在两侧保留小边缘区域，点击可翻页"
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTapEdgeToFlip} />
       </SettingsItemGroup>
       {#if !verticalMode}
-        <SettingsItemGroup title="Page Columns" tooltip="# of text columns rendered">
+        <SettingsItemGroup title="分栏数" tooltip="渲染的文本栏数">
           <input type="number" class={inputClasses} step="1" min="0" bind:value={pageColumns} />
         </SettingsItemGroup>
       {/if}
     {/if}
   {:else if activeSettings === 'Data'}
-    <SettingsItemGroup title="Persistent storage" tooltip={persistentStorageTooltip}>
+    <SettingsItemGroup title="持久化存储" tooltip={persistentStorageTooltip}>
       <div class="flex items-center">
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={persistentStorage} />
         {#if storageQuota}
@@ -952,11 +947,11 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Hide Source Hint"
-      tooltip="Hides the user warning when opening a book from an external storage source"
+      tooltip="打开外部存储源中的书时隐藏警告提示"
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideExternalReadHint} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Epub Import Fixes" tooltip={importHTMLFixModeTooltip}>
+    <SettingsItemGroup title="EPUB 导入修正" tooltip={importHTMLFixModeTooltip}>
       <ButtonToggleGroup
         options={optionsForImportHTMLFixes}
         bind:selectedOptionId={importHTMLFixMode}
@@ -965,7 +960,7 @@
     {#if importHTMLFixMode !== ImportHTMLFixMode.OFF}
       <SettingsItemGroup
         title="Restrict to Links"
-        tooltip="Restricts epub fixes for self closing tags to links only"
+        tooltip="仅对链接标签做自闭合修正"
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -973,22 +968,22 @@
         />
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title="Cache Data" tooltip={cacheStorageDataTooltip}>
+    <SettingsItemGroup title="缓存数据" tooltip={cacheStorageDataTooltip}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={cacheStorageData} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Auto Import/Export" tooltip={autoReplicationTypeTooltip}>
+    <SettingsItemGroup title="自动导入/导出" tooltip={autoReplicationTypeTooltip}>
       <ButtonToggleGroup
         options={optionsForAutoReplicationType}
         bind:selectedOptionId={autoReplication}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Import/Export Behavior" tooltip={replicationSaveBehaviorTooltip}>
+    <SettingsItemGroup title="导入/导出策略" tooltip={replicationSaveBehaviorTooltip}>
       <ButtonToggleGroup
         options={optionsForReplicationSaveBehavior}
         bind:selectedOptionId={replicationSaveBehavior}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Show Placeholder" tooltip={showExternalPlaceholderToolTip}>
+    <SettingsItemGroup title="显示占位卡片" tooltip={showExternalPlaceholderToolTip}>
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={showExternalPlaceholder}
@@ -998,7 +993,7 @@
   {:else}
     <SettingsItemGroup
       title="Keep Local Data on Deletion"
-      tooltip={'Determines if local statistics will be deleted or not when removing a local book copy'}
+      tooltip={'删除本地书籍副本时是否同时删除本地统计'}
     >
       <div class="flex items-center">
         <ButtonToggleGroup
@@ -1034,7 +1029,7 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Overwrite Book Completion"
-      tooltip={`Determines if only the first Book Completion will be tracked or if it always updates to the latest one`}
+      tooltip={'是只记录首次完成，还是始终更新为最新一次完成'}
     >
       <ButtonToggleGroup
         options={optionsForToggle}
@@ -1043,7 +1038,7 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title={`Start Day Hours: ${startOfDayHours}`}
-      tooltip={'Determines at which time a new day starts.\nData before this point will be counted towards the previous day'}
+      tooltip={'设定新一天的开始时间，此时刻之前的数据计入前一天'}
     >
       <input
         type="range"
@@ -1056,7 +1051,7 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Statistics Merge"
-      tooltip={`Determines if statistics will be merged entry by entry or replaced completely on a sync`}
+      tooltip={'同步时统计按条目合并还是整体覆盖'}
     >
       <ButtonToggleGroup
         options={optionsForMergeMode}
@@ -1065,7 +1060,7 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Reading Goals Merge"
-      tooltip={`Determines if reading goals will be merged entry by entry or replaced completely on a sync`}
+      tooltip={'同步时阅读目标按条目合并还是整体覆盖'}
     >
       <ButtonToggleGroup
         options={optionsForMergeMode}
@@ -1074,18 +1069,18 @@
     </SettingsItemGroup>
     <SettingsItemGroup
       title="Enable Statistics"
-      tooltip="Enables the tracker icon in the bottom left corner of the reader which you need to use to start tracking your reading session"
+      tooltip="在阅读器左下角显示统计追踪图标，需手动点击开始记录会话"
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={statisticsEnabled} />
     </SettingsItemGroup>
     {#if statisticsEnabled}
-      <SettingsItemGroup title="Tracker Auto Pause" tooltip={trackerAutoPauseTooltip}>
+      <SettingsItemGroup title="统计自动暂停" tooltip={trackerAutoPauseTooltip}>
         <ButtonToggleGroup
           options={optionsForTrackerAutoPause}
           bind:selectedOptionId={trackerAutoPause}
         />
       </SettingsItemGroup>
-      <SettingsItemGroup title="Open Tracker on Completion">
+      <SettingsItemGroup title="完成时打开统计">
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={openTrackerOnCompletion}
@@ -1093,7 +1088,7 @@
       </SettingsItemGroup>
       <SettingsItemGroup
         title="Update on Completion"
-        tooltip={`Determines if the missing amount of characters between the current position and the book total will be added to the statistics or not`}
+        tooltip={'当前位置与全书总字数之间的差额是否计入统计'}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -1102,7 +1097,7 @@
       </SettingsItemGroup>
       <SettingsItemGroup
         title="Autostart tracker (sec)"
-        tooltip={'Time in seconds without a change to the character count after which the tracker will initially auto start (0 = disabled, higher value recommended to avoid racing conditions)'}
+        tooltip={'字数无变化达到此秒数后统计将自动启动（0 = 关闭，建议设大些避免误触发）'}
       >
         <input
           type="number"
@@ -1121,7 +1116,7 @@
       </SettingsItemGroup>
       <SettingsItemGroup
         title="Idle Time (min)"
-        tooltip={'Time in minutes after which the tracker will auto pause without page interaction (0 = disabled, max 12h)'}
+        tooltip={'无页面交互达到此分钟数后统计自动暂停（0 = 关闭，最大 12 小时）'}
       >
         <input
           type="number"
@@ -1142,7 +1137,7 @@
       </SettingsItemGroup>
       <SettingsItemGroup
         title="Forward Skip Threshold"
-        tooltip={'Amount of positive characters passed between a tick after which a threshold action is triggered (0 = disabled)'}
+        tooltip={'两次采样间正向字数增量超过此阈值触发相应动作（0 = 关闭）'}
       >
         <input
           type="number"
@@ -1161,7 +1156,7 @@
       </SettingsItemGroup>
       <SettingsItemGroup
         title="Backward Skip Threshold"
-        tooltip={'Amount of negative characters passed between a tick after which a threshold action is triggered (0 = disabled)'}
+        tooltip={'两次采样间负向字数差超过此阈值触发相应动作（0 = 关闭）'}
       >
         <input
           type="number"
@@ -1182,7 +1177,7 @@
       {#if trackerForwardSkipThreshold || trackerBackwardSkipThreshold}
         <SettingsItemGroup
           title="Threshold Action"
-          tooltip={`Determines what action will be executed in case a skip threshold was triggered`}
+          tooltip={'达到阈值时执行的动作'}
         >
           <ButtonToggleGroup
             options={optionsForTrackerSkipThresholdAction}
@@ -1193,7 +1188,7 @@
       {#if trackerAutoPause !== TrackerAutoPause.OFF}
         <SettingsItemGroup
           title="Dictionary Detection"
-          tooltip={`If enabled auto pause is skipped if open yomitan/jpdb-browser-reader was detected - yomitan requires disabled 'Secure Container' settings`}
+          tooltip={'开启后，检测到 Yomitan / jpdb-browser-reader 打开时跳过自动暂停（Yomitan 需关闭 Secure Container）'}
         >
           <ButtonToggleGroup
             options={optionsForToggle}
@@ -1204,7 +1199,7 @@
       {#if trackerIdleTime > 0}
         <SettingsItemGroup
           title="Rollback Statistics on Idle"
-          tooltip={`If enabled attempts to rollback statistics by subtracting the idled time value back from the session`}
+          tooltip={'开启后，会从本次会话中扣除空闲时间以回滚统计'}
         >
           <ButtonToggleGroup
             options={optionsForToggle}
