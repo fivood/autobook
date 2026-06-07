@@ -1,0 +1,19 @@
+node_modules
+build
+.svelte-kit
+package
+.env
+*.local
+
+# Tauri
+src-tauri/target
+src-tauri/gen
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/settings.json
+.idea
