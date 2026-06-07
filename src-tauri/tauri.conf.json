@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "阅读器",
+  "productName": "Ebook Reader",
   "version": "1.0.0",
   "identifier": "io.github.fukki.ebookreader",
   "build": {
