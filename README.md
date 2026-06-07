@@ -1,24 +1,63 @@
-# ebook-reader-desktop
+# autopage
 
-Desktop build of [ttu-ebook-reader](https://github.com/ttu-ttu/ebook-reader), packaged with [Tauri](https://tauri.app/) for personal use on Windows and macOS.
+个人定制的电子书阅读器，基于 [ttu-ebook-reader](https://github.com/ttu-ttu/ebook-reader) 改造。同一份源码同时输出两个目标：
 
-Forked from the upstream `apps/web` package and adapted to ship as a native installer instead of a PWA.
+- **网页 PWA**：[book.fivood.com](https://book.fivood.com)（Cloudflare Pages 部署，可在 iPhone Safari 加到主屏幕）
+- **Windows 桌面版**：通过 [Tauri](https://tauri.app/) 打包成 `.msi` / `.exe`，书库直接落到本地文件系统
 
-## Develop
+## 与上游的差异
+
+- **桌面端原生存储**：新增 `TauriFsStorageHandler`，书库存到 `~/Documents/EbookReader/`，每本书一个子目录，文件可直接管理
+- **横排默认 + 中文 UI**：默认横排阅读，菜单/工具提示/对话框按钮中文化
+- **配色重做**：sage-green 主题（`#f0efe6` / `#5f7e7b` / `#405a5c`）作为默认
+- **TXT 编码自动识别**：BOM 嗅探 → 严格 UTF-8 → Shift-JIS / GB18030 / BIG5 按 CJK 密度打分自动选择
+- **字体瘦身**：删掉 Klee / Shippori / Genei 等装饰字体，保留 Noto Sans JP / Noto Serif JP / KZ UDGothic / KZ UDMincho，新增**思源黑体（Noto Sans SC）**
+- **去掉了** Bug Report、PWA 安装的部分提示等不需要的入口
+
+## 开发
 
 ```sh
 npm install
-npm run tauri:dev
+npm run dev          # 浏览器开发，http://localhost:5173
+npm run tauri:dev    # 桌面壳开发，自动启动 Vite + 编译 Rust
 ```
 
-## Build installer
+## 构建
+
+### Windows 安装包
 
 ```sh
 npm run tauri:build
 ```
 
-Produces `.msi` / `.exe` (Windows) or `.dmg` (macOS) under `src-tauri/target/release/bundle/`.
+产物在 `src-tauri/target/release/bundle/`：
+- `msi/<name>_<ver>_x64_en-US.msi`
+- `nsis/<name>_<ver>_x64-setup.exe`
+
+首次安装时 SmartScreen 会提示"未知发布者"，点"更多信息 → 仍要运行"即可。
+
+### 网页版
+
+```sh
+npm run build        # 产物在 build/
+```
+
+Cloudflare Pages 配置：
+- Framework preset: None（或 SvelteKit）
+- Build command: `npm run build`
+- Build output directory: `build`
+- 自动通过 `process.env.BASE_PATH || ''` 部署到域名根路径
+
+## 数据互通
+
+| | 桌面版（Tauri） | 网页版（PWA / 手机） |
+|---|---|---|
+| 默认存储 | 本地文件系统 | 浏览器 IndexedDB |
+| 存储位置 | `~/Documents/EbookReader/<书名>/` | 浏览器内部 |
+| 跨端同步 | 通过 Google Drive / OneDrive 在两端各连一次 | 同左 |
+
+两端的本地存储是隔离的，要共享书库走云盘同步。
 
 ## License
 
-Inherits the upstream project's license — see `LICENSE`.
+继承上游 BSD-3-Clause，见 `LICENSE`。
