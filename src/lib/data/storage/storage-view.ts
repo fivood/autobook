@@ -9,6 +9,7 @@ import {
   gDriveAuthEndpoint,
   gDriveClientId,
   gDriveScope,
+  isTauri,
   oneDriveAuthEndpoint,
   oneDriveClientId,
   oneDriveScope
@@ -59,6 +60,10 @@ export function isStorageSourceAvailable(
       hasValidEnvironment = !!storageSourceManager && 'showDirectoryPicker' in window;
       break;
 
+    case StorageKey.TAURI_FS:
+      hasValidEnvironment = isTauri();
+      break;
+
     default:
       break;
   }
@@ -84,6 +89,7 @@ export function getStorageIconData(storageSource: StorageKey): StorageIcon {
         d: 'M96.2 200.1C96.07 197.4 96 194.7 96 192C96 103.6 167.6 32 256 32C315.3 32 367 64.25 394.7 112.2C409.9 101.1 428.3 96 448 96C501 96 544 138.1 544 192C544 204.2 541.7 215.8 537.6 226.6C596 238.4 640 290.1 640 352C640 422.7 582.7 480 512 480H144C64.47 480 0 415.5 0 336C0 273.2 40.17 219.8 96.2 200.1z'
       };
     case StorageKey.FS:
+    case StorageKey.TAURI_FS:
       return {
         viewBox: '0 0 576 512',
         d: 'M544 32h-112l-32-32H320c-17.62 0-32 14.38-32 32v160c0 17.62 14.38 32 32 32h224c17.62 0 32-14.38 32-32V64C576 46.38 561.6 32 544 32zM544 320h-112l-32-32H320c-17.62 0-32 14.38-32 32v160c0 17.62 14.38 32 32 32h224c17.62 0 32-14.38 32-32v-128C576 334.4 561.6 320 544 320zM64 16C64 7.125 56.88 0 48 0h-32C7.125 0 0 7.125 0 16V416c0 17.62 14.38 32 32 32h224v-64H64V160h192V96H64V16z'
@@ -98,7 +104,7 @@ export function getStorageIconData(storageSource: StorageKey): StorageIcon {
 
 export const storageSource$ = writableStringLocalStorageSubject<StorageKey>()(
   'lastStorageSource',
-  StorageKey.BROWSER
+  isTauri() ? StorageKey.TAURI_FS : StorageKey.BROWSER
 );
 
 export const storageIcon$ = writableSubject<StorageIcon>(getStorageIconData(StorageKey.BROWSER));

@@ -129,6 +129,15 @@
             }
           ]
         : []),
+      ...(isStorageSourceAvailable(StorageKey.TAURI_FS, '', window)
+        ? [
+            {
+              label: 'Local Files',
+              key: StorageKey.TAURI_FS,
+              requiresConnectivity: false
+            }
+          ]
+        : []),
       ...(isStorageSourceAvailable(StorageKey.FS, $fsStorageSource$, window)
         ? [
             {
