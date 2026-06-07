@@ -68,6 +68,10 @@ export const customThemes$ = writableObjectLocalStorageSubject<Record<string, Th
   {}
 );
 export const multiplier$ = writableNumberLocalStorageSubject()('autoScrollMultiplier', 20);
+export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
+  'autoScrollStopAtChapter',
+  false
+);
 export const fontFamilyGroupOne$ = writableStringLocalStorageSubject()(
   'fontFamilyGroupOne',
   'Noto Sans SC'

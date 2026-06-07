@@ -54,6 +54,7 @@
     hideFurigana$,
     hideSpoilerImage$,
     multiplier$,
+    autoScrollStopAtChapter$,
     pageColumns$,
     prioritizeReaderStyles$,
     secondDimensionMaxValue$,
@@ -538,6 +539,20 @@
   $: tapButtonTop = `${showHeader ? 3 : 2}rem`;
 
   $: footerChapterProgress = getCurrentChapterProgress($sectionData$);
+
+  let lastChapterIndexForAutoStop = -1;
+  $: if ($sectionData$?.length && autoScroller) {
+    const [, chapterIndex] = getChapterData($sectionData$);
+    if (
+      lastChapterIndexForAutoStop !== -1 &&
+      chapterIndex !== lastChapterIndexForAutoStop &&
+      $autoScrollStopAtChapter$ &&
+      autoScroller.wasAutoScrollerEnabled$.getValue()
+    ) {
+      autoScroller.off();
+    }
+    lastChapterIndexForAutoStop = chapterIndex;
+  }
 
   $: upSyncEnabled =
     externalStorageHandler &&
