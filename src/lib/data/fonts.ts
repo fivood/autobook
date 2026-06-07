@@ -7,12 +7,9 @@
 export enum LocalFont {
   KZUDGOTHIC = 'KZ UDGothic',
   KZUDMINCHO = 'KZ UDMincho',
-  GENEI = 'Genei Koburi Mincho v5',
-  KLEEONE = 'Klee One',
-  KLEEONESEMIBOLD = 'Klee One SemiBold',
   NOTOSANSJP = 'Noto Sans JP',
   NOTOSERIFJP = 'Noto Serif JP',
-  SHIPPORIMINCHO = 'Shippori Mincho',
+  NOTOSANSSC = 'Noto Sans SC',
   SERIF = 'Serif',
   SANSSERIF = 'Sans-Serif'
 }
@@ -28,12 +25,9 @@ export const userFontsCacheName = 'ttu-userfonts';
 export const reservedFontNames = new Set([
   'KZ UDGothic',
   'KZ UDMincho',
-  'Genei Koburi Mincho v5',
-  'Klee One',
-  'Klee One SemiBold',
   'Noto Sans JP',
   'Noto Serif JP',
-  'Shippori Mincho',
+  'Noto Sans SC',
   'Serif',
   'Sans-Serif'
 ]);
