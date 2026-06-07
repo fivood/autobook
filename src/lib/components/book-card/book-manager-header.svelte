@@ -248,7 +248,7 @@
     <div class="flex h-full justify-between {pxScreen}">
       {#if selectedCount === 0}
         <div
-          title={selectMode ? 'Disable Book Selection' : 'Enable Book Selection'}
+          title={selectMode ? '退出多选' : '进入多选'}
           class="transform-gpu {nTranslateXHeaderMat}"
           in:scale={inAnimationParams}
           out:scale={outAnimationParams}
@@ -277,7 +277,7 @@
           <div
             tabindex="0"
             role="button"
-            title="Disable Book Selection"
+            title="退出多选"
             class="flex h-full items-center text-2xl xl:text-xl {pHeaderFa} cursor-pointer"
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
@@ -297,7 +297,7 @@
       <div class="absolute left-1/2 h-full -translate-x-1/2 transform-gpu">
         {#if !selectMode}
           {#if hasBookOpened}
-            <div title="Back to Book">
+            <div title="回到当前书">
               <svg
                 tabindex="0"
                 role="button"
@@ -317,7 +317,7 @@
             </div>
           {/if}
         {:else}
-          <div title="Select all Books">
+          <div title="全选">
             <svg
               tabindex="0"
               role="button"
@@ -352,7 +352,7 @@
             />
           </div>
           <div
-            title="Select Storage Source"
+            title="选择存储源"
             class="relative transform-gpu"
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
@@ -418,7 +418,7 @@
               yOffset={0}
               bind:this={sortOptionsElm}
             >
-              <div slot="icon" class={baseIconClasses} title="Select Sort Options">
+              <div slot="icon" class={baseIconClasses} title="排序方式">
                 {#if $booklistSortOptions$[$storageSource$].direction === SortDirection.ASC}
                   <Fa icon={faArrowDownShortWide} />
                 {:else}
@@ -502,7 +502,7 @@
           <div
             tabindex="0"
             role="button"
-            title="Open Export Menu"
+            title="导出菜单"
             class="transform-gpu {baseIconClasses}"
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
@@ -515,7 +515,7 @@
             <div
               tabindex="0"
               role="button"
-              title="Go to Statistics"
+              title="查看阅读统计"
               class="transform-gpu {baseIconClasses}"
               in:scale={inAnimationParams}
               out:scale={outAnimationParams}
@@ -527,7 +527,7 @@
             <div
               tabindex="0"
               role="button"
-              title="Delete Statistics for selected Books"
+              title="删除所选书籍的阅读统计"
               class="transform-gpu {baseIconClasses}"
               in:scale={inAnimationParams}
               out:scale={outAnimationParams}
@@ -540,7 +540,7 @@
           <div
             tabindex="0"
             role="button"
-            title="Delete selected Books"
+            title="删除所选书籍"
             class="transform-gpu {baseIconClasses}"
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
@@ -554,7 +554,7 @@
     </div>
   {:else}
     <div
-      title="Cancel Operation"
+      title="取消操作"
       class="mx-auto flex h-full transform-gpu items-center justify-center px-4 md:px-8 lg:max-w-4xl xl:max-w-none 2xl:max-w-6xl"
       in:scale={inAnimationParams}
       out:scale={outAnimationParams}
