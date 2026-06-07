@@ -6,6 +6,16 @@
     "main"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "fs:default",
+    "fs:allow-document-write-recursive",
+    "fs:allow-document-read-recursive",
+    "fs:allow-document-meta-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$DOCUMENT/EbookReader/**" }
+      ]
+    }
   ]
 }

@@ -8,6 +8,7 @@ export enum StorageKey {
   BACKUP = 'backup',
   BROWSER = 'browser',
   FS = 'fs',
+  TAURI_FS = 'tauri-fs',
   GDRIVE = 'gdrive',
   ONEDRIVE = 'onedrive'
 }

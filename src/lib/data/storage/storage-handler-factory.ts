@@ -10,6 +10,7 @@ import { BackupStorageHandler } from '$lib/data/storage/handler/backup-handler';
 import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
 import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
+import { TauriFsStorageHandler } from '$lib/data/storage/handler/tauri-fs-handler';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { MergeMode } from '$lib/data/merge-mode';
 import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
@@ -20,6 +21,7 @@ let browserStorageHandler: BrowserStorageHandler;
 let gDriveStorageHandler: GDriveStorageHandler;
 let oneDriveStorageHandler: OneDriveStorageHandler;
 let fsStorageHandler: FilesystemStorageHandler;
+let tauriFsStorageHandler: TauriFsStorageHandler;
 
 export function getStorageHandler(
   window: Window,
@@ -165,6 +167,21 @@ export function getStorageHandler(
       );
 
       return fsStorageHandler;
+    case StorageKey.TAURI_FS:
+      tauriFsStorageHandler =
+        tauriFsStorageHandler || new TauriFsStorageHandler(window, StorageKey.TAURI_FS);
+      tauriFsStorageHandler.updateSettings(
+        window,
+        isForBrowser,
+        saveBehavior,
+        statisticsMergeMode,
+        readingGoalsMergeMode,
+        cacheStorageData,
+        askForStorageUnlock,
+        storageSourceName
+      );
+
+      return tauriFsStorageHandler;
     default:
       throw new Error(`No handler implementation for ${storageType}`);
   }
