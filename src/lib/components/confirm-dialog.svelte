@@ -27,11 +27,11 @@
   </svelte:fragment>
   <div class="flex grow justify-between" slot="footer">
     <button class={buttonClasses} class:invisible={!showCancel} on:click={() => closeDialog(true)}>
-      Cancel
+      取消
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog()}>
-      Confirm
+      确认
       <Ripple />
     </button>
   </div>

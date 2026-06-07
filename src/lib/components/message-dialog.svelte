@@ -20,7 +20,7 @@
   </svelte:fragment>
   <svelte:fragment slot="footer">
     <button class={buttonClasses} on:click={() => dispatch('close')}>
-      Close
+      关闭
       <Ripple />
     </button>
   </svelte:fragment>

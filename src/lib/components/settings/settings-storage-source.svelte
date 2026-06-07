@@ -55,12 +55,12 @@
     (passwordManagerAvailable && configuredStoredInManager) || false;
   let storageSourceEncryptionDisabled = configuredEncryptionDisabled || false;
   let storageSourceTypes = [
-    { key: StorageKey.GDRIVE, label: 'GDrive' },
-    { key: StorageKey.ONEDRIVE, label: 'OneDrive' }
+    { key: StorageKey.GDRIVE, label: 'Google 云端' },
+    { key: StorageKey.ONEDRIVE, label: 'OneDrive 云端' }
   ];
 
   $: if (browser && 'showDirectoryPicker' in window) {
-    storageSourceTypes = [...storageSourceTypes, { key: StorageKey.FS, label: 'Filesystem' }];
+    storageSourceTypes = [...storageSourceTypes, { key: StorageKey.FS, label: '文件系统' }];
   }
 
   $: setInitialPassword(pwElm);

@@ -175,7 +175,16 @@ const availableThemesCamelCase = {
       g: 0x00,
       b: 0x00
     }
-  }
+  },
+  sageGreenTheme: updateHintFuriganaFontColor({
+    fontColor: { r: 0x40, g: 0x5a, b: 0x5c, a: 0.92 },
+    backgroundColor: { r: 0xf0, g: 0xef, b: 0xe6 },
+    selectionFontColor: { r: 0xf0, g: 0xef, b: 0xe6 },
+    selectionBackgroundColor: { r: 0x5f, g: 0x7e, b: 0x7b },
+    hintFuriganaFontColor: { r: 0x40, g: 0x5a, b: 0x5c },
+    hintFuriganaShadowColor: { r: 0xc3, g: 0xc1, b: 0xaf, a: 0.5 },
+    tooltipTextFontColor: { r: 0x40, g: 0x5a, b: 0x5c, a: 0.7 }
+  })
 };
 
 function camelCaseToKebabCase(s: string) {

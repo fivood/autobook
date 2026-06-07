@@ -33,19 +33,19 @@
     icons = [
       ...icons,
       ...(isStorageSourceAvailable(StorageKey.GDRIVE, $gDriveStorageSource$, window)
-        ? [{ ...getStorageIconData(StorageKey.GDRIVE), source: StorageKey.GDRIVE, label: 'GDrive' }]
+        ? [{ ...getStorageIconData(StorageKey.GDRIVE), source: StorageKey.GDRIVE, label: 'Google 云端' }]
         : []),
       ...(isStorageSourceAvailable(StorageKey.ONEDRIVE, $oneDriveStorageSource$, window)
         ? [
             {
               ...getStorageIconData(StorageKey.ONEDRIVE),
               source: StorageKey.ONEDRIVE,
-              label: 'OneDrive'
+              label: 'OneDrive 云端'
             }
           ]
         : []),
       ...(isStorageSourceAvailable(StorageKey.FS, $fsStorageSource$, window)
-        ? [{ ...getStorageIconData(StorageKey.FS), source: StorageKey.FS, label: 'Filesystem' }]
+        ? [{ ...getStorageIconData(StorageKey.FS), source: StorageKey.FS, label: '文件系统' }]
         : [])
     ].filter((icon) => icon.source !== $storageSource$);
   }

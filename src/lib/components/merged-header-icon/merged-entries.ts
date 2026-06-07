@@ -18,44 +18,44 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 export const mergeEntries = {
-  MANAGE: { routeId: '/manage', label: 'Manager', icon: faSignOutAlt, title: 'Go to Book Manager' },
+  MANAGE: { routeId: '/manage', label: '书库', icon: faSignOutAlt, title: '返回书库' },
   SETTINGS: {
     routeId: '/settings',
-    label: 'Settings',
+    label: '设置',
     icon: faCog,
-    title: 'Go to Reader Settings'
+    title: '阅读器设置'
   },
   STATISTICS: {
     routeId: '/statistics',
-    label: 'Statistics',
+    label: '统计',
     icon: faChartLine,
-    title: 'Go to Statistics'
+    title: '阅读统计'
   },
   JUMP_TO_POSITION: {
     routeId: '',
-    label: 'Jump',
+    label: '跳转',
     icon: faHashtag,
-    title: 'Jump to Position'
+    title: '跳转到位置'
   },
   READER_IMAGE_GALLERY: {
     routeId: '',
-    label: 'Images',
+    label: '图片',
     icon: faImages,
-    title: 'Open Image Gallery'
+    title: '打开图片库'
   },
   DOMAIN_HINT: {
     routeId: '',
-    label: 'Domain Hint',
+    label: '域名提示',
     icon: faTriangleExclamation,
-    title: 'Old Domain used'
+    title: '正在使用旧域名'
   },
   BUG_REPORT: { routeId: '', label: 'Bug Report', icon: faBug, title: 'Report an Issue' },
   FOLDER_IMPORT: {
     routeId: '',
-    label: 'Import Folder(s)',
+    label: '导入文件夹',
     icon: faFolderPlus,
-    title: 'Import from Folder'
+    title: '从文件夹导入'
   },
-  FILE_IMPORT: { routeId: '', label: 'Import File(s)', icon: faFileArrowUp, title: 'Import Files' },
-  BACKUP_IMPORT: { routeId: '', label: 'Import Backup', icon: faFileZipper, title: 'Import Backup' }
+  FILE_IMPORT: { routeId: '', label: '导入文件', icon: faFileArrowUp, title: '导入书籍文件' },
+  BACKUP_IMPORT: { routeId: '', label: '导入备份', icon: faFileZipper, title: '从备份导入' }
 };

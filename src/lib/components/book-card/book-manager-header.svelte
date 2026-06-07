@@ -87,7 +87,7 @@
 
   const importMenuItems = [mergeEntries.FILE_IMPORT];
   const storageSourceMenuItems = [
-    { label: 'Browser', key: StorageKey.BROWSER, requiresConnectivity: false }
+    { label: '浏览器', key: StorageKey.BROWSER, requiresConnectivity: false }
   ];
 
   let fileImportElm: HTMLElement;
@@ -113,7 +113,7 @@
       ...(isStorageSourceAvailable(StorageKey.GDRIVE, $gDriveStorageSource$, window)
         ? [
             {
-              label: 'GDrive',
+              label: 'Google 云端',
               key: StorageKey.GDRIVE,
               requiresConnectivity: true
             }
@@ -122,7 +122,7 @@
       ...(isStorageSourceAvailable(StorageKey.ONEDRIVE, $oneDriveStorageSource$, window)
         ? [
             {
-              label: 'OneDrive',
+              label: 'OneDrive 云端',
               key: StorageKey.ONEDRIVE,
               requiresConnectivity: true
             }
@@ -131,7 +131,7 @@
       ...(isStorageSourceAvailable(StorageKey.TAURI_FS, '', window)
         ? [
             {
-              label: 'Local Files',
+              label: '本地文件',
               key: StorageKey.TAURI_FS,
               requiresConnectivity: false
             }
@@ -140,7 +140,7 @@
       ...(isStorageSourceAvailable(StorageKey.FS, $fsStorageSource$, window)
         ? [
             {
-              label: 'Filesystem',
+              label: '文件系统',
               key: StorageKey.FS,
               requiresConnectivity: false
             }
@@ -150,13 +150,13 @@
   }
 
   $: sortMenuItems = [
-    ...($storageSource$ === StorageKey.BROWSER ? [{ property: 'id', label: 'Added (id)' }] : []),
-    { property: 'title', label: 'Title' },
-    { property: 'characters', label: 'Characters' },
-    { property: 'lastBookModified', label: 'Last Update' },
-    { property: 'lastBookOpen', label: 'Last Read' },
-    { property: 'progress', label: 'Progress' },
-    { property: 'lastBookmarkModified', label: 'Bookmarked' }
+    ...($storageSource$ === StorageKey.BROWSER ? [{ property: 'id', label: '添加顺序' }] : []),
+    { property: 'title', label: '书名' },
+    { property: 'characters', label: '字数' },
+    { property: 'lastBookModified', label: '最近更新' },
+    { property: 'lastBookOpen', label: '最近阅读' },
+    { property: 'progress', label: '阅读进度' },
+    { property: 'lastBookmarkModified', label: '最近标记' }
   ];
 
   function triggerInput(event: CustomEvent<string>) {
