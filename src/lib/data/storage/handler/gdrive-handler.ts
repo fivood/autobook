@@ -153,7 +153,7 @@ export class GDriveStorageHandler extends ApiStorageHandler {
     }
 
     if (!titleId && name === BaseStorageHandler.rootName) {
-      throw new Error('Root folder not found');
+      throw new Error('未找到根文件夹');
     }
 
     return titleId;

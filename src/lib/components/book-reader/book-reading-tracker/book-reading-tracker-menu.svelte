@@ -63,10 +63,10 @@
   }>();
 
   const actions = [
-    { icon: faPlay, event: 'toggleTracker', title: 'Toggle Tracker' },
-    { icon: faRepeat, event: 'updateCurrentLocation', title: 'Update Position' },
-    { icon: faClockRotateLeft, event: 'freezeCurrentLocation', title: 'Toggle Freeze Position' },
-    { icon: faFloppyDisk, event: 'saveStatistics', title: 'Save' }
+    { icon: faPlay, event: 'toggleTracker', title: '切换统计' },
+    { icon: faRepeat, event: 'updateCurrentLocation', title: '更新位置' },
+    { icon: faClockRotateLeft, event: 'freezeCurrentLocation', title: '切换冻结位置' },
+    { icon: faFloppyDisk, event: 'saveStatistics', title: '保存' }
   ];
 
   const trackingItemsPerPage = 15;
@@ -76,20 +76,20 @@
 
   $: allStatistics = autoScrollerStatistics
     ? [
-        { id: 'Current Session', ...sessionStatistics },
-        { id: 'Today', ...todaysStatistics },
-        { id: 'All Time', ...allTimeStatistics },
+        { id: '当前会话', ...sessionStatistics },
+        { id: '今日', ...todaysStatistics },
+        { id: '累计', ...allTimeStatistics },
         ...(bookCompletionStatistics
-          ? [{ id: 'Book Completion', ...bookCompletionStatistics }]
+          ? [{ id: '已完成', ...bookCompletionStatistics }]
           : []),
-        { id: 'Autoscroller', ...autoScrollerStatistics }
+        { id: '自动滚动', ...autoScrollerStatistics }
       ]
     : [
-        { id: 'Current Session', ...sessionStatistics },
-        { id: 'Today', ...todaysStatistics },
-        { id: 'All Time', ...allTimeStatistics },
+        { id: '当前会话', ...sessionStatistics },
+        { id: '今日', ...todaysStatistics },
+        { id: '累计', ...allTimeStatistics },
         ...(bookCompletionStatistics
-          ? [{ id: 'Book Completion', ...bookCompletionStatistics }]
+          ? [{ id: '已完成', ...bookCompletionStatistics }]
           : [])
       ];
 
@@ -180,13 +180,13 @@
 <div class="flex items-center justify-between min-h-[60px] px-4">
   <div class="mr-4">
     {#if hadError}
-      Last Update failed
+      上次更新失败
     {/if}
   </div>
   <div
     tabindex="0"
     role="button"
-    title="Close Tracker Menu"
+    title="关闭统计菜单"
     class="flex items-center hover:text-red-500 md:items-center"
     on:click={() => dispatch('trackerMenuClosed')}
     on:keyup={dummyFn}
@@ -203,7 +203,7 @@
           currentReadingGoal.timeGoal
         )}
         <div>
-          {secondsToMinutes(currentTimeGoal)} / {secondsToMinutes(currentReadingGoal.timeGoal)} Min ({timeGoalPercentage}%)
+          {secondsToMinutes(currentTimeGoal)} / {secondsToMinutes(currentReadingGoal.timeGoal)} 分钟 ({timeGoalPercentage}%)
         </div>
         <!-- eslint-disable-next-line svelte/no-unknown-style-directive-property -->
         <div class="w-full rounded-full h-2.5" style:background-Color={fontColor}>
@@ -220,7 +220,7 @@
           currentReadingGoal.characterGoal
         )}
         <div class="mt-4">
-          {currentCharacterGoal} / {currentReadingGoal.characterGoal} Characters ({characterGoalPercentage}%)
+          {currentCharacterGoal} / {currentReadingGoal.characterGoal} 字 ({characterGoalPercentage}%)
         </div>
         <!-- eslint-disable-next-line svelte/no-unknown-style-directive-property -->
         <div class="w-full rounded-full h-2.5" style:background-Color={fontColor}>
@@ -234,7 +234,7 @@
         </div>
       {/if}
       <div class="grid grid-cols-[max-content,auto] gap-x-4 gap-y-2 mt-4">
-        <div>Current Reading Goal:</div>
+        <div>当前阅读目标:</div>
         <div class="flex flex-col sm:block">
           <span>{currentReadingGoalStart}</span>
           {#if currentReadingGoalEnd && currentReadingGoalStart !== currentReadingGoalEnd}
@@ -242,7 +242,7 @@
             <span>{currentReadingGoalEnd}</span>
           {/if}
         </div>
-        <div>Remaining Time left:</div>
+        <div>剩余时间:</div>
         <div>
           {remainingTimeInReadingGoalWindow}
         </div>
@@ -255,7 +255,7 @@
         <div>
           {statistic.id}
         </div>
-        {#if statistic.id === 'Current Session'}
+        {#if statistic.id === '当前会话'}
           {#each actions as action (action.event)}
             {#if action.event !== 'saveStatistics' || (action.event === 'saveStatistics' && canSaveStatistics)}
               <div
@@ -274,33 +274,33 @@
       </div>
       <hr />
       <div class="grid grid-cols-[max-content,auto] gap-x-4 gap-y-2">
-        {#if statistic.id === 'All Time'}
-          <div class="mt-3">Book started on:</div>
+        {#if statistic.id === '累计'}
+          <div class="mt-3">开始阅读日期:</div>
           <div class="mt-3">{bookStartDate}</div>
         {/if}
-        {#if statistic.id === 'Book Completion' && bookCompletionStatistics}
-          <div class="mt-3">Completed on:</div>
+        {#if statistic.id === '已完成' && bookCompletionStatistics}
+          <div class="mt-3">完成日期:</div>
           <div class="mt-3">{bookCompletionStatistics.dateKey}</div>
         {/if}
         <button
           class="text-left"
-          class:mt-3={statistic.id !== 'All Time' && statistic.id !== 'Book Completion'}
+          class:mt-3={statistic.id !== '累计' && statistic.id !== '已完成'}
           on:click={() => handleBlurredKey('charactersRead')}
         >
-          Characters Read:
+          已读字数:
         </button>
         <div
           role="button"
           tabindex="0"
           class:blur={$lastBlurredTrackerItems$.has('charactersRead')}
-          class:mt-3={statistic.id !== 'All Time' && statistic.id !== 'Book Completion'}
+          class:mt-3={statistic.id !== '累计' && statistic.id !== '已完成'}
           on:click={() => handleBlurredKey('charactersRead')}
           on:keyup={dummyFn}
         >
           {statistic.charactersRead}
         </div>
         <button class="text-left" on:click={() => handleBlurredKey('lastReadingSpeed')}>
-          Reading Speed:
+          阅读速度:
         </button>
         <div
           role="button"
@@ -312,7 +312,7 @@
           {statistic.lastReadingSpeed} / h
         </div>
         <button class="text-left" on:click={() => handleBlurredKey('readingTime')}>
-          Reading Time:
+          阅读时间:
         </button>
         <div
           role="button"
@@ -323,9 +323,9 @@
         >
           {toTimeString(statistic.readingTime)}
         </div>
-        {#if statistic.id === 'Current Session'}
+        {#if statistic.id === '当前会话'}
           <button class="text-left" on:click={() => handleBlurredKey('finishETA')}>
-            Time to Finish Book:
+            预计读完本书:
           </button>
           <div
             role="button"
@@ -338,7 +338,7 @@
           </div>
           {#if timeToFinishChapter}
             <button class="text-left" on:click={() => handleBlurredKey('finishChapterETA')}>
-              Time to Finish Chapter:
+              预计读完本章:
             </button>
             <div
               role="button"
@@ -351,19 +351,19 @@
             </div>
           {/if}
 
-          <div class="mt-3">Current Position:</div>
+          <div class="mt-3">当前位置:</div>
           <div class="mt-3">{lastExploredCharCount}</div>
-          <div>Previous Position</div>
+          <div>上次位置</div>
           <div>{previousLastExploredCharCount}</div>
           {#if frozenPosition > -1}
-            <div>Frozen Position</div>
+            <div>冻结位置</div>
             <div>{frozenPosition}</div>
           {/if}
         {/if}
       </div>
-      {#if statistic.id === 'Current Session' && trackingHistoryItems.length}
+      {#if statistic.id === '当前会话' && trackingHistoryItems.length}
         <details class="mt-3 mr-4">
-          <summary class="cursor-pointer">Recent History</summary>
+          <summary class="cursor-pointer">最近历史</summary>
           <div class="grid grid-cols-[repeat(4,max-content)] gap-x-8 items-center">
             {#each trackingHistoryItems as trackingHistoryItem (trackingHistoryItem.id)}
               <div>{trackingHistoryItem.dateTimeKey}</div>
@@ -381,14 +381,14 @@
               </div>
               <div class="flex">
                 <button
-                  title="Revert Item"
+                  title="撤销项目"
                   class="hover:text-red-500"
                   on:click={() => dispatch('revertStatistic', trackingHistoryItem)}
                 >
                   <Fa icon={faTrash} />
                 </button>
                 <div
-                  title="Item saved to Database"
+                  title="已保存到数据库"
                   class="ml-4 cursor-not-allowed"
                   class:text-green-500={trackingHistoryItem.saved}
                 >
@@ -399,7 +399,7 @@
           </div>
           <div class="flex justify-between mt-3">
             <button
-              title={currentTrackingHistoryIndex === 0 ? '' : 'Previous Page'}
+              title={currentTrackingHistoryIndex === 0 ? '' : '上一页'}
               disabled={currentTrackingHistoryIndex === 0}
               class:opacity-50={currentTrackingHistoryIndex === 0}
               class:cursor-not-allowed={currentTrackingHistoryIndex === 0}
@@ -408,7 +408,7 @@
               <Fa icon={faChevronLeft} />
             </button>
             <button
-              title={hasNextPage ? 'Next Page' : ''}
+              title={hasNextPage ? '下一页' : ''}
               disabled={!hasNextPage}
               class:opacity-50={!hasNextPage}
               class:cursor-not-allowed={!hasNextPage}

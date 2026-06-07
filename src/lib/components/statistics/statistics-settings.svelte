@@ -43,7 +43,7 @@
   }>();
 
   const weekDays = [...daysOfWeek.slice(1, 7), daysOfWeek[0]].map((day, index) => {
-    if (day === 'Sunday') {
+    if (day === '周日') {
       return { day, index: 0 };
     }
     return { day, index: index + 1 };
@@ -78,20 +78,20 @@
   </button>
   <div class="flex flex-1 justify-end">
     <button class="mr-2 sm:mr-4 hover:text-red-500" on:click={() => exportStatisticsData(false)}>
-      Export Selection
+      导出选中项
     </button>
     <button class="mr-2 sm:mr-4 hover:text-red-500" on:click={() => deleteStatisticsData(false)}>
-      Delete Selection
+      删除选中项
     </button>
     <button class="mr-2 sm:mr-4 hover:text-red-500" on:click={() => exportStatisticsData()}>
-      Export All
+      导出全部
     </button>
-    <button class="hover:text-red-500" on:click={() => deleteStatisticsData()}>Delete All</button>
+    <button class="hover:text-red-500" on:click={() => deleteStatisticsData()}>删除全部</button>
   </div>
 </div>
 <div class="flex-1 p-4 overflow-auto">
   <div class="flex flex-col mb-6">
-    <label for="datesTemplate">Template</label>
+    <label for="datesTemplate">模板</label>
     <select id="datesTemplate" class="text-black" bind:value={$lastStatisticsRangeTemplate$}>
       {#each statisticsRangeTemplates as statisticsRangeTemplate (statisticsRangeTemplate)}
         <option value={statisticsRangeTemplate}>
@@ -101,7 +101,7 @@
     </select>
   </div>
   <div class="flex flex-col mb-4 sm:hidden">
-    <label for="weekDay">Start of Week</label>
+    <label for="weekDay">每周起始日</label>
     <select id="weekDay" class="text-black" bind:value={$lastStartDayOfWeek$}>
       {#each weekDays as weekDay (weekDay.day)}
         <option value={weekDay.index}>
@@ -112,7 +112,7 @@
   </div>
   <div class="flex justify-between sm:flex-row">
     <div class="flex flex-col">
-      <label for="fromDate">From</label>
+      <label for="fromDate">从</label>
       <input
         id="fromDate"
         type="date"
@@ -146,7 +146,7 @@
       </button>
     </div>
     <div class="flex flex-col">
-      <label for="toDate">To</label>
+      <label for="toDate">到</label>
       <input
         id="toDate"
         type="date"
@@ -160,7 +160,7 @@
       />
     </div>
     <div class="flex-col hidden sm:flex">
-      <label for="weekDay">Start of Week</label>
+      <label for="weekDay">每周起始日</label>
       <select id="weekDay" class="text-black" bind:value={$lastStartDayOfWeek$}>
         {#each weekDays as weekDay (weekDay.day)}
           <option value={weekDay.index}>
@@ -174,16 +174,16 @@
     class="text-left mt-3 hover:text-red-500"
     on:click={() => setStatisticsDatesToAllTime$.next()}
   >
-    Set to All Time for selected Book Titles
+    设置为所选书籍的全部时间
   </button>
   <div class="flex flex-wrap justify-between mt-4">
     <div class="flex flex-col my-2 w-full sm:w-[initial]">
       <Popover
-        contentText={'Reading Time Attribute which should be used for the Summary Tab'}
+        contentText={'汇总标签页应使用的阅读时间属性'}
         contentStyles="padding: 0.5rem;"
       >
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
-        <label for="timeDataSource">Time Data Source</label>
+        <label for="timeDataSource">时间数据来源</label>
       </Popover>
       <select id="timeDataSource" class="text-black" bind:value={$lastReadingTimeDataSource$}>
         {#each readingTimeDataSources as readingTimeDataSource (readingTimeDataSource.key)}
@@ -195,11 +195,11 @@
     </div>
     <div class="flex flex-col my-2 w-full sm:w-[initial]">
       <Popover
-        contentText={'Characters Read Attribute which should be used for the Summary Tab'}
+        contentText={'汇总标签页应使用的已读字数属性'}
         contentStyles="padding: 0.5rem; max-width: 20rem;"
       >
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
-        <label for="charactersSource">Characters Data Source</label>
+        <label for="charactersSource">字数数据来源</label>
       </Popover>
       <select id="charactersSource" class="text-black" bind:value={$lastCharactersDataSource$}>
         {#each charactersDataSources as charactersDataSource (charactersDataSource.key)}
@@ -211,11 +211,11 @@
     </div>
     <div class="flex flex-col my-2 w-full sm:w-[initial]">
       <Popover
-        contentText={'Reading Speed Attribute which should be used for the Summary Tab'}
+        contentText={'汇总标签页应使用的阅读速度属性'}
         contentStyles="padding: 0.5rem;"
       >
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
-        <label for="speedSource">Speed Data Source</label>
+        <label for="speedSource">速度数据来源</label>
       </Popover>
       <select id="speedSource" class="text-black" bind:value={$lastReadingSpeedDataSource$}>
         {#each readingSpeedDataSources as readingSpeedDataSource (readingSpeedDataSource.key)}
@@ -228,11 +228,11 @@
   </div>
   <div class="flex flex-col mt-4">
     <Popover
-      contentText={'Determines on which primary Attribute the Data will be grouped for the Summary Tab'}
+      contentText={'决定汇总标签页数据按哪个主要属性分组'}
       contentStyles="padding: 0.5rem;"
     >
       <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
-      <label for="primaryAggregration">Primary Aggregration</label>
+      <label for="primaryAggregration">主要聚合方式</label>
     </Popover>
     <select
       id="primaryAggregration"
@@ -247,7 +247,7 @@
     </select>
   </div>
   <div class="mt-4">
-    <SettingsItemGroup title="Confirm Statistics Deletion" applyHeaderClasses={false}>
+    <SettingsItemGroup title="确认统计删除" applyHeaderClasses={false}>
       <ButtonToggleGroup
         invertColors
         options={optionsForToggle}

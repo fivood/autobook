@@ -34,12 +34,12 @@
           ...(forwardSecret ? { secret } : {})
         });
       } else if (requiresSecret) {
-        throw new Error('No data to unlock found');
+        throw new Error('未找到要解锁的数据');
       }
 
       closeDialog({ clientId: '', clientSecret: '' });
     } catch (err: any) {
-      error = `Failed to unlock Data${err.message ? `: ${err.message}` : ''}`;
+      error = `解锁数据失败${err.message ? `: ${err.message}` : ''}`;
       containerElm.classList.add('error-animation');
     }
   }
@@ -63,7 +63,7 @@
     <div>{description}</div>
     <div class="my-2">{action}</div>
     {#if requiresSecret}
-      <input type="password" placeholder="Password" bind:value={secret} bind:this={passwordElm} on:keyup={(evt) => {if (evt.key === 'Enter') {unlock()}}}/>
+      <input type="password" placeholder="密码" bind:value={secret} bind:this={passwordElm} on:keyup={(evt) => {if (evt.key === 'Enter') {unlock()}}}/>
     {/if}
     <div class="text-red-500">{error}</div>
   </div>
@@ -75,12 +75,12 @@
           closeDialog();
         }}
       >
-        Cancel
+        取消
         <Ripple />
       </button>
     {/if}
     <button class={buttonClasses} on:click={unlock}>
-      Confirm
+      确认
       <Ripple />
     </button>
   </div>

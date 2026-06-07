@@ -372,7 +372,7 @@
         hasRowInEdit={rowInEdit !== undefined}
         isHidden={isTitleAggregation}
         gridRow={renderFullStatisticsSummaryTable ? undefined : 2}
-        title="Click to select/sort by this Attribute"
+        title="点击按此属性选择/排序"
         on:propertyChange={(detail) => handlePropertyChange(detail)}
       />
       <StatisticsSummaryHeader
@@ -382,7 +382,7 @@
         hasRowInEdit={rowInEdit !== undefined}
         isHidden={isDateAggregation}
         gridRow={renderFullStatisticsSummaryTable ? undefined : 3 - statisticsSummaryGridRowMod}
-        title="Click to select/sort by this Attribute"
+        title="点击按此属性选择/排序"
         on:propertyChange={(detail) => handlePropertyChange(detail)}
       />
       <StatisticsSummaryHeader
@@ -391,7 +391,7 @@
         selectionKey={$lastReadingTimeDataSource$}
         hasRowInEdit={rowInEdit !== undefined}
         gridRow={renderFullStatisticsSummaryTable ? undefined : 4 - statisticsSummaryGridRowMod}
-        title={'Switch between Reading Time Attributes'}
+        title={'在阅读时间属性之间切换'}
         on:propertyChange={(detail) => handlePropertyChange(detail)}
       />
       <StatisticsSummaryHeader
@@ -400,7 +400,7 @@
         selectionKey={$lastCharactersDataSource$}
         hasRowInEdit={rowInEdit !== undefined}
         gridRow={renderFullStatisticsSummaryTable ? undefined : 5 - statisticsSummaryGridRowMod}
-        title={'Switch between Character Attributes'}
+        title={'在字数属性之间切换'}
         on:propertyChange={(detail) => handlePropertyChange(detail)}
       />
       <StatisticsSummaryHeader
@@ -409,7 +409,7 @@
         selectionKey={$lastReadingSpeedDataSource$}
         hasRowInEdit={rowInEdit !== undefined}
         gridRow={renderFullStatisticsSummaryTable ? undefined : 6 - statisticsSummaryGridRowMod}
-        title={'Switch between Reading Speed Attributes'}
+        title={'在阅读速度属性之间切换'}
         on:propertyChange={(detail) => handlePropertyChange(detail)}
       />
       {#each currentStatisticsSummaryRows as currentStatisticsSummaryRow (currentStatisticsSummaryRow.id)}
@@ -419,7 +419,7 @@
           <button
             class="hover:text-red-500"
             class:cursor-not-allowed={otherRowInEdit}
-            title={otherRowInEdit ? '' : `${rowInEdit ? 'Cancel Edit' : 'Delete Row'}`}
+            title={otherRowInEdit ? '' : `${rowInEdit ? '取消编辑' : '删除行'}`}
             disabled={otherRowInEdit}
             on:click={() => {
               if (rowInEdit) {
@@ -435,7 +435,7 @@
             <button
               class="ml-2 hover:text-red-500"
               class:cursor-not-allowed={otherRowInEdit}
-              title={otherRowInEdit ? '' : `${rowInEdit ? 'Save Changes' : 'Edit Row'}`}
+              title={otherRowInEdit ? '' : `${rowInEdit ? '保存更改' : '编辑行'}`}
               disabled={otherRowInEdit}
               on:click={() => {
                 if (rowInEdit) {

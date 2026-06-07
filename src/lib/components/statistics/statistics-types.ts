@@ -34,22 +34,22 @@ export interface BookStatistic extends BooksDbStatistic {
 }
 
 export enum StatisticsTab {
-  OVERVIEW = 'Overview',
-  SUMMARY = 'Summary'
+  OVERVIEW = '概览',
+  SUMMARY = '汇总'
 }
 
 export enum StatisticsRangeTemplate {
-  TODAY = 'Today',
-  WEEK = 'This Week',
-  MONTH = 'This Month',
-  YEAR = 'This Year',
-  CUSTOM = 'Custom'
+  TODAY = '今天',
+  WEEK = '本周',
+  MONTH = '本月',
+  YEAR = '今年',
+  CUSTOM = '自定义'
 }
 
 export enum StatisticsReadingDataAggregationMode {
-  NONE = 'None',
-  DATE = 'Date',
-  TITLE = 'Title'
+  NONE = '无',
+  DATE = '日期',
+  TITLE = '标题'
 }
 
 export const statisticsRangeTemplates = [
@@ -61,27 +61,27 @@ export const statisticsRangeTemplates = [
 ];
 
 export const readingTimeDataSources: StatisticsDataSource[] = [
-  { key: 'readingTime', label: 'Total Time' },
-  { key: 'averageReadingTime', label: 'Average Time' },
-  { key: 'averageWeightedReadingTime', label: 'Weighted Time' }
+  { key: 'readingTime', label: '总时间' },
+  { key: 'averageReadingTime', label: '平均时间' },
+  { key: 'averageWeightedReadingTime', label: '加权时间' }
 ];
 
 export const charactersDataSources: StatisticsDataSource[] = [
-  { key: 'charactersRead', label: 'Characters' },
-  { key: 'averageCharactersRead', label: 'Average Characters' },
-  { key: 'averageWeightedCharactersRead', label: 'Weighted Characters' }
+  { key: 'charactersRead', label: '字数' },
+  { key: 'averageCharactersRead', label: '平均字数' },
+  { key: 'averageWeightedCharactersRead', label: '加权字数' }
 ];
 
 export const readingSpeedDataSources: StatisticsDataSource[] = [
-  { key: 'lastReadingSpeed', label: 'Speed' },
-  { key: 'minReadingSpeed', label: 'Min Speed' },
-  { key: 'altMinReadingSpeed', label: 'Alt Min Speed' },
-  { key: 'maxReadingSpeed', label: 'Max Speed' }
+  { key: 'lastReadingSpeed', label: '速度' },
+  { key: 'minReadingSpeed', label: '最低速度' },
+  { key: 'altMinReadingSpeed', label: '次低速度' },
+  { key: 'maxReadingSpeed', label: '最高速度' }
 ];
 
-export const dateDataSources: StatisticsDataSource[] = [{ key: 'dateKey', label: 'Date' }];
+export const dateDataSources: StatisticsDataSource[] = [{ key: 'dateKey', label: '日期' }];
 
-export const titleDataSources: StatisticsDataSource[] = [{ key: 'title', label: 'Title' }];
+export const titleDataSources: StatisticsDataSource[] = [{ key: 'title', label: '标题' }];
 
 export const copyStatisticsData$ = new Subject<keyof BookStatistic>();
 

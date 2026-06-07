@@ -13,11 +13,11 @@
 
   export let fontFamily: BehaviorSubject<string>;
 
-  const tabs = ['Stored', 'Add'];
+  const tabs = ['已存储', '添加'];
 
   let isLoading = false;
   let cacheLoaded = false;
-  let currentTab = 'Stored';
+  let currentTab = '已存储';
   let fontCache: Cache | undefined;
 
   onMount(async () => {
@@ -104,7 +104,7 @@
         </ul>
       </div>
       <div class="mt-5">
-        {#if currentTab === 'Stored'}
+        {#if currentTab === '已存储'}
           {#if $userFonts$.length}
             <div
               class="grid grid-cols-[repeat(3,auto)] items-center gap-y-4 gap-x-4 max-h-[50vh] overflow-auto break-all md:gap-x-14"
@@ -113,7 +113,7 @@
                 <div
                   tabindex="0"
                   role="button"
-                  title="Click to select Font"
+                  title="点击选择字体"
                   class="hover:text-blue-700"
                   on:click={() => selectFont(userFont.name)}
                   on:keyup={dummyFn}
@@ -123,7 +123,7 @@
                 <div
                   tabindex="0"
                   role="button"
-                  title="Click to select Font"
+                  title="点击选择字体"
                   class="hover:text-blue-700"
                   on:click={() => selectFont(userFont.name)}
                   on:keyup={dummyFn}
@@ -133,7 +133,7 @@
                 <div
                   tabindex="0"
                   role="button"
-                  title="Remove Font"
+                  title="移除字体"
                   class="hover:text-blue-700"
                   on:click={() => removeFont(userFont.path)}
                   on:keyup={dummyFn}
@@ -143,7 +143,7 @@
               {/each}
             </div>
           {:else}
-            <div>You have currently no stored Fonts</div>
+            <div>当前没有保存的字体</div>
           {/if}
         {:else if fontCache}
           <SvelteUserFontAdd {fontCache} bind:isLoading />

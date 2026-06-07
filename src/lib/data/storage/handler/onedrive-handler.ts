@@ -137,7 +137,7 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
                     body.error_description ||
                       body.error?.message ||
                       body.error ||
-                      'Received error on data retrival'
+                      '接收数据出错'
                   );
                 }
 
@@ -212,7 +212,7 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
         }
       }
     } else {
-      throw new Error('RootId required for search');
+      throw new Error('搜索需要 RootId');
     }
 
     if (!titleId && !readOnly) {
@@ -243,7 +243,7 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
     }
 
     if (!titleId && name === BaseStorageHandler.rootName) {
-      throw new Error('Root folder not found');
+      throw new Error('未找到根文件夹');
     }
 
     return titleId;
@@ -334,7 +334,7 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
       params.append('select', `id,name`);
 
       if (!uploadUrl) {
-        throw new Error('Upload url was not returned');
+        throw new Error('未返回上传 URL');
       }
 
       try {
@@ -379,7 +379,7 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
     }
 
     if (!remoteFile) {
-      throw new Error('Renaming requires a remote id');
+      throw new Error('重命名需要远程 ID');
     }
 
     const renameResponse = await this.rename(name, files, remoteFile, params, rootFilePrefix);

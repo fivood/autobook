@@ -67,7 +67,7 @@ export class SectionCharacterStatsCalculator {
   calcExploredCharCount(customReadingPointRange: Range | undefined) {
     if (dev && this.getPageGap() === 0) {
       // Scroll position must be beyond text size for character count increment
-      throw new Error('Formula assumes non-zero page gap');
+      throw new Error('公式假设页面间距不为零');
     }
 
     if (customReadingPointRange && this.calculator) {

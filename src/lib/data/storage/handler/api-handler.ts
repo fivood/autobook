@@ -153,7 +153,7 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     }
 
     if (!bookData) {
-      throw new Error('No local or external book data found');
+      throw new Error('未找到本地或外部书籍数据');
     }
 
     if (bookData.storageSource !== this.storageSourceName) {
@@ -684,7 +684,7 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
 
               if (this.status === 404) {
                 logger.error(errorMessage);
-                reject(new Error('Resource not found. Refresh your current tab and try again'));
+                reject(new Error('资源未找到。请刷新当前标签页后重试'));
               } else {
                 reject(new Error(errorMessage));
               }

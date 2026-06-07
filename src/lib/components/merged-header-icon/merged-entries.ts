@@ -49,7 +49,7 @@ export const mergeEntries = {
     icon: faTriangleExclamation,
     title: '正在使用旧域名'
   },
-  BUG_REPORT: { routeId: '', label: 'Bug Report', icon: faBug, title: 'Report an Issue' },
+  BUG_REPORT: { routeId: '', label: '问题反馈', icon: faBug, title: '报告问题' },
   FOLDER_IMPORT: {
     routeId: '',
     label: '导入文件夹',

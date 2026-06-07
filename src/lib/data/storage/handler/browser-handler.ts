@@ -81,7 +81,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
       : await database.getDataByTitle(this.currentContext.title);
 
     if (!book) {
-      throw new Error('No local book data found');
+      throw new Error('未找到本地书籍数据');
     }
 
     if (!book.elementHtml) {

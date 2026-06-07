@@ -14,7 +14,7 @@ export function getValueSync<T>(obs: Observable<T>): T {
     value = x;
   });
   subscription.unsubscribe();
-  if (!exists) throw new Error('Observable did not emit a value');
+  if (!exists) throw new Error('可观察对象未发出值');
   // @ts-expect-error Rely on `exists` to throw if no value was emitted
   return value;
 }

@@ -18,33 +18,31 @@
 </script>
 
 <DialogTemplate>
-  <svelte:fragment slot="header">External Read</svelte:fragment>
+  <svelte:fragment slot="header">外部阅读</svelte:fragment>
   <svelte:fragment slot="content">
-    <p class="my-2">You are opening a book from an external storage Source.</p>
+    <p class="my-2">您正在从外部存储来源打开书籍。</p>
     <p class="my-2">
-      Note: This will redownload the complete book every time and may override other configured sync
-      target configurations.
+      注意: 每次都会重新下载完整书籍，并可能覆盖其他已配置的同步目标设置。
     </p>
     <p class="my-2">
-      Consider an export to the local browser and switching to / reading from browser storage view
-      to prevent such behaviour.
+      建议导出到本地浏览器并切换到浏览器存储视图阅读，以避免此问题。
     </p>
     <p class="flex items-center mt-4">
       <input id="show-hint" type="checkbox" bind:checked={$hideExternalReadHint$} />
-      <label class="ml-2" for="show-hint">Remember and hide this message</label>
+      <label class="ml-2" for="show-hint">记住并隐藏此消息</label>
     </p>
   </svelte:fragment>
   <div class="flex flex-col sm:flex-row grow sm:justify-between" slot="footer">
     <button class={buttonClasses} on:click={() => closeDialog('cancel')}>
-      Cancel
+      取消
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog('export')}>
-      Open Export
+      打开导出
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog()}>
-      Confirm
+      确认
       <Ripple />
     </button>
   </div>

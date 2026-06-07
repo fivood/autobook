@@ -128,7 +128,7 @@ export class FilesystemStorageHandler extends BaseStorageHandler {
     }
 
     if (!data) {
-      throw new Error('No local or external book data found');
+      throw new Error('未找到本地或外部书籍数据');
     }
 
     if (data.storageSource !== this.storageSourceName) {
@@ -675,11 +675,11 @@ export class FilesystemStorageHandler extends BaseStorageHandler {
       const handleData = storageSource.data;
 
       if (handleData instanceof ArrayBuffer || isRemoteContext(handleData)) {
-        throw new Error('Wrong filesystem handle type');
+        throw new Error('错误的文件系统句柄类型');
       }
 
       if (!handleData.directoryHandle) {
-        throw new Error('Filesystem handle not found');
+        throw new Error('未找到文件系统句柄');
       }
 
       await FilesystemStorageHandler.verifyPermission(handleData.directoryHandle);
@@ -695,8 +695,8 @@ export class FilesystemStorageHandler extends BaseStorageHandler {
             {
               component: StorageUnlock,
               props: {
-                description: 'You are trying to access data on your filesystem',
-                action: 'Please grant permissions in the next dialog',
+                description: '您正在尝试访问文件系统上的数据',
+                action: '请在下一个对话框中授予权限',
                 requiresSecret: false,
                 resolver
               },
@@ -937,7 +937,7 @@ export class FilesystemStorageHandler extends BaseStorageHandler {
       return true;
     }
 
-    throw new Error('No permissions granted to access filesystem');
+    throw new Error('未授予访问文件系统的权限');
   }
 
   private static async list(directory: FileSystemDirectoryHandle, listDirectories = false) {

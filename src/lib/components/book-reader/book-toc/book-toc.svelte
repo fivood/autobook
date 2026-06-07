@@ -128,11 +128,11 @@
 </script>
 
 <div class="flex justify-between p-4">
-  <div>Chapter Progress: {currentChapterCharacterProgress} ({currentChapterProgress}%)</div>
+  <div>章节进度: {currentChapterCharacterProgress} ({currentChapterProgress}%)</div>
   <div
     tabindex="0"
     role="button"
-    title="Close Table of Contents"
+    title="关闭目录"
     class="flex items-end md:items-center"
     on:click={closeTocMenu}
     on:keyup={dummyFn}
@@ -146,7 +146,7 @@
       <div
         tabindex="0"
         role="button"
-        title={`Go to ${chapter.label}`}
+        title={`跳转到 ${chapter.label}`}
         id={`for${chapter.reference}`}
         class="mr-4"
         class:opacity-30={chapter.progress === 100 && chapter !== currentChapter}
@@ -167,7 +167,7 @@
   <div
     tabindex="0"
     role="button"
-    title={prevChapterAvailable ? `${verticalMode ? 'Next' : 'Previous'} Chapter` : ''}
+    title={prevChapterAvailable ? `${verticalMode ? '下一章' : '上一章'}` : ''}
     class:opacity-30={!prevChapterAvailable}
     on:click={() => changeChapter(prevChapterAvailable, verticalMode ? 1 : -1)}
     on:keyup={dummyFn}
@@ -177,7 +177,7 @@
   <div
     tabindex="0"
     role="button"
-    title={nextChapterAvailable ? `${verticalMode ? 'Previous' : 'Next'} Chapter` : ''}
+    title={nextChapterAvailable ? `${verticalMode ? '上一章' : '下一章'}` : ''}
     class:opacity-30={!nextChapterAvailable}
     on:click={() => changeChapter(nextChapterAvailable, verticalMode ? -1 : 1)}
     on:keyup={dummyFn}

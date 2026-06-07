@@ -23,7 +23,7 @@
   });
 </script>
 
-<h2 class="mb-4 text-xl font-medium">Export Target</h2>
+<h2 class="mb-4 text-xl font-medium">导出目标</h2>
 <div class="mb-4 grid grid-cols-2 gap-8">
   {#each icons as icon (icon.source)}
     {@const disabled = !isOnlineSourceAvailable($isOnline$, icon.source)}
@@ -39,11 +39,11 @@
     />
   {/each}
 </div>
-<h2 class="mb-2 text-xl font-medium">Export Content</h2>
+<h2 class="mb-2 text-xl font-medium">导出内容</h2>
 <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
   <div class="mr-4">
     <input type="checkbox" id="bookdata" name="data" value="data" bind:group={dataToReplicate} />
-    <label for="bookdata">Book Data</label>
+    <label for="bookdata">书籍数据</label>
   </div>
   <div>
     <input
@@ -53,7 +53,7 @@
       value="bookmark"
       bind:group={dataToReplicate}
     />
-    <label for="bookprogress">Bookmark</label>
+    <label for="bookprogress">书签</label>
   </div>
   <div>
     <input
@@ -63,7 +63,7 @@
       value="statistic"
       bind:group={dataToReplicate}
     />
-    <label for="bookstatistic">Statistics</label>
+    <label for="bookstatistic">统计</label>
   </div>
   <div>
     <input
@@ -73,7 +73,7 @@
       value="audioBook"
       bind:group={dataToReplicate}
     />
-    <label for="bookstatistic">Audiobook</label>
+    <label for="audioBook">有声书</label>
   </div>
   <div>
     <input
@@ -83,6 +83,6 @@
       value="subtitle"
       bind:group={dataToReplicate}
     />
-    <label for="bookstatistic">Subtitles</label>
+    <label for="subtitle">字幕</label>
   </div>
 </div>

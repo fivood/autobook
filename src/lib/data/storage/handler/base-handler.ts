@@ -545,7 +545,7 @@ export abstract class BaseStorageHandler {
               const staticData = JSON.parse(
                 await this.readFromZip(
                   new TextWriter(),
-                  'Unable to read Static Data',
+                  '无法读取静态数据',
                   entry,
                   progressPerStep
                 )
@@ -587,7 +587,7 @@ export abstract class BaseStorageHandler {
 
               existingBlobEntries[imagePath] = await this.readFromZip(
                 new BlobWriter(BaseStorageHandler.getImageMimeTypeFromExtension(imagePath)),
-                'Unable to read blob data',
+                '无法读取 blob 数据',
                 entry,
                 progressPerStep
               );
@@ -595,7 +595,7 @@ export abstract class BaseStorageHandler {
             } else if (entry.filename.startsWith('cover.')) {
               bookObject.coverImage = await this.readFromZip(
                 new BlobWriter(BaseStorageHandler.getImageMimeTypeFromExtension(entry.filename)),
-                'Unable to read cover data',
+                '无法读取封面数据',
                 entry,
                 progressPerStep
               );

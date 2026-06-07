@@ -16,6 +16,6 @@ export function throwIfAborted(cancelSignal?: AbortSignal) {
   if (typeof cancelSignal.throwIfAborted === 'function') {
     cancelSignal.throwIfAborted();
   } else if (cancelSignal.aborted) {
-    throw new AbortError('User canceled');
+    throw new AbortError('用户已取消');
   }
 }

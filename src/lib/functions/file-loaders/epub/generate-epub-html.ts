@@ -211,7 +211,7 @@ export default function generateEpubHtml(
       body = parsedContent.querySelector('body')!;
 
       if (!body?.childNodes?.length) {
-        throw new Error('Unable to find valid body content while parsing EPUB');
+        throw new Error('解析 EPUB 时无法找到有效的正文内容');
       }
     }
 

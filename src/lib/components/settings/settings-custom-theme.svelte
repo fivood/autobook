@@ -132,13 +132,13 @@
     themeNameElm.setCustomValidity('');
 
     if (!themeName) {
-      themeNameElm.setCustomValidity('You have to enter a Name!');
+      themeNameElm.setCustomValidity('请输入名称！');
       themeNameElm.reportValidity();
       return;
     }
 
     if (availableThemes.has(themeName)) {
-      themeNameElm.setCustomValidity('This Name is reserved!');
+      themeNameElm.setCustomValidity('该名称已被保留！');
       themeNameElm.reportValidity();
       return;
     }
@@ -201,42 +201,42 @@
         {/each}
       </select>
       <button class={buttonClasses} on:click={handleCopyTheme}
-        >Copy
+        >复制
         <Ripple />
       </button>
-      <span class="hidden sm:block">Attribute</span>
-      <span class="hidden sm:block">Color</span>
-      <span class="hidden sm:block">Alpha</span>
+      <span class="hidden sm:block">属性</span>
+      <span class="hidden sm:block">颜色</span>
+      <span class="hidden sm:block">透明度</span>
       <SettingsCustomThemeInput
-        label="Font"
+        label="字体"
         attribute="fontColor"
         values={customTheme.fontColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="Background"
+        label="背景"
         attribute="backgroundColor"
         values={customTheme.backgroundColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="Furigana Partial Hide Font"
+        label="振假名部分隐藏字体"
         attribute="hintFuriganaFontColor"
         values={customTheme.hintFuriganaFontColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="Furigana Partial/Full Hide Shadow"
+        label="振假名部分/完全隐藏阴影"
         attribute="hintFuriganaShadowColor"
         values={customTheme.hintFuriganaShadowColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="Footer Font"
+        label="页脚字体"
         attribute="tooltipTextFontColor"
         values={customTheme.tooltipTextFontColor}
         on:color={handleColorValueChange}
@@ -245,7 +245,7 @@
       <input
         class="sm:col-span-2"
         type="text"
-        placeholder="Theme Name"
+        placeholder="主题名称"
         bind:value={themeName}
         bind:this={themeNameElm}
       />
@@ -261,11 +261,11 @@
   </div>
   <div class="mt-2 flex grow justify-between" slot="footer">
     <button class={buttonClasses} on:click={() => dispatch('close')}>
-      Cancel
+      取消
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={handleSave}>
-      Save
+      保存
       <Ripple />
     </button>
   </div>

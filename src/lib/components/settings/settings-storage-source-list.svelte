@@ -46,7 +46,7 @@
   export let storageSources: BooksDbStorageSource[];
 
   let listLoading = true;
-  let listTooltip = 'Allows you to add a custom set of credentials';
+  let listTooltip = '允许您添加自定义凭据';
 
   $: if (storageSources) {
     listLoading = false;
@@ -55,7 +55,7 @@
   $: fileSystemAvailable = browser && 'showDirectoryPicker' in window;
 
   $: if (fileSystemAvailable) {
-    listTooltip += ' or filesystem access';
+    listTooltip += ' 或文件系统访问';
   }
 
   function isSyncTarget(name: string, referenceName: string) {
@@ -90,9 +90,9 @@
     if (storageSource && storageSource.type !== StorageKey.FS) {
       const unlockResult = await unlockStorageData(
         storageSource,
-        'You are trying to access protected data',
+        '您正在尝试访问受保护的数据',
         {
-          action: `Enter the correct password for ${storageSource.name} to proceed`,
+          action: `请输入 ${storageSource.name} 的正确密码以继续`,
           encryptedData: storageSource.data
         }
       );
@@ -167,13 +167,13 @@
     const unlockResult = await unlockStorageData(
       storageSource,
       storageSource.type === StorageKey.FS
-        ? 'You are trying to delete data'
-        : 'You are trying to delete protected data',
+        ? '您正在尝试删除数据'
+        : '您正在尝试删除受保护的数据',
       {
         action:
           storageSource.type === StorageKey.FS
-            ? `Please confirm to proceed with deleting ${storageSource.name}`
-            : `Enter the correct password for ${storageSource.name} to proceed`,
+            ? `请确认继续删除 ${storageSource.name}`
+            : `请输入 ${storageSource.name} 的正确密码以继续`,
         requiresSecret: storageSource.type !== StorageKey.FS,
         showCancel: true,
         encryptedData: storageSource.type !== StorageKey.FS ? storageSource.data : undefined
@@ -191,8 +191,8 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
-            message: 'You need to be online to delete this storage source'
+            title: '错误',
+            message: '需要联网才能删除此存储来源'
           },
           disableCloseOnClick: true
         }
@@ -218,14 +218,14 @@
   <div class="flex">
     <div class="flex grow">
       <h1 class="mb-2 text-xl font-medium">
-        <span class="capitalize">Storage Sources</span>
+        <span class="capitalize">存储来源</span>
       </h1>
       <Popover contentText={listTooltip} contentStyles="padding: 0.5rem;">
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
       </Popover>
       {#if $autoReplication$ !== AutoReplicationType.Off && !$syncTarget$}
         <Popover
-          contentText={'Auto import/export enabled but no source as sync target from list selected'}
+          contentText={'已启用自动导入/导出，但未从列表中选择同步目标'}
           contentStyles="padding: 0.25rem;"
         >
           <Fa icon={faTriangleExclamation} slot="icon" class="mx-2" />
@@ -242,7 +242,7 @@
     >
       <div class="flex items-center justify-center">
         <Fa icon={faPlus} />
-        <span class="ml-1 hidden sm:block">Add</span>
+        <span class="ml-1 hidden sm:block">添加</span>
       </div>
       <Ripple />
     </button>
@@ -275,7 +275,7 @@
               <div
                 tabindex="0"
                 role="button"
-                title="Edit source"
+                title="编辑来源"
                 class="mr-4"
                 class:hidden={isDefault}
                 on:click={() => modifyStorageSource(storageSource)}
@@ -286,7 +286,7 @@
               <div
                 tabindex="0"
                 role="button"
-                title="Toggle source as sync target"
+                title="切换同步目标"
                 class="mr-4"
                 class:opacity-50={!storageSourceIsSyncTarget}
                 on:click={() =>
@@ -298,7 +298,7 @@
               <div
                 tabindex="0"
                 role="button"
-                title="Toggle source as data source for this type"
+                title="切换为此类型的数据来源"
                 class="mr-4"
                 class:opacity-50={!storageSourceIsSourceDefault}
                 on:click={() =>
@@ -313,7 +313,7 @@
               <div
                 tabindex="0"
                 role="button"
-                title="Delete source"
+                title="删除来源"
                 class:hidden={isDefault}
                 on:click={() =>
                   deleteStorageSource(

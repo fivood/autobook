@@ -55,9 +55,9 @@
     label: string;
     action: any;
   }[] = [
-    ...(hasCustomReadingPoint ? [{ label: 'Show Point', action: 'showCustomReadingPoint' }] : []),
-    { label: 'Set Point', action: 'setCustomReadingPoint' },
-    ...(hasCustomReadingPoint ? [{ label: 'Reset Point', action: 'resetCustomReadingPoint' }] : [])
+    ...(hasCustomReadingPoint ? [{ label: '显示阅读点', action: 'showCustomReadingPoint' }] : []),
+    { label: '设置阅读点', action: 'setCustomReadingPoint' },
+    ...(hasCustomReadingPoint ? [{ label: '重置阅读点', action: 'resetCustomReadingPoint' }] : [])
   ];
 
   let customReadingPointMenuElm: Popover;
@@ -105,7 +105,7 @@
       <div
         tabindex="0"
         role="button"
-        title="Open Table of Contents"
+        title="打开目录"
         class={baseIconClasses}
         on:click={() => dispatch('tocClick')}
         on:keyup={dummyFn}
@@ -116,7 +116,7 @@
     <div
       tabindex="0"
       role="button"
-      title="Create Bookmark"
+      title="添加书签"
       class={baseIconClasses}
       on:click={() => dispatch('bookmarkClick')}
       on:keyup={dummyFn}
@@ -127,7 +127,7 @@
       <div
         tabindex="0"
         role="button"
-        title="Return to Bookmark"
+        title="返回书签位置"
         class={baseIconClasses}
         on:click={() => dispatch('scrollToBookmarkClick')}
         on:keyup={dummyFn}
@@ -138,7 +138,7 @@
     {#if $viewMode$ === ViewMode.Continuous && !$isMobile$}
       <div
         class="flex items-center px-4 text-xl xl:px-3 xl:text-lg"
-        title="Current Autoscroll Speed"
+        title="当前自动滚动速度"
       >
         {autoScrollMultiplier}x
       </div>
@@ -149,7 +149,7 @@
     <div
       tabindex="0"
       role="button"
-      title="Complete Book"
+      title="完成本书"
       class={baseIconClasses}
       on:click={() => dispatch('completeBook')}
       on:keyup={dummyFn}
@@ -164,7 +164,7 @@
           yOffset={0}
           bind:this={customReadingPointMenuElm}
         >
-          <div slot="icon" title="Open Custom Point Actions" class={baseIconClasses}>
+          <div slot="icon" title="打开自定义阅读点操作" class={baseIconClasses}>
             <Fa icon={faCrosshairs} />
           </div>
           <div class="w-40 bg-gray-700 md:w-32" slot="content">
@@ -187,7 +187,7 @@
       <div
         tabindex="0"
         role="button"
-        title="Toggle Fullscreen"
+        title="切换全屏"
         class={baseIconClasses}
         on:click={() => dispatch('fullscreenClick')}
         on:keyup={dummyFn}

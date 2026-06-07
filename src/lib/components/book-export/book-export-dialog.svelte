@@ -21,8 +21,8 @@
   import { createEventDispatcher } from 'svelte';
 
   let icons = [
-    { ...getStorageIconData(StorageKey.BACKUP), source: StorageKey.BACKUP, label: 'Zip File' },
-    { ...getStorageIconData(StorageKey.BROWSER), source: StorageKey.BROWSER, label: 'Browser DB' }
+    { ...getStorageIconData(StorageKey.BACKUP), source: StorageKey.BACKUP, label: 'ZIP 文件' },
+    { ...getStorageIconData(StorageKey.BROWSER), source: StorageKey.BROWSER, label: '浏览器数据库' }
   ];
 
   const dispatch = createEventDispatcher<{
@@ -67,7 +67,7 @@
   </svelte:fragment>
   <div class="flex grow justify-between" slot="footer">
     <button class={buttonClasses} on:click={() => dispatch('close')}>
-      Cancel
+      取消
       <Ripple />
     </button>
     <button
@@ -76,7 +76,7 @@
       disabled={!$lastExportedTypes$.length}
       on:click={replicateData}
     >
-      Start
+      开始
       <Ripple />
     </button>
   </div>

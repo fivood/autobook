@@ -308,7 +308,7 @@
           {
             component: MessageDialog,
             props: {
-              title: 'Load Error',
+              title: '加载错误',
               message
             }
           }
@@ -599,7 +599,7 @@
     ) {
       event.preventDefault();
       // eslint-disable-next-line no-param-reassign
-      return (event.returnValue = 'Are you sure you want to exit?');
+      return (event.returnValue = '确定要退出吗？');
     }
 
     return event;
@@ -640,7 +640,7 @@
         {
           component: NumberDialog,
           props: {
-            dialogHeader: 'Jump to Position',
+            dialogHeader: '跳转到位置',
             minValue: 1,
             maxValue: bookCharCount || 1,
             resolver
@@ -694,8 +694,8 @@
         {
           component: ConfirmDialog,
           props: {
-            dialogHeader: 'Complete Book',
-            dialogMessage: `Would you like to complete this Book${
+            dialogHeader: '完成本书',
+            dialogMessage: `您想要完成本书吗${
               diffToComplete ? ` and capture ${diffToComplete} characters read` : ''
             }?`,
             resolver
@@ -729,7 +729,7 @@
         const [hadError] = await trackerElm.processStatistics(diffToComplete);
 
         if (hadError) {
-          throw new Error('Character Update failed');
+          throw new Error('字数更新失败');
         }
       }
 
@@ -827,7 +827,7 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
+            title: '错误',
             message: `Error completing Book: ${message}`
           }
         }
@@ -926,9 +926,9 @@
           {
             component: MessageDialog,
             props: {
-              title: 'Load Error',
+              title: '加载错误',
               message:
-                'Sync disabled due to missing Online Connection - refresh Page after going Online to try again'
+                '因缺少网络连接，同步已禁用 - 联网后刷新页面重试'
             }
           }
         ]);
@@ -953,9 +953,9 @@
           {
             component: MessageDialog,
             props: {
-              title: 'Load Error',
+              title: '加载错误',
               message:
-                'Sync disabled due to missing Online Connection - refresh Page after going Online to try again'
+                '因缺少网络连接，同步已禁用 - 联网后刷新页面重试'
             }
           }
         ]);
@@ -984,9 +984,9 @@
             {
               component: MessageDialog,
               props: {
-                title: 'Load Error',
+                title: '加载错误',
                 message:
-                  'Sync disabled due to missing Online Connection - refresh Page after going Online to try again'
+                  '因缺少网络连接，同步已禁用 - 联网后刷新页面重试'
               }
             }
           ]);
@@ -1010,7 +1010,7 @@
       }
     }
 
-    const message = `No storage source with name ${storageSourceName} found - skipping auto import/export`;
+    const message = `未找到名为 ${storageSourceName} 的存储来源 - 跳过自动导入/导出`;
 
     logger.warn(message);
 
@@ -1018,7 +1018,7 @@
       {
         component: MessageDialog,
         props: {
-          title: 'Configuration Error',
+          title: '配置错误',
           message
         }
       }
@@ -1052,7 +1052,7 @@
         };
       }
     } else if (!localBookData.elementHtml) {
-      throw new Error('Book has no data stored');
+      throw new Error('书籍没有存储数据');
     }
 
     const dataToReturn = { id, ...bookData };
@@ -1066,7 +1066,7 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Update Error',
+            title: '更新错误',
             message
           }
         }
@@ -1209,9 +1209,9 @@
       {
         component: MessageDialog,
         props: {
-          title: 'Old Domain',
+          title: '旧域名',
           message:
-            'You are currently using the old domain of ッツ Reader - consider switching to https://reader.ttsu.app to prevent issues and to ensure full features'
+            '您正在使用 ッツ 阅读器的旧域名 - 建议切换到 https://reader.ttsu.app 以避免问题并确保完整功能'
         },
         disableCloseOnClick: true
       }
@@ -1308,9 +1308,9 @@
           {
             component: showReport ? LogReportDialog : MessageDialog,
             props: {
-              title: 'Error Processing Data',
+              title: '处理数据错误',
               message: showReport
-                ? `Some or all data could not be stored on an external storage`
+                ? `部分或全部数据无法存储到外部存储`
                 : error
             }
           }
@@ -1375,8 +1375,8 @@
             {
               component: ConfirmDialog,
               props: {
-                dialogHeader: 'Confirm Exit',
-                dialogMessage: 'Your current location was not bookmarked. Continue leaving?',
+                dialogHeader: '确认退出',
+                dialogMessage: '当前位置未添加书签。继续离开吗？',
                 resolver
               },
 
@@ -1407,7 +1407,7 @@
         const [hadError, updated] = await trackerElm.flushUpdates(true);
 
         if (hadError) {
-          throw new Error('Error updating Statistics');
+          throw new Error('更新统计出错');
         }
 
         if (updated) {
@@ -1432,7 +1432,7 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
+            title: '错误',
             message
           },
           disableCloseOnClick: true
@@ -1841,7 +1841,7 @@
     {#if showTrackerIcon}
       <div
         role="button"
-        title="Click to open Tracker Menu or Double Click to toggle Tracker"
+        title="单击打开统计菜单，双击切换统计"
         class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
         class:text-red-500={$isTrackerPaused$}
         class:animate-pulse={frozenPosition > -1}
@@ -1886,7 +1886,7 @@
     <div
       tabindex="0"
       role="button"
-      title="Click to copy Progress"
+      title="点击复制进度"
       class="writing-horizontal-tb fixed bottom-2 right-2 z-10 text-xs leading-none select-none whitespace-pre"
       class:invisible={!$showCharacterCounter$ &&
         !$showPercentage$ &&

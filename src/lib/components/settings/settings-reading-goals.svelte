@@ -52,13 +52,13 @@
   const readingGoalFrequencies = [
     {
       id: ReadingGoalFrequency.DAILY,
-      label: 'Daily (1 Day)'
+      label: '每日 (1天)'
     },
     {
       id: ReadingGoalFrequency.WEEKLY,
-      label: 'Weekly (7 Days)'
+      label: '每周 (7天)'
     },
-    { id: ReadingGoalFrequency.MONTHLY, label: 'Monthly (30 Days)' }
+    { id: ReadingGoalFrequency.MONTHLY, label: '每月 (30天)' }
   ];
 
   let currentTimeGoal = 0;
@@ -189,8 +189,8 @@
           {
             component: MessageDialog,
             props: {
-              title: 'Error',
-              message: `Error updating Reading Goal(s): ${error.message}`
+              title: '错误',
+              message: `更新阅读目标出错: ${error.message}`
             }
           }
         ])
@@ -210,7 +210,7 @@
         {
           component: SettingsSyncDialog,
           props: {
-            settingsSyncHeader: 'Sync Reading Goals',
+            settingsSyncHeader: '同步阅读目标',
             storageSources: availableSources,
             resolver
           },
@@ -262,8 +262,8 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
-            message: `Error syncing Reading Goals: ${message}`
+            title: '错误',
+            message: `同步阅读目标出错: ${message}`
           }
         }
       ]);
@@ -281,30 +281,30 @@
         $readingGoal$.goalStartDate === readingGoalToDelete.goalStartDate;
       const term =
         getDateKey($startDayHoursForTracker$) >= readingGoalToDelete.goalStartDate
-          ? 'started'
-          : 'starting';
-      dialogMessage = `The${
-        isCurrentReadingGoal ? ` current Reading Goal ${term} on` : ' archived Reading Goal for '
-      } ${dateRangeLabel} will be deleted${isCurrentReadingGoal ? ' without archiving' : ''}`;
+          ? '开始于'
+          : '将从';
+      dialogMessage = `${
+        isCurrentReadingGoal ? `当前阅读目标${term}` : '归档阅读目标针对'
+      } ${dateRangeLabel} 将被删除${isCurrentReadingGoal ? '（不归档）' : ''}`;
     } else if (readingGoals.length > 1) {
-      dialogMessage = `All archived Reading Goals will be deleted${
-        $readingGoal$.goalStartDate ? ' (including the current One)' : ''
+      dialogMessage = `所有归档的阅读目标将被删除${
+        $readingGoal$.goalStartDate ? '（包括当前的）' : ''
       }`;
     } else {
       dialogMessage = $readingGoal$.goalStartDate
-        ? 'Your current Reading Goal will be deleted without archiving'
-        : 'Your archived Reading Goal will be deleted';
+        ? '您的当前阅读目标将被删除（不归档）'
+        : '您的归档阅读目标将被删除';
     }
 
     dialogMessage +=
-      '\n\nExecute an one time Sync with an export behavior of "overwrite" and/or reading goals merge mode of "replace" to apply deletions to other devices';
+      '\n\n执行一次性同步，导出行为设为"覆盖"和/或阅读目标合并模式设为"替换"，以将删除应用到其他设备';
 
     const wasCanceled = await new Promise((resolver) => {
       dialogManager.dialogs$.next([
         {
           component: ConfirmDialog,
           props: {
-            dialogHeader: 'Data Deletion',
+            dialogHeader: '删除数据',
             dialogMessage,
             contentStyles: 'white-space: pre-line;',
             resolver
@@ -328,7 +328,7 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
+            title: '错误',
             message: `An Error occurred: ${message}`
           }
         }
@@ -347,8 +347,8 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
-            message: `Error loading Reading Goals: ${error.message}`
+            title: '错误',
+            message: `加载阅读目标出错: ${error.message}`
           }
         }
       ]);
@@ -371,7 +371,7 @@
 <div class="mb-8 sm:col-span-2 lg:col-span-3">
   <div class="flex flex-grow">
     <h1 class="mb-2 text-xl font-medium w-full">
-      <span class="capitalize">Reading Goals</span>
+      <span class="capitalize">阅读目标</span>
     </h1>
     {#if isInEditMode}
       <button class={`${buttonClasses} mr-4`} disabled={saveDisabled} on:click={saveReadingGoal}>
@@ -379,7 +379,7 @@
           class="flex items-center justify-center hover:opacity-50"
           class:cursor-not-allowed={saveDisabled}
         >
-          <span class="mr-2">Save</span>
+          <span class="mr-2">保存</span>
           <Fa icon={faSave} />
         </div>
       </button>
@@ -397,20 +397,20 @@
         }}
       >
         <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">Cancel</span>
+          <span class="mr-2">取消</span>
           <Fa icon={faCancel} />
         </div>
       </button>
     {:else}
       <button class={buttonClasses} on:click={syncReadingGoals}>
         <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">Sync</span>
+          <span class="mr-2">同步</span>
           <Fa icon={faRotate} />
         </div>
       </button>
       <button class={buttonClasses} on:click={() => (isInEditMode = true)}>
         <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">Edit</span>
+          <span class="mr-2">编辑</span>
           <Fa icon={faEdit} />
         </div>
       </button>
@@ -420,11 +420,11 @@
         on:click={() => deleteReadingGoals()}
       >
         <div
-          title="Delete all Reading Goals"
+          title="删除所有阅读目标"
           class="flex items-center justify-center hover:opacity-50"
           class:cursor-not-allowed={!readingGoals.length}
         >
-          <span class="mr-2">Reset</span>
+          <span class="mr-2">重置</span>
           <Fa icon={faTrash} />
         </div>
       </button>
@@ -433,7 +433,7 @@
   <hr class="border border-black" />
   <div class="grid grid-cols-1 gap-4 justify-between items-end mt-4 md:grid-cols-4">
     <div class="flex flex-col">
-      Time Goal (Min)
+      时间目标 (分钟)
       <input
         type="number"
         min="0"
@@ -444,7 +444,7 @@
       />
     </div>
     <div class="flex flex-col">
-      Character Goal
+      字数目标
       <input
         type="number"
         min="0"
@@ -455,7 +455,7 @@
       />
     </div>
     <div class="flex flex-col">
-      Frequency
+      频率
       <select
         class:cursor-not-allowed={!isInEditMode}
         disabled={!isInEditMode}
@@ -469,7 +469,7 @@
       </select>
     </div>
     <div class="flex flex-col">
-      Start Date
+      开始日期
       <input
         type="date"
         class:cursor-not-allowed={!isInEditMode}
@@ -479,7 +479,7 @@
     </div>
   </div>
   <details class="mt-6 cursor-pointer">
-    <summary>Reading Goal History ({pluralize(readingGoals.length, 'Item')})</summary>
+    <summary>阅读目标历史 ({pluralize(readingGoals.length, '项')})</summary>
     {#if readingGoals.length}
       <div class="grid-cols-[repeat(4,1fr)_0.1fr] hidden sm:grid">
         {#each historyReadingGoals as historyGoal (historyGoal.goalStartDate)}
@@ -488,12 +488,12 @@
             historyGoal.goalEndDate
           )}
           <div>{dateRangeLabel}</div>
-          <div>{secondsToMinutes(historyGoal.timeGoal)} min</div>
-          <div>{historyGoal.characterGoal} characters</div>
+          <div>{secondsToMinutes(historyGoal.timeGoal)} 分钟</div>
+          <div>{historyGoal.characterGoal} 字</div>
           <div>{historyGoal.goalFrequency}</div>
           <button
             on:click={() => deleteReadingGoals(historyGoal, dateRangeLabel)}
-            title="Delete Reading Goal"
+            title="删除阅读目标"
           >
             <Fa icon={faTrash} />
           </button>
@@ -510,7 +510,7 @@
             characters / {historyGoal.goalFrequency}
             <button
               on:click={() => deleteReadingGoals(historyGoal, dateRangeLabel)}
-              title="Delete Reading Goal"
+              title="删除阅读目标"
             >
               <Fa icon={faTrash} />
             </button>
@@ -519,7 +519,7 @@
       </div>
       <div class="mt-3 flex justify-between">
         <button
-          title={currentHistoryIndex === 0 ? '' : 'Previous Page'}
+          title={currentHistoryIndex === 0 ? '' : '上一页'}
           disabled={currentHistoryIndex === 0}
           class:opacity-50={currentHistoryIndex === 0}
           class:cursor-not-allowed={currentHistoryIndex === 0}
@@ -528,7 +528,7 @@
           <Fa icon={faChevronLeft} />
         </button>
         <button
-          title={hasNextHistoryPage ? 'Next Page' : ''}
+          title={hasNextHistoryPage ? '下一页' : ''}
           disabled={!hasNextHistoryPage}
           class:opacity-50={!hasNextHistoryPage}
           class:cursor-not-allowed={!hasNextHistoryPage}
@@ -538,7 +538,7 @@
         </button>
       </div>
     {:else}
-      <div>You have no archived Reading Goals yet</div>
+      <div>暂无归档的阅读目标</div>
     {/if}
   </details>
 </div>

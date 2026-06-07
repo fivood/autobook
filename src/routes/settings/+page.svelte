@@ -137,7 +137,7 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('Settings')}</title>
+  <title>{formatPageTitle('设置')}</title>
 </svelte:head>
 
 <div class="elevation-4 fixed inset-x-0 top-0 z-10">

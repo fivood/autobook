@@ -174,7 +174,7 @@
         const bookItem = $bookCards$.find((book) => book.id === bookId);
 
         if (!bookItem) {
-          throw new Error('Book title not found');
+          throw new Error('未找到书籍标题');
         }
 
         const isForBrowser = $storageSource$ === StorageKey.BROWSER;
@@ -238,7 +238,7 @@
           {
             component: MessageDialog,
             props: {
-              title: 'Error',
+              title: '错误',
               message
             }
           }
@@ -267,7 +267,7 @@
     );
 
     if (!connectivityPass && !replicationToProgress) {
-      const message = 'You have to be online for this operation';
+      const message = '此操作需要联网';
 
       logger.warn(message);
 
@@ -275,7 +275,7 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Failure',
+            title: '失败',
             message
           }
         }
@@ -303,18 +303,18 @@
       return;
     }
 
-    cancelTooltip = `Cancels the current Import\nAlready imported data will not be deleted`;
+    cancelTooltip = `取消当前导入\n已导入的数据不会被删除`;
 
     initializeReplicationProgressData();
 
     const supportedExtRegex = /\.(?:htmlz|epub|txt)$/;
     const files = Array.from(fileList).filter((f) => supportedExtRegex.test(f.name));
-    const errorTitle = 'Bookimport failed';
+    const errorTitle = '书籍导入失败';
 
     if (!files.length) {
       resetProgress();
 
-      showError(errorTitle, 'File(s) must be HTMLZ, TXT or EPUB', '');
+      showError(errorTitle, '文件必须是 HTMLZ、TXT 或 EPUB 格式', '');
       return;
     }
 
@@ -338,7 +338,7 @@
     resetProgress();
 
     if (error) {
-      showError(errorTitle, error, 'Error(s) occurred during bookimport');
+      showError(errorTitle, error, '书籍导入期间发生错误');
     }
   }
 
@@ -398,7 +398,7 @@
       return;
     }
 
-    cancelTooltip = `Cancels the Deletion\nAlready deleted data will not be restored`;
+    cancelTooltip = `取消删除\n已删除的数据无法恢复`;
 
     initializeReplicationProgressData();
 
@@ -428,7 +428,7 @@
     }
 
     if (error) {
-      showError('Deletion failed', error, 'Error(s) occurred during deletion');
+      showError('删除失败', error, '删除期间发生错误');
     }
   }
 
@@ -437,7 +437,7 @@
       return;
     }
 
-    const errorTitle = 'Import failed';
+    const errorTitle = '导入失败';
 
     cancelTooltip = `Cancels the current Import\nAlready imported data will not be deleted`;
 
@@ -446,7 +446,7 @@
     if (!file.name.endsWith('.zip')) {
       resetProgress();
 
-      showError(errorTitle, 'Invalid file - expected zip archive', '');
+      showError(errorTitle, '无效文件 - 需要 zip 压缩包', '');
       return;
     }
 
@@ -478,7 +478,7 @@
     resetProgress();
 
     if (error) {
-      showError(errorTitle, error, 'Error(s) occurred during import');
+      showError(errorTitle, error, '导入期间发生错误');
     }
   }
 
@@ -487,9 +487,9 @@
       {
         component: MessageDialog,
         props: {
-          title: 'Old Domain',
+          title: '旧域名',
           message:
-            'You are currently using the old domain of ッツ Reader - consider switching to https://reader.ttsu.app to prevent issues and to ensure full features'
+            '您正在使用 ッツ 阅读器的旧域名 - 建议切换到 https://reader.ttsu.app 以避免问题并确保完整功能'
         },
         disableCloseOnClick: true
       }
@@ -513,10 +513,10 @@
           {
             component: ConfirmDialog,
             props: {
-              dialogHeader: 'Delete Data',
+              dialogHeader: '删除数据',
               dialogMessage: `This will delete all Statistics for the selected ${pluralize(
                 titles.length,
-                'Title',
+                '书籍',
                 false
               )} (which may include start and/or completion Data)\n\nExecute a one time Sync with an export behavior of "replace" and/or statistics merge mode of "replace" to apply deletions to other devices`,
               contentStyles: 'white-space: pre-line;',
@@ -531,7 +531,7 @@
       return;
     }
 
-    cancelTooltip = `Cancels the current Process`;
+    cancelTooltip = `取消当前操作`;
 
     initializeReplicationProgressData();
 
@@ -566,9 +566,9 @@
     resetProgress();
 
     if (failed) {
-      const errorMessage = `Unable to delete statistics of ${pluralize(failed, 'Title')}`;
+      const errorMessage = `无法删除 ${pluralize(failed, '本书')} 的统计数据`;
 
-      showError('Deletion Failed', errorMessage, errorMessage);
+      showError('删除失败', errorMessage, errorMessage);
     }
   }
 
@@ -618,7 +618,7 @@
         return;
       }
 
-      cancelTooltip = 'Cancels the current export';
+      cancelTooltip = '取消当前导出';
 
       initializeReplicationProgressData();
 
@@ -647,7 +647,7 @@
       resetProgress();
 
       if (error) {
-        showError('Export failed', error, 'Error(s) occurred during export');
+        showError('导出失败', error, '导出期间发生错误');
       }
     }),
     reduceToEmptyString()
@@ -661,7 +661,7 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('Book Manager')}</title>
+  <title>{formatPageTitle('书库管理')}</title>
 </svelte:head>
 
 {$replicator$ ?? ''}
@@ -684,7 +684,7 @@
     on:cancelReplication={() => {
       if (!cancelSignal.aborted) {
         cancelToken.abort();
-        replicationProgressRemaining = 'Canceling ...';
+        replicationProgressRemaining = '正在取消 ...';
       }
     }}
     on:selectionToStatistics={() => {
@@ -711,7 +711,7 @@
   on:drop={(ev) => getDropEventFiles(ev).then(onFilesChange)}
 >
   {#if !$bookCards$ || $booksAreLoading$}
-    Loading...
+    加载中...
   {:else if $bookCards$.length}
     <BookCardList
       currentBookId={$currentBookId$}

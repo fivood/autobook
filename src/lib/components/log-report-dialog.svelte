@@ -80,7 +80,7 @@
     enableReaderWakeLock$
   } from '$lib/data/store';
 
-  export let title = 'Error';
+  export let title = '错误';
 
   export let message: string;
 
@@ -194,11 +194,11 @@
       target="_blank"
       rel="noreferrer"
     >
-      Open Repository
+      打开仓库
       <Ripple />
     </a>
     <a class={buttonClasses} href={downloadableLog} download="log.json">
-      Download Report
+      下载报告
       <Ripple />
     </a>
   </svelte:fragment>

@@ -15,30 +15,30 @@ export const heatmapMinValueColor = 'c6e48b';
 export const heatmapMaxValueColor = '196127';
 
 export const daysOfWeek = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday'
+  '周日',
+  '周一',
+  '周二',
+  '周三',
+  '周四',
+  '周五',
+  '周六'
 ];
 
-export const daysOfWeekShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export const daysOfWeekShort = ['日', '一', '二', '三', '四', '五', '六'];
 
 export const monthLabelList: HeatmapMonthLabel[] = [
-  { monthLabel: 'Jan', heatmapColumn: '' },
-  { monthLabel: 'Feb', heatmapColumn: '' },
-  { monthLabel: 'Mar', heatmapColumn: '' },
-  { monthLabel: 'Apr', heatmapColumn: '' },
-  { monthLabel: 'May', heatmapColumn: '' },
-  { monthLabel: 'Jun', heatmapColumn: '' },
-  { monthLabel: 'Jul', heatmapColumn: '' },
-  { monthLabel: 'Aug', heatmapColumn: '' },
-  { monthLabel: 'Sep', heatmapColumn: '' },
-  { monthLabel: 'Oct', heatmapColumn: '' },
-  { monthLabel: 'Nov', heatmapColumn: '' },
-  { monthLabel: 'Dec', heatmapColumn: '' }
+  { monthLabel: '1月', heatmapColumn: '' },
+  { monthLabel: '2月', heatmapColumn: '' },
+  { monthLabel: '3月', heatmapColumn: '' },
+  { monthLabel: '4月', heatmapColumn: '' },
+  { monthLabel: '5月', heatmapColumn: '' },
+  { monthLabel: '6月', heatmapColumn: '' },
+  { monthLabel: '7月', heatmapColumn: '' },
+  { monthLabel: '8月', heatmapColumn: '' },
+  { monthLabel: '9月', heatmapColumn: '' },
+  { monthLabel: '10月', heatmapColumn: '' },
+  { monthLabel: '11月', heatmapColumn: '' },
+  { monthLabel: '12月', heatmapColumn: '' }
 ];
 
 export enum HeatmapType {

@@ -90,8 +90,8 @@ export class DatabaseService {
                 {
                   component: showReport ? LogReportDialog : MessageDialog,
                   props: {
-                    title: 'Failure',
-                    message: showReport ? 'Error(s) occurred' : `An Error occured: ${error.message}`
+                    title: '失败',
+                    message: showReport ? '发生错误' : `发生错误: ${error.message}`
                   }
                 }
               ]);
@@ -633,7 +633,7 @@ export class DatabaseService {
     let existingStatistic = await db.get('statistic', [newStatistic.title, newStatistic.dateKey]);
 
     if (!existingStatistic) {
-      throw new Error('Unable to find record in the database');
+      throw new Error('无法在数据库中找到记录');
     }
 
     existingStatistic = {
@@ -682,8 +682,8 @@ export class DatabaseService {
         {
           component: MessageDialog,
           props: {
-            title: 'Failure',
-            message: `Error on Deletion: ${error.message}`
+            title: '失败',
+            message: `删除出错: ${error.message}`
           }
         }
       ]);
@@ -759,7 +759,7 @@ export class DatabaseService {
     endDateString = ''
   ) {
     if (!bookTitles.length || (startDateString && !endDateString)) {
-      throw new Error('Received invalid Arguments for deleteStatisticEntries');
+      throw new Error('deleteStatisticEntries 收到无效参数');
     }
 
     const db = await this.db;

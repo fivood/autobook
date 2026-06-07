@@ -146,7 +146,7 @@ export class BackupStorageHandler extends BaseStorageHandler {
 
     const bookBlob = await this.readFromZip(
       new BlobWriter(),
-      'Unable to read book data',
+      '无法读取书籍数据',
       zipEntry,
       this.isForBrowser ? 0.3 : 0.9
     );
@@ -164,12 +164,12 @@ export class BackupStorageHandler extends BaseStorageHandler {
     }
 
     if (this.isForBrowser) {
-      return this.extractAsJSON(zipEntry, 'Unable to read progress data');
+      return this.extractAsJSON(zipEntry, '无法读取进度数据');
     }
 
     const progressBlob = await this.readFromZip(
       new BlobWriter(),
-      'Unable to read progress data',
+      '无法读取进度数据',
       zipEntry,
       0.9
     );
@@ -184,7 +184,7 @@ export class BackupStorageHandler extends BaseStorageHandler {
       return { statistics: undefined, lastStatisticModified: 0 };
     }
 
-    const statistics = await this.extractAsJSON(zipEntry, 'Unable to read statistics');
+    const statistics = await this.extractAsJSON(zipEntry, '无法读取统计数据');
 
     return {
       statistics,
@@ -208,7 +208,7 @@ export class BackupStorageHandler extends BaseStorageHandler {
 
     const cover = await this.readFromZip(
       new BlobWriter(),
-      'Unable to read cover data',
+      '无法读取封面数据',
       zipEntry,
       0.9
     );
@@ -223,7 +223,7 @@ export class BackupStorageHandler extends BaseStorageHandler {
       return { readingGoals: undefined, lastGoalModified: 0 };
     }
 
-    const readingGoals = await this.extractAsJSON(zipEntry, 'Unable to read reading goals');
+    const readingGoals = await this.extractAsJSON(zipEntry, '无法读取阅读目标');
 
     return {
       readingGoals,
@@ -239,12 +239,12 @@ export class BackupStorageHandler extends BaseStorageHandler {
     }
 
     if (this.isForBrowser) {
-      return this.extractAsJSON(zipEntry, 'Unable to read audioBook data');
+      return this.extractAsJSON(zipEntry, '无法读取有声书数据');
     }
 
     const audioBookBlob = await this.readFromZip(
       new BlobWriter(),
-      'Unable to read audioBook data',
+      '无法读取有声书数据',
       zipEntry,
       0.9
     );
@@ -260,12 +260,12 @@ export class BackupStorageHandler extends BaseStorageHandler {
     }
 
     if (this.isForBrowser) {
-      return this.extractAsJSON(zipEntry, 'Unable to read subtitles data');
+      return this.extractAsJSON(zipEntry, '无法读取字幕数据');
     }
 
     const subtitleDataBlob = await this.readFromZip(
       new BlobWriter(),
-      'Unable to read subtitles data',
+      '无法读取字幕数据',
       zipEntry,
       0.9
     );

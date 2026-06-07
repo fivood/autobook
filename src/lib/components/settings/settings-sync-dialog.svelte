@@ -20,8 +20,8 @@
   }>();
 
   const syncSources: SyncSelection[] = [
-    { id: InternalStorageSources.INTERNAL_BROWSER, label: 'Browser DB', type: StorageKey.BROWSER },
-    { id: InternalStorageSources.INTERNAL_ZIP, label: 'ZIP File', type: StorageKey.BACKUP },
+    { id: InternalStorageSources.INTERNAL_BROWSER, label: '浏览器数据库', type: StorageKey.BROWSER },
+    { id: InternalStorageSources.INTERNAL_ZIP, label: 'ZIP 文件', type: StorageKey.BACKUP },
     ...storageSources.map((storageSource) => ({
       id: storageSource.name,
       label: `${storageSource.name} (${storageSource.type})`,
@@ -58,10 +58,10 @@
 </script>
 
 <DialogTemplate>
-  <svelte:fragment slot="header">{settingsSyncHeader}</svelte:fragment>
+  <svelte:fragment slot="header">{settingsSyncHeader || '同步设置'}</svelte:fragment>
   <svelte:fragment slot="content">
     <div class="flex flex-col">
-      <div>Source</div>
+      <div>来源</div>
       <select bind:value={selectedSource}>
         {#each sources as source (source.id)}
           <option value={source.id}>
@@ -73,8 +73,8 @@
         tabindex="0"
         role="button"
         title={selectedTarget === InternalStorageSources.INTERNAL_ZIP
-          ? 'Choose a different Target for swap'
-          : 'Click to swap Source and Target'}
+          ? '选择不同的目标以交换'
+          : '点击交换来源和目标'}},{
         class="transform-gpu {baseIconClasses} flex justify-center"
         style="width: 100%;"
         style:cursor={selectedTarget === InternalStorageSources.INTERNAL_ZIP
@@ -95,7 +95,7 @@
       >
         <Fa icon={faArrowsUpDown} />
       </div>
-      <div>Target</div>
+      <div>目标</div>
       <select bind:value={selectedTarget}>
         {#each targets as target (target.id)}
           <option value={target.id}>
@@ -107,11 +107,11 @@
   </svelte:fragment>
   <div class="flex grow justify-between" slot="footer">
     <button class={buttonClasses} on:click={() => closeDialog(true)}>
-      Cancel
+      取消
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog()}>
-      Confirm
+      确认
       <Ripple />
     </button>
   </div>

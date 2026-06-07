@@ -27,7 +27,7 @@
   }
 
   function getCardDateInfo(dateTime: number) {
-    return dateTime ? new Date(dateTime).toLocaleString() : 'No Data';
+    return dateTime ? new Date(dateTime).toLocaleString() : '无数据';
   }
 </script>
 
@@ -51,7 +51,7 @@
           <div
             tabindex="0"
             role="button"
-            title="Book selected"
+            title="已选中书籍"
             class="absolute inset-0 bg-gray-700 bg-opacity-20"
             on:click={() => onBookCardClick(bookCard.id)}
             on:keyup={dummyFn}
@@ -61,7 +61,7 @@
         {/if}
       </div>
       {#if selectedBookIds.has(bookCard.id)}
-        <div class="absolute top-10 left-2" title="Click to open details">
+        <div class="absolute top-10 left-2" title="点击查看详情">
           <Popover placement="right" fallbackPlacements={['bottom']} yOffset={5}>
             <Fa
               slot="icon"
@@ -69,13 +69,13 @@
               icon={faCircleInfo}
             />
             <div class="p-4" slot="content">
-              <div>Characters:</div>
-              <div class="w-40">{bookCard.characters || 'No Data'}</div>
-              <div class="mt-4">Last Read:</div>
+              <div>字数:</div>
+              <div class="w-40">{bookCard.characters || '无数据'}</div>
+              <div class="mt-4">上次阅读:</div>
               <div class="w-40">{getCardDateInfo(bookCard.lastBookOpen)}</div>
-              <div class="mt-4">Bookmarked:</div>
+              <div class="mt-4">书签时间:</div>
               <div class="w-40">{getCardDateInfo(bookCard.lastBookmarkModified)}</div>
-              <div class="mt-4">Last Update:</div>
+              <div class="mt-4">最后更新:</div>
               <div class="w-40">{getCardDateInfo(bookCard.lastBookModified)}</div>
             </div>
           </Popover>

@@ -137,7 +137,7 @@
       style:background-color={backgroundColor}
     >
       <button
-        title="Close Image Gallery"
+        title="关闭图片库"
         class="flex items-end md:items-center"
         on:click={closeReaderImageGallery}
       >
@@ -159,12 +159,12 @@
         >
           <img
             src={readerImageGalleryPicture.url}
-            alt="galleryImage"
+            alt="画廊图片"
             class="max-h-96 lg:max-h-64"
           />
           {#if showSpoiler}
             <button
-              title="Show Image"
+              title="显示图片"
               class="spoiler-label"
               aria-hidden="true"
               on:click={() => toggleGalleryPictureSpoiler(readerImageGalleryPicture.url)}
@@ -185,7 +185,7 @@
       {@const showSpoiler = $hideSpoilerImage$ && !selectedImage.unspoilered}
       <div class="flex flex-1">
         <button
-          title="Previous Image"
+          title="上一张"
           class="mx-4 text-5xl hover:text-red-500"
           class:invisible={!selectedImageIndex}
           on:click={previousImage}
@@ -193,10 +193,10 @@
           <Fa icon={faChevronLeft} />
         </button>
         <div class="flex justify-center items-center flex-1" class:spoiler={showSpoiler}>
-          <img class="max-h-[94vh]" src={selectedImage.url} alt="currentImage" />
+          <img class="max-h-[94vh]" src={selectedImage.url} alt="当前图片" />
           {#if showSpoiler}
             <button
-              title="Show Image"
+              title="显示图片"
               class="spoiler-label"
               aria-hidden="true"
               on:click={() => toggleGalleryPictureSpoiler(selectedImage.url)}
@@ -206,7 +206,7 @@
           {/if}
         </div>
         <button
-          title="Next Image"
+          title="下一张"
           class="mx-4 text-5xl hover:text-red-500"
           class:invisible={selectedImageIndex === $readerImageGalleryPictures$.length - 1}
           on:click={nextImage}

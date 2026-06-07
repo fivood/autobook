@@ -351,7 +351,7 @@
       return;
     }
 
-    const titleLabel = pluralize(titlesToDelete.size, 'Title');
+    const titleLabel = pluralize(titlesToDelete.size, '书籍');
 
     let wasCanceled = false;
 
@@ -361,7 +361,7 @@
           {
             component: ConfirmDialog,
             props: {
-              dialogHeader: 'Delete Data',
+              dialogHeader: '删除数据',
               dialogMessage: `This will delete data ${
                 startDate ? `from ${getDateRangeLabel(startDate, endDate)}` : ''
               }  for ${titleLabel} (which may include start and/or completion Data)\n\nExecute an one time Sync with an export behavior of "overwrite" and/or statistics merge mode of "replace" to apply deletions to other devices.\n\n${titleLabel}:\n${[
@@ -392,7 +392,7 @@
           {
             component: ConfirmDialog,
             props: {
-              dialogHeader: 'Delete Data',
+              dialogHeader: '删除数据',
               dialogMessage: `Failed to delete Data: ${error}`,
               showCancel: false,
               resolver
@@ -514,7 +514,7 @@
         {
           component: ConfirmDialog,
           props: {
-            dialogHeader: 'Update Data',
+            dialogHeader: '更新数据',
             dialogMessage: `This will update the Data for ${title} on ${dateKey}.\n\nTime: ${secondsToMinutes(
               statistic.readingTime
             )} min => ${secondsToMinutes(newReadingTime)} min\nCharacters: ${
@@ -552,7 +552,7 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
+            title: '错误',
             message: `Update failed: ${message}`
           }
         }
@@ -662,7 +662,7 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
+            title: '错误',
             message: `Error getting Data: ${message}`
           }
         }

@@ -53,7 +53,7 @@
   );
 
   $: readingGoalToReplaceMessage = readingGoalsToReplace.length
-    ? `${pluralize(readingGoalsToReplace.length, 'Item')} will be replaced`
+    ? `${pluralize(readingGoalsToReplace.length, '项')} 将被替换`
     : '';
 
   $: if (selectedArchiveOptionObject) {
@@ -92,7 +92,7 @@
 
       showSpinner = false;
     } catch ({ message }: any) {
-      error = `Failed to refresh Reading Goals (${message})`;
+      error = `刷新阅读目标失败 (${message})`;
       closeDialog();
     }
   }
@@ -182,7 +182,7 @@
         archivalMaxDate = readingGoalEnd;
 
         archivalOptions.push({
-          label: 'Custom',
+          label: '自定义',
           archivalStartDate: $readingGoal$.goalStartDate,
           archivalEndDate: readingGoalEnd,
           editable: true
@@ -194,7 +194,7 @@
           todayKey !== previousReadingGoalEnd
         ) {
           archivalOptions.push({
-            label: 'Close previous nearest End',
+            label: '关闭到最近的上一个结束',
             archivalStartDate: $readingGoal$.goalStartDate,
             archivalEndDate: previousReadingGoalEnd,
             editable: false
@@ -203,7 +203,7 @@
 
         if (yesterDayKey >= $readingGoal$.goalStartDate) {
           archivalOptions.push({
-            label: 'Close Yesterday',
+            label: '关闭到昨天',
             archivalStartDate: $readingGoal$.goalStartDate,
             archivalEndDate: yesterDayKey,
             editable: false
@@ -212,7 +212,7 @@
 
         if (todayKey >= $readingGoal$.goalStartDate) {
           archivalOptions.push({
-            label: 'Close Today',
+            label: '关闭到今天',
             archivalStartDate: $readingGoal$.goalStartDate,
             archivalEndDate: todayKey,
             editable: false
@@ -221,7 +221,7 @@
 
         if (readingGoalEnd !== todayKey) {
           archivalOptions.push({
-            label: 'Close nearest End',
+            label: '关闭到最近结束',
             archivalStartDate: $readingGoal$.goalStartDate,
             archivalEndDate: readingGoalEnd,
             editable: false
@@ -238,7 +238,7 @@
 
       showSpinner = false;
     } catch ({ message }: any) {
-      error = `Failed to set Context (${message})`;
+      error = `设置上下文失败 (${message})`;
       closeDialog();
     }
   }
@@ -272,11 +272,11 @@
   </div>
 {/if}
 <DialogTemplate>
-  <svelte:fragment slot="header">Save Reading Goal</svelte:fragment>
+  <svelte:fragment slot="header">保存阅读目标</svelte:fragment>
   <svelte:fragment slot="content">
     {#if newReadingGoal.goalStartDate}
       <div>
-        <span>New Reading Goal starts from</span>
+        <span>新阅读目标开始于</span>
         <input
           disabled
           class="mb-4 sm:ml-1"
@@ -289,7 +289,7 @@
     {#if archivalOptions.length}
       <input type="checkbox" bind:checked={archiveReadingGoal} on:change={checkDates} />
       <span class:opacity-50={!archiveReadingGoal}>
-        <span class="mr-2">Archive Reading Goal from</span>
+        <span class="mr-2">归档阅读目标从</span>
         <input
           class="w-full mt-2 sm:mt-0 md:w-[initial]"
           type="date"
@@ -347,7 +347,7 @@
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog()}>
-      Confirm
+      确认
       <Ripple />
     </button>
   </div>

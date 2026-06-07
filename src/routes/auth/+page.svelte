@@ -17,8 +17,8 @@
     if (hashError) {
       reportError(
         url.origin,
-        'Authorization failed',
-        hashParams.get('error_description') || hashParams.get('error') || 'Unknown error'
+        '授权失败',
+        hashParams.get('error_description') || hashParams.get('error') || '未知错误'
       );
     } else if (url.searchParams.has('code')) {
       const params = new URLSearchParams();
@@ -66,7 +66,7 @@
           );
         })
         .catch((error) => {
-          reportError(url.origin, 'Code authorization request failed', error.message);
+          reportError(url.origin, '代码授权请求失败', error.message);
         });
     } else if (hashParams.has('access_token')) {
       checkAuthResponse(
@@ -85,7 +85,7 @@
       if (!clientId || !scope || !authEndpoint) {
         return reportError(
           url.origin,
-          'A required authentication input was not found',
+          '未找到必需的认证输入',
           `ClientId: ${!!clientId}\nScope: ${!!scope}\nAuthEndpoint: ${!!authEndpoint}`
         );
       }
@@ -113,7 +113,7 @@
     } else {
       reportError(
         url.origin,
-        'Unexpected authentication context',
+        '意外的认证上下文',
         `Url: ${url.href}\nHash: ${url.hash || '-'}`
       );
     }
@@ -153,7 +153,7 @@
     if (!accessToken || !expiration || !scope || (withRefreshToken && !refreshToken)) {
       reportError(
         origin,
-        'A required authentication property was not found',
+        '未找到必需的认证属性',
         `Had Token: ${!!accessToken}\nHad Expiration: ${!!expiration}\nHad Scope"${!!scope}${
           withRefreshToken ? `\nHad Refresh Token"${!!refreshToken}` : ''
         }`

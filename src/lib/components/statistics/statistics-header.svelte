@@ -27,8 +27,8 @@
   export let showStatisticsSettings: boolean;
 
   const copyStatisticsDataItems: StatisticsDataSource[] = [
-    { key: 'readingTime', label: 'Reading Time' },
-    { key: 'charactersRead', label: 'Characters Read' }
+    { key: 'readingTime', label: '阅读时间' },
+    { key: 'charactersRead', label: '已读字数' }
   ];
 
   let copyStatisticsDataPopover: Popover;
@@ -44,7 +44,7 @@
           yOffset={0}
           bind:this={copyStatisticsDataPopover}
         >
-          <div title="Copy Data in TMW Log Format" slot="icon" class={baseIconClasses}>
+          <div title="以 TMW 日志格式复制数据" slot="icon" class={baseIconClasses}>
             <Fa icon={faCopy} />
           </div>
           <div class="flex flex-col justify-center w-36 bg-gray-700" slot="content">
@@ -66,8 +66,8 @@
         tabindex="0"
         role="button"
         title={$lastStatisticsTab$ === StatisticsTab.SUMMARY
-          ? 'You are already on the Summary Tab'
-          : 'Switch to Summary Tab'}
+          ? '您已在汇总标签页'
+          : '切换到汇总标签页'}
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.SUMMARY}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.SUMMARY)}
@@ -79,8 +79,8 @@
         tabindex="0"
         role="button"
         title={$lastStatisticsTab$ === StatisticsTab.OVERVIEW
-          ? 'You are already on the Heatmap Tab'
-          : 'Switch to Heatmap Tab'}
+          ? '您已在热力图标签页'
+          : '切换到热力图标签页'}
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.OVERVIEW}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.OVERVIEW)}
@@ -91,7 +91,7 @@
       <div
         tabindex="0"
         role="button"
-        title="Open Title Filter Menu"
+        title="打开标题筛选菜单"
         class={baseIconClasses}
         style:cursor={$statisticsTitleFilterEnabled$ ? 'pointer' : 'not-allowed'}
         on:click={() => {
@@ -108,7 +108,7 @@
       <div
         tabindex="0"
         role="button"
-        title="Open Statistics Settings"
+        title="打开统计设置"
         class={baseIconClasses}
         on:click={() => (showStatisticsSettings = true)}
         on:keyup={dummyFn}

@@ -19,7 +19,7 @@
 
   function closeDialog(position?: number) {
     if (typeof position === 'number' && (position < minValue || position > maxValue)) {
-      error = `Must be between ${minValue} and ${maxValue}`;
+      error = `必须在 ${minValue} 和 ${maxValue} 之间`;
       return;
     }
     resolver(position);
@@ -49,11 +49,11 @@
       class:invisible={!showCancel}
       on:click={() => closeDialog(undefined)}
     >
-      Cancel
+      取消
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog(target)}>
-      Confirm
+      确认
       <Ripple />
     </button>
   </div>

@@ -124,7 +124,7 @@ export class StorageOAuthManager {
 
         unlockResult = await unlockStorageData(
           storageSource,
-          'You are trying to access protected data',
+          '您正在尝试访问受保护的数据',
           shallUnlock
             ? {
                 action: `Enter the correct password for ${storageSourceName} and login to your account if required to proceed`,
@@ -178,8 +178,8 @@ export class StorageOAuthManager {
             {
               component: StorageUnlock,
               props: {
-                description: 'You are trying to access external data',
-                action: 'Login to your account when prompted',
+                description: '您正在尝试访问外部数据',
+                action: '提示时登录您的帐户',
                 requiresSecret: false,
                 encryptedData: undefined,
                 resolver
@@ -205,7 +205,7 @@ export class StorageOAuthManager {
         );
       }
 
-      throw new Error('Unable to open login window. Please check your popup settings');
+      throw new Error('无法打开登录窗口。请检查您的弹窗设置');
     }
 
     let errorMessage = '';
@@ -349,7 +349,7 @@ export class StorageOAuthManager {
 
   private base64Url(buffer: ArrayBuffer) {
     if (!this.parentWindow) {
-      throw new Error('Parent window not defined');
+      throw new Error('未定义父窗口');
     }
 
     return this.parentWindow
@@ -362,7 +362,7 @@ export class StorageOAuthManager {
   private waitForAuth(window: Window): Promise<OAuthTokenData> {
     return new Promise((resolve, reject) => {
       if (!this.parentWindow) {
-        reject(new Error('Parent window not defined'));
+        reject(new Error('未定义父窗口'));
         return;
       }
 
@@ -373,12 +373,12 @@ export class StorageOAuthManager {
 
       this.authCloseInterval = window.setInterval(() => {
         if (this.authWindow?.closed) {
-          reject(new Error('Window was closed before login'));
+          reject(new Error('窗口在登录前被关闭'));
         }
       }, this.authCloseIntervalTime);
 
       this.authTimeoutTimer = window.setTimeout(() => {
-        reject(new Error('Login timeout'));
+        reject(new Error('登录超时'));
       }, this.authTimeout);
     });
   }

@@ -547,7 +547,7 @@
           <div
             tabindex="0"
             role="button"
-            title="Open Custom Font Dialog"
+            title="打开自定义字体对话框"
             on:click={() =>
               dialogManager.dialogs$.next([
                 {
@@ -604,7 +604,7 @@
     >
       <input
         type="number"
-        placeholder="default"
+        placeholder="默认"
         class={inputClasses}
         step="100"
         min="100"
@@ -746,13 +746,13 @@
     </SettingsItemGroup>
     {#if verticalMode}
       <SettingsItemGroup
-        title="Enable Font Kerning"
+        title="启用字距调整"
         tooltip={'在字体与浏览器支持时，竖排间距视觉更平衡'}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontKerning} />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="Enable VPAL"
+        title="启用 VPAL"
         tooltip={'在字体与浏览器支持时，竖排文字间距更自然'}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontVPAL} />
@@ -871,7 +871,7 @@
     {/if}
     {#if statisticsEnabled}
       <SettingsItemGroup
-        title="Custom Point pauses Tracker"
+        title="自定义阅读点暂停统计"
         tooltip={'开启后，设置自定义阅读点时统计会自动暂停/恢复'}
       >
         <ButtonToggleGroup
@@ -882,7 +882,7 @@
     {/if}
     {#if viewMode === ViewMode.Continuous}
       <SettingsItemGroup
-        title="Custom Reading Point"
+        title="自定义阅读点"
         tooltip={'开启后可在阅读器中设置固定起算点，进度和书签从该点开始计算'}
       >
         <div class="flex items-center">
@@ -901,7 +901,7 @@
               }}
               on:keyup={dummyFn}
             >
-              Reset Points
+              重置阅读点
             </div>
           {/if}
         </div>
@@ -947,7 +947,7 @@
       </div>
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Hide Source Hint"
+      title="隐藏来源提示"
       tooltip="打开外部存储源中的书时隐藏警告提示"
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideExternalReadHint} />
@@ -960,7 +960,7 @@
     </SettingsItemGroup>
     {#if importHTMLFixMode !== ImportHTMLFixMode.OFF}
       <SettingsItemGroup
-        title="Restrict to Links"
+        title="仅限制链接"
         tooltip="仅对链接标签做自闭合修正"
       >
         <ButtonToggleGroup
@@ -993,7 +993,7 @@
     <SettingsStorageSourceList storageSources={$storageSources$} />
   {:else}
     <SettingsItemGroup
-      title="Keep Local Data on Deletion"
+      title="删除时保留本地数据"
       tooltip={'删除本地书籍副本时是否同时删除本地统计'}
     >
       <div class="flex items-center">
@@ -1014,8 +1014,8 @@
                   {
                     component: MessageDialog,
                     props: {
-                      title: 'Error',
-                      message: `Error clearing Zombie Statistics: ${message}`
+                      title: '错误',
+                      message: `清除僵尸统计数据出错: ${message}`
                     }
                   }
                 ])
@@ -1024,12 +1024,12 @@
           }}
           on:keyup={() => {}}
         >
-          Clear Zombie Statistics
+          清除僵尸统计
         </div>
       </div>
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Overwrite Book Completion"
+      title="覆盖书籍完成状态"
       tooltip={'是只记录首次完成，还是始终更新为最新一次完成'}
     >
       <ButtonToggleGroup
@@ -1038,7 +1038,7 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title={`Start Day Hours: ${startOfDayHours}`}
+      title={`每日起始小时: ${startOfDayHours}`}
       tooltip={'设定新一天的开始时间，此时刻之前的数据计入前一天'}
     >
       <input
@@ -1051,7 +1051,7 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Statistics Merge"
+      title="统计合并方式"
       tooltip={'同步时统计按条目合并还是整体覆盖'}
     >
       <ButtonToggleGroup
@@ -1060,7 +1060,7 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Reading Goals Merge"
+      title="阅读目标合并方式"
       tooltip={'同步时阅读目标按条目合并还是整体覆盖'}
     >
       <ButtonToggleGroup
@@ -1069,7 +1069,7 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Enable Statistics"
+      title="启用统计"
       tooltip="在阅读器左下角显示统计追踪图标，需手动点击开始记录会话"
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={statisticsEnabled} />
@@ -1088,7 +1088,7 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="Update on Completion"
+        title="完成时更新"
         tooltip={'当前位置与全书总字数之间的差额是否计入统计'}
       >
         <ButtonToggleGroup
@@ -1097,7 +1097,7 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="Autostart tracker (sec)"
+        title="自动启动统计 (秒)"
         tooltip={'字数无变化达到此秒数后统计将自动启动（0 = 关闭，建议设大些避免误触发）'}
       >
         <input
@@ -1116,7 +1116,7 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="Idle Time (min)"
+        title="空闲时间 (分钟)"
         tooltip={'无页面交互达到此分钟数后统计自动暂停（0 = 关闭，最大 12 小时）'}
       >
         <input
@@ -1137,7 +1137,7 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="Forward Skip Threshold"
+        title="正向跳过阈值"
         tooltip={'两次采样间正向字数增量超过此阈值触发相应动作（0 = 关闭）'}
       >
         <input
@@ -1156,7 +1156,7 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="Backward Skip Threshold"
+        title="反向跳过阈值"
         tooltip={'两次采样间负向字数差超过此阈值触发相应动作（0 = 关闭）'}
       >
         <input
@@ -1177,7 +1177,7 @@
       </SettingsItemGroup>
       {#if trackerForwardSkipThreshold || trackerBackwardSkipThreshold}
         <SettingsItemGroup
-          title="Threshold Action"
+          title="阈值动作"
           tooltip={'达到阈值时执行的动作'}
         >
           <ButtonToggleGroup
@@ -1188,7 +1188,7 @@
       {/if}
       {#if trackerAutoPause !== TrackerAutoPause.OFF}
         <SettingsItemGroup
-          title="Dictionary Detection"
+          title="词典检测"
           tooltip={'开启后，检测到 Yomitan / jpdb-browser-reader 打开时跳过自动暂停（Yomitan 需关闭 Secure Container）'}
         >
           <ButtonToggleGroup
@@ -1199,7 +1199,7 @@
       {/if}
       {#if trackerIdleTime > 0}
         <SettingsItemGroup
-          title="Rollback Statistics on Idle"
+          title="空闲时回滚统计"
           tooltip={'开启后，会从本次会话中扣除空闲时间以回滚统计'}
         >
           <ButtonToggleGroup

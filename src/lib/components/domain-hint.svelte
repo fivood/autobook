@@ -11,9 +11,9 @@
       {
         component: MessageDialog,
         props: {
-          title: 'Old Domain',
+          title: '旧域名',
           message:
-            'You are currently using the old domain of ッツ Reader - consider switching to https://reader.ttsu.app to prevent issues and to ensure full features'
+            '您正在使用 ッツ 阅读器的旧域名 - 建议切换到 https://reader.ttsu.app 以避免问题并确保完整功能'
         },
         disableCloseOnClick: true
       }

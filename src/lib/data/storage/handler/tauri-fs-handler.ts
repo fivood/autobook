@@ -144,7 +144,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     }
 
     if (!data) {
-      throw new Error('No local or external book data found');
+      throw new Error('未找到本地或外部书籍数据');
     }
 
     if (data.storageSource !== this.storageSourceName) {

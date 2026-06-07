@@ -104,14 +104,14 @@
 
         if (elm === nameElm) {
           if (storageSourceType === StorageKey.FS && !directoryHandle) {
-            nameElm.setCustomValidity('You need to select a directory');
+            nameElm.setCustomValidity('您需要选择一个目录');
             isValid = false;
           } else if (isAppDefault(storageSourceName)) {
-            nameElm.setCustomValidity('Please select a different name');
+            nameElm.setCustomValidity('请选择其他名称');
             isValid = false;
           }
         } else if (elm === pwConfirmElm && pwElm.value !== pwConfirmElm.value) {
-          pwConfirmElm.setCustomValidity('Password does not match');
+          pwConfirmElm.setCustomValidity('密码不匹配');
           isValid = false;
         }
 
@@ -147,7 +147,7 @@
 
       if (storageSourceType === StorageKey.FS) {
         if (!directoryHandle) {
-          throw new Error('Directory handle not defined');
+          throw new Error('未定义目录句柄');
         }
 
         storageSourceData = { directoryHandle, fsPath: handleFsPath };
@@ -163,7 +163,7 @@
           configuredRemoteData?.refreshToken;
 
         if (willInvalidateToken && !$isOnline$) {
-          throw new Error('You need to be online in order to make this change to the credentials');
+          throw new Error('需要联网才能修改凭据');
         }
 
         if (storageSourceEncryptionDisabled) {
@@ -260,15 +260,15 @@
     <input
       required
       type="text"
-      placeholder="Name"
+      placeholder="名称"
       bind:value={storageSourceName}
       bind:this={nameElm}
     />
     <div class="mt-4 flex items-center">
       <input id="cbx-source" type="checkbox" bind:checked={storageSourceIsSyncTarget} />
-      <label for="cbx-source" class="ml-2 mr-6">Is Sync Target</label>
+      <label for="cbx-source" class="ml-2 mr-6">设为同步目标</label>
       <input id="cbx-manager" type="checkbox" bind:checked={storageSourceIsSourceDefault} />
-      <label for="cbx-source" class="ml-2">Is Source Default</label>
+      <label for="cbx-source" class="ml-2">设为默认来源</label>
     </div>
     <select
       class="my-4"
@@ -293,22 +293,22 @@
     </select>
     {#if storageSourceType === StorageKey.FS}
       <button class={buttonClasses} on:click={selectDirectory}>
-        Select Directory
+        选择目录
         <Ripple />
       </button>
-      <div class="my-4 text-center">{handleFsPath || 'Nothing selected'}</div>
+      <div class="my-4 text-center">{handleFsPath || '未选择'}</div>
     {:else}
-      <input required type="text" placeholder="Client ID" bind:value={storageSourceClientId} />
+      <input required type="text" placeholder="客户端 ID" bind:value={storageSourceClientId} />
       <input
         class="mt-4"
         type="text"
-        placeholder="Client Secret"
+        placeholder="客户端密钥"
         bind:value={storageSourceClientSecret}
       />
       <input
         class="mt-4"
         type="password"
-        placeholder="Password"
+        placeholder="密码"
         required={!storageSourceEncryptionDisabled}
         disabled={storageSourceEncryptionDisabled}
         bind:this={pwElm}
@@ -316,7 +316,7 @@
       <input
         class="mt-4"
         type="password"
-        placeholder="Confirm Password"
+        placeholder="确认密码"
         required={!storageSourceEncryptionDisabled}
         disabled={storageSourceEncryptionDisabled}
         bind:this={pwConfirmElm}
@@ -333,7 +333,7 @@
               }
             }}
           />
-          <label for="cbx-store-in-manager" class="ml-2 mr-6">Store in Password Manager</label>
+          <label for="cbx-store-in-manager" class="ml-2 mr-6">保存到密码管理器</label>
         </div>
       {/if}
       <div class="mt-4">
@@ -349,36 +349,35 @@
             }
           }}
         />
-        <label for="cbx-disable-encryption" class="ml-2 mr-6">Disable Password Encryption</label>
+        <label for="cbx-disable-encryption" class="ml-2 mr-6">禁用密码加密</label>
       </div>
     {/if}
     {#if storageSourceStoredInManager || storageSourceEncryptionDisabled}
       <div class="flex items-center my-4 max-w-xs">
         <Fa icon={faTriangleExclamation} />
         <span class="ml-2">
-          Make sure to understand the
+          请确保了解您所选设置的
           <a
             class="text-red-500"
             href="https://github.com/ttu-ttu/ebook-reader?tab=readme-ov-file#security-considerations"
             target="_blank"
           >
-            Implications
+            影响
           </a>
-          of your choosen Settings
         </span>
       </div>
     {/if}
     {#if error}
-      <div class="text-red-500">Error: {error}</div>
+      <div class="text-red-500">错误: {error}</div>
     {/if}
   </div>
   <div class="mt-4 flex grow justify-between" slot="footer">
     <button class={buttonClasses} on:click={() => closeDialog()}>
-      Cancel
+      取消
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={save}>
-      Save
+      保存
       <Ripple />
     </button>
   </div>

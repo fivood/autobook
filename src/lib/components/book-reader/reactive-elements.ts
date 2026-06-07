@@ -84,7 +84,7 @@ function spoilerImageListener(document: Document) {
     const elements = Array.from(contentEl.querySelectorAll('[data-ttu-spoiler-img]'));
     const obs$ = elements.map((el) => {
       const spoilerLabelEl = document.createElement('span');
-      spoilerLabelEl.title = 'Show Image';
+      spoilerLabelEl.title = '显示图片';
       spoilerLabelEl.classList.add('spoiler-label');
       spoilerLabelEl.setAttribute('aria-hidden', 'true');
       spoilerLabelEl.innerText = 'ネタバレ';

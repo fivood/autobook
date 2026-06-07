@@ -12,7 +12,7 @@
 </script>
 
 <Popover bind:this={element} placement="bottom">
-  <div slot="icon" class="mx-2" title="Show available default Fonts">
+  <div slot="icon" class="mx-2" title="显示可用的默认字体">
     <Fa icon={faFont} />
   </div>
   <div slot="content">

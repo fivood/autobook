@@ -13,7 +13,7 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('Home')}</title>
+  <title>{formatPageTitle('首页')}</title>
 </svelte:head>
 
 <div use:observe={autoNavigate$} />

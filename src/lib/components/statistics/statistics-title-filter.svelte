@@ -170,7 +170,7 @@
 {$resizeHandler$ ?? ''}
 <div class="flex items-center p-4">
   <button
-    title="Close Title Filter"
+    title="关闭标题筛选"
     class="flex items-end md:items-center"
     on:click={() => dispatch('close')}
   >
@@ -180,14 +180,14 @@
 <div class="flex flex-col flex-1 px-4">
   <input
     type="search"
-    placeholder="Filter Title"
+    placeholder="筛选标题"
     class="w-full text-black"
     bind:value={titleFilter}
     on:input={handleTitleFilterChange}
   />
   <div class="flex justify-between mt-6 text-2xl">
     <button
-      title="Apply Filter"
+      title="应用筛选"
       class="hover:text-red-500"
       on:click={() => {
         dispatch('applyFilter', titlesToFilter);
@@ -196,16 +196,16 @@
     >
       <Fa icon={faCircleCheck} />
     </button>
-    <button title="Select All" class="hover:text-red-500" on:click={() => handleSelectAll(true)}>
+    <button title="全选" class="hover:text-red-500" on:click={() => handleSelectAll(true)}>
       <Fa icon={faListCheck} />
     </button>
-    <button title="Remove All" class="hover:text-red-500" on:click={() => handleSelectAll(false)}>
+    <button title="取消全选" class="hover:text-red-500" on:click={() => handleSelectAll(false)}>
       <Fa icon={faList} />
     </button>
     <button
       title={$lastStatisticsFilterDateRangeOnly$
-        ? 'Display Titles across all Time'
-        : 'Display Titles in selected Date Range only'}
+        ? '显示所有时间的标题'
+        : '仅显示所选日期范围的标题'}
       class="hover:text-red-500"
       on:click={() => ($lastStatisticsFilterDateRangeOnly$ = !$lastStatisticsFilterDateRangeOnly$)}
     >
@@ -213,8 +213,8 @@
     </button>
     <button
       title={$lastStatisticsFilterShowSelectedTitlesOnly$
-        ? 'Display all Titles'
-        : 'Display selected Titles only'}
+        ? '显示所有标题'
+        : '仅显示选中的标题'}
       class="hover:text-red-500"
       on:click={() =>
         ($lastStatisticsFilterShowSelectedTitlesOnly$ =
@@ -224,7 +224,7 @@
     </button>
     {#if $preFilteredTitlesForStatistics$.size}
       <button
-        title="Remove Prefilter"
+        title="移除预筛选"
         class="hover:text-red-500"
         on:click={() => dispatch('clearPrefilter')}
       >
@@ -259,7 +259,7 @@
         {/each}
       </div>
     {:else}
-      <div class="mt-6 text-2xl text-center">No Titles to filter</div>
+      <div class="mt-6 text-2xl text-center">没有可筛选的标题</div>
     {/if}
   </div>
   <div
