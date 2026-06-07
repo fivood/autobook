@@ -26,6 +26,7 @@
   import { goto } from '$app/navigation';
   import { faCloudBolt, faPause, faPlay, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import BookReader from '$lib/components/book-reader/book-reader.svelte';
+  import AutoScrollFab from '$lib/components/book-reader/auto-scroll-fab.svelte';
   import type {
     AutoScroller,
     BookmarkManager,
@@ -1596,11 +1597,22 @@
 
 {$collectReaderImageGallerySpoilerToggles$ ?? ''}
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
-<button class="fixed inset-x-0 top-0 z-10 h-8 w-full" on:click={() => (showHeader = true)} />
+{#if !showSpinner && !isPaginated}
+  <AutoScrollFab {autoScroller} />
+{/if}
+<div
+  class="fixed inset-x-0 top-0 z-10 h-12 w-full"
+  role="button"
+  tabindex="-1"
+  aria-label="显示阅读器菜单"
+  on:mouseenter={() => (showHeader = true)}
+  on:click={() => (showHeader = true)}
+  on:keyup={dummyFn}
+></div>
 {#if showHeader}
   <div
     class="elevation-4 writing-horizontal-tb fixed inset-x-0 top-0 z-10 w-full"
-    transition:fly|local={{ y: -300, easing: quintInOut }}
+    transition:fly|local={{ y: -300, duration: 180, easing: quintInOut }}
     use:clickOutside={() => (showHeader = false)}
   >
     <BookReaderHeader
