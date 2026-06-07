@@ -1,9 +1,12 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import DomainHint from '$lib/components/domain-hint.svelte';
-  import { basePath, clearConsoleOnReload } from '$lib/data/env';
+  import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
+  import { basePath, clearConsoleOnReload, isTauri } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
+  import { checkForUpdate } from '$lib/functions/updater/check-for-update';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
   import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
@@ -82,6 +85,22 @@
   });
 
   page.subscribe((p) => (path = p.url.pathname));
+
+  onMount(async () => {
+    if (!isTauri()) return;
+    try {
+      const update = await checkForUpdate();
+      if (update) {
+        dialogManager.dialogs$.next([
+          { component: UpdateDialog, props: { update } }
+        ]);
+      }
+    } catch (err) {
+      // silent — no banner on check failure
+      // eslint-disable-next-line no-console
+      console.warn('[updater] check failed:', err);
+    }
+  });
 </script>
 
 <svelte:window bind:online={$isOnline$} />

@@ -1,6 +1,6 @@
 {
   "name": "ebook-reader-desktop",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -44,6 +44,8 @@
     "@popperjs/core": "2.11.8",
     "@tauri-apps/api": "^2.1.0",
     "@tauri-apps/plugin-fs": "^2.5.1",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "@zip.js/zip.js": "2.4.26",
     "balanced-match": "3.0.1",
     "fake-indexeddb": "6.2.5",
