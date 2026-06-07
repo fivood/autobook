@@ -74,7 +74,7 @@
         role="button"
         title={selectedTarget === InternalStorageSources.INTERNAL_ZIP
           ? '选择不同的目标以交换'
-          : '点击交换来源和目标'}},{
+          : '点击交换来源和目标'}
         class="transform-gpu {baseIconClasses} flex justify-center"
         style="width: 100%;"
         style:cursor={selectedTarget === InternalStorageSources.INTERNAL_ZIP

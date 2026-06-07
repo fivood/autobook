@@ -1084,7 +1084,7 @@
     <Fa icon={faRepeat} />
   </button>
   <button
-    title="在"累计"和"今年"之间切换 (连续) 数据"
+    title="在累计与今年之间切换连续数据"
     class="text-lg hover:text-red-500"
     on:click={() =>
       (heatmapAggregration =
