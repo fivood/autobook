@@ -63,7 +63,6 @@
     selectAllClick: void;
     removeClick: void;
     domainHintClick: void;
-    bugReportClick: void;
     backToBookClick: void;
     filesChange: FileList;
     importBackup: File;
@@ -482,22 +481,9 @@
           >
             <MergedHeaderIcon
               items={isOldUrl
-                ? [
-                    mergeEntries.MANAGE,
-                    mergeEntries.DOMAIN_HINT,
-                    mergeEntries.BUG_REPORT,
-                    mergeEntries.SETTINGS
-                  ]
-                : [
-                    mergeEntries.MANAGE,
-                    mergeEntries.STATISTICS,
-                    mergeEntries.SETTINGS,
-                    mergeEntries.BUG_REPORT
-                  ]}
+                ? [mergeEntries.MANAGE, mergeEntries.DOMAIN_HINT, mergeEntries.SETTINGS]
+                : [mergeEntries.MANAGE, mergeEntries.STATISTICS, mergeEntries.SETTINGS]}
               on:action={({ detail }) => {
-                if (detail === mergeEntries.BUG_REPORT.label) {
-                  dispatch('bugReportClick');
-                }
                 if (detail === mergeEntries.DOMAIN_HINT.label) {
                   dispatch('domainHintClick');
                 }

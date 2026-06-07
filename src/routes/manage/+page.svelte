@@ -496,18 +496,6 @@
     ]);
   }
 
-  function onBugReportClick() {
-    dialogManager.dialogs$.next([
-      {
-        component: LogReportDialog,
-        props: {
-          title: 'Bug Report',
-          message: 'Please include the attached file for your report'
-        }
-      }
-    ]);
-  }
-
   function onReplicateData() {
     dialogManager.dialogs$.next([{ component: BookExportDialog, disableCloseOnClick: true }]);
   }
@@ -693,7 +681,6 @@
     on:removeClick={() => removeBooks(Array.from(selectedBookIds))}
     on:filesChange={(ev) => onFilesChange(ev.detail)}
     on:domainHintClick={onDomainHintClick}
-    on:bugReportClick={onBugReportClick}
     on:cancelReplication={() => {
       if (!cancelSignal.aborted) {
         cancelToken.abort();

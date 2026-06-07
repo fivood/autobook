@@ -10,7 +10,7 @@
   import { dummyFn } from '$lib/functions/utils';
 
   export let leavePageLink = '';
-  export let items = [mergeEntries.MANAGE, mergeEntries.SETTINGS, mergeEntries.BUG_REPORT];
+  export let items = [mergeEntries.MANAGE, mergeEntries.SETTINGS];
   export let mergeTo = mergeEntries.MANAGE;
   export let disableRouteNavigation = false;
 
