@@ -129,7 +129,7 @@
     type BooksDbStatistic
   } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
-  import { pagePath } from '$lib/data/env';
+  import { isTauri, pagePath } from '$lib/data/env';
   import { DB_VERSION, PAGE_CHANGE, SKIPKEYLISTENER, SYNCED } from '$lib/data/events';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import { logger } from '$lib/data/logger';
@@ -138,6 +138,7 @@
   import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
   import {
+    InternalStorageSources,
     StorageDataType,
     StorageSourceDefault,
     StorageKey
@@ -904,6 +905,21 @@
       return undefined;
     }
 
+    if (
+      storageSourceName === InternalStorageSources.INTERNAL_TAURI_FS ||
+      (storageSourceName === InternalStorageSources.INTERNAL_DEFAULT && isTauri())
+    ) {
+      return getStorageHandler(
+        window,
+        StorageKey.TAURI_FS,
+        storageSourceName,
+        true,
+        $cacheStorageData$,
+        $replicationSaveBehavior$,
+        $statisticsMergeMode$,
+        $readingGoalsMergeMode$
+      );
+    }
     if (storageSourceName === StorageSourceDefault.GDRIVE_DEFAULT) {
       if (!$isOnline$) {
         dialogManager.dialogs$.next([

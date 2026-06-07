@@ -24,7 +24,7 @@ import { BaseStorageHandler, FilePrefix } from '$lib/data/storage/handler/base-h
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { MergeMode } from '$lib/data/merge-mode';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
-import { StorageKey } from '$lib/data/storage/storage-types';
+import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-types';
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import pLimit from 'p-limit';
@@ -82,7 +82,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     this.readingGoalsMergeMode = readingGoalsMergeMode;
     this.cacheStorageData = cacheStorageData;
     this.askForStorageUnlock = askForStorageUnlock;
-    this.storageSourceName = storageSourceName || this.storageSourceName;
+    this.storageSourceName = InternalStorageSources.INTERNAL_TAURI_FS;
   }
 
   clearData(clearAll = true) {
