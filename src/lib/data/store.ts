@@ -493,15 +493,31 @@ export const database = new DatabaseService(db);
 
 export const domainHintSeen$ = writableBooleanLocalStorageSubject()('domainHintSeen', false);
 
+const defaultBooklistSortOptions: Record<string, SortOption> = {
+  [StorageKey.BROWSER]: { property: 'lastBookOpen', direction: SortDirection.DESC },
+  [StorageKey.GDRIVE]: { property: 'title', direction: SortDirection.ASC },
+  [StorageKey.ONEDRIVE]: { property: 'title', direction: SortDirection.ASC },
+  [StorageKey.FS]: { property: 'title', direction: SortDirection.ASC },
+  [StorageKey.TAURI_FS]: { property: 'lastBookOpen', direction: SortDirection.DESC }
+};
+
 export const booklistSortOptions$ = writableObjectLocalStorageSubject<Record<string, SortOption>>()(
   'booklistSortOptions',
-  {
-    [StorageKey.BROWSER]: { property: 'lastBookOpen', direction: SortDirection.DESC },
-    [StorageKey.GDRIVE]: { property: 'title', direction: SortDirection.ASC },
-    [StorageKey.ONEDRIVE]: { property: 'title', direction: SortDirection.ASC },
-    [StorageKey.FS]: { property: 'title', direction: SortDirection.ASC }
-  }
+  defaultBooklistSortOptions
 );
+
+// Migration: backfill missing StorageKey entries (e.g. TAURI_FS added after first launch)
+{
+  const current = booklistSortOptions$.getValue();
+  let needsUpdate = false;
+  for (const [key, value] of Object.entries(defaultBooklistSortOptions)) {
+    if (!current[key]) {
+      current[key] = value;
+      needsUpdate = true;
+    }
+  }
+  if (needsUpdate) booklistSortOptions$.next({ ...current });
+}
 
 export const verticalCustomReadingPosition$ = writableNumberLocalStorageSubject()(
   'verticalCustomReadingPosition',

@@ -101,14 +101,20 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     if (!this.dataListFetched) {
       database.listLoading$.next(true);
 
-      await this.ensureRoot();
-      const entries = await readDir(ROOT_DIR, { baseDir: BASE_DIR });
-      const directories = entries
-        .filter((e) => e.isDirectory)
-        .map((e) => e.name as string);
+      try {
+        await this.ensureRoot();
+        const entries = await readDir(ROOT_DIR, { baseDir: BASE_DIR });
+        const directories = entries
+          .filter((e) => e.isDirectory)
+          .map((e) => e.name as string);
 
-      await this.setTitleData(directories);
-      this.dataListFetched = true;
+        await this.setTitleData(directories);
+        this.dataListFetched = true;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[TauriFsStorageHandler] getBookList failed:', err);
+        this.dataListFetched = true;
+      }
     }
     return [...this.titleToBookCard.values()];
   }

@@ -14,7 +14,9 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "$DOCUMENT/EbookReader/**" }
+        { "path": "$DOCUMENT/EbookReader" },
+        { "path": "$DOCUMENT/EbookReader/**" },
+        { "path": "$DOCUMENT/EbookReader/*" }
       ]
     }
   ]
