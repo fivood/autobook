@@ -93,7 +93,7 @@ export const furiganaStyle$ = writableStringLocalStorageSubject<FuriganaStyle>()
 );
 export const writingMode$ = writableStringLocalStorageSubject<WritingMode>()(
   'writingMode',
-  'vertical-rl'
+  'horizontal-tb'
 );
 export const enableVerticalFontKerning$ = writableBooleanLocalStorageSubject()(
   'enableVerticalFontKerning',
