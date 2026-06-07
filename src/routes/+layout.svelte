@@ -7,6 +7,8 @@
   import { basePath, clearConsoleOnReload, isTauri } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { checkForUpdate } from '$lib/functions/updater/check-for-update';
+  import { customThemes$, theme$ } from '$lib/data/store';
+  import { availableThemes } from '$lib/data/theme-option';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
   import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
@@ -21,6 +23,18 @@
   $: if (browser) {
     isMobile$.next(isMobile(window));
     addUserFonts($userFonts$);
+  }
+
+  $: if (browser) {
+    const theme =
+      availableThemes.get($theme$) ||
+      $customThemes$[$theme$] ||
+      availableThemes.get('sage-green-theme') ||
+      availableThemes.get('light-theme');
+    if (theme) {
+      document.documentElement.style.setProperty('--background-color', theme.backgroundColor);
+      document.documentElement.style.setProperty('--font-color', theme.fontColor);
+    }
   }
 
   if (clearConsoleOnReload && import.meta.hot) {

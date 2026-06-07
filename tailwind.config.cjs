@@ -6,7 +6,7 @@ const config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Noto Sans JP', 'sans-serif'],
+        sans: ['Noto Sans SC', 'Noto Sans JP', 'sans-serif'],
         serif: ['Noto Serif JP', 'serif']
       },
       colors: {
