@@ -393,6 +393,7 @@
     };
     autoReaderConcrete.wasReaderEnabled$.subscribe((enabled) => {
       if (enabled) {
+        autoScrollerConcrete?.revealAll();
         autoScrollerConcrete?.off();
       }
     });

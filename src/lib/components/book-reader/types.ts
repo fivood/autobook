@@ -11,6 +11,7 @@ export interface AutoScroller {
   wasAutoScrollerEnabled$: BehaviorSubject<boolean>;
   toggle: () => void;
   off: () => void;
+  revealAll: () => void;
 }
 
 export interface AutoReader {

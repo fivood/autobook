@@ -195,6 +195,10 @@ export class AutoScrollerContinuous implements AutoScroller {
     this.revealedIndex = target;
   }
 
+  revealAll() {
+    this.seekToCharIndex(this.chars.length);
+  }
+
   toggle() {
     this.enabled$.next(!this.enabled$.getValue());
   }
