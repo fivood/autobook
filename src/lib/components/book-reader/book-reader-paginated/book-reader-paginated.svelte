@@ -190,11 +190,11 @@
 
   const destroy$ = new Subject<void>();
 
-  if (browser) {
+  onMount(() => {
     autoReaderConcrete = new AutoReaderContinuous(destroy$);
     if (language) autoReaderConcrete.lang = language;
     autoReader = autoReaderConcrete;
-  }
+  });
 
   $: bookmarkData.then((data) => {
     useExploredCharCount = false;
@@ -717,8 +717,8 @@
     : undefined}
   style:max-width={width ? `${width}px` : undefined}
   style:max-height={verticalMode && height ? `${height}px` : undefined}
-  style:--font-family-serif={fontFamilyGroupOne}
-  style:--font-family-sans-serif={fontFamilyGroupTwo}
+  style:--font-family-serif={`"${fontFamilyGroupOne}"`}
+  style:--font-family-sans-serif={`"${fontFamilyGroupTwo}"`}
   style:--font-weight={fontWeight}
   style:--book-content-hint-furigana-font-color={hintFuriganaFontColor}
   style:--book-content-hint-furigana-shadow-color={hintFuriganaShadowColor}

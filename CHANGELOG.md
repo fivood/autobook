@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.5
+
+- 修复中文字体回退到系统宋体的问题
+  - 全局 UI 字体统一使用 `Noto Sans SC`（思源黑体）
+  - 正文 `font-family` fallback 加入 `Noto Sans SC`
+  - CSS 变量 `--font-family-serif` / `--font-family-sans-serif` 现在带引号传入，避免被解析为多个字体名
+  - EPUB 书籍内部 CSS 的 fallback 也加入 `Noto Sans SC`
+- 修复分页模式下语音按钮偶尔不出现的问题（将 `AutoReader` 初始化移到 `onMount`）
+- 打字机自动播放新增可视化调速：右下角 `[-]` / `[+]` 按钮，点击即可减速/加速
+- 设置页面「阅读视图」说明保持：滚动模式支持打字机自动播放，分页模式支持语音朗读
+
 ## 1.0.4
 
 - **语音朗读（TTS）**：基于 Web Speech API，支持桌面端与移动端

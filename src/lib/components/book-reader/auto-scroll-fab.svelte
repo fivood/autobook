@@ -1,6 +1,6 @@
 <script lang="ts">
   import Fa from 'svelte-fa';
-  import { faPlay, faPause, faForward, faRotateRight } from '@fortawesome/free-solid-svg-icons';
+  import { faPlay, faPause, faForward, faRotateRight, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import type { AutoScroller } from '$lib/components/book-reader/types';
   import { autoScrollStopAtChapter$, multiplier$ } from '$lib/data/store';
   import { onDestroy } from 'svelte';
@@ -24,6 +24,22 @@
 
   function toggleStopAtChapter() {
     autoScrollStopAtChapter$.next(!$autoScrollStopAtChapter$);
+  }
+
+  function decreaseSpeed() {
+    const next = Math.max(1, $multiplier$ - 1);
+    multiplier$.next(next);
+    if (autoScroller) {
+      autoScroller.multiplier = next;
+    }
+  }
+
+  function increaseSpeed() {
+    const next = Math.min(60, $multiplier$ + 1);
+    multiplier$.next(next);
+    if (autoScroller) {
+      autoScroller.multiplier = next;
+    }
   }
 </script>
 
@@ -59,5 +75,25 @@
         {$multiplier$}字/秒
       </span>
     </button>
+
+    <div class="flex items-center gap-1 rounded-full px-2 py-1 shadow backdrop-blur" style="background-color: rgba(195, 193, 175, 0.9); color: #405a5c;">
+      <button
+        type="button"
+        title="减速 (D)"
+        on:click={decreaseSpeed}
+        class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
+      >
+        <Fa icon={faMinus} size="xs" />
+      </button>
+      <span class="min-w-[2.5rem] text-center text-[10px]">{$multiplier$} 字/秒</span>
+      <button
+        type="button"
+        title="加速 (A)"
+        on:click={increaseSpeed}
+        class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
+      >
+        <Fa icon={faPlus} size="xs" />
+      </button>
+    </div>
   </div>
 {/if}

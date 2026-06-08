@@ -711,8 +711,8 @@
   style:padding-bottom={!verticalMode && firstDimensionMargin
     ? `${firstDimensionMargin}px`
     : undefined}
-  style:--font-family-serif={fontFamilyGroupOne}
-  style:--font-family-sans-serif={fontFamilyGroupTwo}
+  style:--font-family-serif={`"${fontFamilyGroupOne}"`}
+  style:--font-family-sans-serif={`"${fontFamilyGroupTwo}"`}
   style:--font-weight={fontWeight}
   style:--book-content-hint-furigana-font-color={hintFuriganaFontColor}
   style:--book-content-hint-furigana-shadow-color={hintFuriganaShadowColor}
