@@ -26,23 +26,24 @@
   }
 
   $: if (browser) {
-    const theme =
-      availableThemes.get($theme$) ||
-      $customThemes$[$theme$] ||
-      availableThemes.get('sage-green-theme') ||
-      availableThemes.get('light-theme');
-    if (theme) {
-      const s = document.documentElement.style;
-      s.setProperty('--background-color', theme.backgroundColor);
-      s.setProperty('--font-color', theme.fontColor);
-      s.setProperty('--menu-background', theme.menuBackgroundColor || '#2b5a69');
-      s.setProperty('--menu-foreground', theme.menuFontColor || '#f0efe6');
-      s.setProperty('--button-selected', theme.buttonSelectedColor || '#5f7e7b');
-      s.setProperty('--button-hover', theme.buttonHoverColor || 'rgba(95,126,123,0.18)');
-      s.setProperty('--selection-background', theme.selectionBackgroundColor);
-      s.setProperty('--selection-foreground', theme.selectionFontColor);
-      s.setProperty('--link-color', theme.linkColor || '#2b5a69');
-    }
+    const fallback =
+      availableThemes.get('sage-green-theme') || availableThemes.get('light-theme') || {};
+    const picked = availableThemes.get($theme$) || $customThemes$[$theme$] || fallback;
+    // Merge so legacy custom themes (missing menu/button/link fields) still resolve correctly.
+    const theme = { ...fallback, ...picked } as Record<string, string>;
+    const s = document.documentElement.style;
+    const setVar = (name: string, val: string | undefined, def?: string) => {
+      s.setProperty(name, val || def || '');
+    };
+    setVar('--background-color', theme.backgroundColor, '#f0efe6');
+    setVar('--font-color', theme.fontColor, '#405a5c');
+    setVar('--menu-background', theme.menuBackgroundColor, '#2b5a69');
+    setVar('--menu-foreground', theme.menuFontColor, '#f0efe6');
+    setVar('--button-selected', theme.buttonSelectedColor, '#2b5a69');
+    setVar('--button-hover', theme.buttonHoverColor, 'rgba(95,126,123,0.18)');
+    setVar('--selection-background', theme.selectionBackgroundColor, '#5f7e7b');
+    setVar('--selection-foreground', theme.selectionFontColor, '#f0efe6');
+    setVar('--link-color', theme.linkColor, '#2b5a69');
   }
 
   if (clearConsoleOnReload && import.meta.hot) {

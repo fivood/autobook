@@ -53,11 +53,27 @@
   });
 
   function getThemeData(referenceObject: ThemeOption): Record<keyof ThemeOption, CustomThemeValue> {
-    const result: any = {};
+    // Start from the default skeleton so legacy themes missing the new
+    // menu/button/selection/link fields don't leave undefined slots.
+    const result: any = {
+      fontColor: { ...blank },
+      backgroundColor: { ...blank },
+      selectionFontColor: { ...blank },
+      selectionBackgroundColor: { ...blank },
+      menuBackgroundColor: { ...blank },
+      menuFontColor: { ...blank },
+      buttonSelectedColor: { ...blank },
+      buttonHoverColor: { ...blank },
+      linkColor: { ...blank },
+      hintFuriganaShadowColor: { ...blank },
+      hintFuriganaFontColor: { ...blank },
+      tooltipTextFontColor: { ...blank }
+    };
     const entries = [...Object.entries(referenceObject)];
 
     for (let index = 0, { length } = entries; index < length; index += 1) {
       const [key, value] = entries[index];
+      if (typeof value !== 'string') continue;
       const [r, g, b, a] = (value.match(/rgba\((.+)\)/)?.[1] || '0,0,0,1')
         .split(',')
         .map((x: string) => parseFloat(x.trim()));
