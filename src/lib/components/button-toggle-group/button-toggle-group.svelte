@@ -29,12 +29,6 @@
       : '';
     return base + mapToStyleString(optStyle);
   }
-
-  function handleHover(e: Event, optionId: any, entering: boolean) {
-    if (optionId === selectedOptionId) return;
-    const el = e.currentTarget as HTMLElement;
-    el.style.backgroundColor = entering ? 'var(--button-hover)' : '';
-  }
 </script>
 
 <div class="-m-1 flex flex-wrap">
@@ -42,15 +36,14 @@
     <div class="flex">
       <button
         title={option.id}
-        class="m-1 rounded-md border-2 border-gray-400 p-2 text-black text-lg transition-colors"
+        class="toggle-btn m-1 rounded-md border-2 border-gray-400 p-2 text-black text-lg transition-colors"
+        class:selected={option.id === selectedOptionId}
         class:border-4={option.thickBorders && option.id === selectedOptionId}
         class:text-white={(option.id === selectedOptionId && !invertColors) ||
           (option.id !== selectedOptionId && invertColors)}
         class:bg-white={(option.id === selectedOptionId && invertColors) ||
           (option.id !== selectedOptionId && !invertColors)}
         style={btnStyle(option.id === selectedOptionId, option.style)}
-        on:mouseenter={(e) => handleHover(e, option.id, true)}
-        on:mouseleave={(e) => handleHover(e, option.id, false)}
         on:click={() => (selectedOptionId = option.id)}
       >
         {option.text}
@@ -79,3 +72,9 @@
 
   <slot />
 </div>
+
+<style>
+  .toggle-btn:not(.selected):hover {
+    filter: brightness(0.92);
+  }
+</style>
