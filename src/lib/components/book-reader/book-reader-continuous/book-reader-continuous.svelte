@@ -222,6 +222,7 @@
     if (autoScrollerConcrete) {
       autoScrollerConcrete.multiplier = multiplier;
       autoScrollerConcrete.verticalMode = verticalMode;
+      if (contentEl) autoScrollerConcrete.setContentEl(contentEl);
     }
   }
 
@@ -363,7 +364,13 @@
   });
 
   if (browser) {
-    autoScrollerConcrete = new AutoScrollerContinuous(multiplier, verticalMode, destroy$, document);
+    autoScrollerConcrete = new AutoScrollerContinuous(
+      multiplier,
+      verticalMode,
+      destroy$,
+      document,
+      contentEl
+    );
     autoScroller = autoScrollerConcrete;
   }
 

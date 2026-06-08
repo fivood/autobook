@@ -32,6 +32,11 @@
   .tap-highlight-transparent {
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* typewriter: hidden chars keep layout, transparent in flow */
+  .tw-hidden {
+    visibility: hidden;
+  }
 }
 
 @font-face {

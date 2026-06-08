@@ -67,7 +67,13 @@ export const customThemes$ = writableObjectLocalStorageSubject<Record<string, Th
   'customThemes',
   {}
 );
-export const multiplier$ = writableNumberLocalStorageSubject()('autoScrollMultiplier', 20);
+export const multiplier$ = writableNumberLocalStorageSubject()('autoScrollMultiplier', 6);
+
+// Migrate legacy scroll-speed values (used to be 20 = scroll factor; now means chars/sec)
+{
+  const v = multiplier$.getValue();
+  if (v > 30 || v < 1) multiplier$.next(6);
+}
 export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
   'autoScrollStopAtChapter',
   false

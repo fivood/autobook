@@ -43,7 +43,7 @@
     </button>
     <button
       type="button"
-      title={enabled ? '暂停自动阅读 (Space)' : '开始自动阅读 (Space) · A/D 调速'}
+      title={enabled ? '暂停打字机 (Space)' : '开始打字机阅读 (Space) · A 加速 / D 减速'}
       on:click={toggle}
       class="relative flex h-12 w-12 items-center justify-center rounded-full shadow-lg backdrop-blur"
       class:opacity-90={!enabled}
@@ -53,10 +53,10 @@
       <Fa icon={enabled ? faPause : faPlay} size="lg" />
       <span class="sr-only">{enabled ? '暂停' : '开始'}自动阅读</span>
       <span
-        class="absolute -top-2 -right-2 min-w-[1.25rem] rounded-full bg-black/40 px-1 text-[10px] leading-5"
-        title="速度倍率 (A 加速 / D 减速)"
+        class="absolute -top-2 -right-2 min-w-[2rem] rounded-full bg-black/40 px-1 text-[10px] leading-5"
+        title="速度 (A 加速 / D 减速)"
       >
-        ×{$multiplier$}
+        {$multiplier$}字/秒
       </span>
     </button>
   </div>
