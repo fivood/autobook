@@ -166,7 +166,7 @@ export const showFooterChapterPercentage$ = writableBooleanLocalStorageSubject()
 );
 export const viewMode$ = writableStringLocalStorageSubject<ViewMode>()(
   'viewMode',
-  ViewMode.Paginated
+  ViewMode.Continuous
 );
 
 export const secondDimensionMaxValue$ = writableNumberLocalStorageSubject()(
