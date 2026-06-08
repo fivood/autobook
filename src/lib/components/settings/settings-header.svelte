@@ -32,9 +32,7 @@
     <div class="h12 flex grow justify-evenly xl:h-10">
       {#each settingItems as settingItem (settingItem.label)}
         <button
-          class="flex grow flex-col items-center justify-center text-xs"
-          class:bg-black/30={activeSettings === settingItem.label}
-          class:hover:bg-black/20={activeSettings !== settingItem.label}
+          class="flex grow flex-col items-center justify-center text-xs {activeSettings === settingItem.label ? 'bg-black/30' : ''} {activeSettings !== settingItem.label ? 'hover:bg-black/20' : ''}"
           on:click={() => (activeSettings = settingItem.label)}
         >
           <Fa class="mb-1" icon={settingItem.icon} />

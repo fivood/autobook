@@ -7,6 +7,7 @@
   import type { Subscription } from 'rxjs';
 
   export let autoReader: AutoReader | undefined;
+  export let exploredCharCount = 0;
 
   let enabled = false;
   let sub: Subscription | undefined;
@@ -62,6 +63,10 @@
   });
 
   function toggle() {
+    if (!enabled) {
+      autoReader?.prepare();
+      autoReader?.seekToExplored(exploredCharCount);
+    }
     autoReader?.toggle();
   }
 

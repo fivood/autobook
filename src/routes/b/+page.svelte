@@ -1623,7 +1623,9 @@
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
 {#if !showSpinner && !isPaginated}
   <AutoScrollFab {autoScroller} />
-  <AutoReaderFab {autoReader} />
+{/if}
+{#if !showSpinner}
+  <AutoReaderFab {autoReader} {exploredCharCount} />
 {/if}
 <div
   class="fixed inset-x-0 top-0 z-10 h-6 w-full"

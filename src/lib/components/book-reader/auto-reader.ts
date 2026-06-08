@@ -186,7 +186,7 @@ export class AutoReaderContinuous implements AutoReader {
       return;
     }
 
-    const text = this.paragraphs[this.paraIndex];
+    const text = this.paragraphs[this.paraIndex].slice(this.charOffset);
     const utt = new SpeechSynthesisUtterance(text);
     utt.rate = this._rate;
     utt.lang = this._lang;
@@ -227,7 +227,7 @@ export class AutoReaderContinuous implements AutoReader {
       const parent = node.parentElement;
       if (parent) {
         const tag = parent.tagName;
-        if (tag !== 'SCRIPT' && tag !== 'STYLE' && !parent.classList.contains('tw-c')) {
+        if (tag !== 'SCRIPT' && tag !== 'STYLE') {
           parts.push(node.textContent || '');
         }
       }

@@ -371,9 +371,11 @@
       bind:bookCharCount
       bind:isBookmarkScreen
       bind:bookmarkData
+      bind:autoReader
       bind:bookmarkManager
       bind:pageManager
       bind:customReadingPointRange
+      {language}
       bind:showCustomReadingPoint
       on:contentChange={(ev) => contentEl$.next(ev.detail)}
       on:bookmark

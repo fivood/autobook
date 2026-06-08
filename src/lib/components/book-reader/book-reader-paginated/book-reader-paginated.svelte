@@ -37,7 +37,8 @@
   } from 'rxjs';
   import Fa from 'svelte-fa';
   import { swipe } from 'svelte-gestures';
-  import type { BookmarkManager, PageManager } from '../types';
+  import type { AutoReader, BookmarkManager, PageManager } from '../types';
+  import { AutoReaderContinuous } from '../auto-reader';
   import { BookmarkManagerPaginated } from './bookmark-manager-paginated';
   import { PageManagerPaginated } from './page-manager-paginated';
   import { SectionCharacterStatsCalculator } from './section-character-stats-calculator';
@@ -115,6 +116,10 @@
 
   export let autoBookmarkTime: number;
 
+  export let autoReader: AutoReader | undefined;
+
+  export let language: string | undefined;
+
   export let customReadingPointRange: Range | undefined;
 
   export let showCustomReadingPoint: boolean;
@@ -159,6 +164,8 @@
 
   let fontLoadingAdded = false;
 
+  let autoReaderConcrete: AutoReaderContinuous | undefined;
+
   let currentSectionId = '';
 
   const width$ = new Subject<number>();
@@ -182,6 +189,12 @@
   const gap = 40;
 
   const destroy$ = new Subject<void>();
+
+  if (browser) {
+    autoReaderConcrete = new AutoReaderContinuous(destroy$);
+    if (language) autoReaderConcrete.lang = language;
+    autoReader = autoReaderConcrete;
+  }
 
   $: bookmarkData.then((data) => {
     useExploredCharCount = false;
@@ -258,6 +271,15 @@
         (c) => (previousIntendedCount = c)
       );
       bookmarkManager = concreteBookmarkManager;
+    }
+  }
+
+  $: {
+    if (autoReaderConcrete && contentEl) {
+      autoReaderConcrete.setContentEl(contentEl);
+    }
+    if (autoReaderConcrete && language) {
+      autoReaderConcrete.lang = language;
     }
   }
 
@@ -496,6 +518,8 @@
       return;
     }
     if (!scrollEl) return;
+
+    autoReaderConcrete?.prepare();
 
     calculator = new SectionCharacterStatsCalculator(
       scrollEl,

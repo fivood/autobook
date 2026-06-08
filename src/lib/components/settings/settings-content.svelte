@@ -533,6 +533,7 @@
     <div class="h-full">
       <SettingsItemGroup title="阅读视图">
         <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
+        <p class="mt-1 text-xs opacity-60">注：自动播放（打字机效果）仅在滚动模式下可用</p>
       </SettingsItemGroup>
     </div>
     <SettingsItemGroup title="字体（组 1）">

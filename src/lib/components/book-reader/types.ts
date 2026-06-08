@@ -17,6 +17,8 @@ export interface AutoReader {
   wasReaderEnabled$: BehaviorSubject<boolean>;
   toggle: () => void;
   off: () => void;
+  prepare: () => void;
+  seekToExplored: (count: number) => void;
   rate: number;
   voice: SpeechSynthesisVoice | undefined;
   lang: string;
