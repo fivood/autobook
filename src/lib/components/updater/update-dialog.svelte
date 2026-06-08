@@ -54,13 +54,13 @@
   <svelte:fragment slot="content">
     <div class="space-y-3 max-w-lg">
       <p class="text-sm opacity-80">
-        当前版本 <code>{update.currentVersion}</code> → 新版本 <code>{update.version}</code>
+        当前版本 <span class="font-sans">{update.currentVersion}</span> → 新版本 <span class="font-sans">{update.version}</span>
       </p>
 
       {#if update.notes}
         <div class="border-t pt-2">
           <p class="font-medium mb-1">更新内容</p>
-          <pre class="whitespace-pre-wrap text-sm opacity-90 max-h-56 overflow-y-auto">{update.notes}</pre>
+          <div class="font-sans whitespace-pre-wrap text-sm opacity-90 max-h-56 overflow-y-auto">{update.notes}</div>
         </div>
       {/if}
 
@@ -81,7 +81,7 @@
       {:else if phase === 'error'}
         <div class="border-t pt-2 text-sm text-red-600">
           <p class="font-medium">更新失败</p>
-          <pre class="whitespace-pre-wrap mt-1">{errorMessage}</pre>
+          <div class="font-sans whitespace-pre-wrap mt-1">{errorMessage}</div>
         </div>
       {/if}
     </div>
