@@ -13,6 +13,14 @@ export interface AutoScroller {
   off: () => void;
 }
 
+export interface AutoReader {
+  wasReaderEnabled$: BehaviorSubject<boolean>;
+  toggle: () => void;
+  off: () => void;
+  rate: number;
+  voice: SpeechSynthesisVoice | undefined;
+}
+
 export interface BookmarkManager {
   formatBookmarkData: (
     bookId: number,

@@ -27,7 +27,7 @@
   import { logger } from '$lib/data/logger';
   import { imageLoadingState } from './image-loading-state';
   import { reactiveElements } from './reactive-elements';
-  import type { AutoScroller, BookmarkManager, PageManager } from './types';
+  import type { AutoReader, AutoScroller, BookmarkManager, PageManager } from './types';
   import BookReaderPaginated from './book-reader-paginated/book-reader-paginated.svelte';
   import { enableReaderWakeLock$, enableTapEdgeToFlip$, lastBookHasImages$ } from '$lib/data/store';
   import { onDestroy } from 'svelte';
@@ -105,6 +105,8 @@
   export let bookmarkData: Promise<BooksDbBookmarkData | undefined>;
 
   export let autoScroller: AutoScroller | undefined;
+
+  export let autoReader: AutoReader | undefined;
 
   export let bookmarkManager: BookmarkManager | undefined;
 
@@ -319,6 +321,7 @@
       bind:bookCharCount
       bind:bookmarkData
       bind:autoScroller
+      bind:autoReader
       bind:bookmarkManager
       bind:pageManager
       bind:customReadingPoint

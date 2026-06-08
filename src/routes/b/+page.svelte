@@ -27,7 +27,9 @@
   import { faCloudBolt, faPause, faPlay, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import BookReader from '$lib/components/book-reader/book-reader.svelte';
   import AutoScrollFab from '$lib/components/book-reader/auto-scroll-fab.svelte';
+  import AutoReaderFab from '$lib/components/book-reader/auto-reader-fab.svelte';
   import type {
+    AutoReader,
     AutoScroller,
     BookmarkManager,
     PageManager
@@ -193,6 +195,7 @@
   let exploredCharCount = 0;
   let bookCharCount = 0;
   let autoScroller: AutoScroller | undefined;
+  let autoReader: AutoReader | undefined;
   let bookmarkManager: BookmarkManager | undefined;
   let pageManager: PageManager | undefined;
   let bookmarkData: Promise<BooksDbBookmarkData | undefined> = Promise.resolve(undefined);
@@ -496,6 +499,7 @@
 
   $: if ($tocIsOpen$) {
     autoScroller?.off();
+    autoReader?.off();
   }
 
   $: if (browser && bookCharCount) {
@@ -696,6 +700,7 @@
 
     showHeader = false;
     autoScroller?.off();
+    autoReader?.off();
 
     if ($statisticsEnabled$) {
       wasTrackerPaused = true;
@@ -1146,6 +1151,7 @@
       scrollToBookmark,
       (x) => multiplier$.next(multiplier$.getValue() + x),
       autoScroller,
+      autoReader,
       pageManager,
       $verticalMode$,
       changeChapter,
@@ -1383,6 +1389,7 @@
       await tick();
 
       autoScroller?.off();
+    autoReader?.off();
       wasTrackerPaused = true;
       isTrackerPaused$.next(true);
 
@@ -1472,6 +1479,7 @@
     }
 
     autoScroller?.off();
+    autoReader?.off();
 
     if ($pauseTrackerOnCustomPointChange$) {
       pauseTracker();
@@ -1615,6 +1623,7 @@
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
 {#if !showSpinner && !isPaginated}
   <AutoScrollFab {autoScroller} />
+  <AutoReaderFab {autoReader} />
 {/if}
 <div
   class="fixed inset-x-0 top-0 z-10 h-6 w-full"
@@ -1777,6 +1786,7 @@
     bind:isBookmarkScreen
     bind:bookmarkData
     bind:autoScroller
+    bind:autoReader
     bind:bookmarkManager
     bind:pageManager
     bind:customReadingPoint

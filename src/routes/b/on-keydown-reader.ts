@@ -8,7 +8,7 @@ import {
   ReaderImageGalleryAvailableKeybind,
   type ReaderImageGalleryKeybindMap
 } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
-import type { AutoScroller, PageManager } from '$lib/components/book-reader/types';
+import type { AutoScroller, AutoReader, PageManager } from '$lib/components/book-reader/types';
 import {
   BookReaderAvailableKeybind,
   type BookReaderKeybindMap
@@ -25,6 +25,7 @@ export function onKeydownReader(
   scrollToBookmark: () => void,
   multiplierOffsetFn: (offset: number) => void,
   autoScroller: AutoScroller | undefined,
+  autoReader: AutoReader | undefined,
   pageManager: PageManager | undefined,
   isVertical: boolean,
   changeChapter: (offset: number) => void,
@@ -50,6 +51,9 @@ export function onKeydownReader(
       return true;
     case BookReaderAvailableKeybind.AUTO_SCROLL_DECREASE:
       multiplierOffsetFn(-1);
+      return true;
+    case BookReaderAvailableKeybind.AUTO_READER_TOGGLE:
+      autoReader?.toggle();
       return true;
     case BookReaderAvailableKeybind.NEXT_PAGE:
       pageManager?.nextPage();

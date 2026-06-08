@@ -42,7 +42,8 @@
   } from 'rxjs';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
-  import type { AutoScroller, BookmarkManager, PageManager } from '../types';
+  import type { AutoReader, AutoScroller, BookmarkManager, PageManager } from '../types';
+  import { AutoReaderContinuous } from '../auto-reader';
   import { AutoScrollerContinuous } from './auto-scroller-continuous';
   import { BookmarkManagerContinuous, type BookmarkPosData } from './bookmark-manager-continuous';
   import { CharacterStatsCalculator } from './character-stats-calculator';
@@ -119,6 +120,8 @@
 
   export let autoScroller: AutoScroller | undefined;
 
+  export let autoReader: AutoReader | undefined;
+
   export let bookmarkManager: BookmarkManager | undefined;
 
   export let pageManager: PageManager | undefined;
@@ -146,6 +149,8 @@
   let contentReadyEvent = {};
 
   let autoScrollerConcrete: AutoScrollerContinuous | undefined;
+
+  let autoReaderConcrete: AutoReaderContinuous | undefined;
 
   let bookmarkManagerConcrete: BookmarkManagerContinuous | undefined;
 
@@ -223,6 +228,9 @@
       autoScrollerConcrete.multiplier = multiplier;
       autoScrollerConcrete.verticalMode = verticalMode;
       if (contentEl) autoScrollerConcrete.setContentEl(contentEl);
+    }
+    if (autoReaderConcrete && contentEl) {
+      autoReaderConcrete.setContentEl(contentEl);
     }
   }
 
@@ -372,6 +380,12 @@
       contentEl
     );
     autoScroller = autoScrollerConcrete;
+
+    autoReaderConcrete = new AutoReaderContinuous(destroy$);
+    autoReaderConcrete.onBoundary = (charIndex) => {
+      autoScrollerConcrete?.seekToCharIndex(charIndex);
+    };
+    autoReader = autoReaderConcrete;
   }
 
   combineLatest([width$, height$])
@@ -571,6 +585,7 @@
     if (!contentEl) return;
 
     autoScrollerConcrete?.markContentChanged();
+    autoReaderConcrete?.prepare();
 
     calculator = new CharacterStatsCalculator(
       contentEl,

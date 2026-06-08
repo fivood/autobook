@@ -78,6 +78,10 @@ export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
   'autoScrollStopAtChapter',
   false
 );
+
+export const readerRate$ = writableNumberLocalStorageSubject()('readerRate', 1);
+export const readerVoiceUri$ = writableStringLocalStorageSubject()('readerVoiceUri', '');
+export const readerEnabled$ = writableBooleanLocalStorageSubject()('readerEnabled', false);
 export const lastBookHasImages$ = writableBooleanLocalStorageSubject()(
   'lastBookHasImages',
   false
@@ -479,6 +483,8 @@ export const bookReaderKeybindMap$ = writableSubject<BookReaderKeybindMap>({
   a: BookReaderAvailableKeybind.AUTO_SCROLL_INCREASE,
   KeyD: BookReaderAvailableKeybind.AUTO_SCROLL_DECREASE,
   d: BookReaderAvailableKeybind.AUTO_SCROLL_DECREASE,
+  KeyV: BookReaderAvailableKeybind.AUTO_READER_TOGGLE,
+  v: BookReaderAvailableKeybind.AUTO_READER_TOGGLE,
   KeyN: BookReaderAvailableKeybind.PREV_CHAPTER,
   n: BookReaderAvailableKeybind.PREV_CHAPTER,
   KeyM: BookReaderAvailableKeybind.NEXT_CHAPTER,

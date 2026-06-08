@@ -186,6 +186,15 @@ export class AutoScrollerContinuous implements AutoScroller {
     }
   }
 
+  seekToCharIndex(index: number) {
+    if (!this.chars.length) return;
+    const target = Math.max(0, Math.min(index, this.chars.length));
+    for (let i = this.revealedIndex; i < target; i += 1) {
+      this.chars[i].classList.remove(HIDDEN_CLASS);
+    }
+    this.revealedIndex = target;
+  }
+
   toggle() {
     this.enabled$.next(!this.enabled$.getValue());
   }
