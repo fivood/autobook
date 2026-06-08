@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Ebook Reader",
+  "productName": "AutoBook",
   "version": "1.0.2",
   "identifier": "io.github.fukki.ebookreader",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "阅读器",
+        "title": "AutoBook",
         "width": 1280,
         "height": 860,
         "resizable": true,

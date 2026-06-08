@@ -76,6 +76,11 @@ export class AutoScrollerContinuous implements AutoScroller {
   setContentEl(el: HTMLElement) {
     if (this.contentEl === el) return;
     this.contentEl = el;
+    this.markContentChanged();
+  }
+
+  /** Force a re-walk on next start. Call this when book HTML is re-rendered. */
+  markContentChanged() {
     this.prepared = false;
     this.chars = [];
     this.revealedIndex = 0;
@@ -83,8 +88,14 @@ export class AutoScrollerContinuous implements AutoScroller {
 
   private ensurePrepared() {
     if (this.prepared) return;
-    if (!this.contentEl) return;
+    if (!this.contentEl) {
+      // eslint-disable-next-line no-console
+      console.warn('[typewriter] no contentEl yet');
+      return;
+    }
     this.prepareChars();
+    // eslint-disable-next-line no-console
+    console.info(`[typewriter] prepared ${this.chars.length} chars`);
     this.revealAlreadyScrolled();
     this.prepared = true;
   }

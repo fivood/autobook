@@ -570,6 +570,8 @@
   function onHtmlLoad() {
     if (!contentEl) return;
 
+    autoScrollerConcrete?.markContentChanged();
+
     calculator = new CharacterStatsCalculator(
       contentEl,
       verticalMode ? 'vertical' : 'horizontal',
