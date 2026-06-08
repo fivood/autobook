@@ -82,11 +82,6 @@ export const lastBookHasImages$ = writableBooleanLocalStorageSubject()(
   'lastBookHasImages',
   false
 );
-export const menuBackgroundColor$ = writableStringLocalStorageSubject()(
-  'menuBackgroundColor',
-  '#2b5a69'
-);
-export const menuFontColor$ = writableStringLocalStorageSubject()('menuFontColor', '#f0efe6');
 export const fontFamilyGroupOne$ = writableStringLocalStorageSubject()(
   'fontFamilyGroupOne',
   'Noto Sans SC'

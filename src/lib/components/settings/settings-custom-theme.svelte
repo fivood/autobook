@@ -15,38 +15,24 @@
     close: void;
   }>();
 
+  const blank: CustomThemeValue = {
+    hexExpression: '#ffffff',
+    alphaValue: 1,
+    rgbaExpression: 'rgba(255,255,255,1)'
+  };
   let customTheme: Record<keyof ThemeOption, CustomThemeValue> = {
-    fontColor: { hexExpression: '#ffffff', alphaValue: 1, rgbaExpression: 'rgba(255,255,255,1)' },
-    backgroundColor: {
-      hexExpression: '#000000',
-      alphaValue: 1,
-      rgbaExpression: 'rgba(0,0,0,1)'
-    },
-    selectionFontColor: {
-      hexExpression: '#ffffff',
-      alphaValue: 1,
-      rgbaExpression: 'rgba(255,255,255,1)'
-    },
-    selectionBackgroundColor: {
-      hexExpression: '#ffffff',
-      alphaValue: 1,
-      rgbaExpression: 'rgba(255,255,255,1)'
-    },
-    hintFuriganaShadowColor: {
-      hexExpression: '#ffffff',
-      alphaValue: 1,
-      rgbaExpression: 'rgba(255,255,255,1)'
-    },
-    hintFuriganaFontColor: {
-      hexExpression: '#ffffff',
-      alphaValue: 1,
-      rgbaExpression: 'rgba(255,255,255,1)'
-    },
-    tooltipTextFontColor: {
-      hexExpression: '#ffffff',
-      alphaValue: 1,
-      rgbaExpression: 'rgba(255,255,255,1)'
-    }
+    fontColor: { ...blank },
+    backgroundColor: { ...blank },
+    selectionFontColor: { ...blank },
+    selectionBackgroundColor: { ...blank },
+    menuBackgroundColor: { ...blank },
+    menuFontColor: { ...blank },
+    buttonSelectedColor: { ...blank },
+    buttonHoverColor: { ...blank },
+    linkColor: { ...blank },
+    hintFuriganaShadowColor: { ...blank },
+    hintFuriganaFontColor: { ...blank },
+    tooltipTextFontColor: { ...blank }
   };
 
   let themeToCopy = existingThemes[0].id;
@@ -208,37 +194,65 @@
       <span class="hidden sm:block">颜色</span>
       <span class="hidden sm:block">透明度</span>
       <SettingsCustomThemeInput
-        label="字体"
+        label="正文字体色"
         attribute="fontColor"
         values={customTheme.fontColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="背景"
+        label="正文背景色"
         attribute="backgroundColor"
         values={customTheme.backgroundColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="振假名部分隐藏字体"
-        attribute="hintFuriganaFontColor"
-        values={customTheme.hintFuriganaFontColor}
+        label="菜单背景色"
+        attribute="menuBackgroundColor"
+        values={customTheme.menuBackgroundColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="振假名部分/完全隐藏阴影"
-        attribute="hintFuriganaShadowColor"
-        values={customTheme.hintFuriganaShadowColor}
+        label="菜单文字色"
+        attribute="menuFontColor"
+        values={customTheme.menuFontColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="页脚字体"
-        attribute="tooltipTextFontColor"
-        values={customTheme.tooltipTextFontColor}
+        label="按钮选中色"
+        attribute="buttonSelectedColor"
+        values={customTheme.buttonSelectedColor}
+        on:color={handleColorValueChange}
+        on:alpha={handleAlphaValueChange}
+      />
+      <SettingsCustomThemeInput
+        label="按钮悬停色"
+        attribute="buttonHoverColor"
+        values={customTheme.buttonHoverColor}
+        on:color={handleColorValueChange}
+        on:alpha={handleAlphaValueChange}
+      />
+      <SettingsCustomThemeInput
+        label="选中文字背景"
+        attribute="selectionBackgroundColor"
+        values={customTheme.selectionBackgroundColor}
+        on:color={handleColorValueChange}
+        on:alpha={handleAlphaValueChange}
+      />
+      <SettingsCustomThemeInput
+        label="选中文字颜色"
+        attribute="selectionFontColor"
+        values={customTheme.selectionFontColor}
+        on:color={handleColorValueChange}
+        on:alpha={handleAlphaValueChange}
+      />
+      <SettingsCustomThemeInput
+        label="超链接颜色"
+        attribute="linkColor"
+        values={customTheme.linkColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />

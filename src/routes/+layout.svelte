@@ -7,7 +7,7 @@
   import { basePath, clearConsoleOnReload, isTauri } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { checkForUpdate } from '$lib/functions/updater/check-for-update';
-  import { customThemes$, menuBackgroundColor$, menuFontColor$, theme$ } from '$lib/data/store';
+  import { customThemes$, theme$ } from '$lib/data/store';
   import { availableThemes } from '$lib/data/theme-option';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -32,14 +32,17 @@
       availableThemes.get('sage-green-theme') ||
       availableThemes.get('light-theme');
     if (theme) {
-      document.documentElement.style.setProperty('--background-color', theme.backgroundColor);
-      document.documentElement.style.setProperty('--font-color', theme.fontColor);
+      const s = document.documentElement.style;
+      s.setProperty('--background-color', theme.backgroundColor);
+      s.setProperty('--font-color', theme.fontColor);
+      s.setProperty('--menu-background', theme.menuBackgroundColor || '#2b5a69');
+      s.setProperty('--menu-foreground', theme.menuFontColor || '#f0efe6');
+      s.setProperty('--button-selected', theme.buttonSelectedColor || '#5f7e7b');
+      s.setProperty('--button-hover', theme.buttonHoverColor || 'rgba(95,126,123,0.18)');
+      s.setProperty('--selection-background', theme.selectionBackgroundColor);
+      s.setProperty('--selection-foreground', theme.selectionFontColor);
+      s.setProperty('--link-color', theme.linkColor || '#2b5a69');
     }
-  }
-
-  $: if (browser) {
-    document.documentElement.style.setProperty('--menu-background', $menuBackgroundColor$);
-    document.documentElement.style.setProperty('--menu-foreground', $menuFontColor$);
   }
 
   if (clearConsoleOnReload && import.meta.hot) {

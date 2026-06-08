@@ -22,6 +22,19 @@
       .map(([key, value]) => `${key}: ${value}`)
       .join(';');
   }
+
+  function btnStyle(isSelected: boolean, optStyle: Record<string, any> | undefined) {
+    const base = isSelected
+      ? 'background-color: var(--button-selected); border-color: var(--button-selected); color: var(--menu-foreground);'
+      : '';
+    return base + mapToStyleString(optStyle);
+  }
+
+  function handleHover(e: Event, optionId: any, entering: boolean) {
+    if (optionId === selectedOptionId) return;
+    const el = e.currentTarget as HTMLElement;
+    el.style.backgroundColor = entering ? 'var(--button-hover)' : '';
+  }
 </script>
 
 <div class="-m-1 flex flex-wrap">
@@ -29,15 +42,15 @@
     <div class="flex">
       <button
         title={option.id}
-        class="m-1 rounded-md border-2 border-gray-400 p-2 text-black text-lg"
+        class="m-1 rounded-md border-2 border-gray-400 p-2 text-black text-lg transition-colors"
         class:border-4={option.thickBorders && option.id === selectedOptionId}
-        class:border-blue-300={option.id === selectedOptionId}
-        class:bg-gray-700={option.id === selectedOptionId}
         class:text-white={(option.id === selectedOptionId && !invertColors) ||
           (option.id !== selectedOptionId && invertColors)}
         class:bg-white={(option.id === selectedOptionId && invertColors) ||
           (option.id !== selectedOptionId && !invertColors)}
-        style={mapToStyleString(option.style)}
+        style={btnStyle(option.id === selectedOptionId, option.style)}
+        on:mouseenter={(e) => handleHover(e, option.id, true)}
+        on:mouseleave={(e) => handleHover(e, option.id, false)}
         on:click={() => (selectedOptionId = option.id)}
       >
         {option.text}

@@ -19,6 +19,17 @@
   overflow-clip-margin: unset;
 }
 
+::selection {
+  background-color: var(--selection-background, #5f7e7b);
+  color: var(--selection-foreground, #f0efe6);
+}
+
+a,
+a:link,
+a:visited {
+  color: var(--link-color, #2b5a69);
+}
+
 @layer base {
   body {
     color: var(--font-color);
