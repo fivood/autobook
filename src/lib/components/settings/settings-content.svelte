@@ -35,6 +35,7 @@
     database,
     fontFamilyGroupOne$,
     fontFamilyGroupTwo$,
+    lastBookHasImages$,
     horizontalCustomReadingPosition$,
     textMarginMode$,
     textMarginValue$,
@@ -847,16 +848,21 @@
     <SettingsItemGroup title="自动书签" tooltip={autoBookmarkTooltip}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="图片模糊">
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
-    </SettingsItemGroup>
-    {#if blurImage}
+    {#if $lastBookHasImages$}
       <SettingsItemGroup
-        title="模糊范围"
-        tooltip="选择模糊所有图片，还是仅模糊目录之后的图片"
+        title="图片模糊"
+        tooltip="对包含插图的电子书（如轻小说）有效，可避免剧透图直接显示"
       >
-        <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
       </SettingsItemGroup>
+      {#if blurImage}
+        <SettingsItemGroup
+          title="模糊范围"
+          tooltip="选择模糊所有图片，还是仅模糊目录之后的图片"
+        >
+          <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
+        </SettingsItemGroup>
+      {/if}
     {/if}
     <SettingsItemGroup title="隐藏振假名">
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />

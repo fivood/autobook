@@ -29,7 +29,7 @@
   import { reactiveElements } from './reactive-elements';
   import type { AutoScroller, BookmarkManager, PageManager } from './types';
   import BookReaderPaginated from './book-reader-paginated/book-reader-paginated.svelte';
-  import { enableReaderWakeLock$, enableTapEdgeToFlip$ } from '$lib/data/store';
+  import { enableReaderWakeLock$, enableTapEdgeToFlip$, lastBookHasImages$ } from '$lib/data/store';
   import { onDestroy } from 'svelte';
 
   export let htmlContent: string;
@@ -207,6 +207,7 @@
     tap((contentEl) => {
       mutationObserver.disconnect();
       mutationObserver.observe(contentEl, { attributes: true });
+      lastBookHasImages$.next(!!contentEl.querySelector('img,image'));
     }),
     reduceToEmptyString()
   );

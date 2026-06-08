@@ -78,6 +78,10 @@ export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
   'autoScrollStopAtChapter',
   false
 );
+export const lastBookHasImages$ = writableBooleanLocalStorageSubject()(
+  'lastBookHasImages',
+  false
+);
 export const fontFamilyGroupOne$ = writableStringLocalStorageSubject()(
   'fontFamilyGroupOne',
   'Noto Sans SC'
