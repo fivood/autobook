@@ -7,7 +7,7 @@
   import { basePath, clearConsoleOnReload, isTauri } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { checkForUpdate } from '$lib/functions/updater/check-for-update';
-  import { customThemes$, theme$ } from '$lib/data/store';
+  import { customThemes$, menuBackgroundColor$, menuFontColor$, theme$ } from '$lib/data/store';
   import { availableThemes } from '$lib/data/theme-option';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -35,6 +35,11 @@
       document.documentElement.style.setProperty('--background-color', theme.backgroundColor);
       document.documentElement.style.setProperty('--font-color', theme.fontColor);
     }
+  }
+
+  $: if (browser) {
+    document.documentElement.style.setProperty('--menu-background', $menuBackgroundColor$);
+    document.documentElement.style.setProperty('--menu-foreground', $menuFontColor$);
   }
 
   if (clearConsoleOnReload && import.meta.hot) {

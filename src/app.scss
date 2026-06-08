@@ -10,6 +10,8 @@
   --background-color: #f0efe6;
   --accent-color: #5f7e7b;
   --muted-color: #c3c1af;
+  --menu-background: #2b5a69;
+  --menu-foreground: #f0efe6;
   scrollbar-color: #5f7e7b #f0efe6;
 }
 
@@ -36,6 +38,13 @@
   /* typewriter: hidden chars keep layout, transparent in flow */
   .tw-hidden {
     visibility: hidden;
+  }
+
+  .bg-menu {
+    background-color: var(--menu-background);
+  }
+  .text-menu {
+    color: var(--menu-foreground);
   }
 }
 

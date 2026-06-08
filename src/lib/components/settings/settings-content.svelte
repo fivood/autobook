@@ -36,6 +36,8 @@
     fontFamilyGroupOne$,
     fontFamilyGroupTwo$,
     lastBookHasImages$,
+    menuBackgroundColor$,
+    menuFontColor$,
     horizontalCustomReadingPosition$,
     textMarginMode$,
     textMarginValue$,
@@ -526,6 +528,24 @@
             </button>
           {/if}
         </ButtonToggleGroup>
+      </SettingsItemGroup>
+    </div>
+    <div class="h-full">
+      <SettingsItemGroup title="菜单背景色" tooltip="顶部菜单栏的底色">
+        <input
+          type="color"
+          bind:value={$menuBackgroundColor$}
+          class="h-9 w-16 cursor-pointer rounded border border-gray-400"
+        />
+      </SettingsItemGroup>
+    </div>
+    <div class="h-full">
+      <SettingsItemGroup title="菜单文字色" tooltip="顶部菜单栏的文字颜色">
+        <input
+          type="color"
+          bind:value={$menuFontColor$}
+          class="h-9 w-16 cursor-pointer rounded border border-gray-400"
+        />
       </SettingsItemGroup>
     </div>
     <div class="h-full">
