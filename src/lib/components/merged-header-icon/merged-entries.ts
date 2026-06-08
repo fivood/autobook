@@ -7,6 +7,7 @@
 import {
   faBug,
   faChartLine,
+  faCloudArrowDown,
   faCog,
   faFileArrowUp,
   faFileZipper,
@@ -57,5 +58,11 @@ export const mergeEntries = {
     title: '从文件夹导入'
   },
   FILE_IMPORT: { routeId: '', label: '导入文件', icon: faFileArrowUp, title: '导入书籍文件' },
-  BACKUP_IMPORT: { routeId: '', label: '导入备份', icon: faFileZipper, title: '从备份导入' }
+  BACKUP_IMPORT: { routeId: '', label: '导入备份', icon: faFileZipper, title: '从备份导入' },
+  CHECK_UPDATE: {
+    routeId: '',
+    label: '检查更新',
+    icon: faCloudArrowDown,
+    title: '检查桌面端更新'
+  }
 };

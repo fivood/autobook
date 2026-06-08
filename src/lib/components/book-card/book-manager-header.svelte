@@ -2,6 +2,14 @@
   import { browser } from '$app/environment';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
+  import { isTauri } from '$lib/data/env';
+  import {
+    checkForUpdate,
+    type UpdateInfo
+  } from '$lib/functions/updater/check-for-update';
+  import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
+  import MessageDialog from '$lib/components/message-dialog.svelte';
+  import { dialogManager } from '$lib/data/dialog-manager';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import Popover from '$lib/components/popover/popover.svelte';
   import {
@@ -158,6 +166,31 @@
     { property: 'progress', label: '阅读进度' },
     { property: 'lastBookmarkModified', label: '最近标记' }
   ];
+
+  async function manualCheckUpdate() {
+    let update: UpdateInfo | null = null;
+    try {
+      update = await checkForUpdate();
+    } catch (err: any) {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: { title: '检查更新失败', message: err?.message ?? String(err) }
+        }
+      ]);
+      return;
+    }
+    if (update) {
+      dialogManager.dialogs$.next([{ component: UpdateDialog, props: { update } }]);
+    } else {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: { title: '已是最新', message: '当前已是最新版本。' }
+        }
+      ]);
+    }
+  }
 
   function triggerInput(event: CustomEvent<string>) {
     switch (event.detail) {
@@ -480,12 +513,17 @@
             out:scale={outAnimationParams}
           >
             <MergedHeaderIcon
-              items={isOldUrl
-                ? [mergeEntries.MANAGE, mergeEntries.DOMAIN_HINT, mergeEntries.SETTINGS]
-                : [mergeEntries.MANAGE, mergeEntries.STATISTICS, mergeEntries.SETTINGS]}
+              items={[
+                ...(isOldUrl
+                  ? [mergeEntries.MANAGE, mergeEntries.DOMAIN_HINT, mergeEntries.SETTINGS]
+                  : [mergeEntries.MANAGE, mergeEntries.STATISTICS, mergeEntries.SETTINGS]),
+                ...(isTauri() ? [mergeEntries.CHECK_UPDATE] : [])
+              ]}
               on:action={({ detail }) => {
                 if (detail === mergeEntries.DOMAIN_HINT.label) {
                   dispatch('domainHintClick');
+                } else if (detail === mergeEntries.CHECK_UPDATE.label) {
+                  manualCheckUpdate();
                 }
               }}
             />
