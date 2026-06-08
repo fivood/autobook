@@ -1157,7 +1157,8 @@
       changeChapter,
       handleSetCustomReadingPoint,
       trackerDblClickHandler,
-      freezeTrackerPosition
+      freezeTrackerPosition,
+      isPaginated
     );
 
     if (!result) return;
@@ -1624,7 +1625,7 @@
 {#if !showSpinner && !isPaginated}
   <AutoScrollFab {autoScroller} />
 {/if}
-{#if !showSpinner}
+{#if !showSpinner && isPaginated}
   <AutoReaderFab {autoReader} {exploredCharCount} />
 {/if}
 <div

@@ -31,7 +31,8 @@ export function onKeydownReader(
   changeChapter: (offset: number) => void,
   handleSetCustomReadingPoint: () => void,
   toggleTracker: () => void,
-  freezeTrackerPosition: () => void
+  freezeTrackerPosition: () => void,
+  isPaginated: boolean
 ) {
   const action = bookReaderKeybindMap[ev.code || ev.key?.toLowerCase()];
 
@@ -53,7 +54,9 @@ export function onKeydownReader(
       multiplierOffsetFn(-1);
       return true;
     case BookReaderAvailableKeybind.AUTO_READER_TOGGLE:
-      autoReader?.toggle();
+      if (isPaginated) {
+        autoReader?.toggle();
+      }
       return true;
     case BookReaderAvailableKeybind.NEXT_PAGE:
       pageManager?.nextPage();
