@@ -57,12 +57,20 @@
         <Ripple />
       </button>
       {#if option.showIcons && option.id === selectedOptionId && !availableThemes.has(option.id)}
-        <div class="flex flex-col justify-around mr-2">
-          <button on:click={() => dispatch('edit', option.id)}>
-            <Fa icon={faPen} slot="icon" />
+        <div class="flex flex-col justify-around mr-2 gap-1">
+          <button
+            title="编辑主题"
+            class="p-1 opacity-70 hover:opacity-100"
+            on:click={() => dispatch('edit', option.id)}
+          >
+            <Fa icon={faPen} />
           </button>
-          <button on:click={() => dispatch('delete', option.id)}>
-            <Fa icon={faTrash} slot="icon" />
+          <button
+            title="删除主题"
+            class="p-1 opacity-70 hover:opacity-100 text-red-600"
+            on:click={() => dispatch('delete', option.id)}
+          >
+            <Fa icon={faTrash} />
           </button>
         </div>
       {/if}
