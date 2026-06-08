@@ -35,24 +35,32 @@
     tooltipTextFontColor: { ...blank }
   };
 
-  let themeToCopy = existingThemes[0].id;
+  let themeToCopy = existingThemes.find((t) => t.id === $theme$)?.id || existingThemes[0].id;
   let themeName = '';
   let themeNameElm: HTMLInputElement;
 
   $: themeStyle = `color: ${customTheme.fontColor.rgbaExpression}; background-color: ${customTheme.backgroundColor.rgbaExpression}`;
 
   onMount(() => {
-    // Load from custom themes first; fall back to built-in so editing a built-in
-    // theme pre-fills the dialog with its actual colors.
-    const existingThemeObject =
-      $customThemes$[selectedTheme] || availableThemes.get(selectedTheme);
+    if (selectedTheme) {
+      // Load from custom themes first; fall back to built-in so editing a built-in
+      // theme pre-fills the dialog with its actual colors.
+      const existingThemeObject =
+        $customThemes$[selectedTheme] || availableThemes.get(selectedTheme);
 
-    if (!existingThemeObject) {
-      return;
+      if (existingThemeObject) {
+        customTheme = getThemeData(existingThemeObject);
+        themeName = selectedTheme;
+        return;
+      }
     }
 
-    customTheme = getThemeData(existingThemeObject);
-    themeName = selectedTheme;
+    // New theme: pre-fill from the current active theme so the dialog starts
+    // from a coherent palette instead of all white.
+    const seed = $customThemes$[$theme$] || availableThemes.get($theme$) || availableThemes.get('sage-green-theme');
+    if (seed) {
+      customTheme = getThemeData(seed);
+    }
   });
 
   function getThemeData(referenceObject: ThemeOption): Record<keyof ThemeOption, CustomThemeValue> {
