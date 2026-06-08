@@ -391,6 +391,11 @@
     autoReaderConcrete.onBoundary = (charIndex) => {
       autoScrollerConcrete?.seekToCharIndex(charIndex);
     };
+    autoReaderConcrete.wasReaderEnabled$.subscribe((enabled) => {
+      if (enabled) {
+        autoScrollerConcrete?.off();
+      }
+    });
     autoReader = autoReaderConcrete;
   }
 

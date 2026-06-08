@@ -196,7 +196,9 @@ export class AutoReaderContinuous implements AutoReader {
 
     utt.onboundary = (ev) => {
       if (ev.name === 'word' || ev.name === 'sentence') {
-        const globalIndex = this.computeGlobalCharIndex(this.paraIndex, paraStartOffset + ev.charIndex);
+        const localIndex = paraStartOffset + ev.charIndex;
+        this.charOffset = localIndex;
+        const globalIndex = this.computeGlobalCharIndex(this.paraIndex, localIndex);
         this.onBoundary?.(globalIndex);
       }
     };
@@ -220,6 +222,12 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   private extractText(root: HTMLElement): string {
+    // 如果 DOM 已被 typewriter 修改，直接从 .tw-c span 提取以保持索引一致
+    const twcSpans = root.querySelectorAll('.tw-c');
+    if (twcSpans.length > 0) {
+      return Array.from(twcSpans).map((span) => span.textContent || '').join('');
+    }
+
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
     const parts: string[] = [];
     let node: Node | null = walker.nextNode();
