@@ -80,6 +80,20 @@ export const fontFamilyGroupTwo$ = writableStringLocalStorageSubject()(
   'fontFamilyGroupTwo',
   'Noto Sans SC'
 );
+
+// One-shot migration: upgrade legacy upstream defaults to Noto Sans SC.
+// These JP fonts were removed in our font-slim pass, so without migration the
+// browser falls back to system serif (Songti).
+{
+  const legacyOne = ['Noto Serif JP', 'Noto Sans JP'];
+  const legacyTwo = ['Noto Sans JP'];
+  if (legacyOne.includes(fontFamilyGroupOne$.getValue())) {
+    fontFamilyGroupOne$.next('Noto Sans SC');
+  }
+  if (legacyTwo.includes(fontFamilyGroupTwo$.getValue())) {
+    fontFamilyGroupTwo$.next('Noto Sans SC');
+  }
+}
 export const fontWeight$ = writableNumberOrNullLocalStorageSubject()('fontWeight', null);
 export const fontSize$ = writableNumberLocalStorageSubject()('fontSize', 20);
 export const lineHeight$ = writableNumberLocalStorageSubject()('lineHeight', 1.65);
