@@ -75,6 +75,48 @@ export class AutoReaderContinuous implements AutoReader {
 
   set lang(v: string) {
     this._lang = v;
+    this.autoSelectVoice();
+  }
+
+  get lang() {
+    return this._lang;
+  }
+
+  autoSelectVoice() {
+    if (!this.synth) return;
+    const voices = this.synth.getVoices();
+    if (!voices.length) return;
+
+    // If current voice already matches lang, keep it
+    if (this._voice && this._voice.lang.startsWith(this._lang)) return;
+
+    const exact = voices.find((v) => v.lang === this._lang);
+    if (exact) {
+      this._voice = exact;
+      return;
+    }
+
+    const prefix = voices.find((v) => v.lang.startsWith(this._lang));
+    if (prefix) {
+      this._voice = prefix;
+      return;
+    }
+
+    if (this._lang === 'zh') {
+      const zh = voices.find((v) => v.lang.startsWith('zh'));
+      if (zh) {
+        this._voice = zh;
+        return;
+      }
+    }
+
+    if (this._lang === 'ja') {
+      const ja = voices.find((v) => v.lang.startsWith('ja'));
+      if (ja) {
+        this._voice = ja;
+        return;
+      }
+    }
   }
 
   prepare() {

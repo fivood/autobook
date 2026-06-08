@@ -21,19 +21,35 @@
   onMount(() => {
     const loadVoices = () => {
       const all = window.speechSynthesis.getVoices();
-      // Prefer Chinese voices, then Japanese, then all
-      const zh = all.filter((v) => v.lang.startsWith('zh'));
-      const ja = all.filter((v) => v.lang.startsWith('ja'));
-      const rest = all.filter((v) => !v.lang.startsWith('zh') && !v.lang.startsWith('ja'));
-      voices = [...zh, ...ja, ...rest];
+      const langPrefix = autoReader?.lang?.slice(0, 2);
+      // Sort: current lang first, then zh/ja, then others
+      if (langPrefix) {
+        const current = all.filter((v) => v.lang.startsWith(langPrefix));
+        const zh = all.filter((v) => !v.lang.startsWith(langPrefix) && v.lang.startsWith('zh'));
+        const ja = all.filter((v) => !v.lang.startsWith(langPrefix) && v.lang.startsWith('ja'));
+        const rest = all.filter(
+          (v) =>
+            !v.lang.startsWith(langPrefix) && !v.lang.startsWith('zh') && !v.lang.startsWith('ja')
+        );
+        voices = [...current, ...zh, ...ja, ...rest];
+      } else {
+        const zh = all.filter((v) => v.lang.startsWith('zh'));
+        const ja = all.filter((v) => v.lang.startsWith('ja'));
+        const rest = all.filter((v) => !v.lang.startsWith('zh') && !v.lang.startsWith('ja'));
+        voices = [...zh, ...ja, ...rest];
+      }
 
-      // Restore saved voice
       const savedUri = $readerVoiceUri$;
       if (savedUri && autoReader) {
         const found = voices.find((v) => v.voiceURI === savedUri);
         if (found) {
           autoReader.voice = found;
+          return;
         }
+      }
+      // If no saved voice or saved voice not found, auto-select based on lang
+      if (autoReader) {
+        autoReader.autoSelectVoice();
       }
     };
 

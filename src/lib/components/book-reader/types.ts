@@ -19,6 +19,8 @@ export interface AutoReader {
   off: () => void;
   rate: number;
   voice: SpeechSynthesisVoice | undefined;
+  lang: string;
+  autoSelectVoice: () => void;
 }
 
 export interface BookmarkManager {

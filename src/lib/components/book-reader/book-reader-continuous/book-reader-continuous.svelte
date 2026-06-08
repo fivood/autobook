@@ -112,6 +112,8 @@
 
   export let multiplier: number;
 
+  export let language: string | undefined;
+
   export let bookmarkData: Promise<BooksDbBookmarkData | undefined>;
 
   export let exploredCharCount: number;
@@ -231,6 +233,9 @@
     }
     if (autoReaderConcrete && contentEl) {
       autoReaderConcrete.setContentEl(contentEl);
+    }
+    if (autoReaderConcrete && language) {
+      autoReaderConcrete.lang = language;
     }
   }
 
@@ -382,6 +387,7 @@
     autoScroller = autoScrollerConcrete;
 
     autoReaderConcrete = new AutoReaderContinuous(destroy$);
+    if (language) autoReaderConcrete.lang = language;
     autoReaderConcrete.onBoundary = (charIndex) => {
       autoScrollerConcrete?.seekToCharIndex(charIndex);
     };

@@ -108,6 +108,8 @@
 
   export let autoReader: AutoReader | undefined;
 
+  export let language: string | undefined;
+
   export let bookmarkManager: BookmarkManager | undefined;
 
   export let pageManager: PageManager | undefined;
@@ -316,6 +318,7 @@
       {autoBookmark}
       {autoBookmarkTime}
       {multiplier}
+      {language}
       loadingState={$imageLoadingState$ ?? true}
       bind:exploredCharCount
       bind:bookCharCount
