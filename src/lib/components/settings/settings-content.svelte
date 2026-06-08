@@ -191,14 +191,16 @@
 
   export let adjustStatisticsAfterIdleTime: boolean;
 
-  $: availableThemes = (
-    browser
-      ? [...Array.from(availableThemesMap.entries()), ...Object.entries($customThemes$)]
-      : Array.from(availableThemesMap.entries())
-  ).map(([theme, option]) => ({
-    theme,
-    option
-  }));
+  $: availableThemes = (() => {
+    // Custom themes shadow built-ins of the same id.
+    const map = new Map(availableThemesMap);
+    if (browser) {
+      for (const [name, theme] of Object.entries($customThemes$)) {
+        map.set(name, theme);
+      }
+    }
+    return Array.from(map.entries()).map(([theme, option]) => ({ theme, option }));
+  })();
 
   $: optionsForTheme = availableThemes.map(({ theme, option }) => ({
     id: theme,

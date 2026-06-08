@@ -42,7 +42,10 @@
   $: themeStyle = `color: ${customTheme.fontColor.rgbaExpression}; background-color: ${customTheme.backgroundColor.rgbaExpression}`;
 
   onMount(() => {
-    const existingThemeObject = $customThemes$[selectedTheme];
+    // Load from custom themes first; fall back to built-in so editing a built-in
+    // theme pre-fills the dialog with its actual colors.
+    const existingThemeObject =
+      $customThemes$[selectedTheme] || availableThemes.get(selectedTheme);
 
     if (!existingThemeObject) {
       return;
@@ -135,12 +138,6 @@
 
     if (!themeName) {
       themeNameElm.setCustomValidity('请输入名称！');
-      themeNameElm.reportValidity();
-      return;
-    }
-
-    if (availableThemes.has(themeName)) {
-      themeNameElm.setCustomValidity('该名称已被保留！');
       themeNameElm.reportValidity();
       return;
     }

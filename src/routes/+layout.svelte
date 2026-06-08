@@ -28,7 +28,7 @@
   $: if (browser) {
     const fallback =
       availableThemes.get('sage-green-theme') || availableThemes.get('light-theme') || {};
-    const picked = availableThemes.get($theme$) || $customThemes$[$theme$] || fallback;
+    const picked = $customThemes$[$theme$] || availableThemes.get($theme$) || fallback;
     // Merge so legacy custom themes (missing menu/button/link fields) still resolve correctly.
     const theme = { ...fallback, ...picked } as Record<string, string>;
     const s = document.documentElement.style;

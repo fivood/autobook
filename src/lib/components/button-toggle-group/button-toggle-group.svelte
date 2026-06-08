@@ -49,22 +49,24 @@
         {option.text}
         <Ripple />
       </button>
-      {#if option.showIcons && option.id === selectedOptionId && !availableThemes.has(option.id)}
+      {#if option.showIcons && option.id === selectedOptionId}
         <div class="flex flex-col justify-around mr-2 gap-1">
           <button
-            title="编辑主题"
+            title={availableThemes.has(option.id) ? '编辑（基于内置主题创建覆盖）' : '编辑主题'}
             class="p-1 opacity-70 hover:opacity-100"
             on:click={() => dispatch('edit', option.id)}
           >
             <Fa icon={faPen} />
           </button>
-          <button
-            title="删除主题"
-            class="p-1 opacity-70 hover:opacity-100 text-red-600"
-            on:click={() => dispatch('delete', option.id)}
-          >
-            <Fa icon={faTrash} />
-          </button>
+          {#if !availableThemes.has(option.id)}
+            <button
+              title="删除主题"
+              class="p-1 opacity-70 hover:opacity-100 text-red-600"
+              on:click={() => dispatch('delete', option.id)}
+            >
+              <Fa icon={faTrash} />
+            </button>
+          {/if}
         </div>
       {/if}
     </div>
