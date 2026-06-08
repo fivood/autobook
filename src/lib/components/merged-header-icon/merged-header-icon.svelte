@@ -44,7 +44,7 @@
 </script>
 
 {#if leavePageLink}
-  <a href={leavePageLink}>
+  <a href={leavePageLink} class="text-menu">
     <div class={baseIconClasses}>
       <Fa icon={mergeTo.icon} />
     </div>

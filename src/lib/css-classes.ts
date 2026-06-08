@@ -7,7 +7,7 @@
 export const baseHeaderClasses = 'relative h-12 bg-menu text-menu xl:h-10';
 export const pHeaderMat = 'p-2.5';
 export const pxScreen = 'px-4 md:px-8 lg:max-w-4xl xl:max-w-none 2xl:max-w-6xl mx-auto';
-export const opacityHeaderIcon = 'opacity-60 hover:opacity-100 transition-opacity';
+export const opacityHeaderIcon = 'opacity-80 hover:opacity-100 transition-opacity';
 export const pHeaderFa = 'p-4 xl:p-3';
 export const nTranslateXHeaderFa = '-translate-x-4 xl:-translate-x-3';
 export const translateXHeaderFa = 'translate-x-4 xl:translate-x-3';
