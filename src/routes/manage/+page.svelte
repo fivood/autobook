@@ -721,12 +721,15 @@
       on:removeBookClick={(ev) => removeBooks([ev.detail.id])}
     />
   {:else}
-    <div class="flex justify-center pt-44 text-gray-400 text-opacity-40">
-      <div class="flex w-3/6 justify-center xl:w-3/12">
+    <label
+      class="group mx-auto mt-44 flex w-3/6 cursor-pointer flex-col items-center justify-center text-gray-400 text-opacity-40 hover:text-opacity-60 xl:w-3/12"
+    >
+      <div class="flex w-full justify-center transition-transform group-hover:scale-105">
         <Fa icon={faUpload} style="width: 100%; height: auto" />
       </div>
-    </div>
-    <label class="fixed inset-0 z-0">
+      <span class="mt-4 text-sm opacity-0 transition-opacity group-hover:opacity-100">
+        点击添加书籍
+      </span>
       <input
         type="file"
         accept="application/epub+zip,.epub,.htmlz,plain/text,.txt"
