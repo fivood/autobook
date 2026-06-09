@@ -58,7 +58,10 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   set rate(v: number) {
-    this._rate = Math.max(0.5, Math.min(2, v));
+    const next = Math.max(0.5, Math.min(2, v));
+    if (next === this._rate) return;
+    this._rate = next;
+    this.restartIfSpeaking();
   }
 
   get rate() {
@@ -66,7 +69,9 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   set voice(v: SpeechSynthesisVoice | undefined) {
+    if (this._voice === v) return;
     this._voice = v;
+    this.restartIfSpeaking();
   }
 
   get voice() {
@@ -171,6 +176,21 @@ export class AutoReaderContinuous implements AutoReader {
     }
   }
 
+  private restartIfSpeaking() {
+    if (!this.enabled$.getValue() || !this.synth) return;
+    if (this.utterance) {
+      this.utterance.onboundary = null;
+      this.utterance.onend = null;
+      this.utterance.onerror = null;
+      this.utterance = null;
+    }
+    this.synth.cancel();
+    // resume from current paraIndex/charOffset
+    queueMicrotask(() => {
+      if (this.enabled$.getValue()) this.speakNext();
+    });
+  }
+
   private reset() {
     this.off();
     this.paragraphs = [];
@@ -210,10 +230,11 @@ export class AutoReaderContinuous implements AutoReader {
     };
 
     utt.onerror = (ev) => {
-      if (ev.error !== 'canceled') {
-        // eslint-disable-next-line no-console
-        console.warn('[auto-reader] speech error:', ev.error);
+      if (ev.error === 'canceled' || ev.error === 'interrupted') {
+        return;
       }
+      // eslint-disable-next-line no-console
+      console.warn('[auto-reader] speech error:', ev.error);
       this.off();
     };
 

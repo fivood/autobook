@@ -55,12 +55,27 @@
     };
 
     loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    document.addEventListener('click', handleDocClick, true);
+
+    return () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+      document.removeEventListener('click', handleDocClick, true);
+    };
   });
 
   onDestroy(() => {
     sub?.unsubscribe();
   });
+
+  let settingsRoot: HTMLElement | undefined;
+  function handleDocClick(ev: MouseEvent) {
+    if (!showSettings) return;
+    const t = ev.target as Node;
+    if (settingsRoot && !settingsRoot.contains(t)) {
+      showSettings = false;
+    }
+  }
 
   function toggle() {
     if (!enabled) {
@@ -93,7 +108,7 @@
 </script>
 
 {#if autoReader}
-  <div class="fixed bottom-6 right-20 z-30 flex flex-col items-end gap-2">
+  <div bind:this={settingsRoot} class="fixed bottom-6 right-20 z-30 flex flex-col items-end gap-2">
     <button
       type="button"
       title={enabled ? '暂停朗读 (V)' : '开始朗读 (V)'}
