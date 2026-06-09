@@ -75,9 +75,15 @@ export const customThemes$ = writableObjectLocalStorageSubject<Record<string, Th
     'light-theme',
     'ecru-theme',
     'water-theme',
+    'seafoam-theme',
+    'columbia-theme',
+    'dove-theme',
     'gray-theme',
     'dark-theme',
     'black-theme',
+    'abyss-theme',
+    'espresso-theme',
+    'rainforest-theme',
     'sage-green-theme',
     ...Object.keys(customThemes$.getValue())
   ]);

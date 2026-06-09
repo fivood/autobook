@@ -81,6 +81,78 @@ const darkTheme = fillTheme({
   linkColor: rgba(125, 211, 252)
 });
 
+const seafoamTheme = fillTheme({
+  fontColor: rgba(0x2a, 0x45, 0x45, 0.92),
+  backgroundColor: rgba(0xe5, 0xed, 0xef),
+  selectionFontColor: rgba(0xff, 0xff, 0xff),
+  selectionBackgroundColor: rgba(0x5a, 0x90, 0x8a),
+  menuBackgroundColor: rgba(0x3a, 0x6b, 0x65),
+  menuFontColor: rgba(0xf0, 0xf5, 0xf5),
+  buttonSelectedColor: rgba(0x5a, 0x90, 0x8a),
+  buttonHoverColor: rgba(0x5a, 0x90, 0x8a, 0.18),
+  linkColor: rgba(0x4a, 0x7a, 0x74)
+});
+
+const columbiaTheme = fillTheme({
+  fontColor: rgba(0x1a, 0x33, 0x4a, 0.92),
+  backgroundColor: rgba(0xcd, 0xd7, 0xdf),
+  selectionFontColor: rgba(0xff, 0xff, 0xff),
+  selectionBackgroundColor: rgba(0x3e, 0x69, 0x85),
+  menuBackgroundColor: rgba(0x2b, 0x50, 0x6e),
+  menuFontColor: rgba(0xe8, 0xed, 0xf1),
+  buttonSelectedColor: rgba(0x3e, 0x69, 0x85),
+  buttonHoverColor: rgba(0x3e, 0x69, 0x85, 0.18),
+  linkColor: rgba(0x1c, 0x50, 0x70)
+});
+
+const doveTheme = fillTheme({
+  fontColor: rgba(0x2c, 0x2a, 0x28, 0.92),
+  backgroundColor: rgba(0xd3, 0xda, 0xde),
+  selectionFontColor: rgba(0xff, 0xff, 0xff),
+  selectionBackgroundColor: rgba(0x64, 0x61, 0x5c),
+  menuBackgroundColor: rgba(0x4c, 0x49, 0x45),
+  menuFontColor: rgba(0xf0, 0xf1, 0xf2),
+  buttonSelectedColor: rgba(0x64, 0x61, 0x5c),
+  buttonHoverColor: rgba(0x64, 0x61, 0x5c, 0.18),
+  linkColor: rgba(0x3d, 0x3a, 0x36)
+});
+
+const abyssTheme = fillTheme({
+  fontColor: rgba(0xb0, 0xc0, 0xc8, 0.92),
+  backgroundColor: rgba(0x15, 0x25, 0x2d),
+  selectionFontColor: rgba(0xe0, 0xe8, 0xec),
+  selectionBackgroundColor: rgba(0x45, 0x59, 0x5c),
+  menuBackgroundColor: rgba(0x29, 0x3a, 0x3e),
+  menuFontColor: rgba(0xd0, 0xdc, 0xde),
+  buttonSelectedColor: rgba(0x45, 0x59, 0x5c),
+  buttonHoverColor: rgba(0x45, 0x59, 0x5c, 0.3),
+  linkColor: rgba(0x80, 0xa0, 0xa8)
+});
+
+const espressoTheme = fillTheme({
+  fontColor: rgba(0xd0, 0xc4, 0xba, 0.92),
+  backgroundColor: rgba(0x21, 0x18, 0x15),
+  selectionFontColor: rgba(0xf5, 0xf0, 0xeb),
+  selectionBackgroundColor: rgba(0x6a, 0x5f, 0x53),
+  menuBackgroundColor: rgba(0x48, 0x3f, 0x39),
+  menuFontColor: rgba(0xf0, 0xec, 0xe6),
+  buttonSelectedColor: rgba(0x6a, 0x5f, 0x53),
+  buttonHoverColor: rgba(0x6a, 0x5f, 0x53, 0.3),
+  linkColor: rgba(0xbc, 0xa5, 0x74)
+});
+
+const rainforestTheme = fillTheme({
+  fontColor: rgba(0xc0, 0xd0, 0xc8, 0.92),
+  backgroundColor: rgba(0x2b, 0x3f, 0x32),
+  selectionFontColor: rgba(0xf0, 0xf5, 0xf0),
+  selectionBackgroundColor: rgba(0x53, 0x65, 0x2d),
+  menuBackgroundColor: rgba(0x45, 0x57, 0x66),
+  menuFontColor: rgba(0xdc, 0xec, 0xee),
+  buttonSelectedColor: rgba(0x53, 0x65, 0x2d),
+  buttonHoverColor: rgba(0x53, 0x65, 0x2d, 0.3),
+  linkColor: rgba(0x78, 0x86, 0x6b)
+});
+
 const availableThemesCamelCase = {
   lightTheme,
   ecruTheme: fillTheme({
@@ -92,6 +164,9 @@ const availableThemesCamelCase = {
     backgroundColor: rgba(0xdf, 0xec, 0xf4),
     linkColor: rgba(14, 116, 144)
   }),
+  seafoamTheme,
+  columbiaTheme,
+  doveTheme,
   /** Called gray theme for legacy reasons */
   grayTheme: darkTheme,
   /** Called dark theme for legacy reasons */
@@ -104,6 +179,9 @@ const availableThemesCamelCase = {
     ...darkTheme,
     backgroundColor: rgba(0, 0, 0)
   }),
+  abyssTheme,
+  espressoTheme,
+  rainforestTheme,
   sageGreenTheme: fillTheme({
     fontColor: rgba(0x40, 0x5a, 0x5c, 0.92),
     backgroundColor: rgba(0xf0, 0xef, 0xe6),
