@@ -60,24 +60,24 @@ function fillTheme(t: Partial<Record<keyof ThemeOption, ColorObject>>): Record<k
 const lightTheme = fillTheme({
   fontColor: rgba(0, 0, 0, 0.87),
   backgroundColor: rgba(255, 255, 255),
-  selectionFontColor: rgba(245, 245, 245),
-  selectionBackgroundColor: rgba(151, 151, 151),
-  menuBackgroundColor: rgba(55, 65, 81),
-  menuFontColor: rgba(255, 255, 255),
-  buttonSelectedColor: rgba(17, 24, 39),
-  buttonHoverColor: rgba(0, 0, 0, 0.08),
+  selectionFontColor: rgba(255, 255, 255),
+  selectionBackgroundColor: rgba(59, 130, 246),
+  menuBackgroundColor: rgba(30, 41, 59),
+  menuFontColor: rgba(248, 250, 252),
+  buttonSelectedColor: rgba(59, 130, 246),
+  buttonHoverColor: rgba(59, 130, 246, 0.15),
   linkColor: rgba(30, 64, 175)
 });
 
-const darkTheme = fillTheme({
+const darkThemeBase = fillTheme({
   fontColor: rgba(255, 255, 255, 0.87),
   backgroundColor: rgba(0x23, 0x27, 0x2a),
-  selectionFontColor: rgba(85, 90, 92, 0.6),
-  selectionBackgroundColor: rgba(212, 217, 220, 0.8),
-  menuBackgroundColor: rgba(17, 24, 39),
-  menuFontColor: rgba(240, 240, 241),
-  buttonSelectedColor: rgba(75, 85, 99),
-  buttonHoverColor: rgba(255, 255, 255, 0.12),
+  selectionFontColor: rgba(31, 41, 55),
+  selectionBackgroundColor: rgba(156, 163, 175),
+  menuBackgroundColor: rgba(55, 65, 81),
+  menuFontColor: rgba(243, 244, 246),
+  buttonSelectedColor: rgba(156, 163, 175),
+  buttonHoverColor: rgba(255, 255, 255, 0.1),
   linkColor: rgba(125, 211, 252)
 });
 
@@ -156,28 +156,54 @@ const rainforestTheme = fillTheme({
 const availableThemesCamelCase = {
   lightTheme,
   ecruTheme: fillTheme({
-    ...lightTheme,
-    backgroundColor: rgba(0xf7, 0xf6, 0xeb)
+    fontColor: rgba(0, 0, 0, 0.87),
+    backgroundColor: rgba(0xf7, 0xf6, 0xeb),
+    selectionFontColor: rgba(255, 255, 255),
+    selectionBackgroundColor: rgba(168, 162, 158),
+    menuBackgroundColor: rgba(87, 83, 78),
+    menuFontColor: rgba(250, 250, 249),
+    buttonSelectedColor: rgba(168, 162, 158),
+    buttonHoverColor: rgba(168, 162, 158, 0.2),
+    linkColor: rgba(146, 64, 14)
   }),
   waterTheme: fillTheme({
-    ...lightTheme,
+    fontColor: rgba(0, 0, 0, 0.87),
     backgroundColor: rgba(0xdf, 0xec, 0xf4),
+    selectionFontColor: rgba(255, 255, 255),
+    selectionBackgroundColor: rgba(6, 182, 212),
+    menuBackgroundColor: rgba(8, 51, 68),
+    menuFontColor: rgba(236, 254, 255),
+    buttonSelectedColor: rgba(6, 182, 212),
+    buttonHoverColor: rgba(6, 182, 212, 0.15),
     linkColor: rgba(14, 116, 144)
   }),
   seafoamTheme,
   columbiaTheme,
   doveTheme,
   /** Called gray theme for legacy reasons */
-  grayTheme: darkTheme,
+  grayTheme: darkThemeBase,
   /** Called dark theme for legacy reasons */
   darkTheme: fillTheme({
-    ...darkTheme,
     fontColor: rgba(255, 255, 255, 0.6),
-    backgroundColor: rgba(0x12, 0x12, 0x12)
+    backgroundColor: rgba(0x12, 0x12, 0x12),
+    selectionFontColor: rgba(255, 255, 255),
+    selectionBackgroundColor: rgba(115, 115, 115),
+    menuBackgroundColor: rgba(38, 38, 38),
+    menuFontColor: rgba(245, 245, 245),
+    buttonSelectedColor: rgba(115, 115, 115),
+    buttonHoverColor: rgba(255, 255, 255, 0.1),
+    linkColor: rgba(125, 211, 252)
   }),
   blackTheme: fillTheme({
-    ...darkTheme,
-    backgroundColor: rgba(0, 0, 0)
+    fontColor: rgba(255, 255, 255, 0.87),
+    backgroundColor: rgba(0, 0, 0),
+    selectionFontColor: rgba(255, 255, 255),
+    selectionBackgroundColor: rgba(82, 82, 82),
+    menuBackgroundColor: rgba(23, 23, 23),
+    menuFontColor: rgba(250, 250, 250),
+    buttonSelectedColor: rgba(82, 82, 82),
+    buttonHoverColor: rgba(255, 255, 255, 0.1),
+    linkColor: rgba(125, 211, 252)
   }),
   abyssTheme,
   espressoTheme,
