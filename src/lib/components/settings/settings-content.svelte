@@ -204,7 +204,7 @@
 
   $: optionsForTheme = availableThemes.map(({ theme, option }) => ({
     id: theme,
-    text: 'ぁあ',
+    text: '中字',
     style: {
       color: option.fontColor,
       'background-color': option.backgroundColor

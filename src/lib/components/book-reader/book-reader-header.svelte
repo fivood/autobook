@@ -167,12 +167,12 @@
           <div slot="icon" title="打开自定义阅读点操作" class={baseIconClasses}>
             <Fa icon={faCrosshairs} />
           </div>
-          <div class="w-40 bg-gray-700 md:w-32" slot="content">
+          <div class="w-40 bg-menu text-menu md:w-32" slot="content">
             {#each customReadingPointMenuItems as actionItem (actionItem.label)}
               <div
                 tabindex="0"
                 role="button"
-                class="px-4 py-2 text-sm hover:bg-white hover:text-gray-700"
+                class="px-4 py-2 text-sm hover:bg-white/10"
                 on:click={() => dispatchCustomReadingPointAction(actionItem.action)}
                 on:keyup={dummyFn}
               >

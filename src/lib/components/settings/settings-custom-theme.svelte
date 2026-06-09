@@ -288,7 +288,7 @@
         class="flex justify-center items-center rounded-md border-2 border-gray-400 p-2 text-lg"
         style={themeStyle}
       >
-        ぁあ
+        中字
         <Ripple />
       </button>
     </div>
