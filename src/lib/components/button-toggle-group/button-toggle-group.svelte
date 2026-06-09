@@ -25,7 +25,7 @@
 
   function btnStyle(isSelected: boolean, optStyle: Record<string, any> | undefined) {
     const base = isSelected
-      ? 'background-color: var(--button-selected); border-color: var(--button-selected); color: var(--menu-foreground);'
+      ? 'background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);'
       : '';
     return base + mapToStyleString(optStyle);
   }

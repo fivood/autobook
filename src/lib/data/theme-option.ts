@@ -57,17 +57,20 @@ function fillTheme(t: Partial<Record<keyof ThemeOption, ColorObject>>): Record<k
   };
 }
 
-const lightTheme = fillTheme({
-  fontColor: rgba(0, 0, 0, 0.87),
-  backgroundColor: rgba(255, 255, 255),
-  selectionFontColor: rgba(255, 255, 255),
-  selectionBackgroundColor: rgba(59, 130, 246),
-  menuBackgroundColor: rgba(30, 41, 59),
-  menuFontColor: rgba(248, 250, 252),
-  buttonSelectedColor: rgba(59, 130, 246),
-  buttonHoverColor: rgba(59, 130, 246, 0.15),
-  linkColor: rgba(30, 64, 175)
-});
+const lightTheme = {
+  ...fillTheme({
+    fontColor: rgba(0, 0, 0, 0.87),
+    backgroundColor: rgba(255, 255, 255),
+    selectionFontColor: rgba(255, 255, 255),
+    selectionBackgroundColor: rgba(110, 117, 140),
+    menuBackgroundColor: rgba(30, 41, 59),
+    menuFontColor: rgba(248, 250, 252),
+    buttonSelectedColor: rgba(110, 117, 140),
+    buttonHoverColor: rgba(110, 117, 140, 0.15),
+    linkColor: rgba(30, 64, 175)
+  }),
+  buttonBorderColor: rgba(93, 101, 113)
+};
 
 const darkThemeBase = fillTheme({
   fontColor: rgba(255, 255, 255, 0.87),
