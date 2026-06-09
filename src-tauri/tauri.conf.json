@@ -44,7 +44,7 @@
       "dialog": false,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZDOUI5RDNGQzRGMDUwClJXUlE4TVEvblp2OEFKZlJpQWNubU5TUEc0REtRQ1NiWXMzRG9xU1N0N1BqbUJuWGp5TW9YY1F4Cg==",
       "endpoints": [
-        "https://github.com/fivood/autopage/releases/latest/download/latest.json"
+        "https://github.com/fivood/autobook/releases/latest/download/latest.json"
       ]
     }
   }
