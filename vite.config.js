@@ -10,6 +10,10 @@ if (nodeVersion < 17) {
 /** @type {import('vite').UserConfig} */
 const config = {
   plugins: [sveltekit()],
+  build: {
+    minify: false,
+    cssMinify: false
+  },
   ssr: {
     // https://github.com/FortAwesome/Font-Awesome/issues/18677
     noExternal: ['@fortawesome/*', '@popperjs/*']

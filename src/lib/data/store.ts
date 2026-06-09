@@ -67,6 +67,24 @@ export const customThemes$ = writableObjectLocalStorageSubject<Record<string, Th
   'customThemes',
   {}
 );
+
+// Validate theme: if stored value is empty or not in available themes, reset to default
+{
+  const currentTheme = theme$.getValue();
+  const availableThemeIds = new Set([
+    'light-theme',
+    'ecru-theme',
+    'water-theme',
+    'gray-theme',
+    'dark-theme',
+    'black-theme',
+    'sage-green-theme',
+    ...Object.keys(customThemes$.getValue())
+  ]);
+  if (!currentTheme || !availableThemeIds.has(currentTheme)) {
+    theme$.next('sage-green-theme');
+  }
+}
 export const multiplier$ = writableNumberLocalStorageSubject()('autoScrollMultiplier', 6);
 
 // Migrate legacy scroll-speed values (used to be 20 = scroll factor; now means chars/sec)
@@ -172,6 +190,14 @@ export const viewMode$ = writableStringLocalStorageSubject<ViewMode>()(
   'viewMode',
   ViewMode.Continuous
 );
+
+// Validate viewMode: reset invalid values to Continuous
+{
+  const currentViewMode = viewMode$.getValue();
+  if (!currentViewMode || !Object.values(ViewMode).includes(currentViewMode as ViewMode)) {
+    viewMode$.next(ViewMode.Continuous);
+  }
+}
 
 export const secondDimensionMaxValue$ = writableNumberLocalStorageSubject()(
   'secondDimensionMaxValue',
