@@ -9,6 +9,7 @@ import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/b
 
 export interface AutoScroller {
   wasAutoScrollerEnabled$: BehaviorSubject<boolean>;
+  multiplier: number;
   toggle: () => void;
   off: () => void;
   revealAll: () => void;

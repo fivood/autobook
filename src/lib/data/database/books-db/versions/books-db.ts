@@ -6,6 +6,8 @@
 
 import type BooksDbV6 from '$lib/data/database/books-db/versions/v6/books-db-v6';
 
+export type { Section } from '$lib/data/database/books-db/versions/v6/books-db-v6';
+
 type BooksDb = BooksDbV6;
 
 export type BooksDbBookData = BooksDb['data']['value'];
@@ -19,4 +21,4 @@ export type BooksDbSubtitleData = BooksDb['subtitle']['value'];
 export type BooksDbHandle = BooksDb['handle']['value'];
 export const currentDbVersion = 6;
 
-export default BooksDb;
+export type { BooksDb as default };
