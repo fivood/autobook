@@ -87,7 +87,7 @@ function spoilerImageListener(document: Document) {
       spoilerLabelEl.title = '显示图片';
       spoilerLabelEl.classList.add('spoiler-label');
       spoilerLabelEl.setAttribute('aria-hidden', 'true');
-      spoilerLabelEl.innerText = 'ネタバレ';
+      spoilerLabelEl.innerText = '剧透';
       el.appendChild(spoilerLabelEl);
 
       const imageElement = el.querySelector('img,image');

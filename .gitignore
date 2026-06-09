@@ -17,3 +17,5 @@ Thumbs.db
 .vscode/*
 !.vscode/settings.json
 .idea
+
+build-*.log
