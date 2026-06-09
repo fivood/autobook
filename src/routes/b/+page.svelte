@@ -1,3 +1,13 @@
+<script context="module" lang="ts">
+  // Survives /b unmount so navigating to /settings and back doesn't re-format the book.
+  // Keyed on (bookId, viewMode, blurMode, lastBookmarkModified). Only the latest entry is kept
+  // to avoid leaking object URLs from prior books.
+  const formattedBookCache = new Map<
+    string,
+    { htmlContent: string; styleSheet: string; language?: string }
+  >();
+</script>
+
 <script lang="ts">
   import {
     auditTime,
@@ -367,12 +377,25 @@
 
       sectionList$.next(rawBookData.sections || []);
 
+      const isPaginated = $viewMode$ === ViewMode.Paginated;
+      const cacheKey = `${rawBookData.id}|${isPaginated ? 'p' : 'c'}|${$hideSpoilerImageMode$}|${rawBookData.lastBookModified || 0}`;
+      const cached = formattedBookCache.get(cacheKey);
+      if (cached) {
+        return of(cached);
+      }
+
       return loadBookData(
         rawBookData,
         '.book-content',
         document,
-        $viewMode$ === ViewMode.Paginated,
+        isPaginated,
         $hideSpoilerImageMode$
+      ).pipe(
+        tap((data) => {
+          // Keep only last entry; freeing the prior URLs is risky since other refs may exist.
+          formattedBookCache.clear();
+          formattedBookCache.set(cacheKey, data);
+        })
       );
     }),
     shareReplay({ refCount: true, bufferSize: 1 })

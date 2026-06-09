@@ -19,3 +19,5 @@ Thumbs.db
 .idea
 
 build-*.log
+latest.json
+release-notes-*.md
