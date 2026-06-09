@@ -140,7 +140,7 @@
   <title>{formatPageTitle('设置')}</title>
 </svelte:head>
 
-<div class="elevation-4 fixed inset-x-0 top-0 z-10">
+<div class="elevation-4 fixed inset-x-0 top-0 z-40">
   <SettingsHeader leavePageLink={prevPage} bind:activeSettings />
 </div>
 

@@ -29,10 +29,11 @@
 
 <div class={baseHeaderClasses}>
   <div class="{pxScreen} flex px-0 md:px-5">
-    <div class="h12 flex grow justify-evenly xl:h-10">
+    <div class="flex h-12 grow justify-evenly xl:h-10">
       {#each settingItems as settingItem (settingItem.label)}
         <button
-          class="flex grow flex-col items-center justify-center text-xs {activeSettings === settingItem.label ? 'bg-black/30' : ''} {activeSettings !== settingItem.label ? 'hover:bg-black/20' : ''}"
+          type="button"
+          class="flex flex-1 basis-0 flex-col items-center justify-center text-xs {activeSettings === settingItem.label ? 'bg-black/30' : ''} {activeSettings !== settingItem.label ? 'hover:bg-black/20' : ''}"
           on:click={() => (activeSettings = settingItem.label)}
         >
           <Fa class="mb-1" icon={settingItem.icon} />

@@ -656,14 +656,17 @@
     pauseTracker();
     skipKeyDownListener$.next(true);
 
-    const target = await new Promise<number | undefined>((resolver) => {
+    const total = bookCharCount || 1;
+    const currentPct = total > 1 ? Math.round((exploredCharCount / total) * 100) : 0;
+
+    const percent = await new Promise<number | undefined>((resolver) => {
       dialogManager.dialogs$.next([
         {
           component: NumberDialog,
           props: {
-            dialogHeader: '跳转到位置',
-            minValue: 1,
-            maxValue: bookCharCount || 1,
+            dialogHeader: `跳转到进度（当前 ${currentPct}%）`,
+            minValue: 0,
+            maxValue: 100,
             resolver
           }
         }
@@ -672,12 +675,14 @@
 
     skipKeyDownListener$.next(false);
 
-    if (typeof target !== 'number') {
+    if (typeof percent !== 'number') {
       restartTrackerAfterCharacterChangeOrTime(1);
       return;
     }
 
     restartTrackerAfterCharacterChangeOrTime(1000);
+
+    const target = Math.min(total, Math.max(1, Math.round((percent / 100) * total)));
 
     bookmarkManager.scrollToBookmark(
       {

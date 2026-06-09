@@ -36,7 +36,7 @@ export const mergeEntries = {
     routeId: '',
     label: '跳转',
     icon: faHashtag,
-    title: '跳转到位置'
+    title: '跳转到进度（百分比）'
   },
   READER_IMAGE_GALLERY: {
     routeId: '',
