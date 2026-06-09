@@ -1,3 +1,5 @@
+<script lang="ts"></script>
+
 <section
   class="mdc-elevation--z24 rounded p-6"
   style="background-color: var(--background-color, #fff); color: var(--font-color, #000);"

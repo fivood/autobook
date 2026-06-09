@@ -347,7 +347,7 @@ export class StorageOAuthManager {
     return token;
   }
 
-  private base64Url(buffer: ArrayBuffer) {
+  private base64Url(buffer: ArrayBuffer | Uint8Array) {
     if (!this.parentWindow) {
       throw new Error('未定义父窗口');
     }
