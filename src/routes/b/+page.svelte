@@ -1629,7 +1629,7 @@
   <AutoReaderFab {autoReader} {exploredCharCount} />
 {/if}
 <div
-  class="fixed inset-x-0 top-0 z-10 h-6 w-full"
+  class="fixed inset-x-0 top-0 z-10 h-12 w-full"
   role="button"
   tabindex="-1"
   aria-label="显示阅读器菜单"
