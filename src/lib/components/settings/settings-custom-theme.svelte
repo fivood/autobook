@@ -207,8 +207,12 @@
           </option>
         {/each}
       </select>
-      <button class={buttonClasses} on:click={handleCopyTheme}
-        >复制
+      <button
+        class="m-1 rounded-md border-2 p-2 text-lg transition-colors"
+        style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
+        on:click={handleCopyTheme}
+      >
+        复制
         <Ripple />
       </button>
       <span class="hidden sm:block">属性</span>
@@ -295,11 +299,18 @@
     <div class="flex mt-4" />
   </div>
   <div class="mt-2 flex grow justify-between" slot="footer">
-    <button class={buttonClasses} on:click={() => dispatch('close')}>
+    <button
+      class="m-1 rounded-md border-2 border-gray-400 bg-white p-2 text-lg text-black transition-colors"
+      on:click={() => dispatch('close')}
+    >
       取消
       <Ripple />
     </button>
-    <button class={buttonClasses} on:click={handleSave}>
+    <button
+      class="m-1 rounded-md border-2 p-2 text-lg transition-colors"
+      style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
+      on:click={handleSave}
+    >
       保存
       <Ripple />
     </button>
