@@ -1,6 +1,12 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { faComputer, faPlus, faSpinner } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faComputer,
+    faFileArrowDown,
+    faFileArrowUp,
+    faPlus,
+    faSpinner
+  } from '@fortawesome/free-solid-svg-icons';
   import {
     TrackerAutoPause,
     TrackerSkipThresholdAction
@@ -43,7 +49,10 @@
     verticalCustomReadingPosition$
   } from '$lib/data/store';
   import type { TextMarginMode } from '$lib/data/text-margin-mode';
-  import { availableThemes as availableThemesMap } from '$lib/data/theme-option';
+  import {
+    availableThemes as availableThemesMap,
+    type ThemeOption
+  } from '$lib/data/theme-option';
   import type { VerticalTextOrientation } from '$lib/data/vertical-text-orientation';
   import { ViewMode } from '$lib/data/view-mode';
   import type { WritingMode } from '$lib/data/writing-mode';
@@ -214,6 +223,55 @@
   }));
 
   onDestroy(() => dialogManager.dialogs$.next([]));
+
+  let themeImportInput: HTMLInputElement | undefined;
+
+  function exportCustomThemes() {
+    const json = JSON.stringify($customThemes$, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'autobook-themes.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importCustomThemes(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+
+    if (!file) return;
+
+    try {
+      const parsed = JSON.parse(await file.text());
+
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('不是有效的主题文件');
+      }
+
+      const entries = Object.entries(parsed).filter(
+        ([, value]) => value && typeof value === 'object' && !Array.isArray(value)
+      );
+
+      if (!entries.length) {
+        throw new Error('文件中没有可导入的主题');
+      }
+
+      $customThemes$ = {
+        ...$customThemes$,
+        ...(Object.fromEntries(entries) as Record<string, ThemeOption>)
+      };
+    } catch (error: any) {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: { title: '导入主题失败', message: error.message }
+        }
+      ]);
+    }
+  }
 
   const optionsForFuriganaStyle: ToggleOption<FuriganaStyle>[] = [
     {
@@ -514,6 +572,7 @@
         >
           {#if browser}
             <button
+              title="新建主题"
               class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
               on:click={() =>
                 dialogManager.dialogs$.next([
@@ -526,6 +585,31 @@
               <Fa icon={faPlus} class="mx-2" />
               <Ripple />
             </button>
+            <button
+              title="导出自定义主题"
+              class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+              disabled={!Object.keys($customThemes$).length}
+              class:opacity-40={!Object.keys($customThemes$).length}
+              on:click={exportCustomThemes}
+            >
+              <Fa icon={faFileArrowDown} class="mx-2" />
+              <Ripple />
+            </button>
+            <button
+              title="导入自定义主题"
+              class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+              on:click={() => themeImportInput?.click()}
+            >
+              <Fa icon={faFileArrowUp} class="mx-2" />
+              <Ripple />
+            </button>
+            <input
+              type="file"
+              accept="application/json,.json"
+              class="hidden"
+              bind:this={themeImportInput}
+              on:change={importCustomThemes}
+            />
           {/if}
         </ButtonToggleGroup>
       </SettingsItemGroup>
