@@ -4,10 +4,11 @@
   import { page } from '$app/stores';
   import DomainHint from '$lib/components/domain-hint.svelte';
   import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
-  import { basePath, clearConsoleOnReload, isTauri } from '$lib/data/env';
+  import { basePath, clearConsoleOnReload, isTauri, pagePath } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { checkForUpdate } from '$lib/functions/updater/check-for-update';
-  import { customThemes$, theme$ } from '$lib/data/store';
+  import { goto } from '$app/navigation';
+  import { customThemes$, pendingLaunchFiles$, theme$ } from '$lib/data/store';
   import { availableThemes } from '$lib/data/theme-option';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -112,6 +113,26 @@
 
   onMount(async () => {
     if (!isTauri()) return;
+
+    // Books opened via file association / CLI: queue paths and land on the
+    // manager, which performs the actual import.
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const { listen } = await import('@tauri-apps/api/event');
+
+      const queueLaunchFiles = (paths: string[]) => {
+        if (!paths?.length) return;
+        pendingLaunchFiles$.next([...pendingLaunchFiles$.getValue(), ...paths]);
+        goto(`${pagePath}/manage`);
+      };
+
+      queueLaunchFiles(await invoke<string[]>('take_launch_files'));
+      listen<string[]>('open-files', (event) => queueLaunchFiles(event.payload));
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[launch-files] init failed:', err);
+    }
+
     try {
       const update = await checkForUpdate();
       if (update) {

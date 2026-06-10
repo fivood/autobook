@@ -14,6 +14,7 @@
     "fs:allow-document-write-recursive",
     "fs:allow-document-read-recursive",
     "fs:allow-document-meta-recursive",
+    "fs:allow-read-file",
     {
       "identifier": "fs:scope",
       "allow": [
