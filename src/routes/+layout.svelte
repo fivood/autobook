@@ -8,7 +8,13 @@
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { checkForUpdate } from '$lib/functions/updater/check-for-update';
   import { goto } from '$app/navigation';
-  import { customThemes$, pendingLaunchFiles$, theme$ } from '$lib/data/store';
+  import {
+    customThemes$,
+    pendingLaunchFiles$,
+    theme$,
+    ttsShortcut$,
+    ttsToggleRequest$
+  } from '$lib/data/store';
   import { availableThemes } from '$lib/data/theme-option';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -128,6 +134,19 @@
 
       queueLaunchFiles(await invoke<string[]>('take_launch_files'));
       listen<string[]>('open-files', (event) => queueLaunchFiles(event.payload));
+
+      // Tray + global shortcut fan into the same store; per-page handlers
+      // subscribe and act when they can (e.g. /b toggles TTS).
+      listen('tts-toggle', () => ttsToggleRequest$.next(Date.now()));
+
+      // Apply current shortcut, then keep it in sync with user changes.
+      const applyShortcut = (accel: string) =>
+        invoke('set_tts_shortcut', { accelerator: accel }).catch((err) =>
+          // eslint-disable-next-line no-console
+          console.warn('[tts-shortcut] register failed:', err)
+        );
+      applyShortcut(ttsShortcut$.getValue());
+      ttsShortcut$.subscribe(applyShortcut);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[launch-files] init failed:', err);

@@ -47,8 +47,10 @@
     textMarginMode$,
     textMarginValue$,
     theme$,
+    ttsShortcut$,
     verticalCustomReadingPosition$
   } from '$lib/data/store';
+  import { isTauri } from '$lib/data/env';
   import type { TextMarginMode } from '$lib/data/text-margin-mode';
   import {
     availableThemes as availableThemesMap,
@@ -593,7 +595,7 @@
               class:opacity-40={!Object.keys($customThemes$).length}
               on:click={exportCustomThemes}
             >
-              <Fa icon={faFileArrowDown} class="mx-2" />
+              <Fa icon={faFileArrowUp} class="mx-2" />
               <Ripple />
             </button>
             <button
@@ -601,7 +603,7 @@
               class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
               on:click={() => themeImportInput?.click()}
             >
-              <Fa icon={faFileArrowUp} class="mx-2" />
+              <Fa icon={faFileArrowDown} class="mx-2" />
               <Ripple />
             </button>
             <input
@@ -1032,6 +1034,35 @@
       {/if}
     {/if}
   {:else if activeSettings === 'Data'}
+    {#if isTauri()}
+      <SettingsItemGroup
+        title="朗读全局快捷键"
+        tooltip="任意窗口前台时按下都能切换朗读。格式：modifier+key，如 ctrl+alt+p / shift+f9 / 留空禁用。修改后立刻生效，注册冲突时不报错只是按下无反应。"
+      >
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            class="rounded border px-2 py-1"
+            placeholder="ctrl+alt+p"
+            bind:value={$ttsShortcut$}
+          />
+          <button
+            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+            on:click={() => ttsShortcut$.next('ctrl+alt+p')}
+          >
+            重置
+            <Ripple />
+          </button>
+          <button
+            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+            on:click={() => ttsShortcut$.next('')}
+          >
+            禁用
+            <Ripple />
+          </button>
+        </div>
+      </SettingsItemGroup>
+    {/if}
     <SettingsItemGroup title="诊断日志" tooltip="导出包含设置与运行日志的诊断文件，反馈问题时附上能加快定位">
       <button
         class="m-1 rounded-md border-2 border-gray-400 p-2"

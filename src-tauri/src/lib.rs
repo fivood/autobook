@@ -3,9 +3,18 @@ use std::sync::Mutex;
 use tauri::{
   menu::{Menu, MenuItem},
   tray::{TrayIconBuilder, TrayIconEvent},
-  Emitter, Manager,
+  Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_fs::FsExt;
+
+/// Set when the tray "退出" menu item is chosen so the WindowEvent handler
+/// knows to let the close request through instead of hiding to tray.
+static QUIT_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn request_quit(app: &tauri::AppHandle) {
+  QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+  app.exit(0);
+}
 
 const BOOK_EXTS: [&str; 3] = ["epub", "txt", "htmlz"];
 
@@ -51,6 +60,20 @@ fn take_launch_files(state: tauri::State<LaunchFiles>) -> Vec<String> {
   std::mem::take(&mut *guard)
 }
 
+/// Replace the currently-registered TTS global shortcut. Empty string clears
+/// it. Returns Err with a human-readable message on conflict.
+#[tauri::command]
+fn set_tts_shortcut(app: tauri::AppHandle, accelerator: String) -> Result<(), String> {
+  use tauri_plugin_global_shortcut::GlobalShortcutExt;
+  let gs = app.global_shortcut();
+  let _ = gs.unregister_all();
+  let trimmed = accelerator.trim();
+  if trimmed.is_empty() {
+    return Ok(());
+  }
+  gs.register(trimmed).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -66,7 +89,7 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_process::init())
     .manage(LaunchFiles(Mutex::new(Vec::new())))
-    .invoke_handler(tauri::generate_handler![take_launch_files])
+    .invoke_handler(tauri::generate_handler![take_launch_files, set_tts_shortcut])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -83,11 +106,10 @@ pub fn run() {
         *app.state::<LaunchFiles>().0.lock().unwrap() = launch_files;
       }
 
-      // Global shortcut: Ctrl+Alt+P toggles TTS playback. Register manually so
-      // a conflict with another app degrades to a warning instead of aborting
-      // startup.
+      // Global shortcut plugin: actual binding is set from the frontend
+      // (settings) via set_tts_shortcut so users can rebind / disable it.
       {
-        use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+        use tauri_plugin_global_shortcut::ShortcutState;
         app.handle().plugin(
           tauri_plugin_global_shortcut::Builder::new()
             .with_handler(|app, _shortcut, event| {
@@ -97,9 +119,6 @@ pub fn run() {
             })
             .build(),
         )?;
-        if let Err(err) = app.global_shortcut().register("ctrl+alt+p") {
-          eprintln!("[shortcut] failed to register ctrl+alt+p: {err}");
-        }
       }
 
       // Tray icon
@@ -120,7 +139,7 @@ pub fn run() {
             "tts" => {
               let _ = app.emit("tts-toggle", ());
             }
-            "quit" => app.exit(0),
+            "quit" => request_quit(app),
             _ => {}
           })
           .on_tray_icon_event(|tray, event| {
@@ -129,6 +148,22 @@ pub fn run() {
             }
           })
           .build(app)?;
+      }
+
+      // Close button hides to tray; the tray "退出" item is the only real exit.
+      if let Some(window) = app.get_webview_window("main") {
+        let app_handle = app.handle().clone();
+        window.on_window_event(move |event| {
+          if let WindowEvent::CloseRequested { api, .. } = event {
+            if QUIT_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) {
+              return;
+            }
+            api.prevent_close();
+            if let Some(w) = app_handle.get_webview_window("main") {
+              let _ = w.hide();
+            }
+          }
+        });
       }
 
       Ok(())
