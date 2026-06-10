@@ -7,7 +7,10 @@
   import type { Subscription } from 'rxjs';
 
   export let autoReader: AutoReader | undefined;
-  export let exploredCharCount = 0;
+  /** Section-relative char count to seek to when no resume position applies. */
+  export let seekCharCount = 0;
+  /** Saved in-section position to resume from (wins over seekCharCount). */
+  export let resumePosition: { para: number; offset: number } | undefined = undefined;
 
   let enabled = false;
   let sub: Subscription | undefined;
@@ -78,9 +81,13 @@
   }
 
   function toggle() {
-    if (!enabled) {
-      autoReader?.prepare();
-      autoReader?.seekToExplored(exploredCharCount);
+    if (!enabled && autoReader) {
+      autoReader.prepare();
+      if (resumePosition) {
+        autoReader.setPosition(resumePosition.para, resumePosition.offset);
+      } else {
+        autoReader.seekToExplored(seekCharCount);
+      }
     }
     autoReader?.toggle();
   }

@@ -132,6 +132,16 @@ export class AutoReaderContinuous implements AutoReader {
     this.charOffset = 0;
   }
 
+  getPosition() {
+    return { para: this.paraIndex, offset: this.charOffset };
+  }
+
+  setPosition(para: number, offset: number) {
+    if (!this.paragraphs.length) return;
+    this.paraIndex = Math.min(Math.max(0, para), this.paragraphs.length - 1);
+    this.charOffset = Math.min(Math.max(0, offset), this.paragraphs[this.paraIndex].length);
+  }
+
   seekToExplored(exploredCharCount: number) {
     let acc = 0;
     for (let i = 0; i < this.paragraphs.length; i++) {

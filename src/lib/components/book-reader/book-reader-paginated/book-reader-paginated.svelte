@@ -118,6 +118,10 @@
 
   export let autoReader: AutoReader | undefined;
 
+  export let currentSectionIndex = 0;
+
+  export let sectionStartCharCount = 0;
+
   export let language: string | undefined;
 
   export let customReadingPointRange: Range | undefined;
@@ -567,6 +571,8 @@
     if (!calculator || !scrollEl) return;
 
     calculator.updateCurrentSection(sectionIndex$.getValue());
+    currentSectionIndex = sectionIndex$.getValue();
+    sectionStartCharCount = calculator.getSectionStartCharCount();
     dispatch('contentChange', scrollEl);
   }
 
