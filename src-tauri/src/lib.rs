@@ -6,6 +6,20 @@ use tauri::{
   Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_fs::FsExt;
+use tts::{Tts, UtteranceId};
+
+/// Holds the system-TTS handle. Wrapped in Mutex since `Tts` is not `Sync`.
+struct SystemTts(Mutex<Option<Tts>>);
+
+impl SystemTts {
+  fn with<R>(&self, f: impl FnOnce(&mut Tts) -> R) -> Result<R, String> {
+    let mut guard = self.0.lock().map_err(|e| e.to_string())?;
+    let tts = guard.get_or_insert_with(|| {
+      Tts::default().expect("failed to initialize system TTS")
+    });
+    Ok(f(tts))
+  }
+}
 
 /// Set when the tray "退出" menu item is chosen so the WindowEvent handler
 /// knows to let the close request through instead of hiding to tray.
@@ -60,6 +74,77 @@ fn take_launch_files(state: tauri::State<LaunchFiles>) -> Vec<String> {
   std::mem::take(&mut *guard)
 }
 
+#[derive(serde::Serialize)]
+struct SapiVoice {
+  id: String,
+  name: String,
+  language: String,
+  gender: Option<String>,
+}
+
+#[tauri::command]
+fn sapi_list_voices(state: tauri::State<SystemTts>) -> Result<Vec<SapiVoice>, String> {
+  state.with(|tts| -> Result<Vec<SapiVoice>, String> {
+    let voices = tts.voices().map_err(|e| e.to_string())?;
+    Ok(
+      voices
+        .into_iter()
+        .map(|v| SapiVoice {
+          id: v.id(),
+          name: v.name(),
+          language: v.language().to_string(),
+          gender: v.gender().map(|g| format!("{g:?}")),
+        })
+        .collect(),
+    )
+  })?
+}
+
+#[tauri::command]
+fn sapi_speak(
+  app: tauri::AppHandle,
+  state: tauri::State<SystemTts>,
+  text: String,
+  voice_id: Option<String>,
+  rate: Option<f32>,
+) -> Result<String, String> {
+  let utterance: UtteranceId = state.with(|tts| -> Result<UtteranceId, String> {
+    if let Some(vid) = voice_id.as_deref().filter(|v| !v.is_empty()) {
+      let voices = tts.voices().map_err(|e| e.to_string())?;
+      if let Some(voice) = voices.into_iter().find(|v| v.id() == vid) {
+        tts.set_voice(&voice).map_err(|e| e.to_string())?;
+      }
+    }
+    if let Some(r) = rate {
+      // tts crate accepts the platform's native rate range; SAPI on Windows is
+      // -10..10 with 0 = normal. Map 0.5..2 from the UI -> -5..10.
+      let normalized = (r - 1.0) * 10.0;
+      let _ = tts.set_rate(normalized);
+    }
+    tts.stop().map_err(|e| e.to_string())?;
+    tts
+      .speak(text, true)
+      .map_err(|e| e.to_string())?
+      .ok_or_else(|| "TTS did not return an utterance id".to_string())
+  })??;
+
+  // Hook the utterance end callback once per app (idempotent — re-registers
+  // the same callback every speak, last one wins, all fire app.emit so OK).
+  let app_handle = app.clone();
+  let _ = state.with(|tts| {
+    tts.on_utterance_end(Some(Box::new(move |id| {
+      let _ = app_handle.emit("sapi-utterance-end", format!("{id:?}"));
+    })))
+  });
+
+  Ok(format!("{utterance:?}"))
+}
+
+#[tauri::command]
+fn sapi_stop(state: tauri::State<SystemTts>) -> Result<(), String> {
+  state.with(|tts| tts.stop().map(|_| ()).map_err(|e| e.to_string()))?
+}
+
 /// Replace the currently-registered TTS global shortcut. Empty string clears
 /// it. Returns Err with a human-readable message on conflict.
 #[tauri::command]
@@ -89,7 +174,14 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_process::init())
     .manage(LaunchFiles(Mutex::new(Vec::new())))
-    .invoke_handler(tauri::generate_handler![take_launch_files, set_tts_shortcut])
+    .manage(SystemTts(Mutex::new(None)))
+    .invoke_handler(tauri::generate_handler![
+      take_launch_files,
+      set_tts_shortcut,
+      sapi_list_voices,
+      sapi_speak,
+      sapi_stop
+    ])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

@@ -2,7 +2,7 @@
   import Fa from 'svelte-fa';
   import { faVolumeHigh, faVolumeXmark, faGears } from '@fortawesome/free-solid-svg-icons';
   import type { AutoReader } from '$lib/components/book-reader/types';
-  import { readerRate$, readerVoiceUri$ } from '$lib/data/store';
+  import { readerRate$, readerVoiceUri$, ttsEngine$, ttsSapiVoiceId$ } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
 
@@ -20,6 +20,13 @@
   $: {
     sub?.unsubscribe();
     sub = autoReader?.wasReaderEnabled$.subscribe((v) => (enabled = v));
+  }
+
+  // Push the saved SAPI voice into the reader. Reactive so settings changes apply live.
+  $: if (autoReader && $ttsEngine$ === 'sapi') {
+    autoReader.voice = $ttsSapiVoiceId$
+      ? ({ voiceURI: $ttsSapiVoiceId$ } as SpeechSynthesisVoice)
+      : undefined;
   }
 
   onMount(() => {

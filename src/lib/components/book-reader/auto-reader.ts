@@ -11,14 +11,18 @@
  */
 
 import { BehaviorSubject, type Observable } from 'rxjs';
+import {
+  computeGlobalCharIndex,
+  extractText,
+  seekParagraphsToExplored,
+  splitSentences
+} from './auto-reader-shared';
 
 export interface AutoReader {
   wasReaderEnabled$: BehaviorSubject<boolean>;
   toggle: () => void;
   off: () => void;
 }
-
-const SENTENCE_DELIMITER = /([。！？；.!?;\n]+)/;
 
 export class AutoReaderContinuous implements AutoReader {
   private synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
@@ -126,8 +130,8 @@ export class AutoReaderContinuous implements AutoReader {
 
   prepare() {
     if (!this.contentEl) return;
-    const text = this.extractText(this.contentEl);
-    this.paragraphs = this.splitSentences(text);
+    const text = extractText(this.contentEl);
+    this.paragraphs = splitSentences(text);
     this.paraIndex = 0;
     this.charOffset = 0;
   }
@@ -143,18 +147,9 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   seekToExplored(exploredCharCount: number) {
-    let acc = 0;
-    for (let i = 0; i < this.paragraphs.length; i++) {
-      const len = this.paragraphs[i].length;
-      if (acc + len > exploredCharCount) {
-        this.paraIndex = i;
-        this.charOffset = exploredCharCount - acc;
-        return;
-      }
-      acc += len;
-    }
-    this.paraIndex = this.paragraphs.length;
-    this.charOffset = 0;
+    const pos = seekParagraphsToExplored(this.paragraphs, exploredCharCount);
+    this.paraIndex = pos.paraIndex;
+    this.charOffset = pos.charOffset;
   }
 
   toggle() {
@@ -228,7 +223,7 @@ export class AutoReaderContinuous implements AutoReader {
       if (ev.name === 'word' || ev.name === 'sentence') {
         const localIndex = paraStartOffset + ev.charIndex;
         this.charOffset = localIndex;
-        const globalIndex = this.computeGlobalCharIndex(this.paraIndex, localIndex);
+        const globalIndex = computeGlobalCharIndex(this.paragraphs, this.paraIndex, localIndex);
         this.onBoundary?.(globalIndex);
       }
     };
@@ -252,50 +247,4 @@ export class AutoReaderContinuous implements AutoReader {
     this.synth.speak(utt);
   }
 
-  private extractText(root: HTMLElement): string {
-    // 如果 DOM 已被 typewriter 修改，直接从 .tw-c span 提取以保持索引一致
-    const twcSpans = root.querySelectorAll('.tw-c');
-    if (twcSpans.length > 0) {
-      return Array.from(twcSpans).map((span) => span.textContent || '').join('');
-    }
-
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-    const parts: string[] = [];
-    let node: Node | null = walker.nextNode();
-    while (node) {
-      const parent = node.parentElement;
-      if (parent) {
-        const tag = parent.tagName;
-        if (tag !== 'SCRIPT' && tag !== 'STYLE') {
-          parts.push(node.textContent || '');
-        }
-      }
-      node = walker.nextNode();
-    }
-    return parts.join('');
-  }
-
-  private splitSentences(text: string): string[] {
-    const result: string[] = [];
-    const parts = text.split(SENTENCE_DELIMITER);
-    let buffer = '';
-    for (let i = 0; i < parts.length; i++) {
-      buffer += parts[i];
-      if (SENTENCE_DELIMITER.test(parts[i]) || i === parts.length - 1) {
-        const trimmed = buffer.trim();
-        if (trimmed) result.push(trimmed);
-        buffer = '';
-      }
-    }
-    if (buffer.trim()) result.push(buffer.trim());
-    return result;
-  }
-
-  private computeGlobalCharIndex(paraIndex: number, localIndex: number): number {
-    let acc = 0;
-    for (let i = 0; i < paraIndex; i++) {
-      acc += this.paragraphs[i].length;
-    }
-    return acc + localIndex;
-  }
 }
