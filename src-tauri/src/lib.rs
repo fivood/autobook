@@ -8,6 +8,8 @@ use tauri::{
 use tauri_plugin_fs::FsExt;
 use tts::{Tts, UtteranceId};
 
+mod edge_tts;
+
 /// Holds the system-TTS handle. Wrapped in Mutex since `Tts` is not `Sync`.
 struct SystemTts(Mutex<Option<Tts>>);
 
@@ -145,6 +147,25 @@ fn sapi_stop(state: tauri::State<SystemTts>) -> Result<(), String> {
   state.with(|tts| tts.stop().map(|_| ()).map_err(|e| e.to_string()))?
 }
 
+#[tauri::command]
+fn edge_list_voices() -> Vec<edge_tts::EdgeVoice> {
+  edge_tts::voices()
+}
+
+/// Synthesize a single chunk via Edge online TTS. Returns base64-encoded MP3
+/// so the frontend can hand it straight to an HTMLAudioElement.
+#[tauri::command]
+async fn edge_synthesize(
+  text: String,
+  voice: String,
+  rate: Option<f32>,
+) -> Result<String, String> {
+  let rate = rate.unwrap_or(1.0).clamp(0.5, 2.0);
+  let audio = edge_tts::synthesize(&voice, rate, &text).await?;
+  use base64::Engine;
+  Ok(base64::engine::general_purpose::STANDARD.encode(&audio))
+}
+
 /// Replace the currently-registered TTS global shortcut. Empty string clears
 /// it. Returns Err with a human-readable message on conflict.
 #[tauri::command]
@@ -180,7 +201,9 @@ pub fn run() {
       set_tts_shortcut,
       sapi_list_voices,
       sapi_speak,
-      sapi_stop
+      sapi_stop,
+      edge_list_voices,
+      edge_synthesize
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

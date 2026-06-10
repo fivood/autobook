@@ -111,9 +111,13 @@ export const ttsToggleRequest$ = writableSubject<number>(0);
 
 export const ttsShortcut$ = writableStringLocalStorageSubject()('ttsShortcut', 'ctrl+alt+p');
 
-/** 'web' = Web Speech API (default, works in browser + Tauri), 'sapi' = Windows system TTS. */
+/** 'web' = Web Speech API, 'sapi' = Windows system TTS, 'edge' = Microsoft Edge online voices (Tauri only). */
 export const ttsEngine$ = writableStringLocalStorageSubject()('ttsEngine', 'web');
 export const ttsSapiVoiceId$ = writableStringLocalStorageSubject()('ttsSapiVoiceId', '');
+export const ttsEdgeVoiceId$ = writableStringLocalStorageSubject()(
+  'ttsEdgeVoiceId',
+  'zh-CN-XiaoxiaoNeural'
+);
 
 export interface TtsPosition {
   section: number;
