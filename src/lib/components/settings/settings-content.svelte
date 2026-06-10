@@ -47,6 +47,7 @@
     textMarginMode$,
     textMarginValue$,
     theme$,
+    ttsEdgeVoiceId$,
     ttsEngine$,
     ttsSapiVoiceId$,
     ttsShortcut$,
@@ -229,9 +230,10 @@
 
   onDestroy(() => dialogManager.dialogs$.next([]));
 
-  // TTS engine + SAPI voices
+  // TTS engine + voices (SAPI and Edge)
   let sapiVoices: { id: string; name: string; language: string }[] = [];
   let sapiVoicesError = '';
+  let edgeVoices: { id: string; name: string; language: string }[] = [];
 
   async function loadSapiVoices() {
     sapiVoicesError = '';
@@ -250,7 +252,20 @@
     }
   }
 
+  async function loadEdgeVoices() {
+    if (!isTauri() || $ttsEngine$ !== 'edge' || edgeVoices.length) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      edgeVoices = await invoke<{ id: string; name: string; language: string }[]>(
+        'edge_list_voices'
+      );
+    } catch {
+      edgeVoices = [];
+    }
+  }
+
   $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
+  $: if ($ttsEngine$ === 'edge') loadEdgeVoices();
 
   let themeImportInput: HTMLInputElement | undefined;
 
@@ -1070,8 +1085,25 @@
         >
           <option value="web">Web Speech（浏览器）</option>
           <option value="sapi">系统 TTS（Windows SAPI）</option>
+          <option value="edge">Edge 在线音色（需联网）</option>
         </select>
       </SettingsItemGroup>
+
+      {#if $ttsEngine$ === 'edge'}
+        <SettingsItemGroup
+          title="Edge 在线语音"
+          tooltip="使用微软 Azure 神经网络音色，最自然。需联网且部分网络可能访问受限；失败时会自动停止朗读，请回切到 SAPI 或 Web Speech。"
+        >
+          <select
+            class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
+            bind:value={$ttsEdgeVoiceId$}
+          >
+            {#each edgeVoices as voice (voice.id)}
+              <option value={voice.id}>{voice.name} ({voice.language})</option>
+            {/each}
+          </select>
+        </SettingsItemGroup>
+      {/if}
 
       {#if $ttsEngine$ === 'sapi'}
         <SettingsItemGroup
