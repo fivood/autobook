@@ -106,6 +106,11 @@ export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
 /** Absolute paths queued from file-association / CLI launch (desktop only). */
 export const pendingLaunchFiles$ = writableSubject<string[]>([]);
 
+/** Tray + window menu request to toggle TTS (emitted by both global shortcut and tray). */
+export const ttsToggleRequest$ = writableSubject<number>(0);
+
+export const ttsShortcut$ = writableStringLocalStorageSubject()('ttsShortcut', 'ctrl+alt+p');
+
 export interface TtsPosition {
   section: number;
   para: number;
