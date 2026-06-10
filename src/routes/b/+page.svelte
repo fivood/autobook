@@ -659,6 +659,34 @@
 
   onMount(() => document.addEventListener('ttu-action', handleAction, false));
 
+  // Tray menu / global shortcut (Ctrl+Alt+P) toggles TTS, mirroring the FAB.
+  onMount(() => {
+    if (!isTauri()) return undefined;
+
+    let unlisten: (() => void) | undefined;
+
+    import('@tauri-apps/api/event')
+      .then(({ listen }) =>
+        listen('tts-toggle', () => {
+          if (!autoReader || !isPaginated) return;
+          if (!autoReader.wasReaderEnabled$.getValue()) {
+            autoReader.prepare();
+            if (ttsResumePosition) {
+              autoReader.setPosition(ttsResumePosition.para, ttsResumePosition.offset);
+            } else {
+              autoReader.seekToExplored(ttsSeekCharCount);
+            }
+          }
+          autoReader.toggle();
+        })
+      )
+      .then((fn) => {
+        unlisten = fn;
+      });
+
+    return () => unlisten?.();
+  });
+
   function handleAction({ detail }: any) {
     if (!detail.type) {
       return;

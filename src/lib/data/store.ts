@@ -103,6 +103,9 @@ export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
   false
 );
 
+/** Absolute paths queued from file-association / CLI launch (desktop only). */
+export const pendingLaunchFiles$ = writableSubject<string[]>([]);
+
 export interface TtsPosition {
   section: number;
   para: number;

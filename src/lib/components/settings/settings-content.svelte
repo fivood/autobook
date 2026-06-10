@@ -16,6 +16,7 @@
     optionsForToggle,
     type ToggleOption
   } from '$lib/components/button-toggle-group/toggle-option';
+  import LogReportDialog from '$lib/components/log-report-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsCustomTheme from '$lib/components/settings/settings-custom-theme.svelte';
@@ -1031,6 +1032,24 @@
       {/if}
     {/if}
   {:else if activeSettings === 'Data'}
+    <SettingsItemGroup title="诊断日志" tooltip="导出包含设置与运行日志的诊断文件，反馈问题时附上能加快定位">
+      <button
+        class="m-1 rounded-md border-2 border-gray-400 p-2"
+        on:click={() =>
+          dialogManager.dialogs$.next([
+            {
+              component: LogReportDialog,
+              props: {
+                title: '诊断日志',
+                message: '导出当前会话的设置与运行日志（JSON 文件）。'
+              }
+            }
+          ])}
+      >
+        导出诊断日志
+        <Ripple />
+      </button>
+    </SettingsItemGroup>
     <SettingsItemGroup title="持久化存储" tooltip={persistentStorageTooltip}>
       <div class="flex items-center">
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={persistentStorage} />

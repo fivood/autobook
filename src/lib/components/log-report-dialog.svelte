@@ -190,7 +190,7 @@
   <svelte:fragment slot="footer">
     <a
       class={buttonClasses}
-      href="https://github.com/ttu-ttu/ebook-reader"
+      href="https://github.com/fivood/autobook"
       target="_blank"
       rel="noreferrer"
     >

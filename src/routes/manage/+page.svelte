@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { faUpload } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
@@ -32,11 +33,13 @@
     keepLocalStatisticsOnDeletion$,
     lastExportedTarget$,
     lastExportedTypes$,
+    pendingLaunchFiles$,
     readingGoalsMergeMode$,
     replicationSaveBehavior$,
     showExternalPlaceholder$,
     statisticsMergeMode$
   } from '$lib/data/store';
+  import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
   import { cloneMutateSet } from '$lib/functions/clone-mutate-set';
   import { getDropEventFiles } from '$lib/functions/file-dom/get-drop-event-files';
   import { inputFile } from '$lib/functions/file-dom/input-file';
@@ -307,14 +310,18 @@
 
     initializeReplicationProgressData();
 
-    const supportedExtRegex = /\.(?:htmlz|epub|txt)$/;
-    const files = Array.from(fileList).filter((f) => supportedExtRegex.test(f.name));
+    const supportedExtRegex = /\.(?:htmlz|epub|txt)$/i;
     const errorTitle = '书籍导入失败';
+    const expanded = await expandZipArchives(Array.from(fileList)).catch((err) => {
+      logger.warn(`Error expanding zip: ${err.message}`);
+      return Array.from(fileList);
+    });
+    const files = expanded.filter((f) => supportedExtRegex.test(f.name));
 
     if (!files.length) {
       resetProgress();
 
-      showError(errorTitle, '文件必须是 HTMLZ、TXT 或 EPUB 格式', '');
+      showError(errorTitle, '文件必须是 HTMLZ、TXT、EPUB 或包含这些格式的 ZIP', '');
       return;
     }
 
@@ -340,6 +347,61 @@
     if (error) {
       showError(errorTitle, error, '书籍导入期间发生错误');
     }
+  }
+
+  $: if (browser && $pendingLaunchFiles$.length) {
+    const paths = $pendingLaunchFiles$;
+    pendingLaunchFiles$.next([]);
+    importLaunchPaths(paths);
+  }
+
+  /** Read whitelisted launch paths via the fs plugin and run the normal import. */
+  async function importLaunchPaths(paths: string[]) {
+    try {
+      const { readFile } = await import('@tauri-apps/plugin-fs');
+      const files = await Promise.all(
+        paths.map(async (path) => {
+          const data = await readFile(path);
+          const name = path.split(/[\\/]/).pop() || 'book';
+          return new File([data], name);
+        })
+      );
+      await onFilesChange(files);
+    } catch (err: any) {
+      showError('书籍导入失败', err.message, '打开文件时发生错误');
+    }
+  }
+
+  /** Expand .zip archives into the supported book files they contain. */
+  async function expandZipArchives(list: File[]): Promise<File[]> {
+    const out: File[] = [];
+
+    for (const file of list) {
+      if (!/\.zip$/i.test(file.name)) {
+        out.push(file);
+        continue;
+      }
+
+      const reader = new ZipReader(new BlobReader(file));
+
+      try {
+        const entries = await reader.getEntries();
+
+        for (const entry of entries) {
+          if (entry.directory || !entry.getData) continue;
+          if (!/\.(?:htmlz|epub|txt)$/i.test(entry.filename)) continue;
+
+          const name = entry.filename.split('/').pop() || entry.filename;
+          // eslint-disable-next-line no-await-in-loop
+          const blob = await entry.getData(new BlobWriter());
+          out.push(new File([blob], name, { lastModified: file.lastModified }));
+        }
+      } finally {
+        await reader.close();
+      }
+    }
+
+    return out;
   }
 
   function showError(title: string, message: string, fallbackMessage: string) {
@@ -732,7 +794,7 @@
       </span>
       <input
         type="file"
-        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt"
+        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,application/zip,.zip"
         multiple
         hidden
         use:inputFile={onFilesChange}
