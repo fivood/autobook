@@ -20,6 +20,7 @@ export interface AutoReader {
   toggle: () => void;
   off: () => void;
   prepare: () => void;
+  setContentEl: (el: HTMLElement | undefined) => void;
   seekToExplored: (count: number) => void;
   getPosition: () => { para: number; offset: number };
   setPosition: (para: number, offset: number) => void;

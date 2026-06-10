@@ -47,6 +47,8 @@
     textMarginMode$,
     textMarginValue$,
     theme$,
+    ttsEngine$,
+    ttsSapiVoiceId$,
     ttsShortcut$,
     verticalCustomReadingPosition$
   } from '$lib/data/store';
@@ -226,6 +228,29 @@
   }));
 
   onDestroy(() => dialogManager.dialogs$.next([]));
+
+  // TTS engine + SAPI voices
+  let sapiVoices: { id: string; name: string; language: string }[] = [];
+  let sapiVoicesError = '';
+
+  async function loadSapiVoices() {
+    sapiVoicesError = '';
+    if (!isTauri() || $ttsEngine$ !== 'sapi') {
+      sapiVoices = [];
+      return;
+    }
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      sapiVoices = await invoke<{ id: string; name: string; language: string }[]>(
+        'sapi_list_voices'
+      );
+    } catch (err: any) {
+      sapiVoicesError = err?.message ?? String(err);
+      sapiVoices = [];
+    }
+  }
+
+  $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
 
   let themeImportInput: HTMLInputElement | undefined;
 
@@ -1035,6 +1060,42 @@
     {/if}
   {:else if activeSettings === 'Data'}
     {#if isTauri()}
+      <SettingsItemGroup
+        title="朗读引擎"
+        tooltip="Web Speech：浏览器内建，所有平台可用。系统 TTS（SAPI）：调用 Windows 内置语音，应用最小化也能听，但音质与浏览器差不多；需要更自然音色可在系统设置安装更多语音。重新打开书后生效。"
+      >
+        <select
+          class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+          bind:value={$ttsEngine$}
+        >
+          <option value="web">Web Speech（浏览器）</option>
+          <option value="sapi">系统 TTS（Windows SAPI）</option>
+        </select>
+      </SettingsItemGroup>
+
+      {#if $ttsEngine$ === 'sapi'}
+        <SettingsItemGroup
+          title="系统 TTS 语音"
+          tooltip="Windows 控制面板 → 时间和语言 → 语音 可以下载更多中文/日文/英文语音"
+        >
+          {#if sapiVoicesError}
+            <p class="text-red-500 text-sm">{sapiVoicesError}</p>
+          {:else if !sapiVoices.length}
+            <p class="text-sm opacity-60">未检测到可用语音</p>
+          {:else}
+            <select
+              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
+              bind:value={$ttsSapiVoiceId$}
+            >
+              <option value="">系统默认</option>
+              {#each sapiVoices as voice (voice.id)}
+                <option value={voice.id}>{voice.name} ({voice.language})</option>
+              {/each}
+            </select>
+          {/if}
+        </SettingsItemGroup>
+      {/if}
+
       <SettingsItemGroup
         title="朗读全局快捷键"
         tooltip="任意窗口前台时按下都能切换朗读。格式：modifier+key，如 ctrl+alt+p / shift+f9 / 留空禁用。修改后立刻生效，注册冲突时不报错只是按下无反应。"

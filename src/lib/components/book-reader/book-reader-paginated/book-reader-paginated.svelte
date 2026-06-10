@@ -38,7 +38,8 @@
   import Fa from 'svelte-fa';
   import { swipe } from 'svelte-gestures';
   import type { AutoReader, BookmarkManager, PageManager } from '../types';
-  import { AutoReaderContinuous } from '../auto-reader';
+  import { createAutoReader } from '../auto-reader-factory';
+  import { ttsEngine$ } from '$lib/data/store';
   import { BookmarkManagerPaginated } from './bookmark-manager-paginated';
   import { PageManagerPaginated } from './page-manager-paginated';
   import { SectionCharacterStatsCalculator } from './section-character-stats-calculator';
@@ -168,7 +169,7 @@
 
   let fontLoadingAdded = false;
 
-  let autoReaderConcrete: AutoReaderContinuous | undefined;
+  let autoReaderConcrete: AutoReader | undefined;
 
   let currentSectionId = '';
 
@@ -195,7 +196,7 @@
   const destroy$ = new Subject<void>();
 
   onMount(() => {
-    autoReaderConcrete = new AutoReaderContinuous(destroy$);
+    autoReaderConcrete = createAutoReader($ttsEngine$, destroy$);
     if (language) autoReaderConcrete.lang = language;
     autoReader = autoReaderConcrete;
   });

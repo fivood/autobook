@@ -43,7 +43,8 @@
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
   import type { AutoReader, AutoScroller, BookmarkManager, PageManager } from '../types';
-  import { AutoReaderContinuous } from '../auto-reader';
+  import { createAutoReader } from '../auto-reader-factory';
+  import { ttsEngine$ } from '$lib/data/store';
   import { AutoScrollerContinuous } from './auto-scroller-continuous';
   import { BookmarkManagerContinuous, type BookmarkPosData } from './bookmark-manager-continuous';
   import { CharacterStatsCalculator } from './character-stats-calculator';
@@ -152,7 +153,7 @@
 
   let autoScrollerConcrete: AutoScrollerContinuous | undefined;
 
-  let autoReaderConcrete: AutoReaderContinuous | undefined;
+  let autoReaderConcrete: AutoReader | undefined;
 
   let bookmarkManagerConcrete: BookmarkManagerContinuous | undefined;
 
@@ -386,7 +387,7 @@
     );
     autoScroller = autoScrollerConcrete;
 
-    autoReaderConcrete = new AutoReaderContinuous(destroy$);
+    autoReaderConcrete = createAutoReader($ttsEngine$, destroy$);
     if (language) autoReaderConcrete.lang = language;
     autoReaderConcrete.onBoundary = (charIndex) => {
       autoScrollerConcrete?.seekToCharIndex(charIndex);
