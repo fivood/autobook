@@ -108,6 +108,10 @@
 
   export let autoReader: AutoReader | undefined;
 
+  export let currentSectionIndex = 0;
+
+  export let sectionStartCharCount = 0;
+
   export let language: string | undefined;
 
   export let bookmarkManager: BookmarkManager | undefined;
@@ -372,6 +376,8 @@
       bind:isBookmarkScreen
       bind:bookmarkData
       bind:autoReader
+      bind:currentSectionIndex
+      bind:sectionStartCharCount
       bind:bookmarkManager
       bind:pageManager
       bind:customReadingPointRange

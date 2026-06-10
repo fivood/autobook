@@ -103,6 +103,18 @@ export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
   false
 );
 
+export interface TtsPosition {
+  section: number;
+  para: number;
+  offset: number;
+  explored: number;
+}
+
+export const ttsPositions$ = writableObjectLocalStorageSubject<Record<string, TtsPosition>>()(
+  'ttsPositions',
+  {}
+);
+
 export const readerRate$ = writableNumberLocalStorageSubject()('readerRate', 1);
 export const readerVoiceUri$ = writableStringLocalStorageSubject()('readerVoiceUri', '');
 export const readerEnabled$ = writableBooleanLocalStorageSubject()('readerEnabled', false);

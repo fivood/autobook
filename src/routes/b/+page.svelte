@@ -107,7 +107,8 @@
     showPercentage$,
     enableVerticalFontKerning$,
     enableFontVPAL$,
-    verticalTextOrientation$
+    verticalTextOrientation$,
+    ttsPositions$
   } from '$lib/data/store';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
@@ -556,6 +557,65 @@
   }
 
   $: isPaginated = $viewMode$ === ViewMode.Paginated;
+
+  // --- TTS position memory ---
+  let currentSectionIndex = 0;
+  let sectionStartCharCount = 0;
+  let lastTtsSaveTime = 0;
+
+  $: ttsSeekCharCount = Math.max(0, exploredCharCount - sectionStartCharCount);
+
+  $: ttsResumePosition = (() => {
+    const id = getBookIdSync();
+    if (!id) return undefined;
+    const saved = $ttsPositions$[String(id)];
+    if (!saved) return undefined;
+    if (saved.section !== currentSectionIndex) return undefined;
+    // Only resume when the visible position is where the user left off —
+    // an intentional jump elsewhere should start TTS from the new spot.
+    if (Math.abs(saved.explored - exploredCharCount) > 30) return undefined;
+    return { para: saved.para, offset: saved.offset };
+  })();
+
+  function persistTtsPosition() {
+    const id = getBookIdSync();
+    if (!id || !autoReader) return;
+    const { para, offset } = autoReader.getPosition();
+    $ttsPositions$ = {
+      ...$ttsPositions$,
+      [String(id)]: {
+        section: currentSectionIndex,
+        para,
+        offset,
+        explored: exploredCharCount
+      }
+    };
+  }
+
+  function clearTtsPosition() {
+    const id = getBookIdSync();
+    if (!id) return;
+    const next = { ...$ttsPositions$ };
+    delete next[String(id)];
+    $ttsPositions$ = next;
+  }
+
+  let ttsWiredReader: AutoReader | undefined;
+
+  $: if (autoReader && autoReader !== ttsWiredReader && isPaginated && browser) {
+    ttsWiredReader = autoReader;
+    autoReader.onBoundary = () => {
+      const now = Date.now();
+      if (now - lastTtsSaveTime < 2000) return;
+      lastTtsSaveTime = now;
+      persistTtsPosition();
+    };
+    autoReader.onEnd = () => clearTtsPosition();
+    autoReader.wasReaderEnabled$.subscribe((enabled) => {
+      // Pausing saves the precise spot (throttled boundary saves lag ~2s).
+      if (!enabled && ttsWiredReader === autoReader) persistTtsPosition();
+    });
+  }
 
   $: firstDimensionMargin =
     browser && $enableTapEdgeToFlip$ && isPaginated && $verticalMode$
@@ -1654,7 +1714,7 @@
   <AutoScrollFab {autoScroller} />
 {/if}
 {#if !showSpinner && isPaginated}
-  <AutoReaderFab {autoReader} {exploredCharCount} />
+  <AutoReaderFab {autoReader} seekCharCount={ttsSeekCharCount} resumePosition={ttsResumePosition} />
 {/if}
 <div
   class="fixed inset-x-0 top-0 z-10 h-12 w-full"
@@ -1819,6 +1879,8 @@
     bind:bookmarkData
     bind:autoScroller
     bind:autoReader
+    bind:currentSectionIndex
+    bind:sectionStartCharCount
     bind:bookmarkManager
     bind:pageManager
     bind:customReadingPoint

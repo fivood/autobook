@@ -21,6 +21,10 @@ export interface AutoReader {
   off: () => void;
   prepare: () => void;
   seekToExplored: (count: number) => void;
+  getPosition: () => { para: number; offset: number };
+  setPosition: (para: number, offset: number) => void;
+  onBoundary?: (charIndex: number) => void;
+  onEnd?: () => void;
   rate: number;
   voice: SpeechSynthesisVoice | undefined;
   lang: string;
