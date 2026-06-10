@@ -51,9 +51,34 @@ export default async function extractEpub(blob: Blob) {
         : contents.package.manifest.item
       ).map(async (item) => {
         const fileRelativePath = item['@_href'];
-        const entry = fileMap[path.join(contentsDirectory, fileRelativePath)];
+        // OCF requires hrefs in content.opf to be percent-encoded while zip entry
+        // names are stored as raw UTF-8 — try the encoded form first, then decoded.
+        let entry = fileMap[path.join(contentsDirectory, fileRelativePath)];
 
         if (!entry) {
+          try {
+            entry = fileMap[path.join(contentsDirectory, decodeURIComponent(fileRelativePath))];
+          } catch {
+            // malformed percent-encoding — fall through to the not-found handling
+          }
+        }
+
+        if (!entry) {
+          const mediaType: string = item['@_media-type'] || '';
+          const isNonCritical =
+            mediaType.startsWith('image/') ||
+            mediaType.startsWith('font/') ||
+            mediaType.startsWith('audio/') ||
+            mediaType.startsWith('video/') ||
+            mediaType === 'text/css' ||
+            mediaType === 'application/vnd.ms-opentype' ||
+            mediaType === 'application/font-woff';
+
+          if (isNonCritical) {
+            // eslint-disable-next-line no-console
+            console.warn(`[epub] skipping missing resource: ${fileRelativePath}`);
+            return;
+          }
           throw new Error(`item ${fileRelativePath} not found`);
         }
 

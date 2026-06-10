@@ -1,7 +1,7 @@
 <script lang="ts">
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
-  import { buttonClasses } from '$lib/css-classes';
+  import { buttonClasses, inputClasses } from '$lib/css-classes';
   import { createEventDispatcher } from 'svelte';
 
   export let dialogHeader: string;
@@ -32,6 +32,7 @@
   <div class="flex flex-col text-sm sm:text-base" slot="content">
     <input
       type="number"
+      class="{inputClasses} text-center"
       min={minValue}
       max={maxValue}
       bind:value={target}

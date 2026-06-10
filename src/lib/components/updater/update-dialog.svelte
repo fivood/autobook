@@ -70,7 +70,10 @@
             <span>正在下载…</span>
             <span>{downloadedMB} / {totalMB} MB ({percent}%)</span>
           </div>
-          <div class="h-2 rounded bg-black/10 overflow-hidden">
+          <div
+            class="h-2 rounded overflow-hidden"
+            style="background-color: color-mix(in srgb, currentColor 15%, transparent);"
+          >
             <div class="h-full bg-current transition-[width]" style="width: {percent}%"></div>
           </div>
         </div>
