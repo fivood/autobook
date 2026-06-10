@@ -16,7 +16,10 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
-            args: ''
+            # NSIS only — WiX/MSI bundling fails when fileAssociations are
+            # declared (Tauri 2 known issue); NSIS is the recommended installer
+            # and what latest.json points at via updaterJsonPreferNsis.
+            args: '--bundles nsis,updater'
 
     runs-on: ${{ matrix.platform }}
     steps:
