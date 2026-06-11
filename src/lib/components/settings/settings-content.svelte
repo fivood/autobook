@@ -339,21 +339,32 @@
     }
   }
 
-  function resetUiSettings() {
+  async function resetUiSettings() {
     if (
       typeof window === 'undefined' ||
       !confirm(
-        '将清除本地保存的 UI 设置（主题、字体、自定义快捷键、TTS 引擎选项等），书库与统计数据保留。\n\n继续吗？'
+        '将清除本地保存的 UI 设置（主题、字体、自定义快捷键、TTS 引擎选项等），书库与统计数据保留。应用会自动重启。\n\n继续吗？'
       )
     ) {
       return;
     }
-    const keep = new Set<string>();
-    // Keep nothing UI-related; books live in IndexedDB not localStorage.
+    if (isTauri()) {
+      // Desktop: schedule a Local Storage wipe in Rust and restart, so it
+      // works even when stale UI state would otherwise block the page.
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('schedule_ui_reset');
+        return;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[reset] schedule failed, falling back to in-page clear:', err);
+      }
+    }
+    // Browser fallback / desktop degraded path
     const toClear: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && !keep.has(k)) toClear.push(k);
+      if (k) toClear.push(k);
     }
     toClear.forEach((k) => localStorage.removeItem(k));
     window.location.reload();
