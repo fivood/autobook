@@ -62,6 +62,42 @@ fn allow_paths(app: &tauri::AppHandle, paths: &[String]) {
   }
 }
 
+/// Path to the marker file that signals "delete WebView2 Local Storage on next launch".
+fn reset_flag_path() -> std::path::PathBuf {
+  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/reset-ui.flag")
+}
+
+fn webview_local_storage_dirs() -> Vec<std::path::PathBuf> {
+  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+  let root = std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/EBWebView");
+  let mut out = Vec::new();
+  if let Ok(entries) = std::fs::read_dir(&root) {
+    for entry in entries.flatten() {
+      let path = entry.path();
+      // EBWebView layout: <root>/<UserDataFolder>/Default/Local Storage
+      let ls = path.join("Default").join("Local Storage");
+      if ls.exists() {
+        out.push(ls);
+      }
+    }
+  }
+  out
+}
+
+/// Runs before the WebView2 process is spawned. Removes Local Storage if the
+/// reset flag exists. We don't touch IndexedDB so books survive.
+fn run_pending_reset() {
+  let flag = reset_flag_path();
+  if !flag.exists() {
+    return;
+  }
+  for dir in webview_local_storage_dirs() {
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+  let _ = std::fs::remove_file(&flag);
+}
+
 fn show_main_window(app: &tauri::AppHandle) {
   if let Some(window) = app.get_webview_window("main") {
     let _ = window.show();
@@ -74,6 +110,19 @@ fn show_main_window(app: &tauri::AppHandle) {
 fn take_launch_files(state: tauri::State<LaunchFiles>) -> Vec<String> {
   let mut guard = state.0.lock().unwrap();
   std::mem::take(&mut *guard)
+}
+
+/// Schedule a Local Storage wipe on next launch and restart. Used by both the
+/// tray menu and the settings page reset button.
+#[tauri::command]
+fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
+  let flag = reset_flag_path();
+  if let Some(parent) = flag.parent() {
+    let _ = std::fs::create_dir_all(parent);
+  }
+  std::fs::write(&flag, b"1").map_err(|e| e.to_string())?;
+  QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+  app.restart();
 }
 
 #[derive(serde::Serialize)]
@@ -182,6 +231,7 @@ fn set_tts_shortcut(app: tauri::AppHandle, accelerator: String) -> Result<(), St
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  run_pending_reset();
   tauri::Builder::default()
     .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
       show_main_window(app);
@@ -203,7 +253,8 @@ pub fn run() {
       sapi_speak,
       sapi_stop,
       edge_list_voices,
-      edge_synthesize
+      edge_synthesize,
+      schedule_ui_reset
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -241,8 +292,10 @@ pub fn run() {
         let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
         let tts =
           MenuItem::with_id(app, "tts", "播放 / 暂停朗读 (Ctrl+Alt+P)", true, None::<&str>)?;
+        let reset =
+          MenuItem::with_id(app, "reset", "重置 UI（保留书库）", true, None::<&str>)?;
         let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-        let menu = Menu::with_items(app, &[&show, &tts, &quit])?;
+        let menu = Menu::with_items(app, &[&show, &tts, &reset, &quit])?;
 
         TrayIconBuilder::new()
           .icon(app.default_window_icon().unwrap().clone())
@@ -253,6 +306,15 @@ pub fn run() {
             "show" => show_main_window(app),
             "tts" => {
               let _ = app.emit("tts-toggle", ());
+            }
+            "reset" => {
+              let flag = reset_flag_path();
+              if let Some(parent) = flag.parent() {
+                let _ = std::fs::create_dir_all(parent);
+              }
+              let _ = std::fs::write(&flag, b"1");
+              QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+              app.restart();
             }
             "quit" => request_quit(app),
             _ => {}
