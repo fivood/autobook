@@ -267,6 +267,98 @@
   $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
   $: if ($ttsEngine$ === 'edge') loadEdgeVoices();
 
+  let previewState: 'idle' | 'loading' | 'playing' | 'error' = 'idle';
+  let previewMessage = '';
+  let previewAudio: HTMLAudioElement | undefined;
+  const previewText = '这是语音测试。床前明月光，疑是地上霜。';
+
+  async function previewVoice() {
+    previewMessage = '';
+    if (previewAudio) {
+      previewAudio.pause();
+      previewAudio = undefined;
+    }
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+
+    if ($ttsEngine$ === 'web') {
+      const utt = new SpeechSynthesisUtterance(previewText);
+      utt.lang = 'zh-CN';
+      utt.rate = 1;
+      previewState = 'playing';
+      utt.onend = () => (previewState = 'idle');
+      utt.onerror = () => {
+        previewState = 'error';
+        previewMessage = 'Web Speech 播放失败';
+      };
+      window.speechSynthesis.speak(utt);
+      return;
+    }
+
+    if (!isTauri()) return;
+    previewState = 'loading';
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      if ($ttsEngine$ === 'sapi') {
+        await invoke('sapi_speak', {
+          text: previewText,
+          voiceId: $ttsSapiVoiceId$ || null,
+          rate: 1
+        });
+        previewState = 'playing';
+        const { listen } = await import('@tauri-apps/api/event');
+        const unlisten = await listen('sapi-utterance-end', () => {
+          previewState = 'idle';
+          unlisten();
+        });
+      } else if ($ttsEngine$ === 'edge') {
+        const b64 = await invoke<string>('edge_synthesize', {
+          text: previewText,
+          voice: $ttsEdgeVoiceId$,
+          rate: 1
+        });
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/mpeg' }));
+        previewAudio = new Audio(url);
+        previewAudio.onended = () => {
+          previewState = 'idle';
+          URL.revokeObjectURL(url);
+        };
+        previewAudio.onerror = () => {
+          previewState = 'error';
+          previewMessage = '音频播放失败';
+          URL.revokeObjectURL(url);
+        };
+        previewState = 'playing';
+        await previewAudio.play();
+      }
+    } catch (err: any) {
+      previewState = 'error';
+      previewMessage = err?.message ?? String(err);
+    }
+  }
+
+  function resetUiSettings() {
+    if (
+      typeof window === 'undefined' ||
+      !confirm(
+        '将清除本地保存的 UI 设置（主题、字体、自定义快捷键、TTS 引擎选项等），书库与统计数据保留。\n\n继续吗？'
+      )
+    ) {
+      return;
+    }
+    const keep = new Set<string>();
+    // Keep nothing UI-related; books live in IndexedDB not localStorage.
+    const toClear: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && !keep.has(k)) toClear.push(k);
+    }
+    toClear.forEach((k) => localStorage.removeItem(k));
+    window.location.reload();
+  }
+
   let themeImportInput: HTMLInputElement | undefined;
 
   function exportCustomThemes() {
@@ -1077,16 +1169,35 @@
     {#if isTauri()}
       <SettingsItemGroup
         title="朗读引擎"
-        tooltip="Web Speech：浏览器内建，所有平台可用。系统 TTS（SAPI）：调用 Windows 内置语音，应用最小化也能听，但音质与浏览器差不多；需要更自然音色可在系统设置安装更多语音。重新打开书后生效。"
+        tooltip="Web Speech：浏览器内建，所有平台可用。系统 TTS（SAPI）：调用 Windows 内置语音，应用最小化也能听。Edge 在线：微软神经网络音色，音质最佳但需联网。切换引擎后请重开书生效。"
       >
-        <select
-          class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
-          bind:value={$ttsEngine$}
-        >
-          <option value="web">Web Speech（浏览器）</option>
-          <option value="sapi">系统 TTS（Windows SAPI）</option>
-          <option value="edge">Edge 在线音色（需联网）</option>
-        </select>
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <select
+              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+              bind:value={$ttsEngine$}
+            >
+              <option value="web">Web Speech（浏览器）</option>
+              <option value="sapi">系统 TTS（Windows SAPI）</option>
+              <option value="edge">Edge 在线音色（需联网）</option>
+            </select>
+            <button
+              class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm disabled:opacity-40"
+              disabled={previewState === 'loading' || previewState === 'playing'}
+              on:click={previewVoice}
+            >
+              {previewState === 'loading'
+                ? '加载中…'
+                : previewState === 'playing'
+                  ? '播放中…'
+                  : '试听'}
+              <Ripple />
+            </button>
+          </div>
+          {#if previewState === 'error'}
+            <p class="text-red-500 text-xs">{previewMessage}</p>
+          {/if}
+        </div>
       </SettingsItemGroup>
 
       {#if $ttsEngine$ === 'edge'}
@@ -1171,6 +1282,18 @@
           ])}
       >
         导出诊断日志
+        <Ripple />
+      </button>
+    </SettingsItemGroup>
+    <SettingsItemGroup
+      title="重置 UI 设置"
+      tooltip="清除本地保存的所有界面设置（主题、字体、TTS 引擎、快捷键、自定义主题等），书库和阅读统计保留。从更早版本升级后界面表现异常时用这个，比手动卸载重装快。"
+    >
+      <button
+        class="m-1 rounded-md border-2 border-gray-400 p-2 text-red-600"
+        on:click={resetUiSettings}
+      >
+        重置并刷新
         <Ripple />
       </button>
     </SettingsItemGroup>
