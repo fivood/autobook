@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { faBookOpenReader, faClock, faDatabase } from '@fortawesome/free-solid-svg-icons';
+  import { faBookOpenReader, faClock, faDatabase, faPalette } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import Ripple from '$lib/components/ripple.svelte';
@@ -11,8 +11,13 @@
   const settingItems = [
     {
       label: 'Reader',
-      displayLabel: '阅读器',
+      displayLabel: '阅读',
       icon: faBookOpenReader
+    },
+    {
+      label: 'Appearance',
+      displayLabel: '外观',
+      icon: faPalette
     },
     {
       label: 'Data',

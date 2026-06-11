@@ -18,6 +18,7 @@
   } from '$lib/components/button-toggle-group/toggle-option';
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
+  import SettingsThemeEditor from '$lib/components/settings/settings-theme-editor.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsCustomTheme from '$lib/components/settings/settings-custom-theme.svelte';
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
@@ -371,6 +372,16 @@
   }
 
   let themeImportInput: HTMLInputElement | undefined;
+  let inlineEditTheme: string | null = null;
+
+  function handleNewTheme() {
+    dialogManager.dialogs$.next([
+      {
+        component: SettingsCustomTheme,
+        props: { existingThemes: optionsForTheme }
+      }
+    ]);
+  }
 
   function exportCustomThemes() {
     const json = JSON.stringify($customThemes$, null, 2);
@@ -697,36 +708,25 @@
 </script>
 
 <div class="grid grid-cols-1 items-center sm:grid-cols-2 sm:gap-6 lg:md:gap-8 lg:grid-cols-3">
-  {#if activeSettings === 'Reader'}
-    <div class="lg:col-span-2">
+  {#if activeSettings === 'Appearance'}
+    <div class="lg:col-span-3">
       <SettingsItemGroup title="主题">
         <ButtonToggleGroup
           options={optionsForTheme}
           bind:selectedOptionId={selectedTheme}
-          on:edit={({ detail }) =>
-            dialogManager.dialogs$.next([
-              {
-                component: SettingsCustomTheme,
-                props: { selectedTheme: detail, existingThemes: optionsForTheme }
-              }
-            ])}
+          on:edit={({ detail }) => (inlineEditTheme = detail)}
           on:delete={({ detail }) => {
             $theme$ = optionsForTheme[optionsForTheme.length - 2]?.id || 'light-theme';
             delete $customThemes$[detail];
             $customThemes$ = { ...$customThemes$ };
+            if (inlineEditTheme === detail) inlineEditTheme = null;
           }}
         >
           {#if browser}
             <button
               title="新建主题"
               class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
-              on:click={() =>
-                dialogManager.dialogs$.next([
-                  {
-                    component: SettingsCustomTheme,
-                    props: { existingThemes: optionsForTheme }
-                  }
-                ])}
+              on:click={handleNewTheme}
             >
               <Fa icon={faPlus} class="mx-2" />
               <Ripple />
@@ -758,8 +758,21 @@
             />
           {/if}
         </ButtonToggleGroup>
+        {#if inlineEditTheme}
+          {#key inlineEditTheme}
+            <SettingsThemeEditor
+              themeId={inlineEditTheme}
+              on:close={() => (inlineEditTheme = null)}
+              on:saved={() => (inlineEditTheme = null)}
+              on:deleted={() => (inlineEditTheme = null)}
+            />
+          {/key}
+        {:else}
+          <p class="mt-2 text-xs opacity-60">点击主题按钮旁的笔形图标可直接在下方编辑配色，无需弹窗。</p>
+        {/if}
       </SettingsItemGroup>
     </div>
+  {:else if activeSettings === 'Reader'}
     <div class="h-full">
       <SettingsItemGroup title="阅读视图">
         <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />

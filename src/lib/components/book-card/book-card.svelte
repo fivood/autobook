@@ -63,12 +63,58 @@
 
   $: imageLoadComplete = imgEl?.complete && !imageLoading;
   $: alt = `${title}_cover`;
+
+  /** Detect a book file extension hidden in the title, fall back to BOOK. */
+  $: detectedFormat = (() => {
+    const match = title.match(/\.(epub|txt|htmlz|mobi|azw3?|pdf)$/i);
+    return match ? match[1].toUpperCase() : 'BOOK';
+  })();
+
+  $: cleanTitle = title.replace(/\.(epub|txt|htmlz|mobi|azw3?|pdf)$/i, '');
+
+  const FORMAT_PALETTE: Record<string, { bg: string; accent: string }> = {
+    EPUB: { bg: '#2b5a69', accent: '#5fb0a7' },
+    TXT: { bg: '#5a4a3c', accent: '#c39a55' },
+    HTMLZ: { bg: '#4a2b5a', accent: '#a574c0' },
+    MOBI: { bg: '#7a3f25', accent: '#e08545' },
+    AZW: { bg: '#7a3f25', accent: '#e08545' },
+    AZW3: { bg: '#7a3f25', accent: '#e08545' },
+    PDF: { bg: '#7a2828', accent: '#d05050' },
+    BOOK: { bg: '#3f4a5a', accent: '#7090b0' }
+  };
+  $: palette = FORMAT_PALETTE[detectedFormat] || FORMAT_PALETTE.BOOK;
 </script>
 
-<div tabindex="0" role="button" class="aspect-w-2 aspect-h-3 relative" on:click on:keyup>
+<div tabindex="0" role="button" class="aspect-w-2 aspect-h-3 relative overflow-hidden rounded-lg" on:click on:keyup>
   <div class="inline">
     <div class="h-full w-full text-5xl sm:text-7xl">
-      {#if !imageLoadComplete}
+      {#if !imagePath}
+        <!-- Generated placeholder: format-color background + title + format chip -->
+        <svg
+          viewBox="0 0 200 300"
+          preserveAspectRatio="xMidYMid slice"
+          class="absolute inset-0 h-full w-full"
+        >
+          <defs>
+            <linearGradient id="grad-{detectedFormat}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color={palette.bg} />
+              <stop offset="100%" stop-color="black" stop-opacity="0.35" />
+            </linearGradient>
+          </defs>
+          <rect width="200" height="300" fill="url(#grad-{detectedFormat})" />
+          <rect x="0" y="0" width="6" height="300" fill={palette.accent} />
+          <text
+            x="100"
+            y="280"
+            text-anchor="middle"
+            font-size="20"
+            font-weight="700"
+            fill={palette.accent}
+            font-family="system-ui, sans-serif"
+          >{detectedFormat}</text>
+        </svg>
+      {/if}
+      {#if !imageLoadComplete && imagePath}
         <Fa class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" icon={faImage} />
       {/if}
 
@@ -91,7 +137,7 @@
       <div
         class="sm:h-21 h-16 bg-gray-800 bg-opacity-80 p-0.5 px-1.5 text-justify text-sm text-white sm:p-1.5 sm:text-base"
       >
-        <span class="line-clamp-3">{title}</span>
+        <span class="line-clamp-3">{cleanTitle}</span>
       </div>
       <div class="h-2.5 bg-gray-400 bg-opacity-80">
         <div
