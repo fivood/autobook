@@ -9,6 +9,7 @@ use tauri_plugin_fs::FsExt;
 use tts::{Tts, UtteranceId};
 
 mod edge_tts;
+mod piper_tts;
 
 /// Holds the system-TTS handle. Wrapped in Mutex since `Tts` is not `Sync`.
 struct SystemTts(Mutex<Option<Tts>>);
@@ -201,8 +202,6 @@ fn edge_list_voices() -> Vec<edge_tts::EdgeVoice> {
   edge_tts::voices()
 }
 
-/// Synthesize a single chunk via Edge online TTS. Returns base64-encoded MP3
-/// so the frontend can hand it straight to an HTMLAudioElement.
 #[tauri::command]
 async fn edge_synthesize(
   text: String,
@@ -211,6 +210,41 @@ async fn edge_synthesize(
 ) -> Result<String, String> {
   let rate = rate.unwrap_or(1.0).clamp(0.5, 2.0);
   let audio = edge_tts::synthesize(&voice, rate, &text).await?;
+  use base64::Engine;
+  Ok(base64::engine::general_purpose::STANDARD.encode(&audio))
+}
+
+#[tauri::command]
+fn piper_voices_dir(app: tauri::AppHandle) -> Result<String, String> {
+  piper_tts::voices_dir(&app)
+    .map(|p| p.display().to_string())
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn piper_list_voices(app: tauri::AppHandle) -> Result<Vec<piper_tts::PiperVoice>, String> {
+  piper_tts::list_voices(&app).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn piper_is_available(app: tauri::AppHandle) -> bool {
+  piper_tts::piper_path(&app)
+    .map(|p| p.exists())
+    .unwrap_or(false)
+}
+
+/// Synthesize text via the bundled piper binary. Returns base64-encoded WAV.
+#[tauri::command]
+async fn piper_synthesize(
+  app: tauri::AppHandle,
+  text: String,
+  voice_file: String,
+  rate: Option<f32>,
+) -> Result<String, String> {
+  let rate = rate.unwrap_or(1.0).clamp(0.5, 2.0);
+  let audio = piper_tts::synthesize(&app, &voice_file, rate, &text)
+    .await
+    .map_err(|e| e.to_string())?;
   use base64::Engine;
   Ok(base64::engine::general_purpose::STANDARD.encode(&audio))
 }
@@ -241,6 +275,7 @@ pub fn run() {
         let _ = app.emit("open-files", files);
       }
     }))
+    .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_process::init())
@@ -254,6 +289,10 @@ pub fn run() {
       sapi_stop,
       edge_list_voices,
       edge_synthesize,
+      piper_voices_dir,
+      piper_list_voices,
+      piper_is_available,
+      piper_synthesize,
       schedule_ui_reset
     ])
     .setup(|app| {

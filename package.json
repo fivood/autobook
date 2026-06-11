@@ -1,6 +1,6 @@
 {
   "name": "ebook-reader-desktop",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "type": "module",
   "private": true,
   "scripts": {
@@ -22,6 +22,7 @@
     "@tailwindcss/forms": "0.5.11",
     "@tauri-apps/cli": "^2.1.0",
     "@types/balanced-match": "3.0.2",
+    "@types/node": "^25.9.3",
     "@types/path-browserify": "1.0.3",
     "@types/ua-parser-js": "0.7.39",
     "@types/webappsec-credential-management": "0.6.9",
@@ -45,6 +46,7 @@
     "@tauri-apps/api": "^2.1.0",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@zip.js/zip.js": "2.4.26",
     "balanced-match": "3.0.1",

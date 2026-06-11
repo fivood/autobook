@@ -23,9 +23,15 @@ use tokio_tungstenite::tungstenite::{
   Message,
 };
 
+// Constants tracked against https://github.com/rany2/edge-tts. Microsoft
+// rotates the expected Chromium version every few months and rejects clients
+// using a stale value at the HTTP layer (403). Keep in sync.
 const TRUSTED_CLIENT_TOKEN: &str = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-const GEC_VERSION: &str = "1-131.0.2903.99";
-const EDGE_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0";
+const CHROMIUM_MAJOR: &str = "143";
+const CHROMIUM_FULL: &str = "143.0.3650.75";
+const GEC_VERSION: &str = "1-143.0.3650.75";
+const EDGE_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0";
+const SEC_CH_UA: &str = "\"Not;A Brand\";v=\"99\", \"Microsoft Edge\";v=\"143\", \"Chromium\";v=\"143\"";
 const AUDIO_FORMAT: &str = "audio-24khz-48kbitrate-mono-mp3";
 
 /// Win32 FILETIME epoch (1601-01-01) vs Unix epoch, in 100-nanosecond ticks.
@@ -115,6 +121,15 @@ pub async fn synthesize(voice: &str, rate: f32, text: &str) -> Result<Vec<u8>, S
   headers.insert("Sec-MS-GEC", HeaderValue::from_str(&gec).map_err(|e| e.to_string())?);
   headers.insert("Sec-MS-GEC-Version", HeaderValue::from_static(GEC_VERSION));
   headers.insert("User-Agent", HeaderValue::from_static(EDGE_UA));
+  headers.insert("Sec-CH-UA", HeaderValue::from_static(SEC_CH_UA));
+  headers.insert(
+    "Sec-CH-UA-Mobile",
+    HeaderValue::from_static("?0"),
+  );
+  headers.insert(
+    "Sec-CH-UA-Platform",
+    HeaderValue::from_static("\"Windows\""),
+  );
   headers.insert(
     "Origin",
     HeaderValue::from_static("chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold"),
@@ -123,7 +138,12 @@ pub async fn synthesize(voice: &str, rate: f32, text: &str) -> Result<Vec<u8>, S
   headers.insert("Cache-Control", HeaderValue::from_static("no-cache"));
   headers.insert("Accept-Encoding", HeaderValue::from_static("gzip, deflate, br"));
   headers.insert("Accept-Language", HeaderValue::from_static("en-US,en;q=0.9"));
+  // Suppress unused warnings if these become referenced via macros later.
+  let _ = (CHROMIUM_MAJOR, CHROMIUM_FULL);
 
+  // Use rustls (default features turned off) instead of native-tls. SChannel's
+  // TLS fingerprint was getting actively rejected (EOF during handshake);
+  // rustls's ClientHello looks closer to Chrome's and at least gets past TLS.
   let (ws, _resp) = tokio_tungstenite::connect_async(request)
     .await
     .map_err(|e| format!("WebSocket connect failed: {e}"))?;
