@@ -24,7 +24,8 @@ use tokio_tungstenite::tungstenite::{
 };
 
 const TRUSTED_CLIENT_TOKEN: &str = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-const GEC_VERSION: &str = "1-130.0.2849.68";
+const GEC_VERSION: &str = "1-131.0.2903.99";
+const EDGE_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0";
 const AUDIO_FORMAT: &str = "audio-24khz-48kbitrate-mono-mp3";
 
 /// Win32 FILETIME epoch (1601-01-01) vs Unix epoch, in 100-nanosecond ticks.
@@ -109,24 +110,19 @@ pub async fn synthesize(voice: &str, rate: f32, text: &str) -> Result<Vec<u8>, S
   let mut request: Request<()> = url.into_client_request().map_err(|e| e.to_string())?;
   let headers = request.headers_mut();
   let gec = gec_token();
-  headers.insert(
-    "Sec-MS-GEC",
-    HeaderValue::from_str(&gec).map_err(|e| e.to_string())?,
-  );
-  headers.insert(
-    "Sec-MS-GEC-Version",
-    HeaderValue::from_static(GEC_VERSION),
-  );
+  // Header set matches what the Python edge-tts client sends — Microsoft
+  // appears to gate 403 partly on Cache-Control/Pragma/Accept-* presence.
+  headers.insert("Sec-MS-GEC", HeaderValue::from_str(&gec).map_err(|e| e.to_string())?);
+  headers.insert("Sec-MS-GEC-Version", HeaderValue::from_static(GEC_VERSION));
+  headers.insert("User-Agent", HeaderValue::from_static(EDGE_UA));
   headers.insert(
     "Origin",
     HeaderValue::from_static("chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold"),
   );
-  headers.insert(
-    "User-Agent",
-    HeaderValue::from_static(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0",
-    ),
-  );
+  headers.insert("Pragma", HeaderValue::from_static("no-cache"));
+  headers.insert("Cache-Control", HeaderValue::from_static("no-cache"));
+  headers.insert("Accept-Encoding", HeaderValue::from_static("gzip, deflate, br"));
+  headers.insert("Accept-Language", HeaderValue::from_static("en-US,en;q=0.9"));
 
   let (ws, _resp) = tokio_tungstenite::connect_async(request)
     .await
