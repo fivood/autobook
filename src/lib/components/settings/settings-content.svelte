@@ -772,13 +772,487 @@
         {/if}
       </SettingsItemGroup>
     </div>
+
+    <SettingsItemGroup title="字体（组 1）">
+      <div slot="header" class="flex items-center">
+        <SettingsFontSelector
+          availableFonts={[
+            LocalFont.NOTOSANSSC,
+            LocalFont.NOTOSERIFJP,
+            LocalFont.KZUDMINCHO,
+            LocalFont.SERIF
+          ]}
+          bind:fontValue={fontFamilyGroupOne}
+        />
+        {#if fontCacheSupported}
+          <div
+            tabindex="0"
+            role="button"
+            title="打开自定义字体对话框"
+            on:click={() =>
+              dialogManager.dialogs$.next([
+                {
+                  component: SettingsUserFontDialog,
+                  props: { fontFamily: fontFamilyGroupOne$ }
+                }
+              ])}
+            on:keyup={dummyFn}
+          >
+            <Fa icon={faComputer} />
+          </div>
+        {/if}
+      </div>
+      <input
+        type="text"
+        class={inputClasses}
+        placeholder="Noto Sans SC"
+        bind:value={fontFamilyGroupOne}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="字体（组 2）">
+      <div slot="header" class="flex items-center">
+        <SettingsFontSelector
+          availableFonts={[LocalFont.NOTOSANSSC, LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF]}
+          bind:fontValue={fontFamilyGroupTwo}
+        />
+        {#if fontCacheSupported}
+          <div
+            tabindex="0"
+            role="button"
+            on:click={() =>
+              dialogManager.dialogs$.next([
+                {
+                  component: SettingsUserFontDialog,
+                  props: { fontFamily: fontFamilyGroupTwo$ }
+                }
+              ])}
+            on:keyup={dummyFn}
+          >
+            <Fa icon={faComputer} />
+          </div>
+        {/if}
+      </div>
+      <input
+        type="text"
+        class={inputClasses}
+        placeholder="Noto Sans SC"
+        bind:value={fontFamilyGroupTwo}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="字号">
+      <input type="number" class={inputClasses} step="1" min="1" bind:value={fontSize} />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="行高">
+      <input
+        type="number"
+        class={inputClasses}
+        step="0.05"
+        min="1"
+        bind:value={lineHeight}
+        on:change={() => {
+          if (!lineHeight || lineHeight < 1) {
+            lineHeight = 1.65;
+          }
+        }}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="字重" tooltip={'设置字重，留空使用默认'}>
+      <input
+        type="number"
+        placeholder="默认"
+        class={inputClasses}
+        step="100"
+        min="100"
+        max="1000"
+        bind:value={fontWeight}
+        on:change={() => {
+          if (fontWeight === null) return;
+          if (fontWeight < 100) fontWeight = 100;
+          else if (fontWeight > 1000) fontWeight = 1000;
+        }}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="段落首行缩进" tooltip="段落首行缩进（rem）">
+      <input
+        type="number"
+        class={inputClasses}
+        step=".5"
+        min="0"
+        bind:value={textIndentation}
+        on:blur={() => {
+          const newValue = Number.parseFloat(`${textIndentation ?? 0}`);
+          if (isNaN(newValue) || newValue < 1) textIndentation = 0;
+        }}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="段落间距模式" tooltip={'切到手动模式可指定段落间距值'}>
+      <ButtonToggleGroup
+        options={optionsForTextMarginMode}
+        bind:selectedOptionId={textMarginMode}
+      />
+    </SettingsItemGroup>
+    {#if textMarginMode === 'manual'}
+      <SettingsItemGroup title="段落间距" tooltip="段落间距（rem）">
+        <input
+          type="number"
+          class={inputClasses}
+          step=".5"
+          min="0"
+          bind:value={textMarginValue}
+          on:blur={() => {
+            const newValue = Number.parseFloat(`${textMarginValue ?? 0}`);
+            if (isNaN(newValue) || newValue < 1) textMarginValue = 0;
+          }}
+        />
+      </SettingsItemGroup>
+    {/if}
+    <SettingsItemGroup title="两端对齐" tooltip={'开启后两端对齐段落文字'}>
+      <ButtonToggleGroup
+        options={optionsForToggle}
+        bind:selectedOptionId={enableTextJustification}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="美化换行" tooltip={'在支持的浏览器中启用 pretty 换行样式'}>
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTextWrapPretty} />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="排版方向">
+      <ButtonToggleGroup options={optionsForWritingMode} bind:selectedOptionId={writingMode} />
+    </SettingsItemGroup>
+    {#if verticalMode}
+      <SettingsItemGroup title="启用字距调整" tooltip={'在字体与浏览器支持时，竖排间距视觉更平衡'}>
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontKerning} />
+      </SettingsItemGroup>
+      <SettingsItemGroup title="启用 VPAL" tooltip={'在字体与浏览器支持时，竖排文字间距更自然'}>
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontVPAL} />
+      </SettingsItemGroup>
+      <SettingsItemGroup title="文字方向" tooltip={verticalTextOrientationTooltip}>
+        <ButtonToggleGroup
+          options={optionsForVerticalTextOrientation}
+          bind:selectedOptionId={verticalTextOrientation}
+        />
+      </SettingsItemGroup>
+    {/if}
+    <SettingsItemGroup title="隐藏振假名">
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
+    </SettingsItemGroup>
+    {#if hideFurigana}
+      <SettingsItemGroup title="振假名样式" tooltip={furiganaStyleTooltip}>
+        <ButtonToggleGroup
+          options={optionsForFuriganaStyle}
+          bind:selectedOptionId={furiganaStyle}
+        />
+      </SettingsItemGroup>
+    {/if}
   {:else if activeSettings === 'Reader'}
     <div class="h-full">
       <SettingsItemGroup title="阅读视图">
         <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
-        <p class="mt-1 text-xs opacity-60">注：滚动模式支持自动播放（打字机效果），分页模式支持语音朗读</p>
+        <p class="mt-1 text-xs opacity-60">注：滚动模式支持自动播放（打字机效果），两种模式都支持语音朗读</p>
       </SettingsItemGroup>
     </div>
+
+    {#if isTauri()}
+      <SettingsItemGroup
+        title="朗读引擎"
+        tooltip="Web Speech：浏览器内建，所有平台可用。系统 TTS（SAPI）：调用 Windows 内置语音，应用最小化也能听。Edge 在线：微软神经网络音色，音质最佳但需联网。切换引擎后请重开书生效。"
+      >
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <select
+              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+              bind:value={$ttsEngine$}
+            >
+              <option value="web">Web Speech（浏览器）</option>
+              <option value="sapi">系统 TTS（Windows SAPI）</option>
+              <option value="edge">Edge 在线音色（需联网）</option>
+            </select>
+            <button
+              class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm disabled:opacity-40"
+              disabled={previewState === 'loading' || previewState === 'playing'}
+              on:click={previewVoice}
+            >
+              {previewState === 'loading'
+                ? '加载中…'
+                : previewState === 'playing'
+                  ? '播放中…'
+                  : '试听'}
+              <Ripple />
+            </button>
+          </div>
+          {#if previewState === 'error'}
+            <p class="text-red-500 text-xs">{previewMessage}</p>
+          {/if}
+        </div>
+      </SettingsItemGroup>
+
+      {#if $ttsEngine$ === 'edge'}
+        <SettingsItemGroup
+          title="Edge 在线语音"
+          tooltip="使用微软 Azure 神经网络音色，最自然。需联网且部分网络可能访问受限；失败时会自动停止朗读，请回切到 SAPI 或 Web Speech。"
+        >
+          <select
+            class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
+            bind:value={$ttsEdgeVoiceId$}
+          >
+            {#each edgeVoices as voice (voice.id)}
+              <option value={voice.id}>{voice.name} ({voice.language})</option>
+            {/each}
+          </select>
+        </SettingsItemGroup>
+      {/if}
+
+      {#if $ttsEngine$ === 'sapi'}
+        <SettingsItemGroup
+          title="系统 TTS 语音"
+          tooltip="Windows 控制面板 → 时间和语言 → 语音 可以下载更多中文/日文/英文语音"
+        >
+          {#if sapiVoicesError}
+            <p class="text-red-500 text-sm">{sapiVoicesError}</p>
+          {:else if !sapiVoices.length}
+            <p class="text-sm opacity-60">未检测到可用语音</p>
+          {:else}
+            <select
+              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
+              bind:value={$ttsSapiVoiceId$}
+            >
+              <option value="">系统默认</option>
+              {#each sapiVoices as voice (voice.id)}
+                <option value={voice.id}>{voice.name} ({voice.language})</option>
+              {/each}
+            </select>
+          {/if}
+        </SettingsItemGroup>
+      {/if}
+
+      <SettingsItemGroup
+        title="朗读全局快捷键"
+        tooltip="任意窗口前台时按下都能切换朗读。格式：modifier+key，如 ctrl+alt+p / shift+f9 / 留空禁用。修改后立刻生效，注册冲突时不报错只是按下无反应。"
+      >
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            class="rounded border px-2 py-1"
+            placeholder="ctrl+alt+p"
+            bind:value={$ttsShortcut$}
+          />
+          <button
+            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+            on:click={() => ttsShortcut$.next('ctrl+alt+p')}
+          >
+            重置
+            <Ripple />
+          </button>
+          <button
+            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+            on:click={() => ttsShortcut$.next('')}
+          >
+            禁用
+            <Ripple />
+          </button>
+        </div>
+      </SettingsItemGroup>
+    {/if}
+
+    <!-- 视图模式专属 -->
+    {#if viewMode === ViewMode.Continuous}
+      <SettingsItemGroup
+        title="自定义阅读点"
+        tooltip={'开启后可在阅读器中设置固定起算点，进度和书签从该点开始计算'}
+      >
+        <div class="flex items-center">
+          <ButtonToggleGroup
+            options={optionsForToggle}
+            bind:selectedOptionId={customReadingPointEnabled}
+          />
+          {#if customReadingPointEnabled}
+            <div
+              tabindex="0"
+              role="button"
+              class="ml-4 hover:underline"
+              on:click={() => {
+                verticalCustomReadingPosition$.next(100);
+                horizontalCustomReadingPosition$.next(0);
+              }}
+              on:keyup={dummyFn}
+            >
+              重置阅读点
+            </div>
+          {/if}
+        </div>
+      </SettingsItemGroup>
+      <SettingsItemGroup title="窗口变化时自动定位">
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={autoPositionOnResize}
+        />
+      </SettingsItemGroup>
+    {:else}
+      <SettingsItemGroup title="避免分页打断" tooltip={avoidPageBreakTooltip}>
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={avoidPageBreak} />
+      </SettingsItemGroup>
+      <SettingsItemGroup
+        title="选中即书签"
+        tooltip={'开启后，书签会落在当前/上次选中文本附近段落，而不是页首'}
+      >
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={selectionToBookmarkEnabled}
+        />
+      </SettingsItemGroup>
+      <SettingsItemGroup title="点击翻页" tooltip="在两侧保留小边缘区域，点击可翻页">
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTapEdgeToFlip} />
+      </SettingsItemGroup>
+      {#if !verticalMode}
+        <SettingsItemGroup title="分栏数" tooltip="渲染的文本栏数">
+          <input type="number" class={inputClasses} step="1" min="0" bind:value={pageColumns} />
+        </SettingsItemGroup>
+      {/if}
+      <SettingsItemGroup title="滑动阈值" tooltip={'触发翻页所需的滑动距离'}>
+        <input
+          type="number"
+          step="1"
+          min="10"
+          class={inputClasses}
+          bind:value={swipeThreshold}
+          on:blur={() => {
+            if (swipeThreshold < 10 || typeof swipeThreshold !== 'number') swipeThreshold = 10;
+          }}
+        />
+      </SettingsItemGroup>
+      <SettingsItemGroup title="禁用滚轮翻页">
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={disableWheelNavigation}
+        />
+      </SettingsItemGroup>
+    {/if}
+
+    <!-- 阅读区尺寸 -->
+    <SettingsItemGroup title={verticalMode ? '阅读区左右边距' : '阅读区上下边距'}>
+      <SettingsDimensionPopover
+        slot="header"
+        isFirstDimension
+        isVertical={verticalMode}
+        bind:dimensionValue={firstDimensionMargin}
+      />
+      <input
+        type="number"
+        class={inputClasses}
+        step="1"
+        min="0"
+        bind:value={firstDimensionMargin}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title={verticalMode ? '阅读区最大高度' : '阅读区最大宽度'}>
+      <SettingsDimensionPopover
+        slot="header"
+        isVertical={verticalMode}
+        bind:dimensionValue={secondDimensionMaxValue}
+      />
+      <input
+        type="number"
+        class={inputClasses}
+        step="1"
+        min="0"
+        bind:value={secondDimensionMaxValue}
+      />
+    </SettingsItemGroup>
+
+    <!-- 书签 -->
+    <SettingsItemGroup title="自动书签" tooltip={autoBookmarkTooltip}>
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
+    </SettingsItemGroup>
+    {#if autoBookmark}
+      <SettingsItemGroup title="自动书签延时" tooltip={'触发自动书签的秒数'}>
+        <input
+          type="number"
+          step="1"
+          min="1"
+          class={inputClasses}
+          bind:value={autoBookmarkTime}
+          on:blur={() => {
+            if (autoBookmarkTime < 1 || typeof autoBookmarkTime !== 'number') autoBookmarkTime = 3;
+          }}
+        />
+      </SettingsItemGroup>
+    {/if}
+    <SettingsItemGroup
+      title="仅手动书签"
+      tooltip={'开启后，通过菜单离开阅读器时不会将当前位置加为书签'}
+    >
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
+    </SettingsItemGroup>
+
+    <!-- 页脚显示 -->
+    <SettingsItemGroup title="显示字数">
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showCharacterCounter} />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="显示百分比">
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showPercentage} />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="页脚显示章节字数">
+      <ButtonToggleGroup
+        options={optionsForToggle}
+        bind:selectedOptionId={showFooterChapterCharacterCounter}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="页脚显示章节百分比">
+      <ButtonToggleGroup
+        options={optionsForToggle}
+        bind:selectedOptionId={showFooterChapterPercentage}
+      />
+    </SettingsItemGroup>
+
+    <!-- 图片 / 统计阅读点 -->
+    {#if $lastBookHasImages$}
+      <SettingsItemGroup
+        title="图片模糊"
+        tooltip="对包含插图的电子书（如轻小说）有效，可避免剧透图直接显示"
+      >
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
+      </SettingsItemGroup>
+      {#if blurImage}
+        <SettingsItemGroup title="模糊范围" tooltip="选择模糊所有图片，还是仅模糊目录之后的图片">
+          <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
+        </SettingsItemGroup>
+      {/if}
+    {/if}
+    {#if statisticsEnabled}
+      <SettingsItemGroup
+        title="自定义阅读点暂停统计"
+        tooltip={'开启后，设置自定义阅读点时统计会自动暂停/恢复'}
+      >
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={pauseTrackerOnCustomPointChange}
+        />
+      </SettingsItemGroup>
+    {/if}
+
+    <!-- 杂项 -->
+    {#if wakeLockSupported}
+      <SettingsItemGroup
+        title="屏幕常亮"
+        tooltip={'开启后请求屏幕常亮（WakeLock），防止屏幕变暗或锁屏'}
+      >
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableReaderWakeLock} />
+      </SettingsItemGroup>
+    {/if}
+    <SettingsItemGroup
+      title="关闭确认"
+      tooltip={'开启后，存在未保存改动时关闭/刷新阅读器标签前会确认'}
+    >
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={confirmClose} />
+    </SettingsItemGroup>
+    <SettingsItemGroup
+      title="优先阅读器样式"
+      tooltip={'开启后，对边距/对齐等规则添加 !important，与书内样式冲突时更易生效'}
+    >
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={prioritizeReaderStyles} />
+    </SettingsItemGroup>
+
+    <!-- 旧 Reader 残留（不再使用） -->
+    <div class="hidden">
     <SettingsItemGroup title="字体（组 1）">
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
@@ -1189,8 +1663,11 @@
         </SettingsItemGroup>
       {/if}
     {/if}
+    </div>
+    <!-- end legacy hidden block -->
   {:else if activeSettings === 'Data'}
-    {#if isTauri()}
+    {#if false}
+      <!-- legacy TTS block — moved to Reader tab in 1.2.7 -->
       <SettingsItemGroup
         title="朗读引擎"
         tooltip="Web Speech：浏览器内建，所有平台可用。系统 TTS（SAPI）：调用 Windows 内置语音，应用最小化也能听。Edge 在线：微软神经网络音色，音质最佳但需联网。切换引擎后请重开书生效。"
