@@ -50,6 +50,7 @@
     theme$,
     ttsEdgeVoiceId$,
     ttsEngine$,
+    ttsPiperVoiceFile$,
     ttsSapiVoiceId$,
     ttsShortcut$,
     verticalCustomReadingPosition$
@@ -265,8 +266,37 @@
     }
   }
 
+  let piperVoices: { id: string; name: string; language: string; file: string }[] = [];
+  let piperAvailable = false;
+  let piperVoicesDirPath = '';
+
+  async function loadPiper() {
+    if (!isTauri() || $ttsEngine$ !== 'piper') return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      piperAvailable = await invoke<boolean>('piper_is_available');
+      piperVoicesDirPath = await invoke<string>('piper_voices_dir');
+      piperVoices = await invoke<typeof piperVoices>('piper_list_voices');
+    } catch {
+      piperVoices = [];
+    }
+  }
+
+  async function openPiperVoicesFolder() {
+    if (!isTauri()) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const dir = await invoke<string>('piper_voices_dir');
+      const { open } = await import('@tauri-apps/plugin-shell');
+      await open(dir);
+    } catch {
+      /* ignore */
+    }
+  }
+
   $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
   $: if ($ttsEngine$ === 'edge') loadEdgeVoices();
+  $: if ($ttsEngine$ === 'piper') loadPiper();
 
   let previewState: 'idle' | 'loading' | 'playing' | 'error' = 'idle';
   let previewMessage = '';
@@ -954,7 +984,7 @@
     {#if isTauri()}
       <SettingsItemGroup
         title="朗读引擎"
-        tooltip="Web Speech：浏览器内建，所有平台可用。系统 TTS（SAPI）：调用 Windows 内置语音，应用最小化也能听。Edge 在线：微软神经网络音色，音质最佳但需联网。切换引擎后请重开书生效。"
+        tooltip="Web Speech：浏览器内建。系统 TTS（SAPI）：Windows 内置语音，应用最小化也能听。Piper（本地神经网络）：完全离线的神经网络音色。Edge 在线（实验性）：微软神经网络音色，质量最佳但部分网络访问受限。切换后请重开书生效。"
       >
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-2 flex-wrap">
@@ -964,7 +994,8 @@
             >
               <option value="web">Web Speech（浏览器）</option>
               <option value="sapi">系统 TTS（Windows SAPI）</option>
-              <option value="edge">Edge 在线音色（需联网）</option>
+              <option value="piper">Piper（本地神经网络）</option>
+              <option value="edge">Edge 在线音色（实验性）</option>
             </select>
             <button
               class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm disabled:opacity-40"
@@ -988,7 +1019,7 @@
       {#if $ttsEngine$ === 'edge'}
         <SettingsItemGroup
           title="Edge 在线语音"
-          tooltip="使用微软 Azure 神经网络音色，最自然。需联网且部分网络可能访问受限；失败时会自动停止朗读，请回切到 SAPI 或 Web Speech。"
+          tooltip="使用微软 Azure 神经网络音色，最自然。需联网；微软会定期升级反爬，本功能标实验性，失败时会自动停止朗读。"
         >
           <select
             class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
@@ -1001,10 +1032,57 @@
         </SettingsItemGroup>
       {/if}
 
+      {#if $ttsEngine$ === 'piper'}
+        <SettingsItemGroup
+          title="Piper 音色"
+          tooltip="完全离线的本地神经网络 TTS。首次使用需做两件事：1) 从 github.com/rhasspy/piper/releases 下载 piper_windows_amd64.zip，解压所有文件到下方文件夹；2) 从 huggingface.co/rhasspy/piper-voices/tree/main/zh/zh_CN 下载音色（.onnx + .onnx.json 一对，约 50MB）到同一文件夹。完成后点刷新。"
+        >
+          <div class="flex flex-col gap-2">
+            {#if !piperAvailable}
+              <p class="text-red-500 text-xs">
+                还没找到 piper.exe。从 GitHub 下载 piper_windows_amd64.zip 后解压全部文件到下方文件夹，再点刷新。
+              </p>
+            {/if}
+            {#if !piperVoices.length}
+              <p class="text-xs opacity-70">
+                还没有音色。从 HuggingFace 下载中文音色（.onnx + .onnx.json 一对）到下方文件夹后点刷新。
+              </p>
+            {:else}
+              <select
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
+                bind:value={$ttsPiperVoiceFile$}
+              >
+                <option value="">— 选择音色 —</option>
+                {#each piperVoices as voice (voice.id)}
+                  <option value={voice.file}>{voice.id} ({voice.language})</option>
+                {/each}
+              </select>
+            {/if}
+            <div class="flex items-center gap-2 flex-wrap">
+              <button
+                class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+                on:click={openPiperVoicesFolder}
+              >
+                打开音色文件夹
+                <Ripple />
+              </button>
+              <button
+                class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+                on:click={loadPiper}
+              >
+                刷新
+                <Ripple />
+              </button>
+            </div>
+            <p class="text-xs opacity-60 font-mono break-all">{piperVoicesDirPath}</p>
+          </div>
+        </SettingsItemGroup>
+      {/if}
+
       {#if $ttsEngine$ === 'sapi'}
         <SettingsItemGroup
           title="系统 TTS 语音"
-          tooltip="Windows 控制面板 → 时间和语言 → 语音 可以下载更多中文/日文/英文语音"
+          tooltip="想要更自然的中文神经网络音色：Windows 11 22H2+ 可装「自然语音」 —— 设置 → 辅助功能 → 讲述人 → 添加自然语音 → 选 Xiaoxiao Natural 等下载，重启 AutoBook 后会出现在下方语音列表里。"
         >
           {#if sapiVoicesError}
             <p class="text-red-500 text-sm">{sapiVoicesError}</p>
@@ -1670,7 +1748,7 @@
       <!-- legacy TTS block — moved to Reader tab in 1.2.7 -->
       <SettingsItemGroup
         title="朗读引擎"
-        tooltip="Web Speech：浏览器内建，所有平台可用。系统 TTS（SAPI）：调用 Windows 内置语音，应用最小化也能听。Edge 在线：微软神经网络音色，音质最佳但需联网。切换引擎后请重开书生效。"
+        tooltip="Web Speech：浏览器内建。系统 TTS（SAPI）：Windows 内置语音，应用最小化也能听。Piper（本地神经网络）：完全离线的神经网络音色。Edge 在线（实验性）：微软神经网络音色，质量最佳但部分网络访问受限。切换后请重开书生效。"
       >
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-2 flex-wrap">
@@ -1680,7 +1758,8 @@
             >
               <option value="web">Web Speech（浏览器）</option>
               <option value="sapi">系统 TTS（Windows SAPI）</option>
-              <option value="edge">Edge 在线音色（需联网）</option>
+              <option value="piper">Piper（本地神经网络）</option>
+              <option value="edge">Edge 在线音色（实验性）</option>
             </select>
             <button
               class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm disabled:opacity-40"
@@ -1704,7 +1783,7 @@
       {#if $ttsEngine$ === 'edge'}
         <SettingsItemGroup
           title="Edge 在线语音"
-          tooltip="使用微软 Azure 神经网络音色，最自然。需联网且部分网络可能访问受限；失败时会自动停止朗读，请回切到 SAPI 或 Web Speech。"
+          tooltip="使用微软 Azure 神经网络音色，最自然。需联网；微软会定期升级反爬，本功能标实验性，失败时会自动停止朗读。"
         >
           <select
             class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
@@ -1717,10 +1796,57 @@
         </SettingsItemGroup>
       {/if}
 
+      {#if $ttsEngine$ === 'piper'}
+        <SettingsItemGroup
+          title="Piper 音色"
+          tooltip="完全离线的本地神经网络 TTS。首次使用需做两件事：1) 从 github.com/rhasspy/piper/releases 下载 piper_windows_amd64.zip，解压所有文件到下方文件夹；2) 从 huggingface.co/rhasspy/piper-voices/tree/main/zh/zh_CN 下载音色（.onnx + .onnx.json 一对，约 50MB）到同一文件夹。完成后点刷新。"
+        >
+          <div class="flex flex-col gap-2">
+            {#if !piperAvailable}
+              <p class="text-red-500 text-xs">
+                还没找到 piper.exe。从 GitHub 下载 piper_windows_amd64.zip 后解压全部文件到下方文件夹，再点刷新。
+              </p>
+            {/if}
+            {#if !piperVoices.length}
+              <p class="text-xs opacity-70">
+                还没有音色。从 HuggingFace 下载中文音色（.onnx + .onnx.json 一对）到下方文件夹后点刷新。
+              </p>
+            {:else}
+              <select
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
+                bind:value={$ttsPiperVoiceFile$}
+              >
+                <option value="">— 选择音色 —</option>
+                {#each piperVoices as voice (voice.id)}
+                  <option value={voice.file}>{voice.id} ({voice.language})</option>
+                {/each}
+              </select>
+            {/if}
+            <div class="flex items-center gap-2 flex-wrap">
+              <button
+                class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+                on:click={openPiperVoicesFolder}
+              >
+                打开音色文件夹
+                <Ripple />
+              </button>
+              <button
+                class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+                on:click={loadPiper}
+              >
+                刷新
+                <Ripple />
+              </button>
+            </div>
+            <p class="text-xs opacity-60 font-mono break-all">{piperVoicesDirPath}</p>
+          </div>
+        </SettingsItemGroup>
+      {/if}
+
       {#if $ttsEngine$ === 'sapi'}
         <SettingsItemGroup
           title="系统 TTS 语音"
-          tooltip="Windows 控制面板 → 时间和语言 → 语音 可以下载更多中文/日文/英文语音"
+          tooltip="想要更自然的中文神经网络音色：Windows 11 22H2+ 可装「自然语音」 —— 设置 → 辅助功能 → 讲述人 → 添加自然语音 → 选 Xiaoxiao Natural 等下载，重启 AutoBook 后会出现在下方语音列表里。"
         >
           {#if sapiVoicesError}
             <p class="text-red-500 text-sm">{sapiVoicesError}</p>

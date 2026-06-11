@@ -118,6 +118,8 @@ export const ttsEdgeVoiceId$ = writableStringLocalStorageSubject()(
   'ttsEdgeVoiceId',
   'zh-CN-XiaoxiaoNeural'
 );
+/** Absolute filesystem path to the selected piper .onnx voice. */
+export const ttsPiperVoiceFile$ = writableStringLocalStorageSubject()('ttsPiperVoiceFile', '');
 
 export interface TtsPosition {
   section: number;

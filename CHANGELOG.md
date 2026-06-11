@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.8
+
+- **Edge 在线音色更新到最新协议**：常量同步至 Chromium 143（对齐 rany2/edge-tts master），新增 Sec-CH-UA 等头部，TLS 从 native-tls（SChannel）换成 rustls，绕过部分 TLS 指纹拦截；功能继续标「实验性」，失败时朗读自动停止
+- **新增 Piper 本地神经网络 TTS 引擎**：完全离线，质量优于 SAPI
+  - 首次使用：从 github.com/rhasspy/piper/releases 下载 `piper_windows_amd64.zip` 解压全部文件，从 huggingface.co/rhasspy/piper-voices 下载 `.onnx + .onnx.json` 音色文件对，全部丢进设置里「Piper 音色」下方显示的文件夹，刷新即用
+  - 音色质量：rhasspy/piper-voices 的 zh_CN 含 huayan / liangsheng 等本地音色，约 50MB / 个
+- **Windows 11 自然语音引导**：SAPI 引擎介绍提示用户可在「设置 → 辅助功能 → 讲述人 → 添加自然语音」装 Xiaoxiao 等离线神经网络音色，重启后自动出现在 SAPI 语音列表里
+- 安装包新增 @tauri-apps/plugin-shell（支持「打开音色文件夹」按钮）
+
 ## 1.2.7
 
 - **设置 Tab 重新分工**：
