@@ -22,6 +22,20 @@
   let sub: Subscription | undefined;
   let showSettings = false;
   let voices: SpeechSynthesisVoice[] = [];
+  let nativeVoices: { id: string; name: string; language: string }[] = [];
+
+  async function loadNativeVoices() {
+    nativeVoices = [];
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const cmd = $ttsEngine$ === 'sapi' ? 'sapi_list_voices' : 'edge_list_voices';
+      nativeVoices = await invoke<typeof nativeVoices>(cmd);
+    } catch {
+      nativeVoices = [];
+    }
+  }
+
+  $: if ($ttsEngine$ === 'sapi' || $ttsEngine$ === 'edge') loadNativeVoices();
 
   $: {
     sub?.unsubscribe();
@@ -118,6 +132,16 @@
 
   function handleVoiceChange(ev: Event) {
     const uri = (ev.target as HTMLSelectElement).value;
+    if ($ttsEngine$ === 'sapi') {
+      ttsSapiVoiceId$.next(uri);
+      if (autoReader) autoReader.voice = uri ? ({ voiceURI: uri } as SpeechSynthesisVoice) : undefined;
+      return;
+    }
+    if ($ttsEngine$ === 'edge') {
+      ttsEdgeVoiceId$.next(uri);
+      if (autoReader) autoReader.voice = { voiceURI: uri } as SpeechSynthesisVoice;
+      return;
+    }
     readerVoiceUri$.next(uri);
     const found = voices.find((v) => v.voiceURI === uri);
     if (autoReader && found) {
@@ -174,19 +198,42 @@
         </label>
 
         <label class="flex flex-col gap-1 text-xs">
-          <span>语音</span>
-          <select
-            class="rounded bg-black/20 px-2 py-1 text-xs"
-            value={$readerVoiceUri$}
-            on:change={handleVoiceChange}
-          >
-            <option value="">系统默认</option>
-            {#each voices as voice}
-              <option value={voice.voiceURI}>
-                {voice.name} ({voice.lang})
-              </option>
-            {/each}
-          </select>
+          <span>语音 ({$ttsEngine$ === 'sapi' ? '系统 SAPI' : $ttsEngine$ === 'edge' ? 'Edge 在线' : 'Web Speech'})</span>
+          {#if $ttsEngine$ === 'sapi'}
+            <select
+              class="rounded bg-black/20 px-2 py-1 text-xs"
+              value={$ttsSapiVoiceId$}
+              on:change={handleVoiceChange}
+            >
+              <option value="">系统默认</option>
+              {#each nativeVoices as voice (voice.id)}
+                <option value={voice.id}>{voice.name} ({voice.language})</option>
+              {/each}
+            </select>
+          {:else if $ttsEngine$ === 'edge'}
+            <select
+              class="rounded bg-black/20 px-2 py-1 text-xs"
+              value={$ttsEdgeVoiceId$}
+              on:change={handleVoiceChange}
+            >
+              {#each nativeVoices as voice (voice.id)}
+                <option value={voice.id}>{voice.name} ({voice.language})</option>
+              {/each}
+            </select>
+          {:else}
+            <select
+              class="rounded bg-black/20 px-2 py-1 text-xs"
+              value={$readerVoiceUri$}
+              on:change={handleVoiceChange}
+            >
+              <option value="">系统默认</option>
+              {#each voices as voice}
+                <option value={voice.voiceURI}>
+                  {voice.name} ({voice.lang})
+                </option>
+              {/each}
+            </select>
+          {/if}
         </label>
       </div>
     {/if}
