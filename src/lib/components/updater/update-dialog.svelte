@@ -2,7 +2,7 @@
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { buttonClasses } from '$lib/css-classes';
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import type { UpdateInfo, ProgressEvent } from '$lib/functions/updater/check-for-update';
   import { relaunchApp } from '$lib/functions/updater/check-for-update';
 
@@ -11,11 +11,47 @@
   const dispatch = createEventDispatcher<{ close: void }>();
 
   type Phase = 'idle' | 'downloading' | 'installing' | 'done' | 'error';
+  type ChangelogEntry = { version: string; notes: string; pub_date: string };
 
   let phase: Phase = 'idle';
   let downloaded = 0;
   let total = 0;
   let errorMessage = '';
+  let aggregated: ChangelogEntry[] = [];
+
+  /** Strict SemVer-ish compare; returns -1 | 0 | 1. Pre-release tags ignored. */
+  function cmp(a: string, b: string): number {
+    const pa = a.replace(/[^0-9.].*$/, '').split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = b.replace(/[^0-9.].*$/, '').split('.').map((n) => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const x = pa[i] || 0;
+      const y = pb[i] || 0;
+      if (x !== y) return x < y ? -1 : 1;
+    }
+    return 0;
+  }
+
+  onMount(async () => {
+    // Pull the multi-version changelog from the same Worker that serves
+    // latest.json so users updating across several versions see every
+    // intermediate release's notes. Best-effort: silently fall back to the
+    // single update.notes string the updater already gave us.
+    try {
+      const resp = await fetch('https://updates.fivood.com/changelog', { cache: 'no-store' });
+      if (!resp.ok) return;
+      const all = (await resp.json()) as ChangelogEntry[];
+      aggregated = all
+        .filter(
+          (entry) =>
+            entry.version &&
+            cmp(entry.version, update.currentVersion) > 0 &&
+            cmp(entry.version, update.version) <= 0
+        )
+        .sort((a, b) => cmp(b.version, a.version));
+    } catch {
+      // network or worker failure — fall back to update.notes
+    }
+  });
 
   $: percent = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : 0;
   $: downloadedMB = (downloaded / 1024 / 1024).toFixed(1);
@@ -57,7 +93,19 @@
         当前版本 <span class="font-sans">{update.currentVersion}</span> → 新版本 <span class="font-sans">{update.version}</span>
       </p>
 
-      {#if update.notes}
+      {#if aggregated.length > 1}
+        <div class="border-t pt-2">
+          <p class="font-medium mb-1">更新内容（共 {aggregated.length} 个版本）</p>
+          <div class="max-h-56 overflow-y-auto space-y-3">
+            {#each aggregated as entry (entry.version)}
+              <div>
+                <h4 class="font-medium text-sm">v{entry.version}</h4>
+                <div class="font-sans whitespace-pre-wrap text-sm opacity-90 mt-1">{entry.notes}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {:else if update.notes}
         <div class="border-t pt-2">
           <p class="font-medium mb-1">更新内容</p>
           <div class="font-sans whitespace-pre-wrap text-sm opacity-90 max-h-56 overflow-y-auto">{update.notes}</div>
