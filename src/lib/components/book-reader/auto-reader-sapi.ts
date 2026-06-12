@@ -3,12 +3,14 @@
  * Copyright (c) 2026, ッツ Reader Authors
  * All rights reserved.
  *
- * System TTS engine — uses Windows SAPI (via the `tts` Rust crate). Plays
- * audio outside the WebView so it keeps going even when the window is hidden.
- * Position tracking is sentence-level only: SAPI boundary events aren't
- * forwarded by the bridge yet, so resume snaps to the start of the current
- * sentence (close enough for human listeners and matches user expectation
- * when they explicitly pause to bookmark).
+ * Windows system TTS engine. Rust side wraps WinRT SpeechSynthesizer (NOT
+ * the `tts` crate, which only saw SAPI 5 voices and missed Windows 11's
+ * Natural neural voices). Each sentence is synthesized to a WAV blob and
+ * played here via HTMLAudioElement — same pattern as Edge.
+ *
+ * Position memory is sentence-level: synth happens whole-sentence and there
+ * are no boundary callbacks back to the frontend, so resume snaps to the
+ * current sentence's start.
  */
 
 import { BehaviorSubject, type Observable } from 'rxjs';
@@ -20,48 +22,29 @@ import {
   splitSentences
 } from './auto-reader-shared';
 
-export interface SapiVoice {
-  id: string;
-  name: string;
-  language: string;
-  gender?: string;
-}
-
 export class AutoReaderSapi implements AutoReader {
   wasReaderEnabled$ = new BehaviorSubject<boolean>(false);
 
   private enabled$ = new BehaviorSubject<boolean>(false);
-
   private paragraphs: string[] = [];
-
   private paraIndex = 0;
-
   private charOffset = 0;
-
   private contentEl: HTMLElement | undefined;
-
   private _rate = 1;
-
+  /** WinRT VoiceInformation.Id (a registry-style path). Empty = system default. */
   private _voiceId = '';
-
   private _lang = 'zh-CN';
-
-  private unlistenEnd?: () => void;
-
+  private audio: HTMLAudioElement | undefined;
   private currentSpeakToken = 0;
+  private currentBlobUrl: string | undefined;
 
   onBoundary?: (charIndex: number) => void;
-
   onEnd?: () => void;
+  onError?: (message: string) => void;
 
   constructor(destroy$: Observable<void>) {
     this.enabled$.subscribe((v) => this.wasReaderEnabled$.next(v));
-    destroy$.subscribe(() => {
-      this.off();
-      this.unlistenEnd?.();
-      this.unlistenEnd = undefined;
-    });
-    this.attachEndListener();
+    destroy$.subscribe(() => this.off());
   }
 
   setContentEl(el: HTMLElement | undefined) {
@@ -71,19 +54,18 @@ export class AutoReaderSapi implements AutoReader {
 
   set rate(v: number) {
     this._rate = Math.max(0.5, Math.min(2, v));
+    if (this.audio) this.audio.playbackRate = this._rate;
   }
 
   get rate() {
     return this._rate;
   }
 
-  /** Voice for SAPI is identified by URI string (id from sapi_list_voices). */
   set voice(v: SpeechSynthesisVoice | undefined) {
     this._voiceId = v?.voiceURI ?? '';
   }
 
   get voice() {
-    // SAPI doesn't expose a SpeechSynthesisVoice; FAB only uses .voiceURI.
     return this._voiceId ? ({ voiceURI: this._voiceId } as SpeechSynthesisVoice) : undefined;
   }
 
@@ -95,10 +77,8 @@ export class AutoReaderSapi implements AutoReader {
     return this._lang;
   }
 
-  // Web Speech parity — frontend code calls this on lang change. For SAPI the
-  // FAB drives voice selection explicitly so we don't need to auto-pick here.
   autoSelectVoice() {
-    /* no-op */
+    /* no-op — chosen via settings */
   }
 
   prepare() {
@@ -126,11 +106,8 @@ export class AutoReaderSapi implements AutoReader {
   }
 
   toggle() {
-    if (this.enabled$.getValue()) {
-      this.off();
-    } else {
-      this.on();
-    }
+    if (this.enabled$.getValue()) this.off();
+    else this.on();
   }
 
   on() {
@@ -143,7 +120,15 @@ export class AutoReaderSapi implements AutoReader {
   off() {
     this.enabled$.next(false);
     this.currentSpeakToken += 1;
-    this.stopRust();
+    if (this.audio) {
+      this.audio.pause();
+      this.audio.src = '';
+      this.audio = undefined;
+    }
+    if (this.currentBlobUrl) {
+      URL.revokeObjectURL(this.currentBlobUrl);
+      this.currentBlobUrl = undefined;
+    }
   }
 
   private reset() {
@@ -169,50 +154,48 @@ export class AutoReaderSapi implements AutoReader {
       return;
     }
 
-    // Emit boundary at sentence start so position-save logic fires.
-    const globalIndex = computeGlobalCharIndex(
-      this.paragraphs,
-      this.paraIndex,
-      this.charOffset
-    );
+    const globalIndex = computeGlobalCharIndex(this.paragraphs, this.paraIndex, this.charOffset);
     this.onBoundary?.(globalIndex);
 
     const token = ++this.currentSpeakToken;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('sapi_speak', {
+      const b64 = await invoke<string>('sapi_speak', {
         text,
         voiceId: this._voiceId || null,
         rate: this._rate
       });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[sapi] speak failed:', err);
-      if (token === this.currentSpeakToken) this.off();
-    }
-  }
+      if (token !== this.currentSpeakToken || !this.enabled$.getValue()) return;
 
-  private async stopRust() {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('sapi_stop');
-    } catch {
-      /* ignore */
-    }
-  }
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes as BlobPart], { type: 'audio/wav' });
+      if (this.currentBlobUrl) URL.revokeObjectURL(this.currentBlobUrl);
+      this.currentBlobUrl = URL.createObjectURL(blob);
 
-  private async attachEndListener() {
-    try {
-      const { listen } = await import('@tauri-apps/api/event');
-      this.unlistenEnd = await listen('sapi-utterance-end', () => {
-        if (!this.enabled$.getValue()) return;
+      const audio = new Audio(this.currentBlobUrl);
+      audio.playbackRate = this._rate;
+      audio.onended = () => {
+        if (token !== this.currentSpeakToken) return;
         this.paraIndex += 1;
         this.charOffset = 0;
         this.speakNext();
-      });
-    } catch (err) {
+      };
+      audio.onerror = () => {
+        if (token !== this.currentSpeakToken) return;
+        this.onError?.('音频播放失败');
+        this.off();
+      };
+      this.audio = audio;
+      await audio.play();
+    } catch (err: any) {
+      if (token !== this.currentSpeakToken) return;
+      const message = typeof err === 'string' ? err : err?.message ?? String(err);
       // eslint-disable-next-line no-console
-      console.warn('[sapi] failed to attach end listener:', err);
+      console.warn('[sapi] synth failed:', message);
+      this.onError?.(message);
+      this.off();
     }
   }
 }

@@ -20,9 +20,9 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "$DOCUMENT/EbookReader" },
-        { "path": "$DOCUMENT/EbookReader/**" },
-        { "path": "$DOCUMENT/EbookReader/*" }
+        { "path": "$DOCUMENT/AutoBook" },
+        { "path": "$DOCUMENT/AutoBook/**" },
+        { "path": "$DOCUMENT/AutoBook/*" }
       ]
     }
   ]

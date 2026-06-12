@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.2.8"
+version = "1.2.9"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -28,12 +28,20 @@ tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
-tts = "0.26"
-tokio = { version = "1", features = ["sync", "rt", "time", "macros", "process", "io-util"] }
+tauri-plugin-shell = "2"
+windows = { version = "0.58", features = [
+  "Media_SpeechSynthesis",
+  "Media_Core",
+  "Storage_Streams",
+  "Foundation",
+  "Foundation_Collections",
+] }
+tokio = { version = "1", features = ["sync", "rt", "time", "macros"] }
 tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots", "connect", "handshake"], default-features = false }
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+serde_urlencoded = "0.7"
 futures-util = "0.3"
 sha2 = "0.10"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
-tauri-plugin-shell = "2"

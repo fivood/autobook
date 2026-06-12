@@ -51,6 +51,8 @@
   $: if (autoReader && $ttsEngine$ === 'edge') {
     autoReader.voice = { voiceURI: $ttsEdgeVoiceId$ } as SpeechSynthesisVoice;
   }
+  // Custom engine: configuration is read directly from stores inside the
+  // reader on each speak, so nothing to push from the FAB here.
 
   onMount(() => {
     const loadVoices = () => {
@@ -198,7 +200,7 @@
         </label>
 
         <label class="flex flex-col gap-1 text-xs">
-          <span>语音 ({$ttsEngine$ === 'sapi' ? '系统 SAPI' : $ttsEngine$ === 'edge' ? 'Edge 在线' : 'Web Speech'})</span>
+          <span>语音 ({$ttsEngine$ === 'sapi' ? '系统 SAPI' : $ttsEngine$ === 'edge' ? 'Edge 在线' : $ttsEngine$ === 'custom' ? '自定义 HTTP' : 'Web Speech'})</span>
           {#if $ttsEngine$ === 'sapi'}
             <select
               class="rounded bg-black/20 px-2 py-1 text-xs"
@@ -220,6 +222,8 @@
                 <option value={voice.id}>{voice.name} ({voice.language})</option>
               {/each}
             </select>
+          {:else if $ttsEngine$ === 'custom'}
+            <p class="text-xs opacity-80">使用「设置 → 自定义 HTTP TTS」里配的接口</p>
           {:else}
             <select
               class="rounded bg-black/20 px-2 py-1 text-xs"

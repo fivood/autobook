@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.9
+
+- 移除 Piper 引擎。rhasspy/piper 已停更，中文音色普遍存在 "x is not a single codepoint" 崩溃且唯一不崩的 huayan 朗读体验差，不适合实用。本地高音质需求请用 Windows 11 自然语音（设置 → 辅助功能 → 讲述人 → 添加自然语音，可装晓晓 Natural 等），装好后自动出现在 SAPI 语音列表
+- Edge 在线引擎加上时钟漂移补偿：连接被 403/401 拒绝时解析响应里的 Date 头反推 client/server 时差，自动重试一次。如果是 client 时钟不准导致的 GEC token 失效，这次会自动救回（但实测微软主动反爬下绕过率仍低，建议改用 SAPI + Windows 11 自然语音）
+- 朗读引擎说明文案明确把 SAPI + Windows 11 自然语音作为主推方案，Edge 标实验性、不保证可用
+- 修诊断日志对话框「打开仓库」「下载报告」两按钮在桌面端无效的问题：前者改走 Tauri shell 调用系统浏览器；后者改走 fs 写到 文档/AutoBook/Logs/ 目录（之前用 data: URI + target=_blank，Tauri WebView2 都不支持）
+- 系统 TTS（SAPI）引擎底层切换到 WinRT SpeechSynthesizer，能正确枚举 Windows 11「自然语音」（晓晓 Natural / 云希 Natural 等神经网络音色，离线、音质接近 Edge 云端）。之前用的 tts crate 只能看到老 SAPI 5 音色，看不到 Natural
+- 书库目录从 文档/EbookReader/ 改名为 文档/AutoBook/。安装新版后自动原子重命名（同盘秒级，不复制不丢数据），失败时旧目录原样保留
+- 诊断日志放进 文档/AutoBook/Logs/ 子目录，不再混在书库根目录
+- 新增「自定义 HTTP TTS」引擎：把任意付费/自建 TTS 接口接进来。提供 OpenAI / ElevenLabs / Azure Speech / 火山引擎 / MiMo（小米，限时免费）一键预设，填好 API key 即可；自由编辑端点、请求头（JSON）、请求体模板（{text} 自动替换为句子并 JSON 转义）；新增「音频路径」字段，支持响应是 JSON 包 base64 音频的接口（如 MiMo 的 choices.0.message.audio.data）。这是目前在 Windows 上获得 Edge 云端级别高质量本地 TTS 的唯一可行路径
+- 自定义 TTS 配置面板改成横向 标签+输入 两列网格，独占整行宽度（之前挤在 1/3 列），输入框舒展不再换行折叠
+- 修正 SAPI tooltip 关于 Windows 11 自然语音的错误引导（之前说能用，实测应用层调不到）
+
 ## 1.2.8
 
 - **Edge 在线音色更新到最新协议**：常量同步至 Chromium 143（对齐 rany2/edge-tts master），新增 Sec-CH-UA 等头部，TLS 从 native-tls（SChannel）换成 rustls，绕过部分 TLS 指纹拦截；功能继续标「实验性」，失败时朗读自动停止

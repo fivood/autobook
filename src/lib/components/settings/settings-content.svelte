@@ -48,9 +48,13 @@
     textMarginMode$,
     textMarginValue$,
     theme$,
+    ttsCustomAudioPath$,
+    ttsCustomBody$,
+    ttsCustomEndpoint$,
+    ttsCustomHeaders$,
+    ttsCustomMethod$,
     ttsEdgeVoiceId$,
     ttsEngine$,
-    ttsPiperVoiceFile$,
     ttsSapiVoiceId$,
     ttsShortcut$,
     verticalCustomReadingPosition$
@@ -266,37 +270,129 @@
     }
   }
 
-  let piperVoices: { id: string; name: string; language: string; file: string }[] = [];
-  let piperAvailable = false;
-  let piperVoicesDirPath = '';
-
-  async function loadPiper() {
-    if (!isTauri() || $ttsEngine$ !== 'piper') return;
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      piperAvailable = await invoke<boolean>('piper_is_available');
-      piperVoicesDirPath = await invoke<string>('piper_voices_dir');
-      piperVoices = await invoke<typeof piperVoices>('piper_list_voices');
-    } catch {
-      piperVoices = [];
-    }
-  }
-
-  async function openPiperVoicesFolder() {
-    if (!isTauri()) return;
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const dir = await invoke<string>('piper_voices_dir');
-      const { open } = await import('@tauri-apps/plugin-shell');
-      await open(dir);
-    } catch {
-      /* ignore */
-    }
-  }
-
   $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
   $: if ($ttsEngine$ === 'edge') loadEdgeVoices();
-  $: if ($ttsEngine$ === 'piper') loadPiper();
+
+  function applyCustomPreset(name: string) {
+    if (!name) return;
+    const presets: Record<
+      string,
+      { method: string; endpoint: string; headers: string; body: string; audioPath?: string }
+    > = {
+      openai: {
+        method: 'POST',
+        endpoint: 'https://api.openai.com/v1/audio/speech',
+        headers: JSON.stringify(
+          { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_API_KEY' },
+          null,
+          2
+        ),
+        body: JSON.stringify(
+          { model: 'tts-1', voice: 'alloy', input: '{text}' },
+          null,
+          2
+        )
+      },
+      elevenlabs: {
+        method: 'POST',
+        endpoint:
+          'https://api.elevenlabs.io/v1/text-to-speech/VOICE_ID?output_format=mp3_44100_128',
+        headers: JSON.stringify(
+          { 'Content-Type': 'application/json', 'xi-api-key': 'YOUR_API_KEY' },
+          null,
+          2
+        ),
+        body: JSON.stringify(
+          {
+            text: '{text}',
+            model_id: 'eleven_multilingual_v2',
+            voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+          },
+          null,
+          2
+        )
+      },
+      azure: {
+        method: 'POST',
+        endpoint:
+          'https://YOUR_REGION.tts.speech.microsoft.com/cognitiveservices/v1',
+        headers: JSON.stringify(
+          {
+            'Content-Type': 'application/ssml+xml',
+            'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+            'Ocp-Apim-Subscription-Key': 'YOUR_SUBSCRIPTION_KEY'
+          },
+          null,
+          2
+        ),
+        body: `<speak version='1.0' xml:lang='zh-CN'><voice name='zh-CN-XiaoxiaoNeural'>{text}</voice></speak>`
+      },
+      volcengine: {
+        method: 'POST',
+        endpoint: 'https://openspeech.bytedance.com/api/v1/tts',
+        headers: JSON.stringify(
+          {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer; YOUR_TOKEN'
+          },
+          null,
+          2
+        ),
+        body: JSON.stringify(
+          {
+            app: { appid: 'YOUR_APPID', token: 'YOUR_TOKEN', cluster: 'volcano_tts' },
+            user: { uid: 'autobook' },
+            audio: {
+              voice_type: 'BV700_streaming',
+              encoding: 'mp3',
+              speed_ratio: 1.0
+            },
+            request: { reqid: 'autobook', text: '{text}', operation: 'query' }
+          },
+          null,
+          2
+        )
+      },
+      mimo: {
+        // Xiaomi MiMo TTS — quirky: speech text goes into the 'assistant' role
+        // and the response wraps base64 audio in JSON under choices.0.message.audio.data.
+        method: 'POST',
+        endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
+        headers: JSON.stringify(
+          { 'Content-Type': 'application/json', 'api-key': 'YOUR_API_KEY' },
+          null,
+          2
+        ),
+        body: JSON.stringify(
+          {
+            model: 'mimo-v2.5-tts',
+            messages: [
+              { role: 'user', content: '清晰、稳定、平和的朗读语气，适合长时间听书。' },
+              { role: 'assistant', content: '{text}' }
+            ],
+            audio: { format: 'wav', voice: '茉莉' },
+            stream: false
+          },
+          null,
+          2
+        ),
+        audioPath: 'choices.0.message.audio.data'
+      }
+    };
+    const p = presets[name];
+    if (!p) return;
+    ttsCustomMethod$.next(p.method);
+    ttsCustomEndpoint$.next(p.endpoint);
+    ttsCustomHeaders$.next(p.headers);
+    ttsCustomBody$.next(p.body);
+    ttsCustomAudioPath$.next(p.audioPath || '');
+  }
+
+  function onCustomPresetSelect(ev: Event) {
+    const select = ev.currentTarget as HTMLSelectElement;
+    applyCustomPreset(select.value);
+    select.value = '';
+  }
 
   let previewState: 'idle' | 'loading' | 'playing' | 'error' = 'idle';
   let previewMessage = '';
@@ -330,17 +426,27 @@
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       if ($ttsEngine$ === 'sapi') {
-        await invoke('sapi_speak', {
+        const b64 = await invoke<string>('sapi_speak', {
           text: previewText,
           voiceId: $ttsSapiVoiceId$ || null,
           rate: 1
         });
-        previewState = 'playing';
-        const { listen } = await import('@tauri-apps/api/event');
-        const unlisten = await listen('sapi-utterance-end', () => {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/wav' }));
+        previewAudio = new Audio(url);
+        previewAudio.onended = () => {
           previewState = 'idle';
-          unlisten();
-        });
+          URL.revokeObjectURL(url);
+        };
+        previewAudio.onerror = () => {
+          previewState = 'error';
+          previewMessage = '音频播放失败';
+          URL.revokeObjectURL(url);
+        };
+        previewState = 'playing';
+        await previewAudio.play();
       } else if ($ttsEngine$ === 'edge') {
         const b64 = await invoke<string>('edge_synthesize', {
           text: previewText,
@@ -363,6 +469,47 @@
         };
         previewState = 'playing';
         await previewAudio.play();
+      } else if ($ttsEngine$ === 'custom') {
+        let headersObj: Record<string, string> = {};
+        try {
+          const parsed = JSON.parse($ttsCustomHeaders$ || '{}');
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            headersObj = Object.fromEntries(
+              Object.entries(parsed).map(([k, v]) => [k, String(v)])
+            );
+          }
+        } catch (err: any) {
+          previewState = 'error';
+          previewMessage = `请求头不是合法 JSON: ${err.message}`;
+          return;
+        }
+        const b64 = await invoke<string>('custom_tts_synthesize', {
+          endpoint: $ttsCustomEndpoint$,
+          method: $ttsCustomMethod$ || 'POST',
+          headers: headersObj,
+          bodyTemplate: $ttsCustomBody$ || '',
+          audioPath: $ttsCustomAudioPath$ || null,
+          text: previewText
+        });
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/mpeg' }));
+        previewAudio = new Audio(url);
+        previewAudio.onended = () => {
+          previewState = 'idle';
+          URL.revokeObjectURL(url);
+        };
+        previewAudio.onerror = () => {
+          previewState = 'error';
+          previewMessage = '音频播放失败';
+          URL.revokeObjectURL(url);
+        };
+        previewState = 'playing';
+        await previewAudio.play();
+      } else {
+        // Unknown engine — bail so the UI doesn't stay in 'loading'.
+        previewState = 'idle';
       }
     } catch (err: any) {
       previewState = 'error';
@@ -984,7 +1131,7 @@
     {#if isTauri()}
       <SettingsItemGroup
         title="朗读引擎"
-        tooltip="Web Speech：浏览器内建。系统 TTS（SAPI）：Windows 内置语音，应用最小化也能听。Piper（本地神经网络）：完全离线的神经网络音色。Edge 在线（实验性）：微软神经网络音色，质量最佳但部分网络访问受限。切换后请重开书生效。"
+        tooltip="推荐：系统 TTS（SAPI）+ Windows 11 自然语音（设置→辅助功能→讲述人→添加自然语音），音质接近云端神经网络且完全离线。Web Speech 是浏览器内建作兜底。Edge 在线音色为实验功能，微软持续升级反爬，大概率连不上，不建议依赖。切换后请重开书生效。"
       >
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-2 flex-wrap">
@@ -994,7 +1141,7 @@
             >
               <option value="web">Web Speech（浏览器）</option>
               <option value="sapi">系统 TTS（Windows SAPI）</option>
-              <option value="piper">Piper（本地神经网络）</option>
+              <option value="custom">自定义 HTTP TTS（OpenAI / ElevenLabs / Azure ...）</option>
               <option value="edge">Edge 在线音色（实验性）</option>
             </select>
             <button
@@ -1032,57 +1179,74 @@
         </SettingsItemGroup>
       {/if}
 
-      {#if $ttsEngine$ === 'piper'}
-        <SettingsItemGroup
-          title="Piper 音色"
-          tooltip="完全离线的本地神经网络 TTS。首次使用需做两件事：1) 从 github.com/rhasspy/piper/releases 下载 piper_windows_amd64.zip，解压所有文件到下方文件夹；2) 从 huggingface.co/rhasspy/piper-voices/tree/main/zh/zh_CN 下载音色（.onnx + .onnx.json 一对，约 50MB）到同一文件夹。完成后点刷新。"
-        >
-          <div class="flex flex-col gap-2">
-            {#if !piperAvailable}
-              <p class="text-red-500 text-xs">
-                还没找到 piper.exe。从 GitHub 下载 piper_windows_amd64.zip 后解压全部文件到下方文件夹，再点刷新。
-              </p>
-            {/if}
-            {#if !piperVoices.length}
-              <p class="text-xs opacity-70">
-                还没有音色。从 HuggingFace 下载中文音色（.onnx + .onnx.json 一对）到下方文件夹后点刷新。
-              </p>
-            {:else}
+      {#if $ttsEngine$ === 'custom'}
+        <div class="lg:col-span-3">
+          <SettingsItemGroup
+            title="自定义 HTTP TTS"
+            tooltip={'把任意 TTS API 接进来。{text} 会被替换为当前句子并 JSON 转义。响应是音频字节（OpenAI/ElevenLabs/Azure）「音频路径」留空；响应是 JSON 包 base64 音频（MiMo 等）则填出 base64 字段的 dot-path，如 choices.0.message.audio.data。'}
+          >
+            <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
+              <span class="text-xs opacity-80 pt-2">预设</span>
               <select
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
-                bind:value={$ttsPiperVoiceFile$}
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+                on:change={onCustomPresetSelect}
               >
-                <option value="">— 选择音色 —</option>
-                {#each piperVoices as voice (voice.id)}
-                  <option value={voice.file}>{voice.id} ({voice.language})</option>
-                {/each}
+                <option value="">— 选择填充 —</option>
+                <option value="openai">OpenAI TTS</option>
+                <option value="elevenlabs">ElevenLabs</option>
+                <option value="azure">Azure Speech (REST)</option>
+                <option value="volcengine">火山引擎 大模型 TTS</option>
+                <option value="mimo">MiMo-V2.5-TTS（小米，限时免费）</option>
               </select>
-            {/if}
-            <div class="flex items-center gap-2 flex-wrap">
-              <button
-                class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-                on:click={openPiperVoicesFolder}
+
+              <span class="text-xs opacity-80 pt-2">请求方法</span>
+              <select
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm w-24"
+                bind:value={$ttsCustomMethod$}
               >
-                打开音色文件夹
-                <Ripple />
-              </button>
-              <button
-                class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-                on:click={loadPiper}
-              >
-                刷新
-                <Ripple />
-              </button>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="GET">GET</option>
+              </select>
+
+              <span class="text-xs opacity-80 pt-2">端点 URL</span>
+              <input
+                type="text"
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+                placeholder="https://api.openai.com/v1/audio/speech"
+                bind:value={$ttsCustomEndpoint$}
+              />
+
+              <span class="text-xs opacity-80 pt-2">请求头（JSON）</span>
+              <textarea
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
+                rows="4"
+                bind:value={$ttsCustomHeaders$}
+              ></textarea>
+
+              <span class="text-xs opacity-80 pt-2">请求体模板</span>
+              <textarea
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
+                rows="8"
+                bind:value={$ttsCustomBody$}
+              ></textarea>
+
+              <span class="text-xs opacity-80 pt-2">音频路径</span>
+              <input
+                type="text"
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm font-mono"
+                placeholder="留空 = 响应是裸音频字节；否则填 JSON 里 base64 字段的 dot-path"
+                bind:value={$ttsCustomAudioPath$}
+              />
             </div>
-            <p class="text-xs opacity-60 font-mono break-all">{piperVoicesDirPath}</p>
-          </div>
-        </SettingsItemGroup>
+          </SettingsItemGroup>
+        </div>
       {/if}
 
       {#if $ttsEngine$ === 'sapi'}
         <SettingsItemGroup
           title="系统 TTS 语音"
-          tooltip="想要更自然的中文神经网络音色：Windows 11 22H2+ 可装「自然语音」 —— 设置 → 辅助功能 → 讲述人 → 添加自然语音 → 选 Xiaoxiao Natural 等下载，重启 AutoBook 后会出现在下方语音列表里。"
+          tooltip="注：Windows 11 设置里的「Natural 自然语音」是 Narrator 专属，应用层（包括本 app）调不到。要高质量本地 TTS 暂时无解，建议改用自定义 HTTP TTS 接 OpenAI / Azure 等付费 API。下面是系统暴露给应用的 SAPI 5 老音色，质量基础。"
         >
           {#if sapiVoicesError}
             <p class="text-red-500 text-sm">{sapiVoicesError}</p>
@@ -1748,7 +1912,7 @@
       <!-- legacy TTS block — moved to Reader tab in 1.2.7 -->
       <SettingsItemGroup
         title="朗读引擎"
-        tooltip="Web Speech：浏览器内建。系统 TTS（SAPI）：Windows 内置语音，应用最小化也能听。Piper（本地神经网络）：完全离线的神经网络音色。Edge 在线（实验性）：微软神经网络音色，质量最佳但部分网络访问受限。切换后请重开书生效。"
+        tooltip="推荐：系统 TTS（SAPI）+ Windows 11 自然语音（设置→辅助功能→讲述人→添加自然语音），音质接近云端神经网络且完全离线。Web Speech 是浏览器内建作兜底。Edge 在线音色为实验功能，微软持续升级反爬，大概率连不上，不建议依赖。切换后请重开书生效。"
       >
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-2 flex-wrap">
@@ -1758,7 +1922,7 @@
             >
               <option value="web">Web Speech（浏览器）</option>
               <option value="sapi">系统 TTS（Windows SAPI）</option>
-              <option value="piper">Piper（本地神经网络）</option>
+              <option value="custom">自定义 HTTP TTS（OpenAI / ElevenLabs / Azure ...）</option>
               <option value="edge">Edge 在线音色（实验性）</option>
             </select>
             <button
@@ -1796,57 +1960,74 @@
         </SettingsItemGroup>
       {/if}
 
-      {#if $ttsEngine$ === 'piper'}
-        <SettingsItemGroup
-          title="Piper 音色"
-          tooltip="完全离线的本地神经网络 TTS。首次使用需做两件事：1) 从 github.com/rhasspy/piper/releases 下载 piper_windows_amd64.zip，解压所有文件到下方文件夹；2) 从 huggingface.co/rhasspy/piper-voices/tree/main/zh/zh_CN 下载音色（.onnx + .onnx.json 一对，约 50MB）到同一文件夹。完成后点刷新。"
-        >
-          <div class="flex flex-col gap-2">
-            {#if !piperAvailable}
-              <p class="text-red-500 text-xs">
-                还没找到 piper.exe。从 GitHub 下载 piper_windows_amd64.zip 后解压全部文件到下方文件夹，再点刷新。
-              </p>
-            {/if}
-            {#if !piperVoices.length}
-              <p class="text-xs opacity-70">
-                还没有音色。从 HuggingFace 下载中文音色（.onnx + .onnx.json 一对）到下方文件夹后点刷新。
-              </p>
-            {:else}
+      {#if $ttsEngine$ === 'custom'}
+        <div class="lg:col-span-3">
+          <SettingsItemGroup
+            title="自定义 HTTP TTS"
+            tooltip={'把任意 TTS API 接进来。{text} 会被替换为当前句子并 JSON 转义。响应是音频字节（OpenAI/ElevenLabs/Azure）「音频路径」留空；响应是 JSON 包 base64 音频（MiMo 等）则填出 base64 字段的 dot-path，如 choices.0.message.audio.data。'}
+          >
+            <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
+              <span class="text-xs opacity-80 pt-2">预设</span>
               <select
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
-                bind:value={$ttsPiperVoiceFile$}
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+                on:change={onCustomPresetSelect}
               >
-                <option value="">— 选择音色 —</option>
-                {#each piperVoices as voice (voice.id)}
-                  <option value={voice.file}>{voice.id} ({voice.language})</option>
-                {/each}
+                <option value="">— 选择填充 —</option>
+                <option value="openai">OpenAI TTS</option>
+                <option value="elevenlabs">ElevenLabs</option>
+                <option value="azure">Azure Speech (REST)</option>
+                <option value="volcengine">火山引擎 大模型 TTS</option>
+                <option value="mimo">MiMo-V2.5-TTS（小米，限时免费）</option>
               </select>
-            {/if}
-            <div class="flex items-center gap-2 flex-wrap">
-              <button
-                class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-                on:click={openPiperVoicesFolder}
+
+              <span class="text-xs opacity-80 pt-2">请求方法</span>
+              <select
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm w-24"
+                bind:value={$ttsCustomMethod$}
               >
-                打开音色文件夹
-                <Ripple />
-              </button>
-              <button
-                class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-                on:click={loadPiper}
-              >
-                刷新
-                <Ripple />
-              </button>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="GET">GET</option>
+              </select>
+
+              <span class="text-xs opacity-80 pt-2">端点 URL</span>
+              <input
+                type="text"
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+                placeholder="https://api.openai.com/v1/audio/speech"
+                bind:value={$ttsCustomEndpoint$}
+              />
+
+              <span class="text-xs opacity-80 pt-2">请求头（JSON）</span>
+              <textarea
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
+                rows="4"
+                bind:value={$ttsCustomHeaders$}
+              ></textarea>
+
+              <span class="text-xs opacity-80 pt-2">请求体模板</span>
+              <textarea
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
+                rows="8"
+                bind:value={$ttsCustomBody$}
+              ></textarea>
+
+              <span class="text-xs opacity-80 pt-2">音频路径</span>
+              <input
+                type="text"
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm font-mono"
+                placeholder="留空 = 响应是裸音频字节；否则填 JSON 里 base64 字段的 dot-path"
+                bind:value={$ttsCustomAudioPath$}
+              />
             </div>
-            <p class="text-xs opacity-60 font-mono break-all">{piperVoicesDirPath}</p>
-          </div>
-        </SettingsItemGroup>
+          </SettingsItemGroup>
+        </div>
       {/if}
 
       {#if $ttsEngine$ === 'sapi'}
         <SettingsItemGroup
           title="系统 TTS 语音"
-          tooltip="想要更自然的中文神经网络音色：Windows 11 22H2+ 可装「自然语音」 —— 设置 → 辅助功能 → 讲述人 → 添加自然语音 → 选 Xiaoxiao Natural 等下载，重启 AutoBook 后会出现在下方语音列表里。"
+          tooltip="注：Windows 11 设置里的「Natural 自然语音」是 Narrator 专属，应用层（包括本 app）调不到。要高质量本地 TTS 暂时无解，建议改用自定义 HTTP TTS 接 OpenAI / Azure 等付费 API。下面是系统暴露给应用的 SAPI 5 老音色，质量基础。"
         >
           {#if sapiVoicesError}
             <p class="text-red-500 text-sm">{sapiVoicesError}</p>

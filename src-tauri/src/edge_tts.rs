@@ -37,8 +37,13 @@ const AUDIO_FORMAT: &str = "audio-24khz-48kbitrate-mono-mp3";
 /// Win32 FILETIME epoch (1601-01-01) vs Unix epoch, in 100-nanosecond ticks.
 const WIN_EPOCH_TICKS: i64 = 11_644_473_600 * 10_000_000;
 
+/// Server-vs-client clock skew detected from a previous Date header. Stored
+/// process-wide so once we learn the offset we keep using it for the session.
+static CLOCK_SKEW: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
 fn gec_token() -> String {
-  let ts_secs = Utc::now().timestamp();
+  let skew = CLOCK_SKEW.load(std::sync::atomic::Ordering::Relaxed);
+  let ts_secs = Utc::now().timestamp() + skew;
   // Round down to the nearest 5 minutes — the server expects a quantized
   // timestamp to keep the hash stable across the ~RTT of a request.
   let bucket = ts_secs - (ts_secs % 300);
@@ -47,6 +52,20 @@ fn gec_token() -> String {
   let mut hasher = Sha256::new();
   hasher.update(raw.as_bytes());
   format!("{:X}", hasher.finalize())
+}
+
+/// Extract the server Date from a tungstenite HTTP error response and update
+/// our process-wide clock skew tracker.
+fn record_skew_from_response_headers(
+  headers: &tokio_tungstenite::tungstenite::http::HeaderMap,
+) {
+  if let Some(date) = headers.get("date").and_then(|v| v.to_str().ok()) {
+    if let Ok(server_time) = chrono::DateTime::parse_from_rfc2822(date) {
+      let skew = server_time.timestamp() - Utc::now().timestamp();
+      CLOCK_SKEW.store(skew, std::sync::atomic::Ordering::Relaxed);
+      eprintln!("[edge-tts] clock skew detected from response: {skew}s");
+    }
+  }
 }
 
 fn now_iso() -> String {
@@ -108,45 +127,71 @@ fn strip_audio_header(frame: &[u8]) -> Option<&[u8]> {
   Some(body)
 }
 
+async fn connect_with_skew_retry(
+  build_request: &impl Fn() -> Result<tokio_tungstenite::tungstenite::http::Request<()>, String>,
+) -> Result<
+  tokio_tungstenite::WebSocketStream<
+    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+  >,
+  String,
+> {
+  use tokio_tungstenite::tungstenite::Error as WsErr;
+
+  for attempt in 0..2 {
+    let req = build_request()?;
+    match tokio_tungstenite::connect_async(req).await {
+      Ok((ws, _resp)) => return Ok(ws),
+      Err(WsErr::Http(response)) => {
+        let status = response.status();
+        record_skew_from_response_headers(response.headers());
+        let body = response
+          .into_body()
+          .and_then(|b| String::from_utf8(b).ok())
+          .unwrap_or_default();
+        if attempt == 0 && (status == 403 || status == 401) {
+          // Retry once with the refreshed clock skew baked into the GEC token.
+          continue;
+        }
+        return Err(format!("HTTP {status}: {body}"));
+      }
+      Err(e) => return Err(format!("WebSocket connect failed: {e}")),
+    }
+  }
+  Err("WebSocket connect failed after 2 attempts".into())
+}
+
 pub async fn synthesize(voice: &str, rate: f32, text: &str) -> Result<Vec<u8>, String> {
   let url = format!(
     "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken={TRUSTED_CLIENT_TOKEN}"
   );
 
-  let mut request: Request<()> = url.into_client_request().map_err(|e| e.to_string())?;
-  let headers = request.headers_mut();
-  let gec = gec_token();
-  // Header set matches what the Python edge-tts client sends — Microsoft
-  // appears to gate 403 partly on Cache-Control/Pragma/Accept-* presence.
-  headers.insert("Sec-MS-GEC", HeaderValue::from_str(&gec).map_err(|e| e.to_string())?);
-  headers.insert("Sec-MS-GEC-Version", HeaderValue::from_static(GEC_VERSION));
-  headers.insert("User-Agent", HeaderValue::from_static(EDGE_UA));
-  headers.insert("Sec-CH-UA", HeaderValue::from_static(SEC_CH_UA));
-  headers.insert(
-    "Sec-CH-UA-Mobile",
-    HeaderValue::from_static("?0"),
-  );
-  headers.insert(
-    "Sec-CH-UA-Platform",
-    HeaderValue::from_static("\"Windows\""),
-  );
-  headers.insert(
-    "Origin",
-    HeaderValue::from_static("chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold"),
-  );
-  headers.insert("Pragma", HeaderValue::from_static("no-cache"));
-  headers.insert("Cache-Control", HeaderValue::from_static("no-cache"));
-  headers.insert("Accept-Encoding", HeaderValue::from_static("gzip, deflate, br"));
-  headers.insert("Accept-Language", HeaderValue::from_static("en-US,en;q=0.9"));
   // Suppress unused warnings if these become referenced via macros later.
   let _ = (CHROMIUM_MAJOR, CHROMIUM_FULL);
 
-  // Use rustls (default features turned off) instead of native-tls. SChannel's
-  // TLS fingerprint was getting actively rejected (EOF during handshake);
-  // rustls's ClientHello looks closer to Chrome's and at least gets past TLS.
-  let (ws, _resp) = tokio_tungstenite::connect_async(request)
-    .await
-    .map_err(|e| format!("WebSocket connect failed: {e}"))?;
+  let url_clone = url.clone();
+  let build_request = move || -> Result<Request<()>, String> {
+    let mut request: Request<()> =
+      url_clone.clone().into_client_request().map_err(|e| e.to_string())?;
+    let headers = request.headers_mut();
+    let gec = gec_token();
+    headers.insert("Sec-MS-GEC", HeaderValue::from_str(&gec).map_err(|e| e.to_string())?);
+    headers.insert("Sec-MS-GEC-Version", HeaderValue::from_static(GEC_VERSION));
+    headers.insert("User-Agent", HeaderValue::from_static(EDGE_UA));
+    headers.insert("Sec-CH-UA", HeaderValue::from_static(SEC_CH_UA));
+    headers.insert("Sec-CH-UA-Mobile", HeaderValue::from_static("?0"));
+    headers.insert("Sec-CH-UA-Platform", HeaderValue::from_static("\"Windows\""));
+    headers.insert(
+      "Origin",
+      HeaderValue::from_static("chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold"),
+    );
+    headers.insert("Pragma", HeaderValue::from_static("no-cache"));
+    headers.insert("Cache-Control", HeaderValue::from_static("no-cache"));
+    headers.insert("Accept-Encoding", HeaderValue::from_static("gzip, deflate, br"));
+    headers.insert("Accept-Language", HeaderValue::from_static("en-US,en;q=0.9"));
+    Ok(request)
+  };
+
+  let ws = connect_with_skew_retry(&build_request).await?;
 
   let (mut tx, mut rx) = ws.split();
 
