@@ -118,8 +118,19 @@ export const ttsEdgeVoiceId$ = writableStringLocalStorageSubject()(
   'ttsEdgeVoiceId',
   'zh-CN-XiaoxiaoNeural'
 );
-/** Absolute filesystem path to the selected piper .onnx voice. */
-export const ttsPiperVoiceFile$ = writableStringLocalStorageSubject()('ttsPiperVoiceFile', '');
+
+// User-configurable HTTP TTS
+export const ttsCustomEndpoint$ = writableStringLocalStorageSubject()('ttsCustomEndpoint', '');
+export const ttsCustomMethod$ = writableStringLocalStorageSubject()('ttsCustomMethod', 'POST');
+/** JSON object of {Header: Value}. Stored as a string so users can free-edit. */
+export const ttsCustomHeaders$ = writableStringLocalStorageSubject()(
+  'ttsCustomHeaders',
+  '{\n  "Content-Type": "application/json"\n}'
+);
+/** Body template; the literal {text} is replaced with the (JSON-escaped) sentence. */
+export const ttsCustomBody$ = writableStringLocalStorageSubject()('ttsCustomBody', '');
+/** Dot-path to base64 audio in a JSON response (e.g. choices.0.message.audio.data). Empty = raw audio bytes. */
+export const ttsCustomAudioPath$ = writableStringLocalStorageSubject()('ttsCustomAudioPath', '');
 
 export interface TtsPosition {
   section: number;

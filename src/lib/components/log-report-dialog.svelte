@@ -2,6 +2,7 @@
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { buttonClasses } from '$lib/css-classes';
+  import { isTauri } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
   import { StorageSourceDefault } from '$lib/data/storage/storage-types';
   import {
@@ -84,8 +85,7 @@
 
   export let message: string;
 
-  const encodedLog = encodeURIComponent(
-    JSON.stringify(
+  const reportPayload = JSON.stringify(
       {
         userAgent: navigator.userAgent,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -177,29 +177,79 @@
       },
       null,
       2
-    )
-  );
-  const downloadableLog = `data:text/json;charset=utf-8,${encodedLog}`;
+    );
+
+  let downloadStatus = '';
+
+  async function openRepo() {
+    const url = 'https://github.com/fivood/autobook';
+    try {
+      if (isTauri()) {
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(url);
+        return;
+      }
+    } catch {
+      /* fall through to in-page navigation */
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function downloadReport() {
+    downloadStatus = '';
+    const filename = `autobook-log-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    try {
+      if (isTauri()) {
+        // Write straight to the user's Documents/EbookReader/ folder, which
+        // the fs scope already permits — no save-dialog plugin needed.
+        const { writeTextFile, BaseDirectory, mkdir, exists } = await import(
+          '@tauri-apps/plugin-fs'
+        );
+        if (!(await exists('AutoBook/Logs', { baseDir: BaseDirectory.Document }))) {
+          await mkdir('AutoBook/Logs', {
+            baseDir: BaseDirectory.Document,
+            recursive: true
+          });
+        }
+        const path = `AutoBook/Logs/${filename}`;
+        await writeTextFile(path, reportPayload, { baseDir: BaseDirectory.Document });
+        downloadStatus = `已保存到 文档/${path}`;
+        return;
+      }
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.warn('[log-report] tauri save failed, falling back:', err);
+    }
+    // Browser fallback: blob download trick (data: URIs are rejected by WebView2).
+    const blob = new Blob([reportPayload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    downloadStatus = '已下载';
+  }
 </script>
 
 <DialogTemplate>
   <svelte:fragment slot="header">{title}</svelte:fragment>
   <svelte:fragment slot="content">
     <p>{message}</p>
+    {#if downloadStatus}
+      <p class="text-xs opacity-70 mt-2">{downloadStatus}</p>
+    {/if}
   </svelte:fragment>
   <svelte:fragment slot="footer">
-    <a
-      class={buttonClasses}
-      href="https://github.com/fivood/autobook"
-      target="_blank"
-      rel="noreferrer"
-    >
+    <button class={buttonClasses} on:click={openRepo}>
       打开仓库
       <Ripple />
-    </a>
-    <a class={buttonClasses} href={downloadableLog} download="log.json">
+    </button>
+    <button class={buttonClasses} on:click={downloadReport}>
       下载报告
       <Ripple />
-    </a>
+    </button>
   </svelte:fragment>
 </DialogTemplate>

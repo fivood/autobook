@@ -3,13 +3,22 @@
  * Copyright (c) 2026, ッツ Reader Authors
  * All rights reserved.
  *
- * Piper TTS engine — local neural network voices via a bundled piper.exe.
- * Tauri-only. Synthesis is per-sentence; the Rust side spawns piper.exe and
- * returns a base64 WAV that we play with HTMLAudioElement.
+ * Custom HTTP TTS — sends each sentence to a user-configured endpoint and
+ * plays the returned audio bytes via HTMLAudioElement. Settings live in
+ * tts(Custom)* stores; the user fills URL, headers, body template and the
+ * Rust side handles the actual HTTP call (so CORS / auth headers aren't a
+ * problem).
  */
 
 import { BehaviorSubject, type Observable } from 'rxjs';
 import type { AutoReader } from './types';
+import {
+  ttsCustomAudioPath$,
+  ttsCustomBody$,
+  ttsCustomEndpoint$,
+  ttsCustomHeaders$,
+  ttsCustomMethod$
+} from '$lib/data/store';
 import {
   computeGlobalCharIndex,
   extractText,
@@ -17,7 +26,7 @@ import {
   splitSentences
 } from './auto-reader-shared';
 
-export class AutoReaderPiper implements AutoReader {
+export class AutoReaderCustom implements AutoReader {
   wasReaderEnabled$ = new BehaviorSubject<boolean>(false);
 
   private enabled$ = new BehaviorSubject<boolean>(false);
@@ -26,8 +35,7 @@ export class AutoReaderPiper implements AutoReader {
   private charOffset = 0;
   private contentEl: HTMLElement | undefined;
   private _rate = 1;
-  /** Absolute path to the currently selected .onnx voice file. */
-  private _voiceFile = '';
+  private _voiceId = '';
   private _lang = 'zh-CN';
   private audio: HTMLAudioElement | undefined;
   private currentSpeakToken = 0;
@@ -57,11 +65,11 @@ export class AutoReaderPiper implements AutoReader {
   }
 
   set voice(v: SpeechSynthesisVoice | undefined) {
-    this._voiceFile = v?.voiceURI ?? '';
+    this._voiceId = v?.voiceURI ?? '';
   }
 
   get voice() {
-    return this._voiceFile ? ({ voiceURI: this._voiceFile } as SpeechSynthesisVoice) : undefined;
+    return this._voiceId ? ({ voiceURI: this._voiceId } as SpeechSynthesisVoice) : undefined;
   }
 
   set lang(v: string) {
@@ -73,7 +81,7 @@ export class AutoReaderPiper implements AutoReader {
   }
 
   autoSelectVoice() {
-    /* no-op — chosen via settings */
+    /* no-op */
   }
 
   prepare() {
@@ -149,8 +157,23 @@ export class AutoReaderPiper implements AutoReader {
       return;
     }
 
-    if (!this._voiceFile) {
-      this.onError?.('请先在设置里选择 Piper 音色文件');
+    const endpoint = ttsCustomEndpoint$.getValue().trim();
+    if (!endpoint) {
+      this.onError?.('请先在设置里填好自定义 TTS 端点');
+      this.off();
+      return;
+    }
+
+    let headersObj: Record<string, string> = {};
+    try {
+      const parsed = JSON.parse(ttsCustomHeaders$.getValue() || '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        headersObj = Object.fromEntries(
+          Object.entries(parsed).map(([k, v]) => [k, String(v)])
+        );
+      }
+    } catch (err: any) {
+      this.onError?.(`自定义 TTS 请求头不是合法 JSON: ${err.message}`);
       this.off();
       return;
     }
@@ -161,17 +184,20 @@ export class AutoReaderPiper implements AutoReader {
     const token = ++this.currentSpeakToken;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const b64 = await invoke<string>('piper_synthesize', {
-        text,
-        voiceFile: this._voiceFile,
-        rate: this._rate
+      const b64 = await invoke<string>('custom_tts_synthesize', {
+        endpoint,
+        method: ttsCustomMethod$.getValue() || 'POST',
+        headers: headersObj,
+        bodyTemplate: ttsCustomBody$.getValue() || '',
+        audioPath: ttsCustomAudioPath$.getValue() || null,
+        text
       });
       if (token !== this.currentSpeakToken || !this.enabled$.getValue()) return;
 
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes as BlobPart], { type: 'audio/wav' });
+      const blob = new Blob([bytes as BlobPart], { type: 'audio/mpeg' });
       if (this.currentBlobUrl) URL.revokeObjectURL(this.currentBlobUrl);
       this.currentBlobUrl = URL.createObjectURL(blob);
 
@@ -194,7 +220,7 @@ export class AutoReaderPiper implements AutoReader {
       if (token !== this.currentSpeakToken) return;
       const message = typeof err === 'string' ? err : err?.message ?? String(err);
       // eslint-disable-next-line no-console
-      console.warn('[piper] synth failed:', message);
+      console.warn('[custom-tts] failed:', message);
       this.onError?.(message);
       this.off();
     }

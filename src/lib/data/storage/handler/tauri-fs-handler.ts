@@ -41,7 +41,7 @@ import {
   writeFile
 } from '@tauri-apps/plugin-fs';
 
-const ROOT_DIR = 'EbookReader';
+const ROOT_DIR = 'AutoBook';
 const BASE_DIR = BaseDirectory.Document;
 
 interface FileEntry {

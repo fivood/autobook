@@ -6,23 +6,11 @@ use tauri::{
   Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_fs::FsExt;
-use tts::{Tts, UtteranceId};
 
+mod custom_tts;
 mod edge_tts;
-mod piper_tts;
+mod winrt_tts;
 
-/// Holds the system-TTS handle. Wrapped in Mutex since `Tts` is not `Sync`.
-struct SystemTts(Mutex<Option<Tts>>);
-
-impl SystemTts {
-  fn with<R>(&self, f: impl FnOnce(&mut Tts) -> R) -> Result<R, String> {
-    let mut guard = self.0.lock().map_err(|e| e.to_string())?;
-    let tts = guard.get_or_insert_with(|| {
-      Tts::default().expect("failed to initialize system TTS")
-    });
-    Ok(f(tts))
-  }
-}
 
 /// Set when the tray "退出" menu item is chosen so the WindowEvent handler
 /// knows to let the close request through instead of hiding to tray.
@@ -88,6 +76,24 @@ fn webview_local_storage_dirs() -> Vec<std::path::PathBuf> {
 
 /// Runs before the WebView2 process is spawned. Removes Local Storage if the
 /// reset flag exists. We don't touch IndexedDB so books survive.
+/// One-time migration: pre-1.2.9 the books root was `Documents/EbookReader/`
+/// (carried over from the upstream ttu-reader fork name). Rename to
+/// `Documents/AutoBook/` on first launch of the new version so the app's
+/// name and its data folder match.
+fn migrate_books_dir() {
+  let docs = match std::env::var("USERPROFILE") {
+    Ok(home) => std::path::PathBuf::from(home).join("Documents"),
+    Err(_) => return,
+  };
+  let old = docs.join("EbookReader");
+  let new_dir = docs.join("AutoBook");
+  if old.exists() && !new_dir.exists() {
+    if let Err(e) = std::fs::rename(&old, &new_dir) {
+      eprintln!("[migrate] EbookReader -> AutoBook rename failed: {e}");
+    }
+  }
+}
+
 fn run_pending_reset() {
   let flag = reset_flag_path();
   if !flag.exists() {
@@ -126,75 +132,54 @@ fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
   app.restart();
 }
 
-#[derive(serde::Serialize)]
-struct SapiVoice {
-  id: String,
-  name: String,
-  language: String,
-  gender: Option<String>,
+#[tauri::command]
+fn sapi_list_voices() -> Result<Vec<winrt_tts::SapiVoice>, String> {
+  winrt_tts::list_voices()
 }
 
+/// Synthesize via WinRT SpeechSynthesizer. Returns a base64 WAV the frontend
+/// plays with HTMLAudioElement (same plumbing as Edge). Natural / Online
+/// neural voices are picked up automatically once installed via Windows
+/// Settings → Accessibility → Narrator → Add natural voices.
 #[tauri::command]
-fn sapi_list_voices(state: tauri::State<SystemTts>) -> Result<Vec<SapiVoice>, String> {
-  state.with(|tts| -> Result<Vec<SapiVoice>, String> {
-    let voices = tts.voices().map_err(|e| e.to_string())?;
-    Ok(
-      voices
-        .into_iter()
-        .map(|v| SapiVoice {
-          id: v.id(),
-          name: v.name(),
-          language: v.language().to_string(),
-          gender: v.gender().map(|g| format!("{g:?}")),
-        })
-        .collect(),
-    )
-  })?
-}
-
-#[tauri::command]
-fn sapi_speak(
-  app: tauri::AppHandle,
-  state: tauri::State<SystemTts>,
+async fn sapi_speak(
   text: String,
   voice_id: Option<String>,
   rate: Option<f32>,
 ) -> Result<String, String> {
-  let utterance: UtteranceId = state.with(|tts| -> Result<UtteranceId, String> {
-    if let Some(vid) = voice_id.as_deref().filter(|v| !v.is_empty()) {
-      let voices = tts.voices().map_err(|e| e.to_string())?;
-      if let Some(voice) = voices.into_iter().find(|v| v.id() == vid) {
-        tts.set_voice(&voice).map_err(|e| e.to_string())?;
-      }
-    }
-    if let Some(r) = rate {
-      // tts crate accepts the platform's native rate range; SAPI on Windows is
-      // -10..10 with 0 = normal. Map 0.5..2 from the UI -> -5..10.
-      let normalized = (r - 1.0) * 10.0;
-      let _ = tts.set_rate(normalized);
-    }
-    tts.stop().map_err(|e| e.to_string())?;
-    tts
-      .speak(text, true)
-      .map_err(|e| e.to_string())?
-      .ok_or_else(|| "TTS did not return an utterance id".to_string())
-  })??;
-
-  // Hook the utterance end callback once per app (idempotent — re-registers
-  // the same callback every speak, last one wins, all fire app.emit so OK).
-  let app_handle = app.clone();
-  let _ = state.with(|tts| {
-    tts.on_utterance_end(Some(Box::new(move |id| {
-      let _ = app_handle.emit("sapi-utterance-end", format!("{id:?}"));
-    })))
-  });
-
-  Ok(format!("{utterance:?}"))
+  let rate = rate.unwrap_or(1.0);
+  let audio = tokio::task::spawn_blocking(move || {
+    winrt_tts::synthesize_blocking(voice_id.as_deref(), rate, &text)
+  })
+  .await
+  .map_err(|e| e.to_string())??;
+  use base64::Engine;
+  Ok(base64::engine::general_purpose::STANDARD.encode(&audio))
 }
 
+/// Run a user-configured HTTP TTS request. Returns base64 audio bytes
+/// (whatever Content-Type the API gave us — frontend tries audio/mpeg, then
+/// audio/wav). Body template uses `{text}` as the substitution token.
 #[tauri::command]
-fn sapi_stop(state: tauri::State<SystemTts>) -> Result<(), String> {
-  state.with(|tts| tts.stop().map(|_| ()).map_err(|e| e.to_string()))?
+async fn custom_tts_synthesize(
+  endpoint: String,
+  method: String,
+  headers: std::collections::HashMap<String, String>,
+  body_template: String,
+  audio_path: Option<String>,
+  text: String,
+) -> Result<String, String> {
+  let audio = custom_tts::synthesize(
+    &endpoint,
+    &method,
+    &headers,
+    &body_template,
+    audio_path.as_deref(),
+    &text,
+  )
+  .await?;
+  use base64::Engine;
+  Ok(base64::engine::general_purpose::STANDARD.encode(&audio))
 }
 
 #[tauri::command]
@@ -210,41 +195,6 @@ async fn edge_synthesize(
 ) -> Result<String, String> {
   let rate = rate.unwrap_or(1.0).clamp(0.5, 2.0);
   let audio = edge_tts::synthesize(&voice, rate, &text).await?;
-  use base64::Engine;
-  Ok(base64::engine::general_purpose::STANDARD.encode(&audio))
-}
-
-#[tauri::command]
-fn piper_voices_dir(app: tauri::AppHandle) -> Result<String, String> {
-  piper_tts::voices_dir(&app)
-    .map(|p| p.display().to_string())
-    .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn piper_list_voices(app: tauri::AppHandle) -> Result<Vec<piper_tts::PiperVoice>, String> {
-  piper_tts::list_voices(&app).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn piper_is_available(app: tauri::AppHandle) -> bool {
-  piper_tts::piper_path(&app)
-    .map(|p| p.exists())
-    .unwrap_or(false)
-}
-
-/// Synthesize text via the bundled piper binary. Returns base64-encoded WAV.
-#[tauri::command]
-async fn piper_synthesize(
-  app: tauri::AppHandle,
-  text: String,
-  voice_file: String,
-  rate: Option<f32>,
-) -> Result<String, String> {
-  let rate = rate.unwrap_or(1.0).clamp(0.5, 2.0);
-  let audio = piper_tts::synthesize(&app, &voice_file, rate, &text)
-    .await
-    .map_err(|e| e.to_string())?;
   use base64::Engine;
   Ok(base64::engine::general_purpose::STANDARD.encode(&audio))
 }
@@ -265,6 +215,7 @@ fn set_tts_shortcut(app: tauri::AppHandle, accelerator: String) -> Result<(), St
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  migrate_books_dir();
   run_pending_reset();
   tauri::Builder::default()
     .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
@@ -280,19 +231,14 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_process::init())
     .manage(LaunchFiles(Mutex::new(Vec::new())))
-    .manage(SystemTts(Mutex::new(None)))
     .invoke_handler(tauri::generate_handler![
       take_launch_files,
       set_tts_shortcut,
       sapi_list_voices,
       sapi_speak,
-      sapi_stop,
       edge_list_voices,
       edge_synthesize,
-      piper_voices_dir,
-      piper_list_voices,
-      piper_is_available,
-      piper_synthesize,
+      custom_tts_synthesize,
       schedule_ui_reset
     ])
     .setup(|app| {
