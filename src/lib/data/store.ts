@@ -145,6 +145,28 @@ export const ttsCustomBody$ = writableStringLocalStorageSubject()('ttsCustomBody
 /** Dot-path to base64 audio in a JSON response (e.g. choices.0.message.audio.data). Empty = raw audio bytes. */
 export const ttsCustomAudioPath$ = writableStringLocalStorageSubject()('ttsCustomAudioPath', '');
 
+export interface TtsCustomPresetState {
+  endpoint: string;
+  method: string;
+  headers: string;
+  body: string;
+  audioPath: string;
+}
+
+/** Which named preset is currently active. The five ttsCustom* stores above
+ * mirror the active preset's slot so existing readers (auto-reader-custom)
+ * don't need to know about the map. */
+export const ttsCustomActivePreset$ = writableStringLocalStorageSubject()(
+  'ttsCustomActivePreset',
+  'manual'
+);
+
+/** Per-preset persisted state, so switching between openai/mimo/... doesn't
+ * stomp the key the user typed in for the previous one. */
+export const ttsCustomPresetStates$ = writableObjectLocalStorageSubject<
+  Record<string, TtsCustomPresetState>
+>()('ttsCustomPresetStates', {});
+
 export interface TtsPosition {
   section: number;
   para: number;

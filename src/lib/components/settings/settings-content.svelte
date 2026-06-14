@@ -53,6 +53,8 @@
     ttsCustomEndpoint$,
     ttsCustomHeaders$,
     ttsCustomMethod$,
+    ttsCustomActivePreset$,
+    ttsCustomPresetStates$,
     ttsAutoAdvanceSection$,
     ttsEdgeVoiceId$,
     ttsEngine$,
@@ -275,126 +277,219 @@
   $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
   $: if ($ttsEngine$ === 'edge') loadEdgeVoices();
 
-  function applyCustomPreset(name: string) {
-    if (!name) return;
-    const presets: Record<
-      string,
-      { method: string; endpoint: string; headers: string; body: string; audioPath?: string }
-    > = {
-      openai: {
-        method: 'POST',
-        endpoint: 'https://api.openai.com/v1/audio/speech',
-        headers: JSON.stringify(
-          { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_API_KEY' },
-          null,
-          2
-        ),
-        body: JSON.stringify(
-          { model: 'tts-1', voice: 'alloy', input: '{text}' },
-          null,
-          2
-        )
-      },
-      elevenlabs: {
-        method: 'POST',
-        endpoint:
-          'https://api.elevenlabs.io/v1/text-to-speech/VOICE_ID?output_format=mp3_44100_128',
-        headers: JSON.stringify(
-          { 'Content-Type': 'application/json', 'xi-api-key': 'YOUR_API_KEY' },
-          null,
-          2
-        ),
-        body: JSON.stringify(
-          {
-            text: '{text}',
-            model_id: 'eleven_multilingual_v2',
-            voice_settings: { stability: 0.5, similarity_boost: 0.75 }
-          },
-          null,
-          2
-        )
-      },
-      azure: {
-        method: 'POST',
-        endpoint:
-          'https://YOUR_REGION.tts.speech.microsoft.com/cognitiveservices/v1',
-        headers: JSON.stringify(
-          {
-            'Content-Type': 'application/ssml+xml',
-            'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
-            'Ocp-Apim-Subscription-Key': 'YOUR_SUBSCRIPTION_KEY'
-          },
-          null,
-          2
-        ),
-        body: `<speak version='1.0' xml:lang='zh-CN'><voice name='zh-CN-XiaoxiaoNeural'>{text}</voice></speak>`
-      },
-      volcengine: {
-        method: 'POST',
-        endpoint: 'https://openspeech.bytedance.com/api/v1/tts',
-        headers: JSON.stringify(
-          {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer; YOUR_TOKEN'
-          },
-          null,
-          2
-        ),
-        body: JSON.stringify(
-          {
-            app: { appid: 'YOUR_APPID', token: 'YOUR_TOKEN', cluster: 'volcano_tts' },
-            user: { uid: 'autobook' },
-            audio: {
-              voice_type: 'BV700_streaming',
-              encoding: 'mp3',
-              speed_ratio: 1.0
-            },
-            request: { reqid: 'autobook', text: '{text}', operation: 'query' }
-          },
-          null,
-          2
-        )
-      },
-      mimo: {
-        // Xiaomi MiMo TTS — quirky: speech text goes into the 'assistant' role
-        // and the response wraps base64 audio in JSON under choices.0.message.audio.data.
-        method: 'POST',
-        endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
-        headers: JSON.stringify(
-          { 'Content-Type': 'application/json', 'api-key': 'YOUR_API_KEY' },
-          null,
-          2
-        ),
-        body: JSON.stringify(
-          {
-            model: 'mimo-v2.5-tts',
-            messages: [
-              { role: 'user', content: '清晰、稳定、平和的朗读语气，适合长时间听书。' },
-              { role: 'assistant', content: '{text}' }
-            ],
-            audio: { format: 'wav', voice: '茉莉' },
-            stream: false
-          },
-          null,
-          2
-        ),
-        audioPath: 'choices.0.message.audio.data'
-      }
-    };
-    const p = presets[name];
-    if (!p) return;
-    ttsCustomMethod$.next(p.method);
-    ttsCustomEndpoint$.next(p.endpoint);
-    ttsCustomHeaders$.next(p.headers);
-    ttsCustomBody$.next(p.body);
-    ttsCustomAudioPath$.next(p.audioPath || '');
+  interface CustomPreset {
+    label: string;
+    method: string;
+    endpoint: string;
+    headers: string;
+    body: string;
+    audioPath?: string;
   }
 
-  function onCustomPresetSelect(ev: Event) {
-    const select = ev.currentTarget as HTMLSelectElement;
-    applyCustomPreset(select.value);
-    select.value = '';
+  const CUSTOM_PRESETS: Record<string, CustomPreset> = {
+    manual: {
+      label: '手动配置',
+      method: 'POST',
+      endpoint: '',
+      headers: '{\n  "Content-Type": "application/json"\n}',
+      body: '',
+      audioPath: ''
+    },
+    openai: {
+      label: 'OpenAI TTS',
+      method: 'POST',
+      endpoint: 'https://api.openai.com/v1/audio/speech',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_API_KEY' },
+        null,
+        2
+      ),
+      body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: '{text}' }, null, 2)
+    },
+    elevenlabs: {
+      label: 'ElevenLabs',
+      method: 'POST',
+      endpoint:
+        'https://api.elevenlabs.io/v1/text-to-speech/VOICE_ID?output_format=mp3_44100_128',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json', 'xi-api-key': 'YOUR_API_KEY' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
+        {
+          text: '{text}',
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+        },
+        null,
+        2
+      )
+    },
+    azure: {
+      label: 'Azure Speech (REST)',
+      method: 'POST',
+      endpoint: 'https://YOUR_REGION.tts.speech.microsoft.com/cognitiveservices/v1',
+      headers: JSON.stringify(
+        {
+          'Content-Type': 'application/ssml+xml',
+          'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+          'Ocp-Apim-Subscription-Key': 'YOUR_SUBSCRIPTION_KEY'
+        },
+        null,
+        2
+      ),
+      body: `<speak version='1.0' xml:lang='zh-CN'><voice name='zh-CN-XiaoxiaoNeural'>{text}</voice></speak>`
+    },
+    volcengine: {
+      label: '火山引擎 大模型 TTS',
+      method: 'POST',
+      endpoint: 'https://openspeech.bytedance.com/api/v1/tts',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json', Authorization: 'Bearer; YOUR_TOKEN' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
+        {
+          app: { appid: 'YOUR_APPID', token: 'YOUR_TOKEN', cluster: 'volcano_tts' },
+          user: { uid: 'autobook' },
+          audio: { voice_type: 'BV700_streaming', encoding: 'mp3', speed_ratio: 1.0 },
+          request: { reqid: 'autobook', text: '{text}', operation: 'query' }
+        },
+        null,
+        2
+      )
+    },
+    mimo: {
+      label: 'MiMo-V2.5-TTS（小米，限时免费）',
+      method: 'POST',
+      endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json', 'api-key': 'YOUR_API_KEY' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
+        {
+          model: 'mimo-v2.5-tts',
+          messages: [
+            { role: 'user', content: '清晰、稳定、平和的朗读语气，适合长时间听书。' },
+            { role: 'assistant', content: '{text}' }
+          ],
+          audio: { format: 'wav', voice: '茉莉' },
+          stream: false
+        },
+        null,
+        2
+      ),
+      audioPath: 'choices.0.message.audio.data'
+    }
+  };
+
+  /** Snapshot the live fields into the map under the given preset id. */
+  function saveCurrentPreset(presetId: string) {
+    const map = { ...$ttsCustomPresetStates$ };
+    map[presetId] = {
+      endpoint: $ttsCustomEndpoint$,
+      method: $ttsCustomMethod$,
+      headers: $ttsCustomHeaders$,
+      body: $ttsCustomBody$,
+      audioPath: $ttsCustomAudioPath$
+    };
+    ttsCustomPresetStates$.next(map);
   }
+
+  function loadPresetIntoFields(presetId: string) {
+    const saved = $ttsCustomPresetStates$[presetId];
+    const fallback = CUSTOM_PRESETS[presetId] ?? CUSTOM_PRESETS.manual;
+    const target = saved ?? fallback;
+    ttsCustomMethod$.next(target.method);
+    ttsCustomEndpoint$.next(target.endpoint);
+    ttsCustomHeaders$.next(target.headers);
+    ttsCustomBody$.next(target.body);
+    ttsCustomAudioPath$.next(target.audioPath || '');
+  }
+
+  /** Save current edits to the outgoing preset's slot, then switch. */
+  function switchCustomPreset(newId: string) {
+    const old = $ttsCustomActivePreset$;
+    if (old === newId) return;
+    saveCurrentPreset(old);
+    ttsCustomActivePreset$.next(newId);
+    loadPresetIntoFields(newId);
+  }
+
+  function resetActivePresetToDefaults() {
+    const id = $ttsCustomActivePreset$;
+    const def = CUSTOM_PRESETS[id];
+    if (!def) return;
+    ttsCustomMethod$.next(def.method);
+    ttsCustomEndpoint$.next(def.endpoint);
+    ttsCustomHeaders$.next(def.headers);
+    ttsCustomBody$.next(def.body);
+    ttsCustomAudioPath$.next(def.audioPath || '');
+  }
+
+  // Seed the manual slot from legacy single-store values on first load — so
+  // upgrading users don't lose what they typed in pre-1.3.1.
+  if (browser && Object.keys($ttsCustomPresetStates$).length === 0) {
+    if (
+      $ttsCustomEndpoint$ ||
+      $ttsCustomBody$ ||
+      $ttsCustomAudioPath$ ||
+      $ttsCustomHeaders$ !== CUSTOM_PRESETS.manual.headers
+    ) {
+      saveCurrentPreset('manual');
+    }
+  }
+
+  // Auto-persist live edits back into the active preset's slot.
+  let presetSaveDebounce: ReturnType<typeof setTimeout> | undefined;
+  $: if (browser && $ttsCustomActivePreset$) {
+    // touch all five so this $: reruns on any edit
+    const _touch = [
+      $ttsCustomEndpoint$,
+      $ttsCustomMethod$,
+      $ttsCustomHeaders$,
+      $ttsCustomBody$,
+      $ttsCustomAudioPath$
+    ];
+    void _touch;
+    if (presetSaveDebounce) clearTimeout(presetSaveDebounce);
+    presetSaveDebounce = setTimeout(() => saveCurrentPreset($ttsCustomActivePreset$), 250);
+  }
+
+  function onPresetSelectChange(ev: Event) {
+    const target = ev.currentTarget as HTMLSelectElement;
+    switchCustomPreset(target.value);
+  }
+
+  // --- TTS shortcut recorder ---
+  let recordingShortcut = false;
+  function startRecordShortcut() {
+    recordingShortcut = true;
+  }
+  function onShortcutKeydown(ev: KeyboardEvent) {
+    if (!recordingShortcut) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const key = ev.key;
+    // Skip pure-modifier keypresses — wait for the actual key.
+    if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return;
+    const parts: string[] = [];
+    if (ev.ctrlKey) parts.push('ctrl');
+    if (ev.altKey) parts.push('alt');
+    if (ev.shiftKey) parts.push('shift');
+    if (ev.metaKey) parts.push('meta');
+    const k = key === ' ' ? 'space' : key.length === 1 ? key.toLowerCase() : key.toLowerCase();
+    parts.push(k);
+    ttsShortcut$.next(parts.join('+'));
+    recordingShortcut = false;
+  }
+
+  // --- Custom HTTP TTS visual masking ---
+  let revealCustomSecrets = false;
 
   let previewState: 'idle' | 'loading' | 'playing' | 'error' = 'idle';
   let previewMessage = '';
@@ -1126,11 +1221,11 @@
     <div class="h-full">
       <SettingsItemGroup title="阅读视图">
         <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
-        <p class="mt-1 text-xs opacity-60">注：滚动模式支持自动播放（打字机效果），两种模式都支持语音朗读</p>
+        <p class="mt-1 text-xs opacity-60">滚动模式：自动播放（打字机效果）；分页模式：TTS 语音朗读 + 自动翻页</p>
       </SettingsItemGroup>
     </div>
 
-    {#if isTauri()}
+    {#if isTauri() && viewMode === ViewMode.Paginated}
       <SettingsItemGroup
         title="朗读引擎"
         tooltip="推荐：系统 TTS（SAPI）+ Windows 11 自然语音（设置→辅助功能→讲述人→添加自然语音），音质接近云端神经网络且完全离线。Web Speech 是浏览器内建作兜底。Edge 在线音色为实验功能，微软持续升级反爬，大概率连不上，不建议依赖。切换后请重开书生效。"
@@ -1138,13 +1233,13 @@
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-2 flex-wrap">
             <select
-              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-[14rem] truncate"
               bind:value={$ttsEngine$}
             >
               <option value="web">Web Speech（浏览器）</option>
-              <option value="sapi">系统 TTS（Windows SAPI）</option>
-              <option value="custom">自定义 HTTP TTS（OpenAI / ElevenLabs / Azure ...）</option>
-              <option value="edge">Edge 在线音色（实验性）</option>
+              <option value="sapi">系统 TTS（SAPI）</option>
+              <option value="custom">自定义 HTTP TTS</option>
+              <option value="edge">Edge 在线（实验）</option>
             </select>
             <button
               class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm disabled:opacity-40"
@@ -1165,20 +1260,110 @@
         </div>
       </SettingsItemGroup>
 
-      {#if $ttsEngine$ === 'edge'}
-        <SettingsItemGroup
-          title="Edge 在线语音"
-          tooltip="使用微软 Azure 神经网络音色，最自然。需联网；微软会定期升级反爬，本功能标实验性，失败时会自动停止朗读。"
+      <SettingsItemGroup
+        title="朗读起点"
+        tooltip="按播放按钮（或 V 快捷键）时从哪里开始读。选区：用当前选中文字或光标位置（无选区时降级到上次保存位置）；上次位置：从上次暂停的字位置续读；章节开头：从当前章节第一段开始。"
+      >
+        <select
+          class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-[12rem]"
+          bind:value={$ttsStartStrategy$}
         >
-          <select
-            class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
-            bind:value={$ttsEdgeVoiceId$}
+          <option value="selection">选区 / 光标位置（默认）</option>
+          <option value="resume">上次保存位置</option>
+          <option value="section-start">章节开头</option>
+        </select>
+      </SettingsItemGroup>
+
+      <SettingsItemGroup
+        title="章末自动续读"
+        tooltip="读到本章最后一段时，是否自动翻到下一章继续。关闭则停在章末。"
+      >
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={$ttsAutoAdvanceSection$}
+        />
+      </SettingsItemGroup>
+
+      <SettingsItemGroup
+        title="朗读全局快捷键"
+        tooltip="任意窗口前台时按下都能切换朗读。点「录制」然后按下你想要的组合键（如 Ctrl+Alt+P）即可；注册冲突时不报错只是按下无反应。"
+      >
+        <div class="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            class="rounded border-2 px-3 py-1 text-sm min-w-[8rem] text-center font-mono"
+            class:border-red-500={recordingShortcut}
+            class:border-gray-400={!recordingShortcut}
+            on:click={startRecordShortcut}
+            on:keydown={onShortcutKeydown}
           >
-            {#each edgeVoices as voice (voice.id)}
-              <option value={voice.id}>{voice.name} ({voice.language})</option>
-            {/each}
-          </select>
-        </SettingsItemGroup>
+            {recordingShortcut ? '按下按键…' : $ttsShortcut$ || '(已禁用)'}
+            <Ripple />
+          </button>
+          <button
+            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+            on:click={() => {
+              recordingShortcut = false;
+              ttsShortcut$.next('ctrl+alt+p');
+            }}
+          >
+            重置
+            <Ripple />
+          </button>
+          <button
+            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+            on:click={() => {
+              recordingShortcut = false;
+              ttsShortcut$.next('');
+            }}
+          >
+            禁用
+            <Ripple />
+          </button>
+        </div>
+      </SettingsItemGroup>
+
+      {#if $ttsEngine$ === 'sapi'}
+        <div class="lg:col-span-3">
+          <SettingsItemGroup
+            title="系统 TTS 语音"
+            tooltip="注：Windows 11 设置里的「Natural 自然语音」是 Narrator 专属，应用层（包括本 app）调不到。要高质量本地 TTS 暂时无解，建议改用自定义 HTTP TTS 接 OpenAI / Azure 等付费 API。下面是系统暴露给应用的 SAPI 5 老音色，质量基础。"
+          >
+            {#if sapiVoicesError}
+              <p class="text-red-500 text-sm">{sapiVoicesError}</p>
+            {:else if !sapiVoices.length}
+              <p class="text-sm opacity-60">未检测到可用语音</p>
+            {:else}
+              <select
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
+                bind:value={$ttsSapiVoiceId$}
+              >
+                <option value="">系统默认</option>
+                {#each sapiVoices as voice (voice.id)}
+                  <option value={voice.id}>{voice.name} ({voice.language})</option>
+                {/each}
+              </select>
+            {/if}
+          </SettingsItemGroup>
+        </div>
+      {/if}
+
+      {#if $ttsEngine$ === 'edge'}
+        <div class="lg:col-span-3">
+          <SettingsItemGroup
+            title="Edge 在线语音"
+            tooltip="使用微软 Azure 神经网络音色，最自然。需联网；微软会定期升级反爬，本功能标实验性，失败时会自动停止朗读。"
+          >
+            <select
+              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
+              bind:value={$ttsEdgeVoiceId$}
+            >
+              {#each edgeVoices as voice (voice.id)}
+                <option value={voice.id}>{voice.name} ({voice.language})</option>
+              {/each}
+            </select>
+          </SettingsItemGroup>
+        </div>
       {/if}
 
       {#if $ttsEngine$ === 'custom'}
@@ -1188,18 +1373,33 @@
             tooltip={'把任意 TTS API 接进来。{text} 会被替换为当前句子并 JSON 转义。响应是音频字节（OpenAI/ElevenLabs/Azure）「音频路径」留空；响应是 JSON 包 base64 音频（MiMo 等）则填出 base64 字段的 dot-path，如 choices.0.message.audio.data。'}
           >
             <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
-              <span class="text-xs opacity-80 pt-2">预设</span>
-              <select
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
-                on:change={onCustomPresetSelect}
-              >
-                <option value="">— 选择填充 —</option>
-                <option value="openai">OpenAI TTS</option>
-                <option value="elevenlabs">ElevenLabs</option>
-                <option value="azure">Azure Speech (REST)</option>
-                <option value="volcengine">火山引擎 大模型 TTS</option>
-                <option value="mimo">MiMo-V2.5-TTS（小米，限时免费）</option>
-              </select>
+              <span class="text-xs opacity-80 pt-2">服务预设</span>
+              <div class="flex items-center gap-2 flex-wrap">
+                <select
+                  class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+                  value={$ttsCustomActivePreset$}
+                  on:change={onPresetSelectChange}
+                >
+                  {#each Object.entries(CUSTOM_PRESETS) as [id, preset] (id)}
+                    <option value={id}>{preset.label}</option>
+                  {/each}
+                </select>
+                <button
+                  class="rounded-md border-2 border-gray-400 px-2 py-1 text-xs"
+                  title="把当前预设的字段重置为默认模板（不影响其他预设保存的 key）"
+                  on:click={resetActivePresetToDefaults}
+                >
+                  恢复模板
+                  <Ripple />
+                </button>
+                <button
+                  class="rounded-md border-2 border-gray-400 px-2 py-1 text-xs"
+                  on:click={() => (revealCustomSecrets = !revealCustomSecrets)}
+                >
+                  {revealCustomSecrets ? '隐藏内容' : '显示内容'}
+                  <Ripple />
+                </button>
+              </div>
 
               <span class="text-xs opacity-80 pt-2">请求方法</span>
               <select
@@ -1222,6 +1422,7 @@
               <span class="text-xs opacity-80 pt-2">请求头（JSON）</span>
               <textarea
                 class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
+                class:secret-masked={!revealCustomSecrets}
                 rows="4"
                 bind:value={$ttsCustomHeaders$}
               ></textarea>
@@ -1229,6 +1430,7 @@
               <span class="text-xs opacity-80 pt-2">请求体模板</span>
               <textarea
                 class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
+                class:secret-masked={!revealCustomSecrets}
                 rows="8"
                 bind:value={$ttsCustomBody$}
               ></textarea>
@@ -1245,80 +1447,6 @@
         </div>
       {/if}
 
-      {#if $ttsEngine$ === 'sapi'}
-        <SettingsItemGroup
-          title="系统 TTS 语音"
-          tooltip="注：Windows 11 设置里的「Natural 自然语音」是 Narrator 专属，应用层（包括本 app）调不到。要高质量本地 TTS 暂时无解，建议改用自定义 HTTP TTS 接 OpenAI / Azure 等付费 API。下面是系统暴露给应用的 SAPI 5 老音色，质量基础。"
-        >
-          {#if sapiVoicesError}
-            <p class="text-red-500 text-sm">{sapiVoicesError}</p>
-          {:else if !sapiVoices.length}
-            <p class="text-sm opacity-60">未检测到可用语音</p>
-          {:else}
-            <select
-              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
-              bind:value={$ttsSapiVoiceId$}
-            >
-              <option value="">系统默认</option>
-              {#each sapiVoices as voice (voice.id)}
-                <option value={voice.id}>{voice.name} ({voice.language})</option>
-              {/each}
-            </select>
-          {/if}
-        </SettingsItemGroup>
-      {/if}
-
-      <SettingsItemGroup
-        title="朗读起点"
-        tooltip="按播放按钮（或 V 快捷键）时从哪里开始读。选区：用当前选中文字或光标位置（无选区时降级到上次保存位置）；上次位置：从上次暂停的字位置续读；章节开头：从当前章节第一段开始。"
-      >
-        <select
-          class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
-          bind:value={$ttsStartStrategy$}
-        >
-          <option value="selection">选区 / 光标位置（默认）</option>
-          <option value="resume">上次保存位置</option>
-          <option value="section-start">章节开头</option>
-        </select>
-      </SettingsItemGroup>
-
-      <SettingsItemGroup
-        title="章末自动续读"
-        tooltip="分页模式下读到本章最后一段时，是否自动翻到下一章继续。关闭则停在章末。"
-      >
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={$ttsAutoAdvanceSection$}
-        />
-      </SettingsItemGroup>
-
-      <SettingsItemGroup
-        title="朗读全局快捷键"
-        tooltip="任意窗口前台时按下都能切换朗读。格式：modifier+key，如 ctrl+alt+p / shift+f9 / 留空禁用。修改后立刻生效，注册冲突时不报错只是按下无反应。"
-      >
-        <div class="flex items-center gap-2">
-          <input
-            type="text"
-            class="rounded border px-2 py-1"
-            placeholder="ctrl+alt+p"
-            bind:value={$ttsShortcut$}
-          />
-          <button
-            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-            on:click={() => ttsShortcut$.next('ctrl+alt+p')}
-          >
-            重置
-            <Ripple />
-          </button>
-          <button
-            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-            on:click={() => ttsShortcut$.next('')}
-          >
-            禁用
-            <Ripple />
-          </button>
-        </div>
-      </SettingsItemGroup>
     {/if}
 
     <!-- 视图模式专属 -->
@@ -1934,197 +2062,6 @@
     </div>
     <!-- end legacy hidden block -->
   {:else if activeSettings === 'Data'}
-    {#if false}
-      <!-- legacy TTS block — moved to Reader tab in 1.2.7 -->
-      <SettingsItemGroup
-        title="朗读引擎"
-        tooltip="推荐：系统 TTS（SAPI）+ Windows 11 自然语音（设置→辅助功能→讲述人→添加自然语音），音质接近云端神经网络且完全离线。Web Speech 是浏览器内建作兜底。Edge 在线音色为实验功能，微软持续升级反爬，大概率连不上，不建议依赖。切换后请重开书生效。"
-      >
-        <div class="flex flex-col gap-2">
-          <div class="flex items-center gap-2 flex-wrap">
-            <select
-              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
-              bind:value={$ttsEngine$}
-            >
-              <option value="web">Web Speech（浏览器）</option>
-              <option value="sapi">系统 TTS（Windows SAPI）</option>
-              <option value="custom">自定义 HTTP TTS（OpenAI / ElevenLabs / Azure ...）</option>
-              <option value="edge">Edge 在线音色（实验性）</option>
-            </select>
-            <button
-              class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm disabled:opacity-40"
-              disabled={previewState === 'loading' || previewState === 'playing'}
-              on:click={previewVoice}
-            >
-              {previewState === 'loading'
-                ? '加载中…'
-                : previewState === 'playing'
-                  ? '播放中…'
-                  : '试听'}
-              <Ripple />
-            </button>
-          </div>
-          {#if previewState === 'error'}
-            <p class="text-red-500 text-xs">{previewMessage}</p>
-          {/if}
-        </div>
-      </SettingsItemGroup>
-
-      {#if $ttsEngine$ === 'edge'}
-        <SettingsItemGroup
-          title="Edge 在线语音"
-          tooltip="使用微软 Azure 神经网络音色，最自然。需联网；微软会定期升级反爬，本功能标实验性，失败时会自动停止朗读。"
-        >
-          <select
-            class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
-            bind:value={$ttsEdgeVoiceId$}
-          >
-            {#each edgeVoices as voice (voice.id)}
-              <option value={voice.id}>{voice.name} ({voice.language})</option>
-            {/each}
-          </select>
-        </SettingsItemGroup>
-      {/if}
-
-      {#if $ttsEngine$ === 'custom'}
-        <div class="lg:col-span-3">
-          <SettingsItemGroup
-            title="自定义 HTTP TTS"
-            tooltip={'把任意 TTS API 接进来。{text} 会被替换为当前句子并 JSON 转义。响应是音频字节（OpenAI/ElevenLabs/Azure）「音频路径」留空；响应是 JSON 包 base64 音频（MiMo 等）则填出 base64 字段的 dot-path，如 choices.0.message.audio.data。'}
-          >
-            <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
-              <span class="text-xs opacity-80 pt-2">预设</span>
-              <select
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
-                on:change={onCustomPresetSelect}
-              >
-                <option value="">— 选择填充 —</option>
-                <option value="openai">OpenAI TTS</option>
-                <option value="elevenlabs">ElevenLabs</option>
-                <option value="azure">Azure Speech (REST)</option>
-                <option value="volcengine">火山引擎 大模型 TTS</option>
-                <option value="mimo">MiMo-V2.5-TTS（小米，限时免费）</option>
-              </select>
-
-              <span class="text-xs opacity-80 pt-2">请求方法</span>
-              <select
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm w-24"
-                bind:value={$ttsCustomMethod$}
-              >
-                <option value="POST">POST</option>
-                <option value="PUT">PUT</option>
-                <option value="GET">GET</option>
-              </select>
-
-              <span class="text-xs opacity-80 pt-2">端点 URL</span>
-              <input
-                type="text"
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
-                placeholder="https://api.openai.com/v1/audio/speech"
-                bind:value={$ttsCustomEndpoint$}
-              />
-
-              <span class="text-xs opacity-80 pt-2">请求头（JSON）</span>
-              <textarea
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
-                rows="4"
-                bind:value={$ttsCustomHeaders$}
-              ></textarea>
-
-              <span class="text-xs opacity-80 pt-2">请求体模板</span>
-              <textarea
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
-                rows="8"
-                bind:value={$ttsCustomBody$}
-              ></textarea>
-
-              <span class="text-xs opacity-80 pt-2">音频路径</span>
-              <input
-                type="text"
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm font-mono"
-                placeholder="留空 = 响应是裸音频字节；否则填 JSON 里 base64 字段的 dot-path"
-                bind:value={$ttsCustomAudioPath$}
-              />
-            </div>
-          </SettingsItemGroup>
-        </div>
-      {/if}
-
-      {#if $ttsEngine$ === 'sapi'}
-        <SettingsItemGroup
-          title="系统 TTS 语音"
-          tooltip="注：Windows 11 设置里的「Natural 自然语音」是 Narrator 专属，应用层（包括本 app）调不到。要高质量本地 TTS 暂时无解，建议改用自定义 HTTP TTS 接 OpenAI / Azure 等付费 API。下面是系统暴露给应用的 SAPI 5 老音色，质量基础。"
-        >
-          {#if sapiVoicesError}
-            <p class="text-red-500 text-sm">{sapiVoicesError}</p>
-          {:else if !sapiVoices.length}
-            <p class="text-sm opacity-60">未检测到可用语音</p>
-          {:else}
-            <select
-              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
-              bind:value={$ttsSapiVoiceId$}
-            >
-              <option value="">系统默认</option>
-              {#each sapiVoices as voice (voice.id)}
-                <option value={voice.id}>{voice.name} ({voice.language})</option>
-              {/each}
-            </select>
-          {/if}
-        </SettingsItemGroup>
-      {/if}
-
-      <SettingsItemGroup
-        title="朗读起点"
-        tooltip="按播放按钮（或 V 快捷键）时从哪里开始读。选区：用当前选中文字或光标位置（无选区时降级到上次保存位置）；上次位置：从上次暂停的字位置续读；章节开头：从当前章节第一段开始。"
-      >
-        <select
-          class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
-          bind:value={$ttsStartStrategy$}
-        >
-          <option value="selection">选区 / 光标位置（默认）</option>
-          <option value="resume">上次保存位置</option>
-          <option value="section-start">章节开头</option>
-        </select>
-      </SettingsItemGroup>
-
-      <SettingsItemGroup
-        title="章末自动续读"
-        tooltip="分页模式下读到本章最后一段时，是否自动翻到下一章继续。关闭则停在章末。"
-      >
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={$ttsAutoAdvanceSection$}
-        />
-      </SettingsItemGroup>
-
-      <SettingsItemGroup
-        title="朗读全局快捷键"
-        tooltip="任意窗口前台时按下都能切换朗读。格式：modifier+key，如 ctrl+alt+p / shift+f9 / 留空禁用。修改后立刻生效，注册冲突时不报错只是按下无反应。"
-      >
-        <div class="flex items-center gap-2">
-          <input
-            type="text"
-            class="rounded border px-2 py-1"
-            placeholder="ctrl+alt+p"
-            bind:value={$ttsShortcut$}
-          />
-          <button
-            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-            on:click={() => ttsShortcut$.next('ctrl+alt+p')}
-          >
-            重置
-            <Ripple />
-          </button>
-          <button
-            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-            on:click={() => ttsShortcut$.next('')}
-          >
-            禁用
-            <Ripple />
-          </button>
-        </div>
-      </SettingsItemGroup>
-    {/if}
     <SettingsItemGroup title="诊断日志" tooltip="导出包含设置与运行日志的诊断文件，反馈问题时附上能加快定位">
       <button
         class="m-1 rounded-md border-2 border-gray-400 p-2"
@@ -2438,3 +2375,9 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .secret-masked {
+    -webkit-text-security: disc;
+  }
+</style>
