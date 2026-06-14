@@ -12,12 +12,9 @@
   export let selectedBookIds: ReadonlySet<number>;
 
   const dispatch = createEventDispatcher<{
-    bookClick: {
-      id: number;
-    };
-    removeBookClick: {
-      id: number;
-    };
+    bookClick: { id: number };
+    removeBookClick: { id: number };
+    cardDragStart: { id: number; event: DragEvent };
   }>();
 
   let hoveringBookId: number | undefined;
@@ -37,6 +34,8 @@
       role="banner"
       class="relative"
       class:opacity-60={bookCard.isPlaceholder}
+      draggable="true"
+      on:dragstart={(ev) => dispatch('cardDragStart', { id: bookCard.id, event: ev })}
       on:mouseenter={() => (hoveringBookId = bookCard.id)}
       on:mouseleave={() => (hoveringBookId = undefined)}
     >

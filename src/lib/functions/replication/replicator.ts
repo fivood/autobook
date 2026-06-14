@@ -11,6 +11,7 @@ import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
 import { database, requestPersistentStorage$ } from '$lib/data/store';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
+import loadMd from '$lib/functions/file-loaders/md/load-md';
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
@@ -71,6 +72,8 @@ export async function importData(
             bookContent = await loadEpub(file, document, lastBookModified);
           } else if (file.name.endsWith('.txt')) {
             bookContent = await loadTxt(file, lastBookModified);
+          } else if (/\.(md|markdown)$/i.test(file.name)) {
+            bookContent = await loadMd(file, lastBookModified);
           } else {
             bookContent = await loadHtmlz(file, document, lastBookModified);
           }

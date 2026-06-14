@@ -25,7 +25,7 @@ export default async function loadTxt(file: File, lastBookModified: number): Pro
   const { element, characters, sections } = getFormattedElementTxt(data);
 
   return {
-    title: file.name.replace(/\.txt$/, ''),
+    title: file.name,
     language: detectLanguage(data),
     styleSheet: '',
     elementHtml: element.innerHTML,

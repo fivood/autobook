@@ -202,7 +202,7 @@
     />
 
     <div
-      class="relative top-1/2 left-1/2 inline-block max-w-[80vw] -translate-x-1/2 -translate-y-1/2"
+      class="relative top-[38%] left-1/2 inline-block max-w-[80vw] -translate-x-1/2 -translate-y-1/2"
     >
       {#each dialogs as dialog}
         {#if typeof dialog.component === 'string'}

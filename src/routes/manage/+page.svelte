@@ -3,6 +3,16 @@
   import { goto } from '$app/navigation';
   import { faUpload } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
+  import FolderSidebar from '$lib/components/library-folders/folder-sidebar.svelte';
+  import {
+    folders$,
+    bookFolders$,
+    activeFolderFilter$,
+    refreshFolders,
+    addBooksToFolder,
+    removeBooksFromFolder,
+    clearBookFolderAssignments
+  } from '$lib/data/library-folders';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import BookManagerHeader from '$lib/components/book-card/book-manager-header.svelte';
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
@@ -57,7 +67,7 @@
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import pLimit from 'p-limit';
   import { combineLatest, map, Observable, share, Subject, switchMap, takeUntil } from 'rxjs';
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
 
   const booksAreLoading$ = database.listLoading$.pipe(map((isLoading) => isLoading));
@@ -96,6 +106,30 @@
     share()
   );
 
+  /** bookCards$ filtered by the active folder selection in the sidebar.
+   * "all" → unchanged; "uncategorized" → only books with no folder; numeric
+   * id → books assigned to that folder. */
+  const filteredBookCards$: Observable<BookCardProps[]> = combineLatest([
+    bookCards$,
+    bookFolders$,
+    activeFolderFilter$
+  ]).pipe(
+    map(([cards, bookFolders, filter]) => {
+      if (filter === 'all') return cards;
+      if (filter === 'uncategorized') {
+        const assigned = new Set(bookFolders.map((bf) => bf.bookId));
+        return cards.filter((c) => !assigned.has(c.id));
+      }
+      const folderId = Number(filter);
+      if (!Number.isFinite(folderId)) return cards;
+      const inFolder = new Set(
+        bookFolders.filter((bf) => bf.folderId === folderId).map((bf) => bf.bookId)
+      );
+      return cards.filter((c) => inFolder.has(c.id));
+    }),
+    share()
+  );
+
   const currentBookId$ = database.lastItem$.pipe(
     map((item) => item?.dataId),
     share()
@@ -106,6 +140,7 @@
   let cancelToken = new AbortController();
   let cancelSignal = cancelToken.signal;
   let cancelTooltip = '';
+  let isDragOver = false;
   let replicationProgress = 0;
   let replicationToProgress = 0;
   let replicationProgressRemaining = '~ ??:??:??';
@@ -120,6 +155,38 @@
   }
 
   onDestroy(() => dialogManager.dialogs$.next([]));
+
+  onMount(() => {
+    refreshFolders().catch(() => {});
+  });
+
+  /** Book IDs to assign when the user drags onto a folder. If the dragged
+   * book is part of the current selection, drag the whole selection;
+   * otherwise drag just that one book. */
+  function buildDragPayload(bookId: number): number[] {
+    if (selectedBookIds.has(bookId)) return Array.from(selectedBookIds);
+    return [bookId];
+  }
+
+  function onCardDragStart(ev: DragEvent, bookId: number) {
+    if (!ev.dataTransfer) return;
+    const ids = buildDragPayload(bookId);
+    ev.dataTransfer.setData('application/x-autobook-book-ids', JSON.stringify(ids));
+    ev.dataTransfer.effectAllowed = 'copy';
+  }
+
+  async function removeSelectedFromActiveFolder() {
+    const filter = $activeFolderFilter$;
+    if (filter === 'all' || filter === 'uncategorized') return;
+    const folderId = Number(filter);
+    if (!Number.isFinite(folderId)) return;
+    await removeBooksFromFolder(Array.from(selectedBookIds), folderId);
+    selectedBookIds = new Set();
+  }
+
+  async function addSelectedToFolder(folderId: number) {
+    await addBooksToFolder(Array.from(selectedBookIds), folderId);
+  }
 
   function bookmarkToProgress(b: BooksDbBookmarkData | undefined) {
     return b?.progress
@@ -310,7 +377,7 @@
 
     initializeReplicationProgressData();
 
-    const supportedExtRegex = /\.(?:htmlz|epub|txt)$/i;
+    const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown)$/i;
     const errorTitle = '书籍导入失败';
     const expanded = await expandZipArchives(Array.from(fileList)).catch((err) => {
       logger.warn(`Error expanding zip: ${err.message}`);
@@ -389,7 +456,7 @@
 
         for (const entry of entries) {
           if (entry.directory || !entry.getData) continue;
-          if (!/\.(?:htmlz|epub|txt)$/i.test(entry.filename)) continue;
+          if (!/\.(?:htmlz|epub|txt|md|markdown)$/i.test(entry.filename)) continue;
 
           const name = entry.filename.split('/').pop() || entry.filename;
           // eslint-disable-next-line no-await-in-loop
@@ -480,6 +547,10 @@
     resetProgress();
 
     await tick();
+
+    // Strip folder assignments for any book we just removed. deleted[] is
+    // book IDs (numbers).
+    await Promise.all(deleted.map((id: number) => clearBookFolderAssignments(id).catch(() => {})));
 
     if (deleted.length === currentBookCount) {
       selectMode = false;
@@ -762,26 +833,70 @@
   />
 </div>
 
-<div
-  tabindex="0"
-  role="button"
-  class="{pxScreen} h-full pt-16 xl:pt-14"
-  on:dragenter={(ev) => ev.preventDefault()}
-  on:dragover={(ev) => ev.preventDefault()}
-  on:dragend={(ev) => ev.preventDefault()}
-  on:drop={(ev) => ev.preventDefault()}
-  on:drop={(ev) => getDropEventFiles(ev).then(onFilesChange)}
->
-  {#if !$bookCards$ || $booksAreLoading$}
+<div class="flex min-h-screen pt-16 xl:pt-14">
+  <FolderSidebar totalBookCount={$bookCards$?.length ?? 0} />
+  <div
+    tabindex="0"
+    role="button"
+    class="{pxScreen} relative flex-1 overflow-auto"
+    on:dragenter={(ev) => {
+      ev.preventDefault();
+      if (ev.dataTransfer?.types?.includes('Files')) isDragOver = true;
+    }}
+    on:dragover={(ev) => {
+      ev.preventDefault();
+      if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+    }}
+    on:dragleave={(ev) => {
+      if (ev.currentTarget === ev.target) isDragOver = false;
+    }}
+    on:dragend={() => (isDragOver = false)}
+    on:drop|preventDefault={(ev) => {
+      isDragOver = false;
+      getDropEventFiles(ev).then(onFilesChange);
+    }}
+  >
+  {#if isDragOver}
+    <div
+      class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-blue-500/10 border-4 border-dashed border-blue-400 rounded-lg"
+    >
+      <div class="text-xl font-semibold opacity-80">松开以导入书籍</div>
+    </div>
+  {/if}
+  {#if selectMode && selectedBookIds.size && $folders$.length}
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+      <span class="opacity-70">将选中的 {selectedBookIds.size} 本加入分类：</span>
+      {#each $folders$ as folder (folder.id)}
+        <button
+          class="rounded-full border-2 border-gray-400 px-3 py-1 text-xs hover:bg-gray-400/20"
+          on:click={() => addSelectedToFolder(folder.id)}
+        >
+          + {folder.name}
+        </button>
+      {/each}
+      {#if $activeFolderFilter$ !== 'all' && $activeFolderFilter$ !== 'uncategorized'}
+        <button
+          class="rounded-full border-2 border-red-400 px-3 py-1 text-xs text-red-500 hover:bg-red-400/20"
+          on:click={removeSelectedFromActiveFolder}
+        >
+          从当前分类移出
+        </button>
+      {/if}
+    </div>
+  {/if}
+  {#if !$filteredBookCards$ || $booksAreLoading$}
     加载中...
-  {:else if $bookCards$.length}
+  {:else if $filteredBookCards$.length}
     <BookCardList
       currentBookId={$currentBookId$}
       {selectedBookIds}
-      bookCards={$bookCards$}
+      bookCards={$filteredBookCards$}
       on:bookClick={(ev) => onBookClick(ev.detail.id)}
       on:removeBookClick={(ev) => removeBooks([ev.detail.id])}
+      on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />
+  {:else if $activeFolderFilter$ !== 'all'}
+    <div class="mt-20 text-center text-sm opacity-60">这个分类还是空的；拖书过来或框选后点上面的胶囊加入</div>
   {:else}
     <label
       class="group mx-auto mt-44 flex w-3/6 cursor-pointer flex-col items-center justify-center text-gray-400 text-opacity-40 hover:text-opacity-60 xl:w-3/12"
@@ -794,11 +909,12 @@
       </span>
       <input
         type="file"
-        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,application/zip,.zip"
+        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,application/zip,.zip"
         multiple
         hidden
         use:inputFile={onFilesChange}
       />
     </label>
   {/if}
+  </div>
 </div>

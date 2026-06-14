@@ -1,0 +1,210 @@
+<script lang="ts">
+  import { faFolder, faFolderOpen, faPlus, faPencil, faTrash } from '@fortawesome/free-solid-svg-icons';
+  import { dialogManager } from '$lib/data/dialog-manager';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
+  import TextInputDialog from '$lib/components/text-input-dialog.svelte';
+  import { dummyFn } from '$lib/functions/utils';
+  import Fa from 'svelte-fa';
+  import { createEventDispatcher } from 'svelte';
+  import {
+    folders$,
+    bookFolders$,
+    activeFolderFilter$,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    addBooksToFolder
+  } from '$lib/data/library-folders';
+
+  /** Total book count in the library — shown next to "全部书籍". */
+  export let totalBookCount: number;
+
+  const dispatch = createEventDispatcher<{ booksAddedToFolder: { folderId: number; count: number } }>();
+
+  let dragOverFolderId: number | string | null = null;
+  let renamingId: number | null = null;
+  let renameDraft = '';
+
+  function countForFolder(folderId: number): number {
+    return $bookFolders$.filter((bf) => bf.folderId === folderId).length;
+  }
+
+  $: assignedBookIds = new Set($bookFolders$.map((bf) => bf.bookId));
+  $: uncategorizedCount = Math.max(0, totalBookCount - assignedBookIds.size);
+
+  function onCreateFolder() {
+    dialogManager.dialogs$.next([
+      {
+        component: TextInputDialog,
+        props: {
+          dialogHeader: '新建分类',
+          placeholder: '例如：推理、女性作者',
+          resolver: async (name: string | undefined) => {
+            if (!name) return;
+            const created = await createFolder(name);
+            if (created) activeFolderFilter$.next(String(created.id));
+          }
+        }
+      }
+    ]);
+  }
+
+  function startRename(id: number, current: string) {
+    renamingId = id;
+    renameDraft = current;
+  }
+
+  async function commitRename() {
+    if (renamingId == null) return;
+    const id = renamingId;
+    renamingId = null;
+    const next = renameDraft.trim();
+    if (next) await renameFolder(id, next);
+  }
+
+  function confirmDelete(id: number, name: string) {
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: '删除文件夹',
+          dialogMessage: `删除"${name}"？只移除分类，里面的书不会被删。`,
+          resolver: async (ok: boolean) => {
+            if (ok) await deleteFolder(id);
+          }
+        }
+      }
+    ]);
+  }
+
+  function readDraggedBookIds(ev: DragEvent): number[] {
+    if (!ev.dataTransfer) return [];
+    try {
+      const raw = ev.dataTransfer.getData('application/x-autobook-book-ids');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((n) => typeof n === 'number') : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function onDropToFolder(ev: DragEvent, folderId: number) {
+    ev.preventDefault();
+    dragOverFolderId = null;
+    const ids = readDraggedBookIds(ev);
+    if (!ids.length) return;
+    await addBooksToFolder(ids, folderId);
+    dispatch('booksAddedToFolder', { folderId, count: ids.length });
+  }
+
+  function onDragOverFolder(ev: DragEvent, key: number | string) {
+    if (!ev.dataTransfer?.types?.includes('application/x-autobook-book-ids')) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'copy';
+    dragOverFolderId = key;
+  }
+</script>
+
+<aside
+  class="flex w-52 shrink-0 flex-col gap-1 border-r-2 border-gray-400/60 py-3 pr-2 pl-3 text-sm"
+  style="background: rgba(127, 127, 127, 0.08); min-height: calc(100vh - 4rem);"
+>
+  <div class="px-3 pb-1 text-xs uppercase tracking-wide opacity-60">书库</div>
+
+  <button
+    type="button"
+    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover:bg-gray-400/20"
+    class:bg-gray-400={'all' === $activeFolderFilter$}
+    class:bg-opacity-30={'all' === $activeFolderFilter$}
+    on:click={() => activeFolderFilter$.next('all')}
+  >
+    <span>全部书籍</span>
+    <span class="opacity-60">{totalBookCount}</span>
+  </button>
+
+  <button
+    type="button"
+    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover:bg-gray-400/20"
+    class:bg-gray-400={'uncategorized' === $activeFolderFilter$}
+    class:bg-opacity-30={'uncategorized' === $activeFolderFilter$}
+    on:click={() => activeFolderFilter$.next('uncategorized')}
+  >
+    <span>未分类</span>
+    <span class="opacity-60">{uncategorizedCount}</span>
+  </button>
+
+  <div class="mt-3 flex items-center justify-between px-3 pb-1 text-xs uppercase tracking-wide opacity-60">
+    <span>分类</span>
+    <button
+      type="button"
+      title="新建文件夹"
+      class="rounded p-1 hover:bg-gray-400/20"
+      on:click={onCreateFolder}
+    >
+      <Fa icon={faPlus} />
+    </button>
+  </div>
+
+  <div class="flex-1 overflow-y-auto pr-1">
+    {#each $folders$ as folder (folder.id)}
+      {@const active = $activeFolderFilter$ === String(folder.id)}
+      {@const dragOver = dragOverFolderId === folder.id}
+      <div
+        class="group flex items-center gap-1 rounded px-2 py-1.5 transition-colors"
+        class:bg-gray-400={active}
+        class:bg-opacity-30={active}
+        class:ring-2={dragOver}
+        class:ring-blue-400={dragOver}
+        on:dragover={(ev) => onDragOverFolder(ev, folder.id)}
+        on:dragleave={() => (dragOverFolderId = null)}
+        on:drop={(ev) => onDropToFolder(ev, folder.id)}
+        role="button"
+        tabindex="0"
+      >
+        <Fa icon={active ? faFolderOpen : faFolder} class="opacity-70 shrink-0" />
+        {#if renamingId === folder.id}
+          <input
+            class="min-w-0 flex-1 rounded border border-gray-400/50 bg-background-color px-1 py-0.5 text-sm"
+            bind:value={renameDraft}
+            on:keydown={(ev) => {
+              if (ev.key === 'Enter') commitRename();
+              if (ev.key === 'Escape') (renamingId = null);
+            }}
+            on:blur={commitRename}
+            on:keyup={dummyFn}
+            autofocus
+          />
+        {:else}
+          <button
+            type="button"
+            class="min-w-0 flex-1 truncate text-left"
+            on:click={() => activeFolderFilter$.next(String(folder.id))}
+          >
+            {folder.name}
+          </button>
+        {/if}
+        <span class="text-xs opacity-60">{countForFolder(folder.id)}</span>
+        <button
+          type="button"
+          title="重命名"
+          class="opacity-0 group-hover:opacity-60 hover:opacity-100 px-1"
+          on:click|stopPropagation={() => startRename(folder.id, folder.name)}
+        >
+          <Fa icon={faPencil} />
+        </button>
+        <button
+          type="button"
+          title="删除"
+          class="opacity-0 group-hover:opacity-60 hover:opacity-100 px-1"
+          on:click|stopPropagation={() => confirmDelete(folder.id, folder.name)}
+        >
+          <Fa icon={faTrash} />
+        </button>
+      </div>
+    {/each}
+    {#if !$folders$.length}
+      <div class="px-3 pt-2 text-xs opacity-50">还没有分类，点 + 新建</div>
+    {/if}
+  </div>
+</aside>

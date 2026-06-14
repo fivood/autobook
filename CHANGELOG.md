@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.3.7
+
+- 新建分类弹窗换成主题化对话框：之前用浏览器原生 `prompt()` 跳出 "tauri.localhost 显示" 的灰白默认框，无法贴主题色。新增 TextInputDialog 组件走 DialogTemplate 体系，背景、字色随当前主题变；Enter 提交、Esc / 点取消都正确返回 undefined
+- 所有 dialog 位置上移：原 `top-1/2 -translate-y-1/2` 屏幕正中，垂直方向有点遮挡书库内容。改成 `top-[38%]`，对话框中心点位于屏幕约 38% 处（视觉"中间偏上"），不挡下方继续阅读时的内容
+
+## 1.3.6
+
+- 下拉 / 弹出菜单跟着主题色变：之前 popover 基底硬编码 `bg-[#333] text-white`，书库右上角的「排序」「来源切换」、统计页的「复制数据」下拉和「标题筛选」侧栏一律深灰白字，与 sage-green 等浅主题不搭。改走 `bg-menu` / `text-menu`（已绑 --menu-background / --menu-foreground 变量），切主题这些下拉立刻跟着变
+- 新增 `bg-menu-inverted` / `text-menu-inverted` / `hover-menu-inverted` 三个工具类，用于"菜单底色反转"的选中态和 hover —— 排序菜单当前选中项的高亮就是这个反转色，hover 同理
+- 书籍卡片底部标题条由 `bg-gray-800 text-white` 改成 `bg-menu/85 text-menu`，封面上的标题在浅主题下不再是突兀的灰黑横条
+
+## 1.3.5
+
+- 修 1.3.4 fresh install 看不到分类侧栏：v0 → v7 升级路径里没建 folder / bookFolder 两个 store，导致 refreshFolders 静默失败、侧栏组件挂在但没数据；侧栏 CSS 用 transparent 背景在浅主题下完全看不出来。case 0 补建两表 + 索引；侧栏改成淡灰底 + 加粗右边框 + min-height: calc(100vh - 4rem) 强制撑满
+- bump 到 1.3.5 是因为 NSIS 检测「已是 1.3.4」会跳过覆盖、WebView2 又缓存了旧 frontend，导致重装后还是看不到改动；新版本号能强制走完整安装
+
+## 1.3.4
+
+- 书库分类：左侧新增分类侧栏，支持新建 / 重命名 / 删除文件夹。一本书可以同时归入多个分类（tag 风格），比如《无人生还》同时属于「推理」和「女性作者」，互不冲突
+- 拖动入分类：从书库选中（点头部「选择」进多选模式）一本或多本，直接拖到侧栏目标文件夹上，松手即批量加入。被拖的书若在当前选区里则整批进，不在则只进它一本
+- 顶部胶囊按钮：进入选择模式后顶部出现「将选中 N 本加入 [分类名]」一排胶囊，点一下即加入；当前正在浏览某个分类时多出「从当前分类移出」红色按钮
+- 视图过滤：侧栏可切换「全部书籍」/「未分类」/ 每个分类，对应过滤右侧卡片网格。当前选择 persist 到 localStorage，下次打开维持
+- DB schema v6 → v7：新增 `folder`（id / name / sortOrder / createdAt）和 `bookFolder` 多对多映射（[bookId, folderId] 复合主键），从 v5 / v6 升级时不动现有书数据，只 createObjectStore + 索引。删书时联动清理 bookFolder 中该 bookId 的所有条目，避免脏挂载
+
+## 1.3.3
+
+- 新增 Markdown 文档支持：.md / .markdown 文件可直接拖入或选取导入。解析走 marked（GFM），代码块用 highlight.js 语法高亮，行内 / 块级数学公式（$...$ / $$...$$）用 KaTeX 渲染，含表格、引用、列表、链接、图片。按 H1 / H2 自动切章并生成目录；其余样式（标题字号、引用块、代码块背景）走 .md-section 全局样式
+- 文件关联 / 文件选择对话框 / 拖拽过滤 / 书库 ZIP 内扫描的允许后缀全部加上 .md, .markdown
+- 修 TXT 在书库封面不显示后缀和 TXT 配色的问题：之前 loadTxt 把 .txt 从 title 抠掉了，book-card 检测格式时拿不到后缀，回落到通用 BOOK 占位图。改成不抠后缀，book-card 自己负责显示时再剥（cleanTitle 已有这逻辑）
+- 书库占位封面新增 MD 配色（深蓝 + 亮蓝 accent），与现有 EPUB / TXT / HTMLZ 视觉区分
+
+## 1.3.2
+
+- 拖拽导入书籍：从资源管理器把 epub / htmlz / txt / zip 拖到 AutoBook 窗口任意空白处即可导入；拖入时整页会出现虚线蓝框 + 「松开以导入书籍」提示。原「点击图标」选择文件夹的入口保留但仍只限于中间那个上传图标区域，避免误触
+- 修 Tauri 2 webview 默认开启 `dragDropEnabled` 拦截 HTML5 drop 事件、导致原有 Svelte `on:drop` 完全不触发的问题。tauri.conf.json 的 windows 配置加 `"dragDropEnabled": false`
+
 ## 1.3.1
 
 - 滚动模式下隐藏 TTS 相关全部设置：滚动模式有自己的「打字机自动播放」，分页模式才用 TTS 朗读 + 自动翻页，设置项明确二选一，不再两套都展开

@@ -66,16 +66,19 @@
 
   /** Detect a book file extension hidden in the title, fall back to BOOK. */
   $: detectedFormat = (() => {
-    const match = title.match(/\.(epub|txt|htmlz|mobi|azw3?|pdf)$/i);
-    return match ? match[1].toUpperCase() : 'BOOK';
+    const match = title.match(/\.(epub|txt|htmlz|mobi|azw3?|pdf|markdown|md)$/i);
+    if (!match) return 'BOOK';
+    const ext = match[1].toUpperCase();
+    return ext === 'MARKDOWN' ? 'MD' : ext;
   })();
 
-  $: cleanTitle = title.replace(/\.(epub|txt|htmlz|mobi|azw3?|pdf)$/i, '');
+  $: cleanTitle = title.replace(/\.(epub|txt|htmlz|mobi|azw3?|pdf|markdown|md)$/i, '');
 
   const FORMAT_PALETTE: Record<string, { bg: string; accent: string }> = {
     EPUB: { bg: '#2b5a69', accent: '#5fb0a7' },
     TXT: { bg: '#5a4a3c', accent: '#c39a55' },
     HTMLZ: { bg: '#4a2b5a', accent: '#a574c0' },
+    MD: { bg: '#1f3a4a', accent: '#4ca8d8' },
     MOBI: { bg: '#7a3f25', accent: '#e08545' },
     AZW: { bg: '#7a3f25', accent: '#e08545' },
     AZW3: { bg: '#7a3f25', accent: '#e08545' },
@@ -135,7 +138,7 @@
 
     <div class="absolute inset-x-0 bottom-0">
       <div
-        class="sm:h-21 h-16 bg-gray-800 bg-opacity-80 p-0.5 px-1.5 text-justify text-sm text-white sm:p-1.5 sm:text-base"
+        class="sm:h-21 h-16 bg-menu bg-opacity-85 p-0.5 px-1.5 text-justify text-sm text-menu sm:p-1.5 sm:text-base"
       >
         <span class="line-clamp-3">{cleanTitle}</span>
       </div>

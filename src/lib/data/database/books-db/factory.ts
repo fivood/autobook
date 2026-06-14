@@ -9,7 +9,7 @@ import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 6, {
+  return openDB<BooksDb>(name, 7, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -52,6 +52,18 @@ export function createBooksDb(name = 'books') {
 
           oldDb.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
 
+          // v7: library folders.
+          const freshFolderStore = oldDb.createObjectStore('folder', {
+            keyPath: 'id',
+            autoIncrement: true
+          });
+          freshFolderStore.createIndex('sortOrder', 'sortOrder');
+          const freshBookFolderStore = oldDb.createObjectStore('bookFolder', {
+            keyPath: ['bookId', 'folderId']
+          });
+          freshBookFolderStore.createIndex('bookId', 'bookId');
+          freshBookFolderStore.createIndex('folderId', 'folderId');
+
           break;
         }
         case 2: {
@@ -90,6 +102,22 @@ export function createBooksDb(name = 'books') {
           oldDb.createObjectStore('subtitle', { keyPath: 'title' });
 
           oldDb.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
+
+          // Fall through to v6 → v7 upgrade.
+        }
+        // eslint-disable-next-line no-fallthrough
+        case 6: {
+          const folderStore = oldDb.createObjectStore('folder', {
+            keyPath: 'id',
+            autoIncrement: true
+          });
+          folderStore.createIndex('sortOrder', 'sortOrder');
+
+          const bookFolderStore = oldDb.createObjectStore('bookFolder', {
+            keyPath: ['bookId', 'folderId']
+          });
+          bookFolderStore.createIndex('bookId', 'bookId');
+          bookFolderStore.createIndex('folderId', 'folderId');
 
           break;
         }

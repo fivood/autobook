@@ -47,10 +47,10 @@
           <div title="以 TMW 日志格式复制数据" slot="icon" class={baseIconClasses}>
             <Fa icon={faCopy} />
           </div>
-          <div class="flex flex-col justify-center w-36 bg-gray-700" slot="content">
+          <div class="flex flex-col justify-center w-36 bg-menu text-menu" slot="content">
             {#each copyStatisticsDataItems as copyStatisticsDataItem (copyStatisticsDataItem.key)}
               <button
-                class="p-2 hover:bg-white hover:text-gray-700"
+                class="p-2 hover-menu-inverted"
                 on:click={() => {
                   copyStatisticsData$.next(copyStatisticsDataItem.key);
                   copyStatisticsDataPopover.toggleOpen();

@@ -4,6 +4,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Markdown rendering: KaTeX for math + highlight.js for code blocks. Imported
+ * here so the loaded HTML inside the reader picks them up; .md-* / .hljs /
+ * .katex selectors all resolve against this global sheet. */
+@import 'katex/dist/katex.min.css';
+@import 'highlight.js/styles/github.css';
+
+.md-section {
+  line-height: 1.7;
+  h1, h2, h3, h4, h5, h6 { font-weight: 700; margin: 1.4em 0 0.6em; }
+  h1 { font-size: 1.8em; }
+  h2 { font-size: 1.5em; }
+  h3 { font-size: 1.25em; }
+  p { margin: 0.7em 0; }
+  ul, ol { margin: 0.6em 0 0.6em 1.6em; }
+  li { margin: 0.2em 0; }
+  blockquote {
+    margin: 0.8em 0;
+    padding: 0.4em 1em;
+    border-left: 4px solid var(--accent-color, #5f7e7b);
+    color: inherit;
+    opacity: 0.85;
+    background: rgba(127, 127, 127, 0.08);
+  }
+  code:not(.hljs) {
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: rgba(127, 127, 127, 0.15);
+    font-size: 0.92em;
+  }
+  pre.md-code {
+    margin: 0.9em 0;
+    padding: 0.9em 1em;
+    border-radius: 6px;
+    overflow-x: auto;
+    background: #f6f8fa;
+    code { background: transparent; padding: 0; }
+  }
+  table {
+    border-collapse: collapse;
+    margin: 0.9em 0;
+    th, td { border: 1px solid rgba(127, 127, 127, 0.4); padding: 0.4em 0.7em; }
+    th { background: rgba(127, 127, 127, 0.12); }
+  }
+  hr { margin: 1.4em 0; border-color: rgba(127, 127, 127, 0.3); }
+  .katex-display { margin: 0.8em 0; }
+  .math-error { color: #b00; }
+  img { max-width: 100%; }
+}
+
 :root {
   /* Sage green palette */
   --font-color: #405a5c;
@@ -57,6 +106,18 @@ a:visited {
   }
   .text-menu {
     color: var(--menu-foreground);
+  }
+  /* Inverted pair used for the "selected" or hovered row inside a themed
+   * dropdown (sort menu, source picker, etc.). */
+  .bg-menu-inverted {
+    background-color: var(--menu-foreground);
+  }
+  .text-menu-inverted {
+    color: var(--menu-background);
+  }
+  .hover-menu-inverted:hover {
+    background-color: var(--menu-foreground);
+    color: var(--menu-background);
   }
 }
 
