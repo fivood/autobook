@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0
+
+- 朗读 / 打字机起点改为光标位置：阅读页内选中一段文字或单击设置光标后再按播放，会从那个位置开始读，而不是从上次保存位置或当前可见处。继承原有优先级回退：有选区用选区；没选区用上次保存的恢复点；都没有用当前可见位置
+- 分页模式 TTS 读到本章结尾自动翻到下一章并继续：之前读完最后一段就停了，现在会推进 sectionIndex、等新章节渲染完后再 prepare + 续读，直到整本书结束
+- 后台朗读不中断：最小化到托盘时音频继续播放，下一段也能正常获取，章末换章也会触发
+- AutoReader 接口暴露 on()，PageManager 暴露 advanceToNextSection() + ensureCharVisible()
+- 分页模式 TTS 边读边翻页：每次朗读新句子时算它对应的 scrollPos，若不在当前页，自动翻过去（前后两个方向都行）。横向翻页留下的 translateX 也会清掉再 scrollTo，否则视觉上看着没动。配合「章末自动续读」，整本书能从头读到尾且文字始终在屏幕里
+- 修分页模式 TTS 跟页错位：TTS 报的 charIndex 是 extractText 原始字符串里的偏移（含空格、标点），而 SectionCharacterStatsCalculator 用 getCharacterCount 数（剥掉空白和非 CJK 符号），两套口径不通，导致整个 section 后半段全部返回 -1。新增 ttsIndexToCalculatorIndex 转换函数，onBoundary 时按章节缓存 extractText，把 TTS 索引换算成 calculator 口径再传入 ensureCharVisible
+- 修自动翻章 this 丢失：之前 const fn = pageManager.advanceToNextSection 这种提取式调用让 this 变 undefined，advanceToNextSection 改成 pageManager.advanceToNextSection() 直接当方法调
+- 修 TTS 音频 blob URL 在切换句子时报 net::ERR_FILE_NOT_FOUND 和 偶发系统滴滴声：每个 Audio 自带 URL，onended/onerror 时 src 清空 + revoke，旧元素不会再异步去查已失效 URL
+- DevTools 启用（按 F12 打开）
+
 ## 1.2.9
 
 - 移除 Piper 引擎。rhasspy/piper 已停更，中文音色普遍存在 "x is not a single codepoint" 崩溃且唯一不崩的 huayan 朗读体验差，不适合实用。本地高音质需求请用 Windows 11 自然语音（设置 → 辅助功能 → 讲述人 → 添加自然语音，可装晓晓 Natural 等），装好后自动出现在 SAPI 语音列表

@@ -53,10 +53,12 @@
     ttsCustomEndpoint$,
     ttsCustomHeaders$,
     ttsCustomMethod$,
+    ttsAutoAdvanceSection$,
     ttsEdgeVoiceId$,
     ttsEngine$,
     ttsSapiVoiceId$,
     ttsShortcut$,
+    ttsStartStrategy$,
     verticalCustomReadingPosition$
   } from '$lib/data/store';
   import { isTauri } from '$lib/data/env';
@@ -1267,6 +1269,30 @@
       {/if}
 
       <SettingsItemGroup
+        title="朗读起点"
+        tooltip="按播放按钮（或 V 快捷键）时从哪里开始读。选区：用当前选中文字或光标位置（无选区时降级到上次保存位置）；上次位置：从上次暂停的字位置续读；章节开头：从当前章节第一段开始。"
+      >
+        <select
+          class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+          bind:value={$ttsStartStrategy$}
+        >
+          <option value="selection">选区 / 光标位置（默认）</option>
+          <option value="resume">上次保存位置</option>
+          <option value="section-start">章节开头</option>
+        </select>
+      </SettingsItemGroup>
+
+      <SettingsItemGroup
+        title="章末自动续读"
+        tooltip="分页模式下读到本章最后一段时，是否自动翻到下一章继续。关闭则停在章末。"
+      >
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={$ttsAutoAdvanceSection$}
+        />
+      </SettingsItemGroup>
+
+      <SettingsItemGroup
         title="朗读全局快捷键"
         tooltip="任意窗口前台时按下都能切换朗读。格式：modifier+key，如 ctrl+alt+p / shift+f9 / 留空禁用。修改后立刻生效，注册冲突时不报错只是按下无反应。"
       >
@@ -2046,6 +2072,30 @@
           {/if}
         </SettingsItemGroup>
       {/if}
+
+      <SettingsItemGroup
+        title="朗读起点"
+        tooltip="按播放按钮（或 V 快捷键）时从哪里开始读。选区：用当前选中文字或光标位置（无选区时降级到上次保存位置）；上次位置：从上次暂停的字位置续读；章节开头：从当前章节第一段开始。"
+      >
+        <select
+          class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+          bind:value={$ttsStartStrategy$}
+        >
+          <option value="selection">选区 / 光标位置（默认）</option>
+          <option value="resume">上次保存位置</option>
+          <option value="section-start">章节开头</option>
+        </select>
+      </SettingsItemGroup>
+
+      <SettingsItemGroup
+        title="章末自动续读"
+        tooltip="分页模式下读到本章最后一段时，是否自动翻到下一章继续。关闭则停在章末。"
+      >
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={$ttsAutoAdvanceSection$}
+        />
+      </SettingsItemGroup>
 
       <SettingsItemGroup
         title="朗读全局快捷键"

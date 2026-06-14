@@ -540,6 +540,10 @@
     exploredCharCount = 0;
     previousIntendedCount = 0;
     bookCharCount = calculator.charCount;
+    // Hand the per-section calculator to the page manager so TTS-driven
+    // auto-page-flip (ensureCharVisible) can map a sentence's char count to
+    // a scroll position.
+    concretePageManager?.setCalculator(calculator);
 
     let fontLoaded = false;
 

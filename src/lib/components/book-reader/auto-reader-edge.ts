@@ -19,6 +19,7 @@ import {
   computeGlobalCharIndex,
   extractText,
   seekParagraphsToExplored,
+  selectionToCharIndex,
   splitSentences
 } from './auto-reader-shared';
 
@@ -104,6 +105,14 @@ export class AutoReaderEdge implements AutoReader {
     const pos = seekParagraphsToExplored(this.paragraphs, exploredCharCount);
     this.paraIndex = pos.paraIndex;
     this.charOffset = pos.charOffset;
+  }
+
+  seekToSelection(): boolean {
+    if (!this.contentEl) return false;
+    const charIdx = selectionToCharIndex(this.contentEl);
+    if (charIdx == null) return false;
+    this.seekToExplored(charIdx);
+    return true;
   }
 
   getPosition() {
@@ -192,23 +201,30 @@ export class AutoReaderEdge implements AutoReader {
 
       const bytes = base64ToBytes(b64);
       const blob = new Blob([bytes as BlobPart], { type: 'audio/mpeg' });
-      this.releaseBlobUrl();
-      this.currentBlobUrl = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(blob);
 
-      const audio = new Audio(this.currentBlobUrl);
+      const audio = new Audio(url);
       audio.playbackRate = this._rate;
+      const cleanup = () => {
+        audio.removeAttribute('src');
+        audio.load();
+        URL.revokeObjectURL(url);
+      };
       audio.onended = () => {
+        cleanup();
         if (token !== this.currentSpeakToken) return;
         this.paraIndex += 1;
         this.charOffset = 0;
         this.speakNext();
       };
       audio.onerror = () => {
+        cleanup();
         if (token !== this.currentSpeakToken) return;
         this.onError?.('音频播放失败');
         this.off();
       };
       this.audio = audio;
+      this.currentBlobUrl = url;
       await audio.play();
     } catch (err: any) {
       if (token !== this.currentSpeakToken) return;

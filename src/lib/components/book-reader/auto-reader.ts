@@ -15,6 +15,7 @@ import {
   computeGlobalCharIndex,
   extractText,
   seekParagraphsToExplored,
+  selectionToCharIndex,
   splitSentences
 } from './auto-reader-shared';
 
@@ -150,6 +151,14 @@ export class AutoReaderContinuous implements AutoReader {
     const pos = seekParagraphsToExplored(this.paragraphs, exploredCharCount);
     this.paraIndex = pos.paraIndex;
     this.charOffset = pos.charOffset;
+  }
+
+  seekToSelection(): boolean {
+    if (!this.contentEl) return false;
+    const charIdx = selectionToCharIndex(this.contentEl);
+    if (charIdx == null) return false;
+    this.seekToExplored(charIdx);
+    return true;
   }
 
   toggle() {

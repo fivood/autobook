@@ -29,6 +29,10 @@
     tap,
     timer
   } from 'rxjs';
+  import {
+    extractText,
+    ttsIndexToCalculatorIndex
+  } from '$lib/components/book-reader/auto-reader-shared';
   import { quintInOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
   import { browser } from '$app/environment';
@@ -108,6 +112,7 @@
     enableVerticalFontKerning$,
     enableFontVPAL$,
     verticalTextOrientation$,
+    ttsAutoAdvanceSection$,
     ttsPositions$,
     ttsToggleRequest$
   } from '$lib/data/store';
@@ -563,6 +568,8 @@
   let currentSectionIndex = 0;
   let sectionStartCharCount = 0;
   let lastTtsSaveTime = 0;
+  let ttsExtractedText = '';
+  let ttsExtractedTextSection = -1;
 
   $: ttsSeekCharCount = Math.max(0, exploredCharCount - sectionStartCharCount);
 
@@ -602,20 +609,79 @@
   }
 
   let ttsWiredReader: AutoReader | undefined;
+  /** When >=0, TTS hit a section end and we're waiting for currentSectionIndex
+   * to reach this value before re-preparing + resuming reading. */
+  let ttsAwaitingSection = -1;
 
   $: if (autoReader && autoReader !== ttsWiredReader && isPaginated && browser) {
     ttsWiredReader = autoReader;
-    autoReader.onBoundary = () => {
+    autoReader.onBoundary = (charIndex) => {
+      // Auto-page-flip: whatever the TTS engine is about to speak should be
+      // on-screen. charIndex is a section-local offset into extractText()'s
+      // raw string (counts whitespace, punctuation, …). The paginated
+      // calculator uses getCharacterCount() which strips those — translate
+      // before handing it over so we don't drift off the section end.
+      if (typeof charIndex === 'number') {
+        const el = document.querySelector('.book-content') as HTMLElement | null;
+        let calcLocal = charIndex;
+        if (el) {
+          if (ttsExtractedTextSection !== currentSectionIndex) {
+            ttsExtractedText = extractText(el);
+            ttsExtractedTextSection = currentSectionIndex;
+          }
+          calcLocal = ttsIndexToCalculatorIndex(ttsExtractedText, charIndex);
+        }
+        pageManager?.ensureCharVisible?.(calcLocal + sectionStartCharCount);
+      }
       const now = Date.now();
       if (now - lastTtsSaveTime < 2000) return;
       lastTtsSaveTime = now;
       persistTtsPosition();
     };
-    autoReader.onEnd = () => clearTtsPosition();
+    autoReader.onEnd = () => {
+      if (!$ttsAutoAdvanceSection$) {
+        clearTtsPosition();
+        return;
+      }
+      const sectionAtEnd = currentSectionIndex;
+      // Defer so the audio-end → off → onEnd chain settles before we touch
+      // Svelte stores.
+      setTimeout(() => {
+        if (!pageManager || typeof pageManager.advanceToNextSection !== 'function') {
+          clearTtsPosition();
+          return;
+        }
+        // Must call as a method so `this` binds — otherwise the inner
+        // `this.nextSection(...)` throws.
+        const advanced = pageManager.advanceToNextSection();
+        if (advanced) {
+          ttsAwaitingSection = sectionAtEnd + 1;
+        } else {
+          clearTtsPosition();
+        }
+      }, 0);
+    };
     autoReader.wasReaderEnabled$.subscribe((enabled) => {
       // Pausing saves the precise spot (throttled boundary saves lag ~2s).
       if (!enabled && ttsWiredReader === autoReader) persistTtsPosition();
     });
+  }
+
+  // After the new section finishes rendering (currentSectionIndex catches up),
+  // re-extract paragraphs and resume from paragraph 0.
+  $: if (
+    ttsAwaitingSection >= 0 &&
+    currentSectionIndex >= ttsAwaitingSection &&
+    autoReader
+  ) {
+    ttsAwaitingSection = -1;
+    // Defer so DOM/innerHTML updates from the new section land before
+    // extractText() runs.
+    setTimeout(() => {
+      autoReader?.prepare();
+      autoReader?.setPosition(0, 0);
+      autoReader?.on();
+    }, 300);
   }
 
   $: firstDimensionMargin =

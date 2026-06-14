@@ -11,11 +11,14 @@ import {
   type SectionWithProgress
 } from '$lib/components/book-reader/book-toc/book-toc';
 import type { PageManager } from '../types';
+import type { SectionCharacterStatsCalculator } from './section-character-stats-calculator';
 
 export class PageManagerPaginated implements PageManager {
   private translateX = 0;
 
   private sectionData: Map<string, SectionWithProgress> = new Map();
+
+  private calculator: SectionCharacterStatsCalculator | undefined;
 
   constructor(
     private contentEl: HTMLElement,
@@ -147,6 +150,44 @@ export class PageManagerPaginated implements PageManager {
       this.scrollOrTranslateToPos(scrollValue, scrollSize, viewportSize, isUser);
     });
     return true;
+  }
+
+  /** Public next-section advance used by TTS auto-flip. Returns false at book end. */
+  advanceToNextSection(): boolean {
+    return this.nextSection(false);
+  }
+
+  /** Book-reader-paginated injects the calculator after each section's HTML
+   * loads so we can convert a TTS boundary char-index to a scroll position. */
+  setCalculator(calc: SectionCharacterStatsCalculator | undefined) {
+    this.calculator = calc;
+  }
+
+  /** TTS calls this with the (book-wide) char-count of the sentence it's
+   * about to speak. Jumps to the page containing that char if we're not
+   * already on it — works both directions (when user manually navigated
+   * past the spoken position, this scrolls BACK to it). */
+  ensureCharVisible(globalCharCount: number): void {
+    if (!this.calculator) return;
+    const targetScrollPos = this.calculator.getScrollPosByCharCount(globalCharCount);
+    if (targetScrollPos < 0) return;
+
+    const viewportSize = this.verticalMode ? this.height : this.width;
+    const currentPos = this.virtualScrollPos$.getValue();
+    if (targetScrollPos >= currentPos && targetScrollPos < currentPos + viewportSize - 8) {
+      return;
+    }
+
+    const step = viewportSize + this.pageGap;
+    const pageIndex = Math.max(0, Math.floor(targetScrollPos / step));
+    // A horizontal flipPage may have left a CSS `transform: translateX(...)`
+    // on the content element — scrollTo alone wouldn't undo that, so the
+    // page would scroll behind a still-translated layer.
+    if (this.translateX) {
+      this.contentEl.style.removeProperty('transform');
+      this.translateX = 0;
+    }
+    this.scrollTo(pageIndex * step, false);
   }
 
   private nextSection(isUser: boolean) {
