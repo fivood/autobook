@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.4.12
+
+- MOBI 中文乱码彻底解决：放弃 mobi crate 的 String::from_utf8_lossy 输出（会把 GBK 字节永久转成 U+FFFD），改成自己从 records 拉原始字节、直接做 PalmDoc 解压，再按 UTF-8 → GB18030 → GBK → Big5 优先级嗅探
+- 关键判别量：用 UTF-8 lossy 的 replacement char 比例做编码分类轴。真 UTF-8 文件带尾部噪声 ratio ≈ 0–5%，真 GBK 强解 UTF-8 ratio ≈ 40–65%，20% 阈值能干净分开；纯靠"最少替换字符"判别时 GBK / Big5 都是宽容编码，会把任意字节解成"看起来像汉字的垃圾"，无法分辨
+- KF8 / AZW3 joint 文件不再混过：扫记录里的 BOUNDARY 标记，发现就直接报错引导用户用 Calibre 转 EPUB，不再显示 1/8 残片误导用户。原生 KF8 解析器排进 1.5.0
+- MOBI 解析全流程外套 catch_unwind：原先只 Mobi::new 受保护，后续 raw_records / image_records / palmdoc decode 任一环节 panic 都会让 Tauri command 崩溃，前端收到 null 弹"error: undefined"。现在 panic 也会变成可读字符串
+- 前端 loadMobi 把 Tauri reject 的裸字符串包成真 Error 对象，让上层错误提示能正确显示中文报错
+- HTML 属性碎片清理正则增强，能匹配以 CSS 值开头的残片如 1em" width="2em">，以及孤立的 "> 闭合碎片
+
+## 1.4.6
+
+- MOBI 编码 fallback 加 GB18030：GBK fallback 在 1.4.3 已加，但少量 GBK 不收录的字符仍剩 `��`。GB18030 是 GBK 的 4 字节超集覆盖全 Unicode，作为第三选项；三个候选（原始 / GBK / GB18030）按 replacement char 比例最低者取胜
+- MOBI HTML 残片清理 v2：上一版 DOMParser 处理后仍有「孤儿属性串」漏到 text node 里（`1em" width="2em" align="justify">他两只...`），原因是 MOBI6 record 边界把 `<p ...` 的开头切走，剩下半截属性串进了文字流。现在 DOMParser 之后遍历所有 text node，用正则 `(\w+="..."){1,5}>?` 把这种残片删掉，要求至少一对完整 `name="value"` 才匹配，避免误伤正常文字里的引号
+- 图片库剧透标签 `ネタバレ` → 「剧透」：1.2.x 中文化时漏了 book-reader-image-gallery 这两处
+
+## 1.4.5
+
+- 修 Win10 Web Speech 引擎下 TTS 朗读时不自动翻页：原逻辑只靠 `SpeechSynthesisUtterance.onboundary` 事件触发翻页同步，但 Win10 老 OneCore 语音（Yaoyao / Huihui 等）在 Chromium/WebView2 里不发 word/sentence 级 boundary 事件，整段读完都没回调，页面永远不动。现在每段开头额外用 `onstart` 触发一次 boundary，至少能做到段级翻页，与 SAPI 引擎的行为对齐。Win11 用户也无副作用：onstart 比第一个 word boundary 早一点点触发，已在当前页就 no-op
+- 清理 stop / restartIfSpeaking 路径里漏掉的 `onstart = null`，避免引用泄漏
+
 ## 1.4.4
 
 - 修分页模式下鼠标框选文字会被识别成翻页：svelte-gestures v5 的 swipe action 不区分 pointerType，鼠标拖动也会触发 swipe；现在 onSwipe 里检测 `ev.detail.pointerType === 'mouse'` 直接 return，触控 / 触笔不受影响

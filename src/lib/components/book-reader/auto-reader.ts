@@ -186,6 +186,7 @@ export class AutoReaderContinuous implements AutoReader {
       this.utterance.onboundary = null;
       this.utterance.onend = null;
       this.utterance.onerror = null;
+      this.utterance.onstart = null;
       this.utterance = null;
     }
   }
@@ -196,6 +197,7 @@ export class AutoReaderContinuous implements AutoReader {
       this.utterance.onboundary = null;
       this.utterance.onend = null;
       this.utterance.onerror = null;
+      this.utterance.onstart = null;
       this.utterance = null;
     }
     this.synth.cancel();
@@ -227,6 +229,18 @@ export class AutoReaderContinuous implements AutoReader {
     if (this._voice) utt.voice = this._voice;
 
     const paraStartOffset = this.charOffset;
+
+    // Fire a synthetic boundary at the start of the utterance so page-flip
+    // tracking works even on platforms (Win10 + old OneCore voices) where
+    // SpeechSynthesisUtterance.onboundary never fires word-level events.
+    const paraStartGlobalIndex = computeGlobalCharIndex(
+      this.paragraphs,
+      this.paraIndex,
+      paraStartOffset
+    );
+    utt.onstart = () => {
+      this.onBoundary?.(paraStartGlobalIndex);
+    };
 
     utt.onboundary = (ev) => {
       if (ev.name === 'word' || ev.name === 'sentence') {

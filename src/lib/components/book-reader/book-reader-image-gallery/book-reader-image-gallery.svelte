@@ -169,7 +169,7 @@
               aria-hidden="true"
               on:click={() => toggleGalleryPictureSpoiler(readerImageGalleryPicture.url)}
             >
-              ネタバレ
+              剧透
             </button>
           {/if}
         </button>
@@ -201,7 +201,7 @@
               aria-hidden="true"
               on:click={() => toggleGalleryPictureSpoiler(selectedImage.url)}
             >
-              ネタバレ
+              剧透
             </button>
           {/if}
         </div>

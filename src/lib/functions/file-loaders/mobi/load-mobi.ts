@@ -61,15 +61,42 @@ function rewriteImageRefs(
   });
 }
 
+/** Orphan tag-attribute fragments like `1em" width="2em" align="justify">` show
+ * up in MOBI6 content where record boundaries chopped the opening `<tag`. They
+ * survive DOMParser as plain text. Two patterns:
+ * 1) Full attr pairs: `name="value"` runs (possibly starting with a partial
+ *    CSS value like `1em"`)
+ * 2) Lone closing fragment: a short value + `">` at the start of a text node */
+const ATTR_LEAK_RE =
+  /(?:[^\s"<>]{0,20}"\s+)?(?:[a-zA-Z][\w-]*\s*=\s*"[^"<>]{0,40}"\s*){1,5}>?/g;
+const LONE_CLOSE_RE = /^[^"<>]{0,30}"?\s*>/;
+
+function stripAttributeLeaks(root: HTMLElement) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    const text = node.nodeValue || '';
+    if (text.includes('="') || LONE_CLOSE_RE.test(text)) {
+      let cleaned = text.replace(ATTR_LEAK_RE, '');
+      cleaned = cleaned.replace(LONE_CLOSE_RE, '');
+      if (cleaned !== text) node.nodeValue = cleaned;
+    }
+    node = walker.nextNode();
+  }
+}
+
 /** mobi HTML is often a fragment with orphaned tag attributes leaking
  * after partial pagebreak splits. Feed it through DOMParser so the browser's
- * tolerant parser fixes most malformations, then re-serialize. */
+ * tolerant parser fixes most malformations, strip attribute leaks in text
+ * nodes, then re-serialize. */
 function cleanHtml(raw: string): string {
   try {
     const wrapped = `<!doctype html><html><body><div id="autobook-mobi-root">${raw}</div></body></html>`;
     const doc = new DOMParser().parseFromString(wrapped, 'text/html');
     const root = doc.getElementById('autobook-mobi-root');
-    return root ? root.innerHTML : raw;
+    if (!root) return raw;
+    stripAttributeLeaks(root);
+    return root.innerHTML;
   } catch {
     return raw;
   }
@@ -121,7 +148,15 @@ function languageHint(lang: string | null): string {
 
 export default async function loadMobi(file: File, lastBookModified: number): Promise<LoadData> {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const parsed = await invoke<ParsedMobi>('parse_mobi', { bytes: Array.from(bytes) });
+  let parsed: ParsedMobi;
+  try {
+    parsed = await invoke<ParsedMobi>('parse_mobi', { bytes: Array.from(bytes) });
+  } catch (e) {
+    // Tauri rejects with a raw string from Rust's `Err(String)`. Re-throw as a
+    // real Error so the replicator's error handler shows the message instead of
+    // "undefined".
+    throw new Error(typeof e === 'string' ? e : JSON.stringify(e));
+  }
 
   const blobs: Record<string, Blob> = {};
   const rewrittenHtml = rewriteImageRefs(parsed.html, blobs, parsed.images);
