@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.3.7"
+version = "1.4.4"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -45,3 +45,5 @@ sha2 = "0.10"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
+mobi = "0.8"
+encoding_rs = "0.8.35"

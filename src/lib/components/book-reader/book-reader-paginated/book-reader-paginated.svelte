@@ -659,8 +659,16 @@
     }
   }
 
-  function onSwipe(ev: CustomEvent<{ direction: 'top' | 'right' | 'left' | 'bottom' | null }>) {
+  function onSwipe(
+    ev: CustomEvent<{
+      direction: 'top' | 'right' | 'left' | 'bottom' | null;
+      pointerType?: string;
+    }>
+  ) {
     if (!concretePageManager || $skipKeyDownListener$) return;
+    // svelte-gestures v5 fires swipe for mouse drags too, which hijacks text
+    // selection on desktop — only react to touch / pen.
+    if (ev.detail.pointerType === 'mouse') return;
     if (ev.detail.direction !== 'left' && ev.detail.direction !== 'right') return;
     const swipeLeft = ev.detail.direction === 'left';
     const nextPage = verticalMode ? !swipeLeft : swipeLeft;

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "AutoBook",
-  "version": "1.3.7",
+  "version": "1.4.4",
   "identifier": "io.github.fukki.ebookreader",
   "build": {
     "frontendDist": "../build",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "AutoBook v1.3.7",
+        "title": "AutoBook v1.4.4",
         "width": 1280,
         "height": 860,
         "resizable": true,
@@ -63,6 +63,12 @@
         "name": "Markdown",
         "description": "Markdown 文档",
         "mimeType": "text/markdown",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["mobi", "azw", "azw3"],
+        "name": "Mobi",
+        "description": "Kindle 电子书",
         "role": "Viewer"
       }
     ],

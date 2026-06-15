@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.4.4
+
+- 修分页模式下鼠标框选文字会被识别成翻页：svelte-gestures v5 的 swipe action 不区分 pointerType，鼠标拖动也会触发 swipe；现在 onSwipe 里检测 `ev.detail.pointerType === 'mouse'` 直接 return，触控 / 触笔不受影响
+
+## 1.4.3
+
+- 修中文 MOBI 乱码 `���`：mobi crate 只支持 UTF-8 / WIN1252 两种解码，国产中文 .mobi 基本都是 GBK，全部被识别成乱码。新逻辑：把 crate 输出的 WIN1252 字符串按 char→byte 反推回原始字节流，再用 encoding_rs 的 GBK 解一遍，replacement char 比例更低就用 GBK 结果
+- 修 MOBI HTML 标签残片泄漏（`9ight="1em" width="2"` `idth="2em">` 等）：MOBI6 时代 HTML 经常带半截 `<p height="" width="" />` 伪标签，crate 直接拼记录串出来后字符串里残留这些片段。前端走一遍 DOMParser 让浏览器宽容 parser 修复，再 re-serialize 拿干净的 HTML
+- AZW3 / 纯 KF8 文件友好报错：当前 mobi crate 只读 MOBI6 record 区，KF8 章节读不到，会变成空书。导入前检测 strip_tags 后内容 < 50 字时直接返回错误 "本文件看起来是 AZW3 / KF8 格式，KF8 章节为空。请尝试用 Calibre 转成 EPUB 后再导入"。后续要原生 KF8 得换 parser 或者 libmobi FFI，复杂度高，先这样兜底
+- 加 encoding_rs 0.8 依赖（仅用于 GBK 解码 fallback）
+
+## 1.4.2
+
+- 修拖入 / 选择器报「文件必须是 HTMLZ、TXT、EPUB 或包含这些格式的 ZIP」的过时提示。错误文案改成「EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3」完整列表。如果还是看到这个错，多半是 NSIS 检测到「已是 1.4.1」跳过了覆盖，1.4.2 版本号会强制走完整安装
+
+## 1.4.1
+
+- 新增 MOBI / AZW3 支持：
+  - Rust 端用 `mobi = "0.8"` crate 在 Tauri command `parse_mobi` 里解析，纯 Rust 无 C 依赖；KF8 (AZW3) 和 legacy MOBI 都能吃
+  - 解析跑在 `catch_unwind` 里，遇到畸形文件 panic 不会拖垮整个 webview，返回字符串错误给前端
+  - 内部图片走 EXTH cover offset 找封面，其余图片按 `recindex:NNNNN` 在 HTML 里被前端 rewrite 成虚拟文件名挂进 blobs map，复用现有 reader 的图片解析管线
+  - HTML 用 `<mbp:pagebreak>` / `<p style="page-break-after:always">` / `<div class="mbp_pagebreak">` 切 section，每段抓首个 h1-h6 作为 TOC label，匹配现有翻页 / 进度算法
+  - DRM 文件能解析出 metadata 但内容是乱码，crate 会在解压时报错降级成 `content_as_string_lossy`，目前不专门提示，后续看反馈再加
+- tauri.conf.json fileAssociations 注册 `.mobi` `.azw` `.azw3`；BOOK_EXTS 同步加，从命令行 / 双击关联打开也走得通
+- 文件选择器 accept / 拖入 regex / book-card 封面识别都已就位（书脊 palette MOBI/AZW/AZW3 已有，棕橘色）
+
+## 1.4.0
+
+- 新增 Markdown 格式支持（.md / .markdown）：
+  - marked 解析 GFM；fenced code block 走 highlight.js（atom-one-dark 配色）；`$...$` / `$$...$$` 数学公式由 KaTeX 渲染（throwOnError=false，错的语法降级显示为红字 code 块，不让一条公式炸掉整章）
+  - 按一级、二级标题（`#` `##`）切 section，与 TOC 联动；三级以下标题留在 section 内
+  - 表格、引用块、列表、分隔线、行内代码都有相应样式；blockquote 边框 / table border / hr 用 currentColor 跟主题字色走
+  - 读取时先 UTF-8，若 replacement char 超过 5 个再 fallback GBK，国产 Windows .md 文件不乱码
+  - 跑通的链路：drop/选择器 accept → replicator dispatch (`load-md.ts`) → MD palette 绿色书脊封面（MD 标识）→ reader stylesheet 注入 KaTeX + hljs
+- tauri.conf fileAssociations 注册 `.md` `.markdown` → 系统可关联本应用打开
+- MOBI / AZW3 单独开下一个 1.4.x 处理：纯前端 parser 没有现成靠谱的，要么找 wasm（kindleunpack-wasm 之类）要么调用 Calibre cli 或自己写 PalmDOC + Huffman/HUFF 解码，工作量与 MD 不在一个量级
+
 ## 1.3.7
 
 - 新建分类弹窗换成主题化对话框：之前用浏览器原生 `prompt()` 跳出 "tauri.localhost 显示" 的灰白默认框，无法贴主题色。新增 TextInputDialog 组件走 DialogTemplate 体系，背景、字色随当前主题变；Enter 提交、Esc / 点取消都正确返回 undefined

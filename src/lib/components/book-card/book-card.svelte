@@ -77,6 +77,7 @@
   const FORMAT_PALETTE: Record<string, { bg: string; accent: string }> = {
     EPUB: { bg: '#2b5a69', accent: '#5fb0a7' },
     TXT: { bg: '#5a4a3c', accent: '#c39a55' },
+    MD: { bg: '#2d4a2b', accent: '#7ab86d' },
     HTMLZ: { bg: '#4a2b5a', accent: '#a574c0' },
     MD: { bg: '#1f3a4a', accent: '#4ca8d8' },
     MOBI: { bg: '#7a3f25', accent: '#e08545' },
