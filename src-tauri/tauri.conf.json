@@ -70,6 +70,13 @@
         "name": "Mobi",
         "description": "Kindle 电子书",
         "role": "Viewer"
+      },
+      {
+        "ext": ["pdf"],
+        "name": "PDF",
+        "description": "PDF 文档",
+        "mimeType": "application/pdf",
+        "role": "Viewer"
       }
     ],
     "icon": [
