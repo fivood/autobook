@@ -4,18 +4,12 @@
  * All rights reserved.
  */
 
-import {
-  StorageKey,
-  StorageSourceDefault,
-  internalStorageSourceName
-} from '$lib/data/storage/storage-types';
-import { fsStorageSource$, gDriveStorageSource$, oneDriveStorageSource$ } from '$lib/data/store';
+import { internalStorageSourceName } from '$lib/data/storage/storage-types';
 
 import type { BooksDbStorageSource } from '$lib/data/database/books-db/versions/books-db';
 import StorageUnlock from '$lib/components/storage-unlock.svelte';
 import { dialogManager } from '$lib/data/dialog-manager';
 import { logger } from '$lib/data/logger';
-import { storageSource$ } from '$lib/data/storage/storage-view';
 
 const saltByteLength = 16;
 const ivByteLength = 12;
@@ -62,31 +56,11 @@ export interface StorageUnlockAction extends RemoteContext {
 }
 
 export function isAppDefault(name: string) {
-  return (
-    name === StorageSourceDefault.GDRIVE_DEFAULT ||
-    name === StorageSourceDefault.ONEDRIVE_DEFAULT ||
-    internalStorageSourceName.has(name)
-  );
+  return internalStorageSourceName.has(name);
 }
 
-export function setStorageSourceDefault(name: string, type: StorageKey) {
-  switch (type) {
-    case StorageKey.GDRIVE:
-      gDriveStorageSource$.next(name || StorageSourceDefault.GDRIVE_DEFAULT);
-      break;
-    case StorageKey.ONEDRIVE:
-      oneDriveStorageSource$.next(name || StorageSourceDefault.ONEDRIVE_DEFAULT);
-      break;
-    case StorageKey.FS:
-      fsStorageSource$.next(name);
-      break;
-    default:
-      break;
-  }
-
-  if (!name && type === StorageKey.FS) {
-    storageSource$.next(StorageKey.BROWSER);
-  }
+export function setStorageSourceDefault(_name: string, _type: any) {
+  // no-op: cloud storage defaults removed
 }
 
 export async function encrypt(window: Window, payload: string, secret: string) {
@@ -125,43 +99,6 @@ export async function unlockStorageData(
   unlockProps?: Record<string, any>
 ) {
   let unlockResult: StorageUnlockAction | undefined;
-  let description = unlockDescription;
-
-  if (storageSource && storageSource.type !== StorageKey.FS) {
-    if (storageSource.storedInManager && storageSource.data instanceof ArrayBuffer) {
-      const passwordCredential: PasswordCredential | undefined = await navigator.credentials
-        .get({ password: true })
-        .then((credentials) =>
-          credentials instanceof PasswordCredential ? credentials : undefined
-        )
-        .catch(({ message }: any) => {
-          logger.error(`Error getting Password from Manager: ${message}`);
-
-          return undefined;
-        });
-
-      if (passwordCredential?.password) {
-        try {
-          unlockResult = JSON.parse(
-            new TextDecoder().decode(
-              await decrypt(window, storageSource.data, passwordCredential.password)
-            )
-          );
-
-          if (unlockResult) {
-            unlockResult.secret = passwordCredential.password;
-          }
-        } catch ({ message }: any) {
-          description += ' but the provided Credentials were invalid';
-          logger.error(
-            `Error decrypting Data with Credential ${passwordCredential.id}: ${message}`
-          );
-        }
-      }
-    } else if (isRemoteContext(storageSource.data)) {
-      unlockResult = storageSource.data;
-    }
-  }
 
   if (!unlockResult && unlockProps) {
     unlockResult = await new Promise<StorageUnlockAction | undefined>((resolver) => {
@@ -170,7 +107,7 @@ export async function unlockStorageData(
           component: StorageUnlock,
           props: {
             ...unlockProps,
-            description,
+            description: unlockDescription,
             resolver
           },
           disableCloseOnClick: true

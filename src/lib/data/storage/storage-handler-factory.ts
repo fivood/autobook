@@ -9,18 +9,12 @@ import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-ty
 import { BackupStorageHandler } from '$lib/data/storage/handler/backup-handler';
 import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
-import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
 import { TauriFsStorageHandler } from '$lib/data/storage/handler/tauri-fs-handler';
-import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { MergeMode } from '$lib/data/merge-mode';
-import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 
 let backupStorageHandler: BackupStorageHandler;
 let browserStorageHandler: BrowserStorageHandler;
-let gDriveStorageHandler: GDriveStorageHandler;
-let oneDriveStorageHandler: OneDriveStorageHandler;
-let fsStorageHandler: FilesystemStorageHandler;
 let tauriFsStorageHandler: TauriFsStorageHandler;
 
 export function getStorageHandler(
@@ -45,39 +39,6 @@ export function getStorageHandler(
   readingGoalsMergeMode?: MergeMode,
   askForStorageUnlock?: boolean
 ): BrowserStorageHandler;
-export function getStorageHandler(
-  window: Window,
-  storageType: StorageKey.GDRIVE,
-  storageSourceName?: string,
-  isForBrowser?: boolean,
-  cacheStorageData?: boolean,
-  saveBehavior?: ReplicationSaveBehavior,
-  statisticsMergeMode?: MergeMode,
-  readingGoalsMergeMode?: MergeMode,
-  askForStorageUnlock?: boolean
-): GDriveStorageHandler;
-export function getStorageHandler(
-  window: Window,
-  storageType: StorageKey.ONEDRIVE,
-  storageSourceName?: string,
-  isForBrowser?: boolean,
-  cacheStorageData?: boolean,
-  saveBehavior?: ReplicationSaveBehavior,
-  statisticsMergeMode?: MergeMode,
-  readingGoalsMergeMode?: MergeMode,
-  askForStorageUnlock?: boolean
-): OneDriveStorageHandler;
-export function getStorageHandler(
-  window: Window,
-  storageType: StorageKey.FS,
-  storageSourceName?: string,
-  isForBrowser?: boolean,
-  cacheStorageData?: boolean,
-  saveBehavior?: ReplicationSaveBehavior,
-  statisticsMergeMode?: MergeMode,
-  readingGoalsMergeMode?: MergeMode,
-  askForStorageUnlock?: boolean
-): FilesystemStorageHandler;
 export function getStorageHandler(
   window: Window,
   storageType: StorageKey,
@@ -125,48 +86,6 @@ export function getStorageHandler(
       );
 
       return browserStorageHandler;
-    case StorageKey.GDRIVE:
-      gDriveStorageHandler = gDriveStorageHandler || new GDriveStorageHandler(window);
-      gDriveStorageHandler.updateSettings(
-        window,
-        isForBrowser,
-        saveBehavior,
-        statisticsMergeMode,
-        readingGoalsMergeMode,
-        cacheStorageData,
-        askForStorageUnlock,
-        storageSourceName
-      );
-
-      return gDriveStorageHandler;
-    case StorageKey.ONEDRIVE:
-      oneDriveStorageHandler = oneDriveStorageHandler || new OneDriveStorageHandler(window);
-      oneDriveStorageHandler.updateSettings(
-        window,
-        isForBrowser,
-        saveBehavior,
-        statisticsMergeMode,
-        readingGoalsMergeMode,
-        cacheStorageData,
-        askForStorageUnlock,
-        storageSourceName
-      );
-
-      return oneDriveStorageHandler;
-    case StorageKey.FS:
-      fsStorageHandler = fsStorageHandler || new FilesystemStorageHandler(window, StorageKey.FS);
-      fsStorageHandler.updateSettings(
-        window,
-        isForBrowser,
-        saveBehavior,
-        statisticsMergeMode,
-        readingGoalsMergeMode,
-        cacheStorageData,
-        askForStorageUnlock,
-        storageSourceName
-      );
-
-      return fsStorageHandler;
     case StorageKey.TAURI_FS:
       tauriFsStorageHandler =
         tauriFsStorageHandler || new TauriFsStorageHandler(window, StorageKey.TAURI_FS);

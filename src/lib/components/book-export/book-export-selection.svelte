@@ -2,19 +2,11 @@
   import BookExportIcon from '$lib/components/book-export/book-export-icon.svelte';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import type { StorageIconElement } from '$lib/data/storage/storage-view';
-  import { isOnline$ } from '$lib/data/store';
-  import { isOnlineSourceAvailable } from '$lib/functions/utils';
   import { onMount } from 'svelte';
 
   export let icons: StorageIconElement[];
   export let target: StorageKey;
   export let dataToReplicate: StorageDataType[];
-
-  $: if (!isOnlineSourceAvailable($isOnline$, target)) {
-    target = icons.find((icon) => icon.source === StorageKey.BACKUP)
-      ? StorageKey.BACKUP
-      : StorageKey.BROWSER;
-  }
 
   onMount(() => {
     if (!icons.find((icon) => icon.source === target)) {
@@ -26,15 +18,12 @@
 <h2 class="mb-4 text-xl font-medium">导出目标</h2>
 <div class="mb-4 grid grid-cols-2 gap-8">
   {#each icons as icon (icon.source)}
-    {@const disabled = !isOnlineSourceAvailable($isOnline$, icon.source)}
     <BookExportIcon
       {...icon}
-      {disabled}
+      disabled={false}
       selected={icon.source === target}
       on:click={() => {
-        if (!disabled) {
-          target = icon.source;
-        }
+        target = icon.source;
       }}
     />
   {/each}

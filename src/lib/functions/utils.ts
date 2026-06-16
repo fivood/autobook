@@ -4,7 +4,6 @@
  * All rights reserved.
  */
 
-import { StorageKey } from '$lib/data/storage/storage-types';
 import { getCharacterCount } from './get-character-count';
 import { writableSubject } from '$lib/functions/svelte/store';
 
@@ -43,8 +42,8 @@ export function dummyFn() {}
 
 export const isMobile$ = writableSubject<boolean>(false);
 
-export function isOnlineSourceAvailable(isOnline: boolean, storageKey: StorageKey) {
-  return isOnline || (storageKey !== StorageKey.GDRIVE && storageKey !== StorageKey.ONEDRIVE);
+export function isOnlineSourceAvailable() {
+  return true;
 }
 
 export function caluclatePercentage(x: number, y: number) {

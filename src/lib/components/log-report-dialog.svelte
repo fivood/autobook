@@ -4,7 +4,6 @@
   import { buttonClasses } from '$lib/css-classes';
   import { isTauri } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
-  import { StorageSourceDefault } from '$lib/data/storage/storage-types';
   import {
     theme$,
     viewMode$,
@@ -48,9 +47,6 @@
     autoReplication$,
     replicationSaveBehavior$,
     showExternalPlaceholder$,
-    gDriveStorageSource$,
-    oneDriveStorageSource$,
-    fsStorageSource$,
     syncTarget$,
     keepLocalStatisticsOnDeletion$,
     overwriteBookCompletion$,
@@ -144,11 +140,6 @@
           autoReplication: autoReplication$.getValue(),
           replicationSaveBehavior: replicationSaveBehavior$.getValue(),
           showExternalPlaceholder: showExternalPlaceholder$.getValue(),
-          gDriveStorageSource:
-            gDriveStorageSource$.getValue() === StorageSourceDefault.GDRIVE_DEFAULT,
-          oneDriveStorageSource:
-            oneDriveStorageSource$.getValue() === StorageSourceDefault.ONEDRIVE_DEFAULT,
-          fsStorageSource: !!fsStorageSource$.getValue(),
           syncTarget: !!syncTarget$.getValue(),
           keepLocalStatisticsOnDeletion: keepLocalStatisticsOnDeletion$.getValue(),
           overwriteBookCompletion: overwriteBookCompletion$.getValue(),

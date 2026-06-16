@@ -262,13 +262,9 @@ function isGarbageText(text: string): boolean {
 }
 
 export default async function loadPdf(file: File, lastBookModified: number): Promise<LoadData> {
-  console.log('[loadPdf] start', file.name, file.size);
   try {
-    const result = await loadPdfInner(file, lastBookModified);
-    console.log('[loadPdf] done', result.title, result.sections.length, 'sections');
-    return result;
+    return await loadPdfInner(file, lastBookModified);
   } catch (e: any) {
-    console.error('[loadPdf] error object:', e);
     const msg = e?.message || e?.name || (typeof e === 'string' ? e : JSON.stringify(e));
     throw new Error(`PDF 加载失败: ${msg}`);
   }

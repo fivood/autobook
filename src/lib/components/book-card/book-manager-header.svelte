@@ -21,7 +21,6 @@
     translateXHeaderFa
   } from '$lib/css-classes';
   import { SortDirection } from '$lib/data/sort-types';
-  import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import {
@@ -33,10 +32,7 @@
     booklistSortOptions$,
     cacheStorageData$,
     fileCountData$,
-    fsStorageSource$,
-    gDriveStorageSource$,
-    isOnline$,
-    oneDriveStorageSource$
+    isOnline$
   } from '$lib/data/store';
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import { inputFile } from '$lib/functions/file-dom/input-file';
@@ -118,38 +114,11 @@
     );
 
     storageSourceMenuItems.push(
-      ...(isStorageSourceAvailable(StorageKey.GDRIVE, $gDriveStorageSource$, window)
-        ? [
-            {
-              label: 'Google 云端',
-              key: StorageKey.GDRIVE,
-              requiresConnectivity: true
-            }
-          ]
-        : []),
-      ...(isStorageSourceAvailable(StorageKey.ONEDRIVE, $oneDriveStorageSource$, window)
-        ? [
-            {
-              label: 'OneDrive 云端',
-              key: StorageKey.ONEDRIVE,
-              requiresConnectivity: true
-            }
-          ]
-        : []),
       ...(isStorageSourceAvailable(StorageKey.TAURI_FS, '', window)
         ? [
             {
               label: '本地文件',
               key: StorageKey.TAURI_FS,
-              requiresConnectivity: false
-            }
-          ]
-        : []),
-      ...(isStorageSourceAvailable(StorageKey.FS, $fsStorageSource$, window)
-        ? [
-            {
-              label: '文件系统',
-              key: StorageKey.FS,
               requiresConnectivity: false
             }
           ]
@@ -218,7 +187,7 @@
 
   async function setCountData(fileList: FileList) {
     try {
-      $fileCountData$ = JSON.parse(await FilesystemStorageHandler.readFileObject(fileList[0]));
+      $fileCountData$ = JSON.parse(await fileList[0].text());
     } catch ({ message }: any) {
       console.error(`failed to read file: ${message}`);
     }

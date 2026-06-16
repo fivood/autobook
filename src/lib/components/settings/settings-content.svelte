@@ -36,8 +36,6 @@
   import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
   import { isAppDefault } from '$lib/data/storage/storage-source-manager';
-  import { defaultStorageSources } from '$lib/data/storage/storage-types';
-  import { isStorageSourceAvailable } from '$lib/data/storage/storage-view';
   import {
     customThemes$,
     database,
@@ -861,21 +859,9 @@
   ];
 
   const storageSources$ = database.storageSourcesChanged$.pipe(
-    map((storageSources) => [
-      ...defaultStorageSources
-        .filter((defaultStorageSource) =>
-          isStorageSourceAvailable(defaultStorageSource.type, defaultStorageSource.name, window)
-        )
-        .map((defaultStorageSource) => ({
-          name: defaultStorageSource.name,
-          type: defaultStorageSource.type,
-          storedInManager: false,
-          encryptionDisabled: false,
-          data: new ArrayBuffer(0),
-          lastSourceModified: 0
-        })),
-      ...storageSources.filter((storageSource) => !isAppDefault(storageSource.name))
-    ])
+    map((storageSources) =>
+      storageSources.filter((storageSource) => !isAppDefault(storageSource.name))
+    )
   );
 
   let showSpinner = false;

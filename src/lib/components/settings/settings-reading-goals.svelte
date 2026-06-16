@@ -38,7 +38,7 @@
     statisticsMergeMode$
   } from '$lib/data/store';
   import { replicateData } from '$lib/functions/replication/replicator';
-  import { isOnlineSourceAvailable, pluralize } from '$lib/functions/utils';
+  import { pluralize } from '$lib/functions/utils';
   import { getDateKey, secondsToMinutes } from '$lib/functions/statistic-util';
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
@@ -71,9 +71,7 @@
   let historyIndex = 0;
   const itemsPerPage = 1;
 
-  $: availableSources = storageSources.filter((source) =>
-    isOnlineSourceAvailable($isOnline$, source.type)
-  );
+  $: availableSources = storageSources;
 
   $: saveDisabled = !!((currentTimeGoal || currentCharacterGoal) && !currentReadingGoalStartDate);
 

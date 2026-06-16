@@ -28,7 +28,6 @@
   import { pagePath } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
   import { SortDirection, type SortOption } from '$lib/data/sort-types';
-  import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
@@ -271,7 +270,7 @@
 
         idToOpen = await handler.prepareBookForReading();
 
-        if (!$hideExternalReadHint$ && handler instanceof ApiStorageHandler) {
+        if (false) {
           const nextAction = await new Promise<string>((resolver) => {
             dialogManager.dialogs$.next([
               {
@@ -331,10 +330,7 @@
   }
 
   function operationAllowed() {
-    const connectivityPass = !(
-      ($storageSource$ === StorageKey.GDRIVE || $storageSource$ === StorageKey.ONEDRIVE) &&
-      !$isOnline$
-    );
+    const connectivityPass = true;
 
     if (!connectivityPass && !replicationToProgress) {
       const message = '此操作需要联网';
