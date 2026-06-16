@@ -8,7 +8,6 @@
 //! data URIs into the HTML on the Rust side).
 
 use base64::{engine::general_purpose, Engine};
-use mobi::headers::Compression;
 use mobi::Mobi;
 use serde::Serialize;
 
@@ -40,6 +39,12 @@ fn replacement_char_ratio(s: &str) -> f32 {
     let bad = s.chars().filter(|c| *c == '\u{FFFD}').count() as f32;
     let total = s.chars().count() as f32;
     bad / total
+}
+
+/// Public wrapper around the encoding sniffer for use by sibling modules
+/// (kf8_parser). Same algorithm as `decode_best`.
+pub fn decode_best_public(raw: &[u8]) -> String {
+    decode_best(raw)
 }
 
 fn strip_tags(s: &str) -> String {
@@ -122,33 +127,104 @@ fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
     text
 }
 
-/// Extract raw decompressed content bytes, bypassing the mobi crate's
-/// string conversion which destroys CJK byte sequences via
-/// `String::from_utf8_lossy`. Returns None for Huffman compression
-/// (where we'd need the complex Huffman tables — rare for Chinese books).
-fn extract_raw_content_bytes(mobi: &Mobi) -> Option<Vec<u8>> {
-    let compression = mobi.compression();
-    let range = mobi.readable_records_range();
-    let records = mobi.raw_records();
-    let readable = records.range(range);
+/// Extract raw decompressed content bytes by parsing PalmDB directly,
+/// bypassing the mobi crate's record handling and string conversion.
+/// Returns (bytes, declared_encoding) or None for Huffman compression.
+/// declared_encoding: 1252 = CP1252, 65001 = UTF-8.
+fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)> {
+    use crate::kf8_parser::{parse_palmdb_records, strip_record_trailers};
 
-    match compression {
-        Compression::No => {
-            let mut bytes = Vec::new();
-            for record in readable {
-                bytes.extend_from_slice(record.content);
-            }
-            Some(bytes)
-        }
-        Compression::PalmDoc => {
-            let mut bytes = Vec::new();
-            for record in readable {
-                bytes.extend(decompress_palmdoc(record.content));
-            }
-            Some(bytes)
-        }
-        Compression::Huff => None,
+    let (records, _title) = parse_palmdb_records(file_bytes).ok()?;
+    if records.is_empty() {
+        return None;
     }
+
+    let rec0 = records[0];
+    if rec0.len() < 18 {
+        return None;
+    }
+
+    // PalmDoc header (first 16 bytes of record 0):
+    //   0x00 compression u16 (1=none, 2=PalmDoc, 17480=Huff)
+    //   0x08 text_record_count u16
+    let compression = u16::from_be_bytes([rec0[0], rec0[1]]);
+    let text_record_count = u16::from_be_bytes([rec0[8], rec0[9]]) as usize;
+
+    if compression == 17480 {
+        return None; // Huff/CDIC
+    }
+
+    // text_encoding at record offset 0x1C (MOBI header offset 0x0C)
+    let text_encoding = if rec0.len() >= 0x20 {
+        u32::from_be_bytes([rec0[0x1C], rec0[0x1D], rec0[0x1E], rec0[0x1F]])
+    } else {
+        65001
+    };
+
+    // extra_record_data_flags: u16 at record offset 0xF2, only if MOBI
+    // header length (at record offset 0x14) >= 0xE4.
+    let extra_flags = if rec0.len() >= 0xF4 {
+        let mobi_len = u32::from_be_bytes([rec0[0x14], rec0[0x15], rec0[0x16], rec0[0x17]]) as usize;
+        if mobi_len >= 0xE4 {
+            u16::from_be_bytes([rec0[0xF2], rec0[0xF3]]) as u32
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    // Text records are records 1..=text_record_count
+    let text_end = 1 + text_record_count;
+    if text_end > records.len() {
+        return None;
+    }
+
+    let mut bytes = Vec::with_capacity(text_record_count * 4096);
+    for record in &records[1..text_end] {
+        let trimmed = strip_record_trailers(record, extra_flags);
+        match compression {
+            1 => bytes.extend_from_slice(trimmed),
+            2 => bytes.extend(decompress_palmdoc(trimmed)),
+            _ => return None,
+        }
+    }
+    Some((bytes, text_encoding))
+}
+
+/// Decode UTF-8 bytes with CP1252 fallback for invalid sequences.
+/// Many MOBI files declare UTF-8 but embed CP1252 special characters
+/// (em-dashes 0x97, curly quotes 0x93/0x94, etc.) whose byte values
+/// are invalid in UTF-8.
+fn decode_utf8_cp1252_fallback(raw: &[u8]) -> String {
+    let mut result = String::with_capacity(raw.len());
+    let mut pos = 0;
+    while pos < raw.len() {
+        match std::str::from_utf8(&raw[pos..]) {
+            Ok(s) => {
+                result.push_str(s);
+                break;
+            }
+            Err(e) => {
+                let valid_up_to = e.valid_up_to();
+                // Safe: from_utf8 guarantees [pos..pos+valid_up_to] is valid UTF-8
+                result.push_str(unsafe {
+                    std::str::from_utf8_unchecked(&raw[pos..pos + valid_up_to])
+                });
+                pos += valid_up_to;
+                // Decode the invalid byte(s) as CP1252
+                let error_len = e.error_len().unwrap_or(1);
+                for j in 0..error_len {
+                    if pos + j < raw.len() {
+                        let (ch, _, _) = encoding_rs::WINDOWS_1252.decode(&raw[pos + j..pos + j + 1]);
+                        result.push_str(&ch);
+                    }
+                }
+                pos += error_len;
+            }
+        }
+    }
+    result
 }
 
 /// Pick the best encoding for raw content bytes. Order matters because
@@ -303,11 +379,26 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
     let author = mobi.author().unwrap_or_default();
     let language = Some(format!("{:?}", mobi.language()));
 
-    // Try to get raw bytes and decode with proper CJK encoding detection.
-    // This bypasses the mobi crate's lossy UTF-8/WIN1252 conversion that
-    // destroys GBK byte sequences.
-    let html = if let Some(raw_bytes) = extract_raw_content_bytes(&mobi) {
-        decode_best(&raw_bytes)
+    // Try direct PalmDB parsing first (bypasses mobi crate's record handling).
+    // Falls back to mobi crate for Huff/CDIC compressed files.
+    let html = if let Some((raw_bytes, declared_enc)) = extract_raw_content_bytes_direct(bytes) {
+        if declared_enc == 65001 {
+            // Declared UTF-8: use UTF-8 with CP1252 fallback for invalid bytes.
+            // Many MOBI files mix UTF-8 text with CP1252 special chars (0x80-0x9F).
+            let utf8_result = decode_utf8_cp1252_fallback(&raw_bytes);
+            let ratio = replacement_char_ratio(&utf8_result);
+            if ratio < 0.20 {
+                utf8_result
+            } else {
+                // Too many replacements → probably not UTF-8 at all, run sniffer
+                decode_best(&raw_bytes)
+            }
+        } else if declared_enc == 1252 {
+            // Declared CP1252: might actually be GBK/GB18030, run sniffer
+            decode_best(&raw_bytes)
+        } else {
+            decode_best(&raw_bytes)
+        }
     } else {
         // Huffman compression: fall back to crate's string + WIN1252 roundtrip
         let primary = mobi
@@ -316,54 +407,70 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
         decode_via_win1252_roundtrip(&primary)
     };
 
-    // Detect KF8:joint files. They contain a record whose content is the
-    // 8-byte marker `BOUNDARY`, after which all subsequent records belong to
-    // the KF8 segment (the modern format Amazon uses). The MOBI6 portion of
-    // a joint file is intentionally degraded — usually just a "use a newer
-    // Kindle" stub or a tiny excerpt — so passing it through silently makes
-    // the user think the book is broken. Reject up-front with a clear hint.
-    //
-    // Also catches pure AZW3 / KF8 where the MOBI6 segment is empty.
-    let is_joint = mobi
-        .raw_records()
-        .records()
-        .iter()
-        .any(|r| r.content == b"BOUNDARY");
+    // Detect KF8:joint / pure KF8 and dispatch to the dedicated KF8 parser.
+    let is_joint = crate::kf8_parser::parse_palmdb_records(bytes)
+        .map(|(records, _)| records.iter().any(|r| r.starts_with(b"BOUNDARY")))
+        .unwrap_or(false);
     let is_kf8_only = strip_tags(&html).trim().chars().count() < 50;
     if is_joint || is_kf8_only {
-        return Err(
-            "本文件是 AZW3 / KF8 格式（Amazon 新版 Kindle 格式），AutoBook 目前还在做原生 KF8 解析。临时方案：用 Calibre 把它转成 EPUB 后再导入。下个大版本会原生支持 KF8。"
-                .into(),
-        );
-    }
-
-    let mut images = Vec::new();
-    for (i, raw) in mobi.image_records().iter().enumerate() {
-        let content = raw.content;
-        if content.is_empty() {
-            continue;
-        }
-        let ext = detect_image_ext(content).to_string();
-        images.push(ParsedMobiImage {
-            index: i + 1,
-            ext,
-            data: general_purpose::STANDARD.encode(content),
-        });
-    }
-
-    let cover_index = mobi
-        .metadata
-        .exth
-        .get_record(mobi::headers::ExthRecord::CoverOffset)
-        .and_then(|vals| vals.first())
-        .and_then(|bytes| {
-            if bytes.len() >= 4 {
-                Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize + 1)
-            } else {
-                None
+        match crate::kf8_parser::try_parse_kf8(bytes) {
+            Ok(Some(parsed)) => return Ok(parsed),
+            Ok(None) => {
+                // No KF8 segment found but MOBI6 content is empty — likely a
+                // truly broken file.
+                return Err(
+                    "本文件 MOBI6 段为空且未找到 KF8 段，文件可能损坏。"
+                        .into(),
+                );
             }
-        })
-        .unwrap_or(0);
+            Err(e) => {
+                return Err(format!(
+                    "KF8 解析失败: {e}\n临时方案：用 Calibre 把它转成 EPUB 后再导入。"
+                ));
+            }
+        }
+    }
+
+    // Extract images from PalmDB records directly.
+    let mut images = Vec::new();
+    let mut cover_index = 0usize;
+    if let Ok((all_records, _)) = crate::kf8_parser::parse_palmdb_records(bytes) {
+        let rec0 = all_records.get(0).copied().unwrap_or(&[]);
+        // first_image_index at record offset 0x6C (MOBI sig 0x5C)
+        let first_img = if rec0.len() >= 0x70 {
+            u32::from_be_bytes([rec0[0x6C], rec0[0x6D], rec0[0x6E], rec0[0x6F]]) as usize
+        } else {
+            0
+        };
+        let scan_start = if first_img > 0 && first_img < all_records.len() {
+            first_img
+        } else {
+            // fallback: start after text records
+            let text_count = if rec0.len() >= 10 {
+                u16::from_be_bytes([rec0[8], rec0[9]]) as usize
+            } else {
+                0
+            };
+            text_count + 1
+        };
+        for (i, record) in all_records[scan_start..].iter().enumerate() {
+            if record.starts_with(&[0xFF, 0xD8, 0xFF])
+                || record.starts_with(&[0x89, b'P', b'N', b'G'])
+                || record.starts_with(b"GIF8")
+            {
+                let ext = detect_image_ext(record);
+                images.push(ParsedMobiImage {
+                    index: i + 1,
+                    ext: ext.to_string(),
+                    data: general_purpose::STANDARD.encode(record),
+                });
+            }
+        }
+        // Cover from EXTH CoverOffset
+        cover_index = crate::kf8_parser::parse_exth_cover_offset(rec0)
+            .filter(|&idx| idx > 0 && idx <= images.len())
+            .unwrap_or_else(|| if images.is_empty() { 0 } else { 1 });
+    }
 
     Ok(ParsedMobi {
         title,

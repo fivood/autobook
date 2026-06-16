@@ -38,7 +38,7 @@
         component: TextInputDialog,
         props: {
           dialogHeader: '新建分类',
-          placeholder: '例如：推理、女性作者',
+          placeholder: '',
           resolver: async (name: string | undefined) => {
             if (!name) return;
             const created = await createFolder(name);
@@ -69,8 +69,8 @@
         props: {
           dialogHeader: '删除文件夹',
           dialogMessage: `删除"${name}"？只移除分类，里面的书不会被删。`,
-          resolver: async (ok: boolean) => {
-            if (ok) await deleteFolder(id);
+          resolver: async (wasCanceled: boolean) => {
+            if (!wasCanceled) await deleteFolder(id);
           }
         }
       }

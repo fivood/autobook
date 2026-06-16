@@ -593,9 +593,10 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
 
             if (!files.length) return;
 
+            const title = BaseStorageHandler.desanitizeFilename(dirName);
             const bookCard: BookCardProps = {
-              id: BaseStorageHandler.getDummyId(),
-              title: BaseStorageHandler.desanitizeFilename(dirName),
+              id: BaseStorageHandler.stableIdFromTitle(title),
+              title,
               imagePath: '',
               characters: 0,
               lastBookModified: 0,

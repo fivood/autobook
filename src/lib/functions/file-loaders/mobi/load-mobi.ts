@@ -11,6 +11,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
+import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 
 interface ParsedMobiImage {
   index: number;
@@ -146,16 +147,38 @@ function languageHint(lang: string | null): string {
   return 'zh';
 }
 
-export default async function loadMobi(file: File, lastBookModified: number): Promise<LoadData> {
+async function tryCalibConvert(file: File, lastBookModified: number): Promise<LoadData | null> {
+  try {
+    const hasCalibre = await invoke<boolean>('check_calibre');
+    if (!hasCalibre) return null;
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const epubBytes = await invoke<number[]>('convert_with_calibre', {
+      bytes: Array.from(bytes),
+      filename: file.name
+    });
+    const epubBlob = new Blob([new Uint8Array(epubBytes)], {
+      type: 'application/epub+zip'
+    });
+    const epubFile = new File([epubBlob], file.name.replace(/\.[^.]+$/, '.epub'), {
+      type: 'application/epub+zip'
+    });
+    return await loadEpub(epubFile, document, lastBookModified);
+  } catch {
+    return null;
+  }
+}
+
+const CALIBRE_HINT = '\n\n提示：安装 Calibre（https://calibre-ebook.com）可获得更好的 MOBI/AZW3 兼容性，导入时会自动调用 Calibre 转换。';
+
+async function nativeParse(file: File, lastBookModified: number): Promise<LoadData> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let parsed: ParsedMobi;
   try {
     parsed = await invoke<ParsedMobi>('parse_mobi', { bytes: Array.from(bytes) });
   } catch (e) {
-    // Tauri rejects with a raw string from Rust's `Err(String)`. Re-throw as a
-    // real Error so the replicator's error handler shows the message instead of
-    // "undefined".
-    throw new Error(typeof e === 'string' ? e : JSON.stringify(e));
+    const msg = typeof e === 'string' ? e : JSON.stringify(e);
+    throw new Error(msg + CALIBRE_HINT);
   }
 
   const blobs: Record<string, Blob> = {};
@@ -185,4 +208,10 @@ export default async function loadMobi(file: File, lastBookModified: number): Pr
     lastBookModified,
     lastBookOpen: 0
   };
+}
+
+export default async function loadMobi(file: File, lastBookModified: number): Promise<LoadData> {
+  const calibreResult = await tryCalibConvert(file, lastBookModified);
+  if (calibreResult) return calibreResult;
+  return nativeParse(file, lastBookModified);
 }

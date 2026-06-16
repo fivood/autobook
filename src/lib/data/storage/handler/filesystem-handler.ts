@@ -730,9 +730,10 @@ export class FilesystemStorageHandler extends BaseStorageHandler {
               return;
             }
 
+            const fsTitle = BaseStorageHandler.desanitizeFilename(directory.name);
             const bookCard: BookCardProps = {
-              id: BaseStorageHandler.getDummyId(),
-              title: BaseStorageHandler.desanitizeFilename(directory.name),
+              id: BaseStorageHandler.stableIdFromTitle(fsTitle),
+              title: fsTitle,
               imagePath: '',
               characters: 0,
               lastBookModified: 0,

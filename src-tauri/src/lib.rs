@@ -7,8 +7,10 @@ use tauri::{
 };
 use tauri_plugin_fs::FsExt;
 
+mod calibre_converter;
 mod custom_tts;
 mod edge_tts;
+mod kf8_parser;
 mod mobi_parser;
 mod winrt_tts;
 
@@ -241,7 +243,9 @@ pub fn run() {
       edge_synthesize,
       custom_tts_synthesize,
       schedule_ui_reset,
-      mobi_parser::parse_mobi
+      mobi_parser::parse_mobi,
+      calibre_converter::check_calibre,
+      calibre_converter::convert_with_calibre
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
