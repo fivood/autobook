@@ -97,10 +97,26 @@ function cleanHtml(raw: string): string {
     const root = doc.getElementById('autobook-mobi-root');
     if (!root) return raw;
     stripAttributeLeaks(root);
+    stripEmbeddedFonts(root);
     return root.innerHTML;
   } catch {
     return raw;
   }
+}
+
+function stripEmbeddedFonts(root: HTMLElement) {
+  root.querySelectorAll('style').forEach((style) => {
+    style.textContent = (style.textContent || '').replace(
+      /font-family\s*:[^;}"']+[;]?/gi,
+      ''
+    );
+  });
+  root.querySelectorAll('[style]').forEach((el) => {
+    const s = el.getAttribute('style') || '';
+    if (/font-family/i.test(s)) {
+      el.setAttribute('style', s.replace(/font-family\s*:[^;}"']+[;]?/gi, ''));
+    }
+  });
 }
 
 /** mobi crate gives us one concatenated HTML blob. Split into sections on
@@ -198,7 +214,7 @@ async function nativeParse(file: File, lastBookModified: number): Promise<LoadDa
   return {
     title: parsed.title || fallbackTitle,
     language: languageHint(parsed.language),
-    styleSheet: '',
+    styleSheet: '.mobi-section, .mobi-section * { font-family: inherit !important; }',
     elementHtml: sectionedHtml,
     blobs,
     coverImage,
@@ -210,8 +226,16 @@ async function nativeParse(file: File, lastBookModified: number): Promise<LoadDa
   };
 }
 
+let forceNative = false;
+
+export function setForceNativeParser(val: boolean) {
+  forceNative = val;
+}
+
 export default async function loadMobi(file: File, lastBookModified: number): Promise<LoadData> {
-  const calibreResult = await tryCalibConvert(file, lastBookModified);
-  if (calibreResult) return calibreResult;
+  if (!forceNative) {
+    const calibreResult = await tryCalibConvert(file, lastBookModified);
+    if (calibreResult) return calibreResult;
+  }
   return nativeParse(file, lastBookModified);
 }

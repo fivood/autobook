@@ -152,56 +152,50 @@ fn parse_mobi8_header(record: &[u8]) -> Result<Mobi8Header, String> {
 }
 
 /// Strip trailing data appended to a content record per `extra_record_data_flags`.
-/// Each high bit (1..31) of the flags adds a varint-length-prefixed trailer at
-/// the end. Bit 0 adds a 1-byte multibyte char overlap count, also at the end.
-/// We process from the highest bit down, peeling bytes off the end.
+/// Strip trailing metadata from a text record. Matches Calibre's
+/// sizeof_trailing_entries: bits 1+ processed in ascending order (bit 1's
+/// trailer is outermost), then bit 0 (multibyte overlap).
 pub fn strip_record_trailers(record: &[u8], flags: u32) -> &[u8] {
-    let mut len = record.len();
-    // Process bits 31..1 in descending order.
-    let mut bit = 31usize;
-    while bit > 0 {
-        if (flags >> bit) & 1 == 1 {
-            // Trailer is a backward-encoded varint: read bytes from end while
-            // the high bit (continuation marker, here actually the MSB acts as
-            // a stop signal in MOBI's reversed scheme). We read up to 4 bytes.
-            let trailer_size = read_backward_varint(&record[..len]);
-            if trailer_size == 0 || trailer_size > len {
-                return record; // bad data, bail
+    let size = record.len();
+    let mut num: usize = 0;
+
+    let mut f = flags >> 1;
+    while f != 0 {
+        if f & 1 == 1 {
+            let ts = sizeof_trailing_entry(record, size - num);
+            if ts == 0 || ts > size - num {
+                return record;
             }
-            len -= trailer_size;
+            num += ts;
         }
-        bit -= 1;
+        f >>= 1;
     }
-    // Bit 0: a single byte at the end indicating how many bytes of the next
-    // record's first multibyte char spill into this one. We discard them since
-    // they're metadata, not text.
-    if flags & 1 == 1 && len > 0 {
-        let n = (record[len - 1] & 0x03) as usize + 1;
-        if n <= len {
-            len -= n;
-        }
+
+    if flags & 1 == 1 && size > num {
+        let off = size - num - 1;
+        num += (record[off] & 0x03) as usize + 1;
     }
-    &record[..len]
+
+    if num >= size { return &record[..0]; }
+    &record[..size - num]
 }
 
-/// MOBI's backward-encoded varint: read from end, each byte contributes 7 bits,
-/// MSB=1 marks the FIRST byte (i.e. the last byte read going backward), so we
-/// stop after reading a byte with MSB set. Returns the total decoded value AND
-/// includes its own byte count in the value (so subtracting yields the data
-/// before the trailer).
-fn read_backward_varint(bytes: &[u8]) -> usize {
-    let mut val: usize = 0;
-    for i in 1..=4 {
-        if bytes.len() < i {
-            return 0;
-        }
-        let b = bytes[bytes.len() - i];
-        val = (val << 7) | (b & 0x7F) as usize;
-        if b & 0x80 != 0 {
-            return val;
+/// Calibre-compatible backward varint. Reads from position psize-1 backward;
+/// first byte read (at end) occupies lowest bits. MSB=1 is the stop signal.
+fn sizeof_trailing_entry(data: &[u8], psize: usize) -> usize {
+    let mut bitpos: u32 = 0;
+    let mut result: usize = 0;
+    let mut p = psize;
+    loop {
+        if p == 0 { return result; }
+        p -= 1;
+        let v = data[p] as usize;
+        result |= (v & 0x7F) << bitpos;
+        bitpos += 7;
+        if (v & 0x80) != 0 || bitpos >= 28 {
+            return result;
         }
     }
-    0
 }
 
 /// Locate the BOUNDARY record in `raw_records` content. Returns the index of
@@ -383,7 +377,7 @@ pub fn parse_exth_cover_offset(record0: &[u8]) -> Option<usize> {
 }
 
 /// Try to extract author from EXTH records.
-fn parse_exth_author(record0: &[u8]) -> Option<String> {
+pub fn parse_exth_author(record0: &[u8]) -> Option<String> {
     if record0.len() < 24 {
         return None;
     }
@@ -419,7 +413,7 @@ fn parse_exth_author(record0: &[u8]) -> Option<String> {
 /// Extract the "full name" from MOBI record 0. The MOBI header stores
 /// full_name_offset at record offset 0x54 and full_name_length at 0x58.
 /// These are offsets from the START of record 0.
-fn parse_mobi_full_name(record0: &[u8]) -> Option<String> {
+pub fn parse_mobi_full_name(record0: &[u8]) -> Option<String> {
     if record0.len() < 0x5C {
         return None;
     }

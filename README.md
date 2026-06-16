@@ -3,7 +3,7 @@
 桌面优先的中文电子书阅读器，原型 fork 自 [ttu-ebook-reader](https://github.com/ttu-ttu/ebook-reader)，目前与上游已有较大分歧。同一份源码输出两个目标：
 
 - **网页 PWA**：[book.fivood.com](https://book.fivood.com)（Cloudflare Pages，可在 iPhone Safari 加到主屏幕）
-- **Windows 桌面版**：[Tauri 2](https://tauri.app/) 打包成 `.msi` / `.exe`，书库直接落到本地文件系统，带签名的自动更新通道
+- **Windows 桌面版**：[Tauri 2](https://tauri.app/) 打包成 `.exe`（NSIS），书库直接落到本地文件系统，带签名的自动更新通道
 
 ## 与上游 ttu-ebook-reader 的差异
 
@@ -12,12 +12,16 @@
 ### 桌面端 / 分发
 - **完整的 Tauri 2 桌面壳**，上游只有网页版
 - **签名的自动更新通道**：基于 GitHub Releases + `latest.json` manifest，应用内一键检查更新
-- **本地文件系统存储**：`TauriFsStorageHandler`，书库直接放 `~/Documents/EbookReader/<书名>/`，每本书一个子目录，可直接拷贝 / 备份 / 用 Everything 搜索
+- **本地文件系统存储**：`TauriFsStorageHandler`，书库直接放 `~/Documents/AutoBook/<书名>/`，每本书一个子目录，可直接拷贝 / 备份 / 用 Everything 搜索
 - **窗口标题栏带版本号**（"AutoBook vX.Y.Z"）
 
 ### 阅读体验（这是主要改动）
 - **打字机自动播放**（连续滚动模式）：右下角播放/暂停按钮，逐字浮现，A/D 调速（1–60 字/秒），从已读位置接着开始
-- **Web Speech API 语音朗读**（分页模式）：右下角喇叭按钮 / `V` 键，0.5×–2.0× 语速、可选系统语音、播放过程中改语速 / 切语音立即生效
+- **多引擎语音朗读**（分页模式）：
+  - **WinRT TTS**：Windows 本地语音，支持自然人声（需在 Windows 设置中安装）
+  - **Edge 在线 TTS**：微软 Edge 云端神经网络语音，无需安装，音质优秀
+  - **自定义 HTTP TTS**：对接任意第三方 TTS API（如讯飞、百度等），支持自定义 endpoint / headers / body 模板
+  - 右下角喇叭按钮 / 全局快捷键（默认 `Ctrl+Alt+P`，可自定义），0.5×–2.0× 语速
 - **自动语言检测**：打开书籍时根据 EPUB `dc:language` 或文本 CJK 密度自动识别（中 / 日 / 英），匹配对应 TTS 语音
 - **滚动模式与分页模式自动播放各司其职**：连续模式跟随打字机，分页模式跟随 TTS，互不串扰
 - **顶部菜单触发热区扩大到 48px**（上游过小容易划过）
@@ -26,8 +30,9 @@
 - **EPUB / HTMLZ**：继承上游，是最完整的格式
 - **TXT**：编码自动识别（BOM 嗅探 → 严格 UTF-8 → Shift-JIS / GB18030 / BIG5 按 CJK 密度打分）；自动识别章节（「第 X 章」汉/阿数字、序章 / 楔子 / 番外 / Chapter / Section / Part 等）
 - **Markdown（.md / .markdown）**：marked + GFM 渲染；fenced code block 走 highlight.js（atom-one-dark 配色）；`$...$` / `$$...$$` 数学公式由 KaTeX 渲染（语法错误降级为红字 code 块）；按 h1/h2 切 section 联动 TOC
-- **MOBI（legacy MOBI6）**：Rust 端 `mobi` crate 解析跑在 panic 防护里；中文编码嗅探链 UTF-8 → GB18030 → GBK → Big5，按 UTF-8 lossy ratio 做主要判别（详见 1.4.12 changelog）；按 `<mbp:pagebreak>` / `<p style="page-break-after:always">` 切 section，首个 h1–h6 作为 TOC label
-- **AZW3 / KF8 / MOBI:joint**：暂不支持。检测到会报错引导用 [Calibre](https://calibre-ebook.com/) 转 EPUB。原生 KF8 解析器排在 1.5.0
+- **MOBI / AZW / AZW3**：完全自研 Rust 解析器（不依赖第三方 crate），支持 PalmDoc 和 Huff/CDIC 两种压缩；中文编码嗅探链（UTF-8 + CP1252 回退 → GB18030 → GBK → Big5）；自动提取封面和内嵌图片；按 `<mbp:pagebreak>` 切 section 生成 TOC
+- **AZW3 / KF8**：原生 KF8 解析器，支持 KF8:joint 和纯 KF8 两种文件结构，自动检测 BOUNDARY 标记切换解析模式
+- **Calibre 智能转换**：导入 MOBI/AZW3 时自动检测本机 [Calibre](https://calibre-ebook.com/)，有则调用 `ebook-convert` 转 EPUB 获得最佳效果，无则走内置解析器并提示安装 Calibre
 - **ZIP 批量**：上述任意格式打包成 ZIP 拖入或选择，自动展开后逐个导入
 
 ### 书库管理
@@ -57,8 +62,10 @@
 
 | 功能 | 操作 |
 |---|---|
+| 导入书籍 | 拖入文件 / 点击上传图标，支持 EPUB、TXT、MD、MOBI、AZW3、ZIP |
 | 打字机自动播放 | 连续滚动模式 → 右下角播放按钮 / A/D 调速 |
-| 语音朗读 | 分页模式 → 右下角喇叭按钮 / `V` 键 / 齿轮调语速语音 |
+| 语音朗读 | 分页模式 → 右下角喇叭按钮 / 全局快捷键 `Ctrl+Alt+P` |
+| 文件夹分类 | 左侧栏新建文件夹，拖拽书籍卡片归类 |
 | 检查更新 | 顶部菜单 → 设置内（仅桌面端） |
 | 自定义主题 | 设置 → 主题 → `+` 新建 / 选中已有主题点笔图标编辑 |
 | 切换全屏 | 顶部菜单全屏图标 |
@@ -126,7 +133,7 @@ Cloudflare Pages：
 | | 桌面版（Tauri） | 网页版（PWA / 手机） |
 |---|---|---|
 | 默认存储 | 本地文件系统 | 浏览器 IndexedDB |
-| 存储位置 | `~/Documents/EbookReader/<书名>/` | 浏览器内部 |
+| 存储位置 | `~/Documents/AutoBook/<书名>/` | 浏览器内部 |
 | 跨端同步 | 通过 Google Drive / OneDrive 在两端各连一次 | 同左 |
 
 两端的本地存储隔离，要共享书库走云盘同步。

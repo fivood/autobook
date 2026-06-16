@@ -12,7 +12,14 @@ import { database, requestPersistentStorage$ } from '$lib/data/store';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadMd from '$lib/functions/file-loaders/md/load-md';
-import loadMobi from '$lib/functions/file-loaders/mobi/load-mobi';
+import loadMobi, { setForceNativeParser } from '$lib/functions/file-loaders/mobi/load-mobi';
+
+if (typeof window !== 'undefined') {
+  (window as any).__forceNativeMobi = (val = true) => {
+    setForceNativeParser(val);
+    console.log(val ? '已切换到内置 MOBI 解析器' : '已恢复 Calibre 优先模式');
+  };
+}
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';

@@ -8,7 +8,6 @@
 //! data URIs into the HTML on the Rust side).
 
 use base64::{engine::general_purpose, Engine};
-use mobi::Mobi;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -39,12 +38,6 @@ fn replacement_char_ratio(s: &str) -> f32 {
     let bad = s.chars().filter(|c| *c == '\u{FFFD}').count() as f32;
     let total = s.chars().count() as f32;
     bad / total
-}
-
-/// Public wrapper around the encoding sniffer for use by sibling modules
-/// (kf8_parser). Same algorithm as `decode_best`.
-pub fn decode_best_public(raw: &[u8]) -> String {
-    decode_best(raw)
 }
 
 fn strip_tags(s: &str) -> String {
@@ -127,9 +120,191 @@ fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
     text
 }
 
+// ── Huff/CDIC decompressor (algorithm from Calibre, reimplemented in Rust) ──
+
+struct HuffDict1Entry {
+    codelen: u32,
+    term: bool,
+    maxcode: u32,
+}
+
+struct HuffCdic {
+    dict1: Vec<HuffDict1Entry>,
+    mincode: Vec<u32>,
+    maxcode: Vec<u32>,
+    dictionary: Vec<(Vec<u8>, bool)>,
+}
+
+impl HuffCdic {
+    fn load(huff_record: &[u8], cdic_records: &[&[u8]]) -> Result<Self, String> {
+        if huff_record.len() < 24 || &huff_record[0..8] != b"HUFF\x00\x00\x00\x18" {
+            return Err("Invalid HUFF header".into());
+        }
+        let off1 = u32::from_be_bytes([huff_record[8], huff_record[9], huff_record[10], huff_record[11]]) as usize;
+        let off2 = u32::from_be_bytes([huff_record[12], huff_record[13], huff_record[14], huff_record[15]]) as usize;
+
+        if off1 + 1024 > huff_record.len() || off2 + 256 > huff_record.len() {
+            return Err("HUFF record too short for tables".into());
+        }
+
+        let mut dict1 = Vec::with_capacity(256);
+        for i in 0..256 {
+            let base = off1 + i * 4;
+            let v = u32::from_be_bytes([
+                huff_record[base], huff_record[base+1],
+                huff_record[base+2], huff_record[base+3],
+            ]);
+            let codelen = v & 0x1F;
+            let term = (v & 0x80) != 0;
+            let maxcode_raw = v >> 8;
+            let maxcode = if codelen > 0 {
+                ((maxcode_raw + 1) << (32 - codelen)).wrapping_sub(1)
+            } else {
+                0
+            };
+            dict1.push(HuffDict1Entry { codelen, term, maxcode });
+        }
+
+        let mut mincode = vec![0u32; 33];
+        let mut maxcode_table = vec![0u32; 33];
+        for i in 0..32 {
+            let base = off2 + i * 8;
+            let min_raw = u32::from_be_bytes([
+                huff_record[base], huff_record[base+1],
+                huff_record[base+2], huff_record[base+3],
+            ]);
+            let max_raw = u32::from_be_bytes([
+                huff_record[base+4], huff_record[base+5],
+                huff_record[base+6], huff_record[base+7],
+            ]);
+            let cl = i + 1;
+            mincode[cl] = min_raw << (32 - cl);
+            maxcode_table[cl] = ((max_raw + 1) << (32 - cl)).wrapping_sub(1);
+        }
+
+        let mut dictionary: Vec<(Vec<u8>, bool)> = Vec::new();
+        for cdic in cdic_records {
+            if cdic.len() < 16 || &cdic[0..8] != b"CDIC\x00\x00\x00\x10" {
+                return Err("Invalid CDIC header".into());
+            }
+            let phrases = u32::from_be_bytes([cdic[8], cdic[9], cdic[10], cdic[11]]) as usize;
+            let bits = u32::from_be_bytes([cdic[12], cdic[13], cdic[14], cdic[15]]) as usize;
+            let n = std::cmp::min(1 << bits, phrases.saturating_sub(dictionary.len()));
+
+            for j in 0..n {
+                let off_pos = 16 + j * 2;
+                if off_pos + 2 > cdic.len() { break; }
+                let off = u16::from_be_bytes([cdic[off_pos], cdic[off_pos+1]]) as usize;
+                let data_base = 16 + off;
+                if data_base + 2 > cdic.len() { break; }
+                let blen = u16::from_be_bytes([cdic[data_base], cdic[data_base+1]]);
+                let slice_len = (blen & 0x7FFF) as usize;
+                let flag = (blen & 0x8000) != 0;
+                let end = std::cmp::min(data_base + 2 + slice_len, cdic.len());
+                let slice_data = cdic[data_base + 2..end].to_vec();
+                dictionary.push((slice_data, flag));
+            }
+        }
+
+        Ok(HuffCdic { dict1, mincode, maxcode: maxcode_table, dictionary })
+    }
+
+    fn unpack(&mut self, data: &[u8]) -> Vec<u8> {
+        let mut bitsleft = (data.len() as i64) * 8;
+        let mut padded = data.to_vec();
+        padded.extend_from_slice(&[0u8; 8]);
+
+        let mut pos: usize = 0;
+        let mut x = self.read_u64(&padded, pos);
+        let mut n: i32 = 32;
+        let mut result = Vec::new();
+
+        loop {
+            if n <= 0 {
+                pos += 4;
+                x = self.read_u64(&padded, pos);
+                n += 32;
+            }
+            let code = ((x >> n as u64) & 0xFFFF_FFFF) as u32;
+
+            let top8 = (code >> 24) as usize;
+            let mut codelen = self.dict1[top8].codelen;
+            let term = self.dict1[top8].term;
+            let mut maxcode_val = self.dict1[top8].maxcode;
+
+            if !term {
+                while codelen < 33 && code < self.mincode[codelen as usize] {
+                    codelen += 1;
+                }
+                if codelen >= 33 { break; }
+                maxcode_val = self.maxcode[codelen as usize];
+            }
+
+            n -= codelen as i32;
+            bitsleft -= codelen as i64;
+            if bitsleft < 0 { break; }
+
+            let r = (maxcode_val.wrapping_sub(code) >> (32 - codelen)) as usize;
+            if r >= self.dictionary.len() { break; }
+
+            let (slice_data, flag) = self.dictionary[r].clone();
+            if flag {
+                result.extend_from_slice(&slice_data);
+            } else {
+                let unpacked = self.unpack(&slice_data);
+                result.extend_from_slice(&unpacked);
+                self.dictionary[r] = (unpacked, true);
+            }
+        }
+        result
+    }
+
+    fn read_u64(&self, data: &[u8], pos: usize) -> u64 {
+        if pos + 8 > data.len() { return 0; }
+        u64::from_be_bytes([
+            data[pos], data[pos+1], data[pos+2], data[pos+3],
+            data[pos+4], data[pos+5], data[pos+6], data[pos+7],
+        ])
+    }
+}
+
+/// Decompress all text records using Huff/CDIC.
+fn decompress_huffcdic(records: &[&[u8]], rec0: &[u8], text_record_count: usize, extra_flags: u32) -> Option<Vec<u8>> {
+    use crate::kf8_parser::strip_record_trailers;
+
+    if rec0.len() < 0x78 { return None; }
+    let huff_offset = u32::from_be_bytes([rec0[0x70], rec0[0x71], rec0[0x72], rec0[0x73]]) as usize;
+    let huff_count = u32::from_be_bytes([rec0[0x74], rec0[0x75], rec0[0x76], rec0[0x77]]) as usize;
+
+    if huff_offset == 0 || huff_count == 0 { return None; }
+    if huff_offset + huff_count > records.len() { return None; }
+
+    let huff_record = records[huff_offset];
+    let cdic_records: Vec<&[u8]> = (1..huff_count)
+        .map(|i| records[huff_offset + i])
+        .collect();
+
+    let mut huff = HuffCdic::load(huff_record, &cdic_records).ok()?;
+
+    let text_end = 1 + text_record_count;
+    if text_end > records.len() { return None; }
+
+    let mut bytes = Vec::with_capacity(text_record_count * 4096);
+    for record in &records[1..text_end] {
+        let trimmed = strip_record_trailers(record, extra_flags);
+        bytes.extend(huff.unpack(trimmed));
+    }
+    Some(bytes)
+}
+
+/// Strip MOBI control characters (Calibre's approach).
+fn strip_mobi_control_chars(raw: &mut Vec<u8>) {
+    raw.retain(|&b| b != 0x00 && b != 0x1E && b != 0x02);
+}
+
 /// Extract raw decompressed content bytes by parsing PalmDB directly,
 /// bypassing the mobi crate's record handling and string conversion.
-/// Returns (bytes, declared_encoding) or None for Huffman compression.
+/// Returns (bytes, declared_encoding).
 /// declared_encoding: 1252 = CP1252, 65001 = UTF-8.
 fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)> {
     use crate::kf8_parser::{parse_palmdb_records, strip_record_trailers};
@@ -144,25 +319,15 @@ fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)>
         return None;
     }
 
-    // PalmDoc header (first 16 bytes of record 0):
-    //   0x00 compression u16 (1=none, 2=PalmDoc, 17480=Huff)
-    //   0x08 text_record_count u16
     let compression = u16::from_be_bytes([rec0[0], rec0[1]]);
     let text_record_count = u16::from_be_bytes([rec0[8], rec0[9]]) as usize;
 
-    if compression == 17480 {
-        return None; // Huff/CDIC
-    }
-
-    // text_encoding at record offset 0x1C (MOBI header offset 0x0C)
     let text_encoding = if rec0.len() >= 0x20 {
         u32::from_be_bytes([rec0[0x1C], rec0[0x1D], rec0[0x1E], rec0[0x1F]])
     } else {
         65001
     };
 
-    // extra_record_data_flags: u16 at record offset 0xF2, only if MOBI
-    // header length (at record offset 0x14) >= 0xE4.
     let extra_flags = if rec0.len() >= 0xF4 {
         let mobi_len = u32::from_be_bytes([rec0[0x14], rec0[0x15], rec0[0x16], rec0[0x17]]) as usize;
         if mobi_len >= 0xE4 {
@@ -174,21 +339,31 @@ fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)>
         0
     };
 
-    // Text records are records 1..=text_record_count
     let text_end = 1 + text_record_count;
     if text_end > records.len() {
         return None;
     }
 
-    let mut bytes = Vec::with_capacity(text_record_count * 4096);
-    for record in &records[1..text_end] {
-        let trimmed = strip_record_trailers(record, extra_flags);
-        match compression {
-            1 => bytes.extend_from_slice(trimmed),
-            2 => bytes.extend(decompress_palmdoc(trimmed)),
-            _ => return None,
+    let mut bytes = match compression {
+        17480 => {
+            // Huff/CDIC
+            decompress_huffcdic(&records, rec0, text_record_count, extra_flags)?
         }
-    }
+        _ => {
+            let mut buf = Vec::with_capacity(text_record_count * 4096);
+            for record in &records[1..text_end] {
+                let trimmed = strip_record_trailers(record, extra_flags);
+                match compression {
+                    1 => buf.extend_from_slice(trimmed),
+                    2 => buf.extend(decompress_palmdoc(trimmed)),
+                    _ => return None,
+                }
+            }
+            buf
+        }
+    };
+
+    strip_mobi_control_chars(&mut bytes);
     Some((bytes, text_encoding))
 }
 
@@ -291,51 +466,6 @@ fn decode_best(raw: &[u8]) -> String {
     best.1
 }
 
-/// Fallback for Huffman-compressed files: reverse-engineer the original
-/// bytes from a WIN1252-decoded string and try CJK encodings.
-fn win1252_string_to_bytes(s: &str) -> Vec<u8> {
-    let mut out = Vec::with_capacity(s.len());
-    let mut enc = encoding_rs::WINDOWS_1252.new_encoder();
-    let mut input = s;
-    let mut buf = vec![0u8; s.len() * 2 + 16];
-    loop {
-        let (result, read, written, _) = enc.encode_from_utf8(input, &mut buf, true);
-        out.extend_from_slice(&buf[..written]);
-        match result {
-            encoding_rs::CoderResult::InputEmpty => break,
-            encoding_rs::CoderResult::OutputFull => {
-                input = &input[read..];
-            }
-        }
-    }
-    out
-}
-
-fn decode_via_win1252_roundtrip(primary: &str) -> String {
-    let bytes = win1252_string_to_bytes(primary);
-    let primary_ratio = replacement_char_ratio(primary);
-    let (gbk_str, _, gbk_err) = encoding_rs::GBK.decode(&bytes);
-    let gbk_ratio = if gbk_err {
-        1.0
-    } else {
-        replacement_char_ratio(&gbk_str)
-    };
-    let (gb18030_str, _, gb18030_err) = encoding_rs::GB18030.decode(&bytes);
-    let gb18030_ratio = if gb18030_err {
-        1.0
-    } else {
-        replacement_char_ratio(&gb18030_str)
-    };
-    let mut best = (primary_ratio, primary.to_string());
-    if gbk_ratio + 0.001 < best.0 {
-        best = (gbk_ratio, gbk_str.into_owned());
-    }
-    if gb18030_ratio + 0.001 < best.0 {
-        best = (gb18030_ratio, gb18030_str.into_owned());
-    }
-    best.1
-}
-
 fn detect_image_ext(bytes: &[u8]) -> &'static str {
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
         "jpg"
@@ -373,104 +503,104 @@ pub fn parse_mobi(bytes: Vec<u8>) -> Result<ParsedMobi, String> {
 }
 
 fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
-    let mobi = Mobi::new(&bytes.to_vec()).map_err(|e| format!("解析失败: {e}"))?;
+    let all_records = crate::kf8_parser::parse_palmdb_records(bytes)
+        .map_err(|e| format!("PalmDB 解析失败: {e}"))?;
+    let (records, _palm_title) = &all_records;
 
-    let title = mobi.title();
-    let author = mobi.author().unwrap_or_default();
-    let language = Some(format!("{:?}", mobi.language()));
+    if records.is_empty() {
+        return Err("文件不包含有效记录".into());
+    }
+    let rec0 = records[0];
 
-    // Try direct PalmDB parsing first (bypasses mobi crate's record handling).
-    // Falls back to mobi crate for Huff/CDIC compressed files.
-    let html = if let Some((raw_bytes, declared_enc)) = extract_raw_content_bytes_direct(bytes) {
-        if declared_enc == 65001 {
-            // Declared UTF-8: use UTF-8 with CP1252 fallback for invalid bytes.
-            // Many MOBI files mix UTF-8 text with CP1252 special chars (0x80-0x9F).
-            let utf8_result = decode_utf8_cp1252_fallback(&raw_bytes);
-            let ratio = replacement_char_ratio(&utf8_result);
-            if ratio < 0.20 {
-                utf8_result
-            } else {
-                // Too many replacements → probably not UTF-8 at all, run sniffer
-                decode_best(&raw_bytes)
-            }
-        } else if declared_enc == 1252 {
-            // Declared CP1252: might actually be GBK/GB18030, run sniffer
-            decode_best(&raw_bytes)
+    // Extract metadata from EXTH / MOBI header (no mobi crate dependency)
+    let title = crate::kf8_parser::parse_mobi_full_name(rec0)
+        .unwrap_or_else(|| _palm_title.clone());
+    let author = crate::kf8_parser::parse_exth_author(rec0)
+        .unwrap_or_default();
+    let language: Option<String> = None;
+
+    // Decompress text (PalmDoc + Huff/CDIC both handled natively now)
+    let (raw_bytes, declared_enc) = extract_raw_content_bytes_direct(bytes)
+        .ok_or_else(|| "无法解压文本内容".to_string())?;
+
+    // Encoding: trust declared codec first (Calibre's approach), then sniff
+    let html = if declared_enc == 65001 {
+        let utf8_result = decode_utf8_cp1252_fallback(&raw_bytes);
+        let ratio = replacement_char_ratio(&utf8_result);
+        if ratio < 0.20 {
+            utf8_result
         } else {
             decode_best(&raw_bytes)
         }
+    } else if declared_enc == 1252 {
+        // Calibre trusts CP1252 declaration, but Chinese books often lie.
+        // Try CP1252 first; if it looks like garbage (CJK content decoded
+        // as Latin), fall back to sniffer.
+        let (cp1252_str, _, _) = encoding_rs::WINDOWS_1252.decode(&raw_bytes);
+        let plain = strip_tags(&cp1252_str);
+        let cjk_count = plain.chars().filter(|c| *c as u32 > 0x2E80).count();
+        let total = plain.chars().count().max(1);
+        if cjk_count * 100 / total > 30 {
+            // Looks like CJK text — CP1252 was correct (the raw bytes
+            // actually encoded CJK via some double-byte scheme that
+            // CP1252 decoded into high Unicode). But more likely the
+            // file is actually GBK/GB18030 mislabeled as 1252.
+            decode_best(&raw_bytes)
+        } else {
+            cp1252_str.into_owned()
+        }
     } else {
-        // Huffman compression: fall back to crate's string + WIN1252 roundtrip
-        let primary = mobi
-            .content_as_string()
-            .unwrap_or_else(|_| mobi.content_as_string_lossy());
-        decode_via_win1252_roundtrip(&primary)
+        decode_best(&raw_bytes)
     };
 
-    // Detect KF8:joint / pure KF8 and dispatch to the dedicated KF8 parser.
-    let is_joint = crate::kf8_parser::parse_palmdb_records(bytes)
-        .map(|(records, _)| records.iter().any(|r| r.starts_with(b"BOUNDARY")))
-        .unwrap_or(false);
+    // Detect KF8:joint / pure KF8 and dispatch to dedicated parser
+    let is_joint = records.iter().any(|r| r.starts_with(b"BOUNDARY"));
     let is_kf8_only = strip_tags(&html).trim().chars().count() < 50;
     if is_joint || is_kf8_only {
         match crate::kf8_parser::try_parse_kf8(bytes) {
             Ok(Some(parsed)) => return Ok(parsed),
             Ok(None) => {
-                // No KF8 segment found but MOBI6 content is empty — likely a
-                // truly broken file.
-                return Err(
-                    "本文件 MOBI6 段为空且未找到 KF8 段，文件可能损坏。"
-                        .into(),
-                );
+                return Err("本文件 MOBI6 段为空且未找到 KF8 段，文件可能损坏。".into());
             }
             Err(e) => {
-                return Err(format!(
-                    "KF8 解析失败: {e}\n临时方案：用 Calibre 把它转成 EPUB 后再导入。"
-                ));
+                return Err(format!("KF8 解析失败: {e}"));
             }
         }
     }
 
-    // Extract images from PalmDB records directly.
+    // Extract images
     let mut images = Vec::new();
-    let mut cover_index = 0usize;
-    if let Ok((all_records, _)) = crate::kf8_parser::parse_palmdb_records(bytes) {
-        let rec0 = all_records.get(0).copied().unwrap_or(&[]);
-        // first_image_index at record offset 0x6C (MOBI sig 0x5C)
-        let first_img = if rec0.len() >= 0x70 {
-            u32::from_be_bytes([rec0[0x6C], rec0[0x6D], rec0[0x6E], rec0[0x6F]]) as usize
+    let first_img = if rec0.len() >= 0x70 {
+        u32::from_be_bytes([rec0[0x6C], rec0[0x6D], rec0[0x6E], rec0[0x6F]]) as usize
+    } else {
+        0
+    };
+    let scan_start = if first_img > 0 && first_img < records.len() {
+        first_img
+    } else {
+        let text_count = if rec0.len() >= 10 {
+            u16::from_be_bytes([rec0[8], rec0[9]]) as usize
         } else {
             0
         };
-        let scan_start = if first_img > 0 && first_img < all_records.len() {
-            first_img
-        } else {
-            // fallback: start after text records
-            let text_count = if rec0.len() >= 10 {
-                u16::from_be_bytes([rec0[8], rec0[9]]) as usize
-            } else {
-                0
-            };
-            text_count + 1
-        };
-        for (i, record) in all_records[scan_start..].iter().enumerate() {
-            if record.starts_with(&[0xFF, 0xD8, 0xFF])
-                || record.starts_with(&[0x89, b'P', b'N', b'G'])
-                || record.starts_with(b"GIF8")
-            {
-                let ext = detect_image_ext(record);
-                images.push(ParsedMobiImage {
-                    index: i + 1,
-                    ext: ext.to_string(),
-                    data: general_purpose::STANDARD.encode(record),
-                });
-            }
+        text_count + 1
+    };
+    for (i, record) in records[scan_start..].iter().enumerate() {
+        if record.starts_with(&[0xFF, 0xD8, 0xFF])
+            || record.starts_with(&[0x89, b'P', b'N', b'G'])
+            || record.starts_with(b"GIF8")
+        {
+            let ext = detect_image_ext(record);
+            images.push(ParsedMobiImage {
+                index: i + 1,
+                ext: ext.to_string(),
+                data: general_purpose::STANDARD.encode(record),
+            });
         }
-        // Cover from EXTH CoverOffset
-        cover_index = crate::kf8_parser::parse_exth_cover_offset(rec0)
-            .filter(|&idx| idx > 0 && idx <= images.len())
-            .unwrap_or_else(|| if images.is_empty() { 0 } else { 1 });
     }
+    let cover_index = crate::kf8_parser::parse_exth_cover_offset(rec0)
+        .filter(|&idx| idx > 0 && idx <= images.len())
+        .unwrap_or_else(|| if images.is_empty() { 0 } else { 1 });
 
     Ok(ParsedMobi {
         title,
