@@ -9,7 +9,6 @@ use tauri_plugin_fs::FsExt;
 
 mod calibre_converter;
 mod custom_tts;
-mod edge_tts;
 mod kf8_parser;
 mod mobi_parser;
 mod winrt_tts;
@@ -185,23 +184,6 @@ async fn custom_tts_synthesize(
   Ok(base64::engine::general_purpose::STANDARD.encode(&audio))
 }
 
-#[tauri::command]
-fn edge_list_voices() -> Vec<edge_tts::EdgeVoice> {
-  edge_tts::voices()
-}
-
-#[tauri::command]
-async fn edge_synthesize(
-  text: String,
-  voice: String,
-  rate: Option<f32>,
-) -> Result<String, String> {
-  let rate = rate.unwrap_or(1.0).clamp(0.5, 2.0);
-  let audio = edge_tts::synthesize(&voice, rate, &text).await?;
-  use base64::Engine;
-  Ok(base64::engine::general_purpose::STANDARD.encode(&audio))
-}
-
 /// Replace the currently-registered TTS global shortcut. Empty string clears
 /// it. Returns Err with a human-readable message on conflict.
 #[tauri::command]
@@ -239,8 +221,6 @@ pub fn run() {
       set_tts_shortcut,
       sapi_list_voices,
       sapi_speak,
-      edge_list_voices,
-      edge_synthesize,
       custom_tts_synthesize,
       schedule_ui_reset,
       mobi_parser::parse_mobi,

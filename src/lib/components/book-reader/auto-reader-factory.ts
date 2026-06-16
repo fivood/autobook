@@ -8,14 +8,12 @@ import type { Observable } from 'rxjs';
 import { isTauri } from '$lib/data/env';
 import { AutoReaderContinuous } from './auto-reader';
 import { AutoReaderCustom } from './auto-reader-custom';
-import { AutoReaderEdge } from './auto-reader-edge';
 import { AutoReaderSapi } from './auto-reader-sapi';
 import type { AutoReader } from './types';
 
 export function createAutoReader(engine: string, destroy$: Observable<void>): AutoReader {
   if (isTauri()) {
     if (engine === 'sapi') return new AutoReaderSapi(destroy$);
-    if (engine === 'edge') return new AutoReaderEdge(destroy$);
     if (engine === 'custom') return new AutoReaderCustom(destroy$);
   }
   return new AutoReaderContinuous(destroy$);

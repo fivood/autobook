@@ -123,13 +123,8 @@ export const ttsAutoAdvanceSection$ = writableBooleanLocalStorageSubject()(
 
 export const ttsShortcut$ = writableStringLocalStorageSubject()('ttsShortcut', 'ctrl+alt+p');
 
-/** 'web' = Web Speech API, 'sapi' = Windows system TTS, 'edge' = Microsoft Edge online voices (Tauri only). */
 export const ttsEngine$ = writableStringLocalStorageSubject()('ttsEngine', 'web');
 export const ttsSapiVoiceId$ = writableStringLocalStorageSubject()('ttsSapiVoiceId', '');
-export const ttsEdgeVoiceId$ = writableStringLocalStorageSubject()(
-  'ttsEdgeVoiceId',
-  'zh-CN-XiaoxiaoNeural'
-);
 
 // User-configurable HTTP TTS
 export const ttsCustomEndpoint$ = writableStringLocalStorageSubject()('ttsCustomEndpoint', '');
