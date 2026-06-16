@@ -540,6 +540,10 @@
     exploredCharCount = 0;
     previousIntendedCount = 0;
     bookCharCount = calculator.charCount;
+    // Hand the per-section calculator to the page manager so TTS-driven
+    // auto-page-flip (ensureCharVisible) can map a sentence's char count to
+    // a scroll position.
+    concretePageManager?.setCalculator(calculator);
 
     let fontLoaded = false;
 
@@ -655,8 +659,16 @@
     }
   }
 
-  function onSwipe(ev: CustomEvent<{ direction: 'top' | 'right' | 'left' | 'bottom' | null }>) {
+  function onSwipe(
+    ev: CustomEvent<{
+      direction: 'top' | 'right' | 'left' | 'bottom' | null;
+      pointerType?: string;
+    }>
+  ) {
     if (!concretePageManager || $skipKeyDownListener$) return;
+    // svelte-gestures v5 fires swipe for mouse drags too, which hijacks text
+    // selection on desktop — only react to touch / pen.
+    if (ev.detail.pointerType === 'mouse') return;
     if (ev.detail.direction !== 'left' && ev.detail.direction !== 'right') return;
     const swipeLeft = ev.detail.direction === 'left';
     const nextPage = verticalMode ? !swipeLeft : swipeLeft;

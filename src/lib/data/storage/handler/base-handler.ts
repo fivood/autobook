@@ -345,7 +345,7 @@ export abstract class BaseStorageHandler {
   protected addBookCard(title: string, dataToAdd: Record<string, any>) {
     const bookCard: BookCardProps = {
       ...(this.titleToBookCard.get(title) || {
-        id: BaseStorageHandler.getDummyId(),
+        id: BaseStorageHandler.stableIdFromTitle(title),
         title,
         imagePath: '',
         characters: 0,
@@ -637,6 +637,15 @@ export abstract class BaseStorageHandler {
 
   protected static getDummyId() {
     return Math.floor(Date.now() * Math.random());
+  }
+
+  protected static stableIdFromTitle(title: string): number {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < title.length; i++) {
+      hash ^= title.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0) || 1;
   }
 
   protected static sanitizeForFilename(title: string) {

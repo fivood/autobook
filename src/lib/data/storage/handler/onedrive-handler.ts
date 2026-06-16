@@ -439,7 +439,7 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
     }
 
     const bookCard: BookCardProps = {
-      id: BaseStorageHandler.getDummyId(),
+      id: BaseStorageHandler.stableIdFromTitle(title),
       title,
       imagePath: '',
       characters: 0,

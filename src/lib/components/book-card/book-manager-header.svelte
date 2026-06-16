@@ -250,7 +250,7 @@
   hidden
   multiple
   type="file"
-  accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,application/zip,.zip"
+  accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/zip,.zip"
   use:inputFile={dispatchFilesChange}
   bind:this={fileImportElm}
 />
@@ -407,16 +407,14 @@
                   </svg>
                 {/key}
               </div>
-              <div class="w-28 bg-gray-700" slot="content">
+              <div class="w-28 bg-menu text-menu" slot="content">
                 {#each storageSourceMenuItems as sourceMenuItem (sourceMenuItem.key)}
                   <div
                     tabindex="0"
                     role="button"
-                    class="cursor-pointer px-4 py-2 text-sm hover:bg-white hover:text-gray-700"
-                    class:hover:bg-white={!sourceMenuItem.requiresConnectivity || $isOnline$}
-                    class:hover:text-gray-700={!sourceMenuItem.requiresConnectivity || $isOnline$}
+                    class="cursor-pointer px-4 py-2 text-sm hover-menu-inverted"
                     class:cursor-not-allowed={sourceMenuItem.requiresConnectivity && !$isOnline$}
-                    class:text-gray-500={sourceMenuItem.requiresConnectivity && !$isOnline$}
+                    class:opacity-50={sourceMenuItem.requiresConnectivity && !$isOnline$}
                     on:click={async () => {
                       if (sourceMenuItem.requiresConnectivity && !$isOnline$) {
                         return;
@@ -458,7 +456,7 @@
                   <Fa icon={faArrowDownWideShort} />
                 {/if}
               </div>
-              <div class="w-44 bg-gray-700" slot="content">
+              <div class="w-44 bg-menu text-menu" slot="content">
                 {#each sortMenuItems as sortMenuItem (sortMenuItem.property)}
                   {@const isCurrentSort =
                     $booklistSortOptions$[$storageSource$].property === sortMenuItem.property}
@@ -466,9 +464,9 @@
                     isCurrentSort &&
                     $booklistSortOptions$[$storageSource$].direction === SortDirection.ASC}
                   <div
-                    class="grid cursor-default grid-cols-[auto_auto_auto] text-sm hover:bg-white hover:text-gray-700"
-                    class:bg-white={isCurrentSort}
-                    class:text-gray-700={isCurrentSort}
+                    class="grid cursor-default grid-cols-[auto_auto_auto] text-sm hover-menu-inverted"
+                    class:bg-menu-inverted={isCurrentSort}
+                    class:text-menu-inverted={isCurrentSort}
                     class:hover:opacity-70={isCurrentSort}
                   >
                     <div
@@ -476,7 +474,6 @@
                       role="button"
                       class="self-center justify-self-start"
                       class:text-red-500={isCurrentSortAsc}
-                      class:hover:text-gray-700={isCurrentSortAsc}
                       class:hover:text-red-500={!isCurrentSortAsc}
                       on:click={() => {
                         changeSortOptions(sortMenuItem.property, SortDirection.ASC);
@@ -493,7 +490,6 @@
                       role="button"
                       class="justify-self-end hover:text-red-500"
                       class:text-red-500={isCurrentSort && !isCurrentSortAsc}
-                      class:hover:text-gray-700={isCurrentSort && !isCurrentSortAsc}
                       class:hover:text-red-500={!isCurrentSort || isCurrentSortAsc}
                       on:click={() => {
                         changeSortOptions(sortMenuItem.property, SortDirection.DESC);

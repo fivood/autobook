@@ -61,6 +61,83 @@ export function computeGlobalCharIndex(
   return acc + localIndex;
 }
 
+/**
+ * Translate a DOM (node, offset) pair inside the rendered book content into
+ * a character index that aligns with extractText() output — so it can feed
+ * straight into seekParagraphsToExplored / autoReader.seekToExplored.
+ */
+export function domPositionToCharIndex(
+  root: HTMLElement,
+  targetNode: Node,
+  targetOffset: number
+): number | null {
+  // Typewriter wraps every character in its own .tw-c span; if those are
+  // present, mirror extractText()'s span-walk so indices line up.
+  const twcSpans = root.querySelectorAll('.tw-c');
+  if (twcSpans.length > 0) {
+    let total = 0;
+    for (let i = 0; i < twcSpans.length; i++) {
+      const span = twcSpans[i];
+      if (span === targetNode || span.contains(targetNode)) {
+        return total + targetOffset;
+      }
+      total += (span.textContent || '').length;
+    }
+    return total;
+  }
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let total = 0;
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    const parent = node.parentElement;
+    if (parent) {
+      const tag = parent.tagName;
+      if (tag !== 'SCRIPT' && tag !== 'STYLE') {
+        if (node === targetNode) {
+          return total + targetOffset;
+        }
+        if (node.contains(targetNode)) {
+          // Selection inside a descendant of this text node shouldn't happen
+          // (text nodes have no element children), but be defensive.
+          return total + targetOffset;
+        }
+        total += (node.textContent || '').length;
+      }
+    }
+    node = walker.nextNode();
+  }
+  return null;
+}
+
+/**
+ * Convenience: read the current document selection's start position and map
+ * it to a char index inside `root`. Returns null when there's no selection
+ * inside the content area.
+ */
+export function selectionToCharIndex(root: HTMLElement): number | null {
+  const sel = typeof window === 'undefined' ? null : window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  if (!root.contains(range.startContainer)) return null;
+  return domPositionToCharIndex(root, range.startContainer, range.startOffset);
+}
+
+/**
+ * The paginated calculator counts characters via getCharacterCount(), which
+ * strips whitespace, punctuation and most non-CJK symbols. TTS engines report
+ * boundary positions as offsets into the raw extractText() string. Convert
+ * one into the other so we can hand a TTS boundary char-index to
+ * SectionCharacterStatsCalculator.getScrollPosByCharCount().
+ */
+const NOT_COUNTED_REGEX =
+  /[^0-9A-Z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]+/gimu;
+
+export function ttsIndexToCalculatorIndex(extractedText: string, ttsIndex: number): number {
+  const slice = extractedText.slice(0, ttsIndex);
+  return Array.from(slice.replace(NOT_COUNTED_REGEX, '')).length;
+}
+
 export function seekParagraphsToExplored(
   paragraphs: string[],
   exploredCharCount: number

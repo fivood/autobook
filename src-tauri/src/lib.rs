@@ -7,8 +7,11 @@ use tauri::{
 };
 use tauri_plugin_fs::FsExt;
 
+mod calibre_converter;
 mod custom_tts;
 mod edge_tts;
+mod kf8_parser;
+mod mobi_parser;
 mod winrt_tts;
 
 
@@ -21,7 +24,7 @@ fn request_quit(app: &tauri::AppHandle) {
   app.exit(0);
 }
 
-const BOOK_EXTS: [&str; 3] = ["epub", "txt", "htmlz"];
+const BOOK_EXTS: [&str; 7] = ["epub", "txt", "htmlz", "md", "markdown", "mobi", "azw3"];
 
 /// File paths handed to the app via file association / command line, waiting
 /// for the frontend to pick them up.
@@ -239,7 +242,10 @@ pub fn run() {
       edge_list_voices,
       edge_synthesize,
       custom_tts_synthesize,
-      schedule_ui_reset
+      schedule_ui_reset,
+      mobi_parser::parse_mobi,
+      calibre_converter::check_calibre,
+      calibre_converter::convert_with_calibre
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

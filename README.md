@@ -13,7 +13,7 @@
 - **完整的 Tauri 2 桌面壳**，上游只有网页版
 - **签名的自动更新通道**：基于 GitHub Releases + `latest.json` manifest，应用内一键检查更新
 - **本地文件系统存储**：`TauriFsStorageHandler`，书库直接放 `~/Documents/EbookReader/<书名>/`，每本书一个子目录，可直接拷贝 / 备份 / 用 Everything 搜索
-- **窗口标题栏带版本号**（"AutoBook v1.0.x"）
+- **窗口标题栏带版本号**（"AutoBook vX.Y.Z"）
 
 ### 阅读体验（这是主要改动）
 - **打字机自动播放**（连续滚动模式）：右下角播放/暂停按钮，逐字浮现，A/D 调速（1–60 字/秒），从已读位置接着开始
@@ -22,9 +22,16 @@
 - **滚动模式与分页模式自动播放各司其职**：连续模式跟随打字机，分页模式跟随 TTS，互不串扰
 - **顶部菜单触发热区扩大到 48px**（上游过小容易划过）
 
-### TXT 支持
-- **编码自动识别**：BOM 嗅探 → 严格 UTF-8 → Shift-JIS / GB18030 / BIG5 按 CJK 密度打分
-- **章节识别**：自动识别「第 X 章」（汉数字 / 阿拉伯数字）、序章 / 楔子 / 番外 / Chapter / Section / Part 等
+### 格式支持
+- **EPUB / HTMLZ**：继承上游，是最完整的格式
+- **TXT**：编码自动识别（BOM 嗅探 → 严格 UTF-8 → Shift-JIS / GB18030 / BIG5 按 CJK 密度打分）；自动识别章节（「第 X 章」汉/阿数字、序章 / 楔子 / 番外 / Chapter / Section / Part 等）
+- **Markdown（.md / .markdown）**：marked + GFM 渲染；fenced code block 走 highlight.js（atom-one-dark 配色）；`$...$` / `$$...$$` 数学公式由 KaTeX 渲染（语法错误降级为红字 code 块）；按 h1/h2 切 section 联动 TOC
+- **MOBI（legacy MOBI6）**：Rust 端 `mobi` crate 解析跑在 panic 防护里；中文编码嗅探链 UTF-8 → GB18030 → GBK → Big5，按 UTF-8 lossy ratio 做主要判别（详见 1.4.12 changelog）；按 `<mbp:pagebreak>` / `<p style="page-break-after:always">` 切 section，首个 h1–h6 作为 TOC label
+- **AZW3 / KF8 / MOBI:joint**：暂不支持。检测到会报错引导用 [Calibre](https://calibre-ebook.com/) 转 EPUB。原生 KF8 解析器排在 1.5.0
+- **ZIP 批量**：上述任意格式打包成 ZIP 拖入或选择，自动展开后逐个导入
+
+### 书库管理
+- **自定义文件夹分类**（1.3.4+）：左侧侧栏建文件夹；拖书籍卡片到文件夹完成归类；同一本书可同时归到多个文件夹（标签式而非互斥）；多选 + 胶囊批量分类
 
 ### 主题
 - **13 个内置主题**：上游 7 个，autobook 新增 Seafoam / Columbia Blue / Dove Grey（浅色）与 Abyss / Espresso / Rainforest（深色）

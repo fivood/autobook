@@ -109,6 +109,19 @@ export const pendingLaunchFiles$ = writableSubject<string[]>([]);
 /** Tray + window menu request to toggle TTS (emitted by both global shortcut and tray). */
 export const ttsToggleRequest$ = writableSubject<number>(0);
 
+/** Where to start when the user presses play. 'selection' = current
+ * cursor/selection (falls back to resume); 'resume' = saved position only;
+ * 'visible' = whatever the viewport shows. */
+export const ttsStartStrategy$ = writableStringLocalStorageSubject()(
+  'ttsStartStrategy',
+  'selection'
+);
+/** When TTS finishes a section in paginated mode, auto-advance to next section. */
+export const ttsAutoAdvanceSection$ = writableBooleanLocalStorageSubject()(
+  'ttsAutoAdvanceSection',
+  true
+);
+
 export const ttsShortcut$ = writableStringLocalStorageSubject()('ttsShortcut', 'ctrl+alt+p');
 
 /** 'web' = Web Speech API, 'sapi' = Windows system TTS, 'edge' = Microsoft Edge online voices (Tauri only). */
@@ -131,6 +144,28 @@ export const ttsCustomHeaders$ = writableStringLocalStorageSubject()(
 export const ttsCustomBody$ = writableStringLocalStorageSubject()('ttsCustomBody', '');
 /** Dot-path to base64 audio in a JSON response (e.g. choices.0.message.audio.data). Empty = raw audio bytes. */
 export const ttsCustomAudioPath$ = writableStringLocalStorageSubject()('ttsCustomAudioPath', '');
+
+export interface TtsCustomPresetState {
+  endpoint: string;
+  method: string;
+  headers: string;
+  body: string;
+  audioPath: string;
+}
+
+/** Which named preset is currently active. The five ttsCustom* stores above
+ * mirror the active preset's slot so existing readers (auto-reader-custom)
+ * don't need to know about the map. */
+export const ttsCustomActivePreset$ = writableStringLocalStorageSubject()(
+  'ttsCustomActivePreset',
+  'manual'
+);
+
+/** Per-preset persisted state, so switching between openai/mimo/... doesn't
+ * stomp the key the user typed in for the previous one. */
+export const ttsCustomPresetStates$ = writableObjectLocalStorageSubject<
+  Record<string, TtsCustomPresetState>
+>()('ttsCustomPresetStates', {});
 
 export interface TtsPosition {
   section: number;

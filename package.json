@@ -1,6 +1,6 @@
 {
   "name": "ebook-reader-desktop",
-  "version": "1.2.9",
+  "version": "1.4.22",
   "type": "module",
   "private": true,
   "scripts": {
@@ -52,7 +52,10 @@
     "balanced-match": "3.0.1",
     "fake-indexeddb": "6.2.5",
     "fast-xml-parser": "5.8.0",
+    "highlight.js": "^11.11.1",
     "idb": "8.0.3",
+    "katex": "^0.17.0",
+    "marked": "^18.0.5",
     "p-limit": "7.3.0",
     "path-browserify": "1.0.1",
     "rxjs": "7.8.2",
