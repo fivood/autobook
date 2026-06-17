@@ -28,7 +28,6 @@
   import { pagePath } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
   import { SortDirection, type SortOption } from '$lib/data/sort-types';
-  import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
@@ -271,7 +270,7 @@
 
         idToOpen = await handler.prepareBookForReading();
 
-        if (!$hideExternalReadHint$ && handler instanceof ApiStorageHandler) {
+        if (false) {
           const nextAction = await new Promise<string>((resolver) => {
             dialogManager.dialogs$.next([
               {
@@ -331,10 +330,7 @@
   }
 
   function operationAllowed() {
-    const connectivityPass = !(
-      ($storageSource$ === StorageKey.GDRIVE || $storageSource$ === StorageKey.ONEDRIVE) &&
-      !$isOnline$
-    );
+    const connectivityPass = true;
 
     if (!connectivityPass && !replicationToProgress) {
       const message = '此操作需要联网';
@@ -377,7 +373,7 @@
 
     initializeReplicationProgressData();
 
-    const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?)$/i;
+    const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf)$/i;
     const errorTitle = '书籍导入失败';
     const expanded = await expandZipArchives(Array.from(fileList)).catch((err) => {
       logger.warn(`Error expanding zip: ${err.message}`);
@@ -390,7 +386,7 @@
 
       showError(
         errorTitle,
-        '文件必须是 EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3，或包含这些格式的 ZIP',
+        '文件必须是 EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3 / PDF，或包含这些格式的 ZIP',
         ''
       );
       return;
@@ -460,7 +456,7 @@
 
         for (const entry of entries) {
           if (entry.directory || !entry.getData) continue;
-          if (!/\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?)$/i.test(entry.filename)) continue;
+          if (!/\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf)$/i.test(entry.filename)) continue;
 
           const name = entry.filename.split('/').pop() || entry.filename;
           // eslint-disable-next-line no-await-in-loop
@@ -913,7 +909,7 @@
       </span>
       <input
         type="file"
-        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/zip,.zip"
+        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,application/zip,.zip"
         multiple
         hidden
         use:inputFile={onFilesChange}

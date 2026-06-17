@@ -33,8 +33,7 @@ import {
 import {
   InternalStorageSources,
   StorageDataType,
-  StorageKey,
-  StorageSourceDefault
+  StorageKey
 } from '$lib/data/storage/storage-types';
 import {
   AutoReplicationType,
@@ -124,13 +123,8 @@ export const ttsAutoAdvanceSection$ = writableBooleanLocalStorageSubject()(
 
 export const ttsShortcut$ = writableStringLocalStorageSubject()('ttsShortcut', 'ctrl+alt+p');
 
-/** 'web' = Web Speech API, 'sapi' = Windows system TTS, 'edge' = Microsoft Edge online voices (Tauri only). */
 export const ttsEngine$ = writableStringLocalStorageSubject()('ttsEngine', 'web');
 export const ttsSapiVoiceId$ = writableStringLocalStorageSubject()('ttsSapiVoiceId', '');
-export const ttsEdgeVoiceId$ = writableStringLocalStorageSubject()(
-  'ttsEdgeVoiceId',
-  'zh-CN-XiaoxiaoNeural'
-);
 
 // User-configurable HTTP TTS
 export const ttsCustomEndpoint$ = writableStringLocalStorageSubject()('ttsCustomEndpoint', '');
@@ -369,17 +363,6 @@ export const showExternalPlaceholder$ = writableBooleanLocalStorageSubject()(
   false
 );
 
-export const gDriveStorageSource$ = writableStringLocalStorageSubject()(
-  'gDriveStorageSource',
-  StorageSourceDefault.GDRIVE_DEFAULT
-);
-
-export const oneDriveStorageSource$ = writableStringLocalStorageSubject()(
-  'oneDriveStorageSource',
-  StorageSourceDefault.ONEDRIVE_DEFAULT
-);
-
-export const fsStorageSource$ = writableStringLocalStorageSubject()('fsStorageSource', '');
 
 export const syncTarget$ = writableStringLocalStorageSubject()('syncTarget', '');
 
@@ -637,9 +620,6 @@ export const domainHintSeen$ = writableBooleanLocalStorageSubject()('domainHintS
 
 const defaultBooklistSortOptions: Record<string, SortOption> = {
   [StorageKey.BROWSER]: { property: 'lastBookOpen', direction: SortDirection.DESC },
-  [StorageKey.GDRIVE]: { property: 'title', direction: SortDirection.ASC },
-  [StorageKey.ONEDRIVE]: { property: 'title', direction: SortDirection.ASC },
-  [StorageKey.FS]: { property: 'title', direction: SortDirection.ASC },
   [StorageKey.TAURI_FS]: { property: 'lastBookOpen', direction: SortDirection.DESC }
 };
 

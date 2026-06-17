@@ -46,6 +46,8 @@ function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean)
 
     let { elementHtml } = bookData;
 
+    const pdfPageUrls = new Set<string>();
+
     Object.entries(blobs).forEach(([key, value]) => {
       const url = URL.createObjectURL(
         value.type
@@ -56,6 +58,7 @@ function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean)
 
       objectUrls.push(url);
       urlIndexes.set(url, elementHtml.indexOf(dummyUrl));
+      if (/^pdf-page-\d+\.jpg$/.test(key)) pdfPageUrls.add(url);
 
       elementHtml = elementHtml.replaceAll(dummyUrl, url).replaceAll(`ttu:${key}`, url);
     });
@@ -63,7 +66,7 @@ function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean)
 
     const readerImageGalleryPictures: ReaderImageGalleryPicture[] = objectUrls.map((url) => ({
       url,
-      unspoilered: !isPaginated
+      unspoilered: !isPaginated || pdfPageUrls.has(url)
     }));
 
     readerImageGalleryPictures.sort((picture1, picture2) => {
@@ -127,7 +130,7 @@ function addSpoilerTags(el: HTMLElement, document: Document, blurMode: BlurMode)
     : [...el.children]
   ).forEach((childNode) => {
     Array.from(childNode.getElementsByTagName('img'))
-      .filter((tag) => !isElementGaiji(tag))
+      .filter((tag) => !isElementGaiji(tag) && !tag.hasAttribute('data-pdf-page'))
       .forEach((tag) => createWrapper(tag, childNode));
 
     Array.from(childNode.getElementsByTagName('svg'))

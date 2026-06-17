@@ -5,6 +5,13 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import type { UpdateInfo, ProgressEvent } from '$lib/functions/updater/check-for-update';
   import { relaunchApp } from '$lib/functions/updater/check-for-update';
+  import { marked } from 'marked';
+
+  marked.setOptions({ breaks: true, gfm: true });
+
+  function renderMd(text: string): string {
+    return marked.parse(text || '') as string;
+  }
 
   export let update: UpdateInfo;
 
@@ -100,7 +107,7 @@
             {#each aggregated as entry (entry.version)}
               <div>
                 <h4 class="font-medium text-sm">v{entry.version}</h4>
-                <div class="font-sans whitespace-pre-wrap text-sm opacity-90 mt-1">{entry.notes}</div>
+                <div class="release-notes font-sans text-sm opacity-90 mt-1">{@html renderMd(entry.notes)}</div>
               </div>
             {/each}
           </div>
@@ -108,7 +115,7 @@
       {:else if update.notes}
         <div class="border-t pt-2">
           <p class="font-medium mb-1">更新内容</p>
-          <div class="font-sans whitespace-pre-wrap text-sm opacity-90 max-h-56 overflow-y-auto">{update.notes}</div>
+          <div class="release-notes font-sans text-sm opacity-90 max-h-56 overflow-y-auto">{@html renderMd(update.notes)}</div>
         </div>
       {/if}
 
@@ -154,3 +161,35 @@
     {/if}
   </div>
 </DialogTemplate>
+
+<style>
+  .release-notes :global(h1),
+  .release-notes :global(h2),
+  .release-notes :global(h3) {
+    font-weight: 600;
+    margin: 0.5em 0 0.25em;
+  }
+  .release-notes :global(h1) { font-size: 1.1em; }
+  .release-notes :global(h2) { font-size: 1.05em; }
+  .release-notes :global(h3) { font-size: 1em; }
+  .release-notes :global(ul),
+  .release-notes :global(ol) {
+    padding-left: 1.5em;
+    margin: 0.25em 0;
+  }
+  .release-notes :global(li) {
+    margin: 0.15em 0;
+  }
+  .release-notes :global(p) {
+    margin: 0.25em 0;
+  }
+  .release-notes :global(code) {
+    background: rgba(127, 127, 127, 0.15);
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  .release-notes :global(a) {
+    text-decoration: underline;
+  }
+</style>

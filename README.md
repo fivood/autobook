@@ -1,9 +1,6 @@
 # autobook
 
-桌面优先的中文电子书阅读器，原型 fork 自 [ttu-ebook-reader](https://github.com/ttu-ttu/ebook-reader)，目前与上游已有较大分歧。同一份源码输出两个目标：
-
-- **网页 PWA**：[book.fivood.com](https://book.fivood.com)（Cloudflare Pages，可在 iPhone Safari 加到主屏幕）
-- **Windows 桌面版**：[Tauri 2](https://tauri.app/) 打包成 `.exe`（NSIS），书库直接落到本地文件系统，带签名的自动更新通道
+Windows 桌面中文电子书阅读器，原型 fork 自 [ttu-ebook-reader](https://github.com/ttu-ttu/ebook-reader)，目前与上游已有较大分歧。[Tauri 2](https://tauri.app/) 打包成 `.exe`（NSIS），书库直接落到本地文件系统，带签名的自动更新通道。
 
 ## 与上游 ttu-ebook-reader 的差异
 
@@ -19,7 +16,6 @@
 - **打字机自动播放**（连续滚动模式）：右下角播放/暂停按钮，逐字浮现，A/D 调速（1–60 字/秒），从已读位置接着开始
 - **多引擎语音朗读**（分页模式）：
   - **WinRT TTS**：Windows 本地语音，支持自然人声（需在 Windows 设置中安装）
-  - **Edge 在线 TTS**：微软 Edge 云端神经网络语音，无需安装，音质优秀
   - **自定义 HTTP TTS**：对接任意第三方 TTS API（如讯飞、百度等），支持自定义 endpoint / headers / body 模板
   - 右下角喇叭按钮 / 全局快捷键（默认 `Ctrl+Alt+P`，可自定义），0.5×–2.0× 语速
 - **自动语言检测**：打开书籍时根据 EPUB `dc:language` 或文本 CJK 密度自动识别（中 / 日 / 英），匹配对应 TTS 语音
@@ -55,7 +51,8 @@
 
 ### 删掉的东西
 - Bug Report 入口
-- 部分 PWA 安装提示
+- PWA / 网页版（云存储 GDrive/OneDrive、OAuth、Service Worker、GitHub Pages 部署）
+- Edge 在线 TTS（微软反爬导致始终 HTTP 403）
 - 各种日语学习者向的细节（如假名 furigana 的部分提示）
 
 ## 主要功能速查
@@ -74,7 +71,6 @@
 
 ```sh
 npm install
-npm run dev          # 浏览器开发，http://localhost:5173
 npm run tauri:dev    # 桌面壳开发（自动启 Vite + 编译 Rust）
 ```
 
@@ -96,47 +92,11 @@ npm run tauri:build
 
 首次安装时 SmartScreen 会提示"未知发布者"，点"更多信息 → 仍要运行"即可。
 
-#### 发版时还要做一步：上传 `latest.json`
+发版流程已由 CI 自动化：推送 `v*` tag 后 GitHub Actions 构建 NSIS 安装包 + `latest.json`，Cloudflare Worker (`updates.fivood.com`) 代理 updater 端点。
 
-updater 端点是 `releases/latest/download/latest.json`，没这个文件「检查更新」会报 *Could not fetch a valid release JSON from the remote*。每次 `gh release create` 后还要：
+## 数据存储
 
-```json
-{
-  "version": "1.0.x",
-  "notes": "...",
-  "pub_date": "2026-06-09T10:00:00Z",
-  "platforms": {
-    "windows-x86_64": {
-      "signature": "<.sig 文件全部内容>",
-      "url": "https://github.com/fivood/autobook/releases/download/v1.0.x/AutoBook_1.0.x_x64-setup.exe"
-    }
-  }
-}
-```
-
-```sh
-gh release upload v1.0.x latest.json --clobber
-```
-
-### 网页版
-
-```sh
-npm run build        # 产物在 build/
-```
-
-Cloudflare Pages：
-- Build command: `npm run build`
-- Build output directory: `build`
-
-## 数据互通
-
-| | 桌面版（Tauri） | 网页版（PWA / 手机） |
-|---|---|---|
-| 默认存储 | 本地文件系统 | 浏览器 IndexedDB |
-| 存储位置 | `~/Documents/AutoBook/<书名>/` | 浏览器内部 |
-| 跨端同步 | 通过 Google Drive / OneDrive 在两端各连一次 | 同左 |
-
-两端的本地存储隔离，要共享书库走云盘同步。
+书库默认放在 `~/Documents/AutoBook/<书名>/`，每本书一个子目录，可直接拷贝 / 备份。
 
 ## License
 

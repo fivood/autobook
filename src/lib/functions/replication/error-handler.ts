@@ -14,8 +14,9 @@ export function handleErrorDuringReplication(
   limiters?: LimitFunction[],
   currentProgressBase?: number
 ) {
-  if (error.name !== 'AbortError') {
-    logger.error(`${baseError}${error.message}`);
+  const errorMsg = error?.message || error?.name || (typeof error === 'string' ? error : String(error));
+  if (error?.name !== 'AbortError') {
+    logger.error(`${baseError}${errorMsg}`);
   }
 
   if (error.name === 'AbortError') {
@@ -34,7 +35,7 @@ export function handleErrorDuringReplication(
     replicationProgress$.next({ skipStep: true });
   }
 
-  return `${baseError}${error.message}`;
+  return `${baseError}${errorMsg}`;
 }
 
 export async function convertAuthErrorResponse(

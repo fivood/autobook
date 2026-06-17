@@ -13,6 +13,7 @@ import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadMd from '$lib/functions/file-loaders/md/load-md';
 import loadMobi, { setForceNativeParser } from '$lib/functions/file-loaders/mobi/load-mobi';
+import loadPdf from '$lib/functions/file-loaders/pdf/load-pdf';
 
 if (typeof window !== 'undefined') {
   (window as any).__forceNativeMobi = (val = true) => {
@@ -84,6 +85,8 @@ export async function importData(
             bookContent = await loadMd(file, lastBookModified);
           } else if (/\.(mobi|azw3?)$/i.test(file.name)) {
             bookContent = await loadMobi(file, lastBookModified);
+          } else if (/\.pdf$/i.test(file.name)) {
+            bookContent = await loadPdf(file, lastBookModified);
           } else {
             bookContent = await loadHtmlz(file, document, lastBookModified);
           }

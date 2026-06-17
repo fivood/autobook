@@ -4,16 +4,8 @@
  * All rights reserved.
  */
 
-import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
-import {
-  gDriveAuthEndpoint,
-  gDriveClientId,
-  gDriveScope,
-  isTauri,
-  oneDriveAuthEndpoint,
-  oneDriveClientId,
-  oneDriveScope
-} from '$lib/data/env';
+import { StorageKey } from '$lib/data/storage/storage-types';
+import { isTauri } from '$lib/data/env';
 
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { writableSubject } from '$lib/functions/svelte/store';
@@ -33,42 +25,14 @@ export function isStorageSourceAvailable(
   storageSourceManager: string,
   window: Window
 ) {
-  let hasValidEnvironment = false;
-
   switch (storageSource) {
     case StorageKey.BROWSER:
-      hasValidEnvironment = true;
-      break;
-
-    case StorageKey.GDRIVE:
-      hasValidEnvironment =
-        ((storageSourceManager && storageSourceManager !== StorageSourceDefault.GDRIVE_DEFAULT) ||
-          gDriveClientId) &&
-        gDriveAuthEndpoint &&
-        gDriveScope;
-      break;
-
-    case StorageKey.ONEDRIVE:
-      hasValidEnvironment =
-        ((storageSourceManager && storageSourceManager !== StorageSourceDefault.ONEDRIVE_DEFAULT) ||
-          oneDriveClientId) &&
-        oneDriveAuthEndpoint &&
-        oneDriveScope;
-      break;
-
-    case StorageKey.FS:
-      hasValidEnvironment = !!storageSourceManager && 'showDirectoryPicker' in window;
-      break;
-
+      return true;
     case StorageKey.TAURI_FS:
-      hasValidEnvironment = isTauri();
-      break;
-
+      return isTauri();
     default:
-      break;
+      return false;
   }
-
-  return hasValidEnvironment;
 }
 
 export function getStorageIconData(storageSource: StorageKey): StorageIcon {
@@ -78,17 +42,6 @@ export function getStorageIconData(storageSource: StorageKey): StorageIcon {
         viewBox: '0 0 384 512',
         d: 'M256 0v128h128L256 0zM224 128L224 0H48C21.49 0 0 21.49 0 48v416C0 490.5 21.49 512 48 512h288c26.51 0 48-21.49 48-48V160h-127.1C238.3 160 224 145.7 224 128zM96 32h64v32H96V32zM96 96h64v32H96V96zM96 160h64v32H96V160zM128.3 415.1c-40.56 0-70.76-36.45-62.83-75.45L96 224h64l30.94 116.9C198.7 379.7 168.5 415.1 128.3 415.1zM144 336h-32C103.2 336 96 343.2 96 352s7.164 16 16 16h32C152.8 368 160 360.8 160 352S152.8 336 144 336z'
       };
-    case StorageKey.GDRIVE:
-      return {
-        viewBox: '0 0 512 512',
-        d: 'M339 314.9L175.4 32h161.2l163.6 282.9H339zm-137.5 23.6L120.9 480h310.5L512 338.5H201.5zM154.1 67.4L0 338.5 80.6 480 237 208.8 154.1 67.4z'
-      };
-    case StorageKey.ONEDRIVE:
-      return {
-        viewBox: '0 0 640 512',
-        d: 'M96.2 200.1C96.07 197.4 96 194.7 96 192C96 103.6 167.6 32 256 32C315.3 32 367 64.25 394.7 112.2C409.9 101.1 428.3 96 448 96C501 96 544 138.1 544 192C544 204.2 541.7 215.8 537.6 226.6C596 238.4 640 290.1 640 352C640 422.7 582.7 480 512 480H144C64.47 480 0 415.5 0 336C0 273.2 40.17 219.8 96.2 200.1z'
-      };
-    case StorageKey.FS:
     case StorageKey.TAURI_FS:
       return {
         viewBox: '0 0 576 512',

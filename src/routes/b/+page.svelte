@@ -161,7 +161,6 @@
   import {
     InternalStorageSources,
     StorageDataType,
-    StorageSourceDefault,
     StorageKey
   } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
@@ -1113,80 +1112,11 @@
         $readingGoalsMergeMode$
       );
     }
-    if (storageSourceName === StorageSourceDefault.GDRIVE_DEFAULT) {
-      if (!$isOnline$) {
-        dialogManager.dialogs$.next([
-          {
-            component: MessageDialog,
-            props: {
-              title: '加载错误',
-              message:
-                '因缺少网络连接，同步已禁用 - 联网后刷新页面重试'
-            }
-          }
-        ]);
-
-        return undefined;
-      }
-
-      return getStorageHandler(
-        window,
-        StorageKey.GDRIVE,
-        storageSourceName,
-        true,
-        $cacheStorageData$,
-        $replicationSaveBehavior$,
-        $statisticsMergeMode$,
-        $readingGoalsMergeMode$
-      );
-    }
-    if (storageSourceName === StorageSourceDefault.ONEDRIVE_DEFAULT) {
-      if (!$isOnline$) {
-        dialogManager.dialogs$.next([
-          {
-            component: MessageDialog,
-            props: {
-              title: '加载错误',
-              message:
-                '因缺少网络连接，同步已禁用 - 联网后刷新页面重试'
-            }
-          }
-        ]);
-
-        return undefined;
-      }
-
-      return getStorageHandler(
-        window,
-        StorageKey.ONEDRIVE,
-        storageSourceName,
-        true,
-        $cacheStorageData$,
-        $replicationSaveBehavior$,
-        $statisticsMergeMode$,
-        $readingGoalsMergeMode$
-      );
-    }
     if (storageSourceName) {
       const db = await database.db;
       const storageSource = await db.get('storageSource', storageSourceName);
 
       if (storageSource) {
-        if (storageSource.type !== StorageKey.FS && !$isOnline$) {
-          dialogManager.dialogs$.next([
-            {
-              component: MessageDialog,
-              props: {
-                title: '加载错误',
-                message:
-                  '因缺少网络连接，同步已禁用 - 联网后刷新页面重试'
-              }
-            }
-          ]);
-
-          return undefined;
-        }
-
         return getStorageHandler(
           window,
           storageSource.type,

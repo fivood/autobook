@@ -7,10 +7,7 @@
 export enum StorageKey {
   BACKUP = 'backup',
   BROWSER = 'browser',
-  FS = 'fs',
-  TAURI_FS = 'tauri-fs',
-  GDRIVE = 'gdrive',
-  ONEDRIVE = 'onedrive'
+  TAURI_FS = 'tauri-fs'
 }
 
 export enum StorageDataType {
@@ -20,11 +17,6 @@ export enum StorageDataType {
   READING_GOALS = 'readingGoal',
   AUDIOBOOK = 'audioBook',
   SUBTITLE = 'subtitle'
-}
-
-export enum StorageSourceDefault {
-  GDRIVE_DEFAULT = 'ttu-gdrive-default',
-  ONEDRIVE_DEFAULT = 'ttu-onedrive-default'
 }
 
 export enum InternalStorageSources {
@@ -40,8 +32,3 @@ export const internalStorageSourceName = new Set<string>([
   InternalStorageSources.INTERNAL_ZIP,
   InternalStorageSources.INTERNAL_TAURI_FS
 ]);
-
-export const defaultStorageSources = [
-  { name: StorageSourceDefault.GDRIVE_DEFAULT, type: StorageKey.GDRIVE },
-  { name: StorageSourceDefault.ONEDRIVE_DEFAULT, type: StorageKey.ONEDRIVE }
-];

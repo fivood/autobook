@@ -36,8 +36,6 @@
   import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
   import { isAppDefault } from '$lib/data/storage/storage-source-manager';
-  import { defaultStorageSources } from '$lib/data/storage/storage-types';
-  import { isStorageSourceAvailable } from '$lib/data/storage/storage-view';
   import {
     customThemes$,
     database,
@@ -56,7 +54,6 @@
     ttsCustomActivePreset$,
     ttsCustomPresetStates$,
     ttsAutoAdvanceSection$,
-    ttsEdgeVoiceId$,
     ttsEngine$,
     ttsSapiVoiceId$,
     ttsShortcut$,
@@ -240,10 +237,8 @@
 
   onDestroy(() => dialogManager.dialogs$.next([]));
 
-  // TTS engine + voices (SAPI and Edge)
   let sapiVoices: { id: string; name: string; language: string }[] = [];
   let sapiVoicesError = '';
-  let edgeVoices: { id: string; name: string; language: string }[] = [];
 
   async function loadSapiVoices() {
     sapiVoicesError = '';
@@ -262,20 +257,7 @@
     }
   }
 
-  async function loadEdgeVoices() {
-    if (!isTauri() || $ttsEngine$ !== 'edge' || edgeVoices.length) return;
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      edgeVoices = await invoke<{ id: string; name: string; language: string }[]>(
-        'edge_list_voices'
-      );
-    } catch {
-      edgeVoices = [];
-    }
-  }
-
   $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
-  $: if ($ttsEngine$ === 'edge') loadEdgeVoices();
 
   interface CustomPreset {
     label: string;
@@ -532,28 +514,6 @@
         const bytes = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
         const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/wav' }));
-        previewAudio = new Audio(url);
-        previewAudio.onended = () => {
-          previewState = 'idle';
-          URL.revokeObjectURL(url);
-        };
-        previewAudio.onerror = () => {
-          previewState = 'error';
-          previewMessage = '音频播放失败';
-          URL.revokeObjectURL(url);
-        };
-        previewState = 'playing';
-        await previewAudio.play();
-      } else if ($ttsEngine$ === 'edge') {
-        const b64 = await invoke<string>('edge_synthesize', {
-          text: previewText,
-          voice: $ttsEdgeVoiceId$,
-          rate: 1
-        });
-        const bin = atob(b64);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/mpeg' }));
         previewAudio = new Audio(url);
         previewAudio.onended = () => {
           previewState = 'idle';
@@ -861,21 +821,9 @@
   ];
 
   const storageSources$ = database.storageSourcesChanged$.pipe(
-    map((storageSources) => [
-      ...defaultStorageSources
-        .filter((defaultStorageSource) =>
-          isStorageSourceAvailable(defaultStorageSource.type, defaultStorageSource.name, window)
-        )
-        .map((defaultStorageSource) => ({
-          name: defaultStorageSource.name,
-          type: defaultStorageSource.type,
-          storedInManager: false,
-          encryptionDisabled: false,
-          data: new ArrayBuffer(0),
-          lastSourceModified: 0
-        })),
-      ...storageSources.filter((storageSource) => !isAppDefault(storageSource.name))
-    ])
+    map((storageSources) =>
+      storageSources.filter((storageSource) => !isAppDefault(storageSource.name))
+    )
   );
 
   let showSpinner = false;
@@ -1239,7 +1187,6 @@
               <option value="web">Web Speech（浏览器）</option>
               <option value="sapi">系统 TTS（SAPI）</option>
               <option value="custom">自定义 HTTP TTS</option>
-              <option value="edge">Edge 在线（实验）</option>
             </select>
             <button
               class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm disabled:opacity-40"
@@ -1344,24 +1291,6 @@
                 {/each}
               </select>
             {/if}
-          </SettingsItemGroup>
-        </div>
-      {/if}
-
-      {#if $ttsEngine$ === 'edge'}
-        <div class="lg:col-span-3">
-          <SettingsItemGroup
-            title="Edge 在线语音"
-            tooltip="使用微软 Azure 神经网络音色，最自然。需联网；微软会定期升级反爬，本功能标实验性，失败时会自动停止朗读。"
-          >
-            <select
-              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
-              bind:value={$ttsEdgeVoiceId$}
-            >
-              {#each edgeVoices as voice (voice.id)}
-                <option value={voice.id}>{voice.name} ({voice.language})</option>
-              {/each}
-            </select>
           </SettingsItemGroup>
         </div>
       {/if}
