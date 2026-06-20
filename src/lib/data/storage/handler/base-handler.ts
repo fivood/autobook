@@ -12,7 +12,8 @@ import {
   type BooksDbStatistic,
   type BooksDbReadingGoal,
   type BooksDbAudioBook,
-  type BooksDbSubtitleData
+  type BooksDbSubtitleData,
+  type BooksDbHighlight
 } from '$lib/data/database/books-db/versions/books-db';
 import type { Section } from '$lib/data/database/books-db/versions/v4/books-db-v4';
 import { storageRootName } from '$lib/data/env';
@@ -39,7 +40,8 @@ import {
 
 export enum FilePrefix {
   AUDIO_BOOK = 'audioBook_',
-  SUBTITLE = 'subtitles_'
+  SUBTITLE = 'subtitles_',
+  HIGHLIGHT = 'highlights_'
 }
 
 export interface ExternalFile {
@@ -85,6 +87,10 @@ export abstract class BaseStorageHandler {
     referenceFilename: string | undefined
   ): Promise<boolean>;
 
+  abstract areHighlightsPresentAndUpToDate(
+    referenceFilename: string | undefined
+  ): Promise<boolean>;
+
   abstract getBook(): Promise<Omit<BooksDbBookData, 'id'> | File | undefined>;
 
   abstract getProgress(): Promise<BooksDbBookmarkData | File | undefined>;
@@ -105,6 +111,11 @@ export abstract class BaseStorageHandler {
 
   abstract getSubtitleData(): Promise<BooksDbSubtitleData | File | undefined>;
 
+  abstract getHighlightData(): Promise<{
+    highlights: BooksDbHighlight[] | undefined;
+    lastHighlightModified: number;
+  }>;
+
   abstract saveBook(
     data: Omit<BooksDbBookData, 'id'> | File,
     skipTimestampFallback?: boolean,
@@ -122,6 +133,11 @@ export abstract class BaseStorageHandler {
   abstract saveAudioBook(data: BooksDbAudioBook | File): Promise<void>;
 
   abstract saveSubtitleData(data: BooksDbSubtitleData | File): Promise<void>;
+
+  abstract saveHighlightData(
+    data: BooksDbHighlight[] | File,
+    lastHighlightModified: number
+  ): Promise<void>;
 
   abstract deleteBookData(
     booksToDelete: string[],
@@ -709,6 +725,15 @@ export abstract class BaseStorageHandler {
       : `${FilePrefix.SUBTITLE}${exporterVersion}_${currentDbVersion}_${data.lastSubtitleDataModified}_${data.subtitleData.subtitles.length}.json`;
   }
 
+  protected static getHighlightsFileName(
+    data: BooksDbHighlight[] | File,
+    lastHighlightModified: number
+  ) {
+    return data instanceof File
+      ? data.name
+      : `${FilePrefix.HIGHLIGHT}${exporterVersion}_${currentDbVersion}_${lastHighlightModified}_${data.length}.json`;
+  }
+
   protected static async getCoverFileName(cover: Blob) {
     const type = (await BaseStorageHandler.determineImageExtension(cover)) || 'jpeg';
 
@@ -767,6 +792,17 @@ export abstract class BaseStorageHandler {
       dbVersion: +parts[2],
       lastSubtitleDataModified: +parts[3],
       subtitleCount: +parts[4]
+    };
+  }
+
+  protected static getHighlightsMetadata(filename: string) {
+    const parts = filename.split('_').map((part) => part.replace(/\.json$/, ''));
+
+    return {
+      exporterVersion: +parts[1],
+      dbVersion: +parts[2],
+      lastHighlightModified: +parts[3],
+      highlightCount: +parts[4]
     };
   }
 

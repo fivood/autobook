@@ -277,6 +277,7 @@
   let hlMemoDialogOpen = false;
   let hlMemoText = '';
   let hlMemoSelectedText = '';
+  let hlMemoTags: string[] = [];
   let hlPendingColor: HighlightColor = 'yellow';
   let hlPendingRange: Range | undefined;
   let syncedResolver: () => void;
@@ -633,6 +634,10 @@
   );
 
   let hlRafId = 0;
+  let pendingScrollHlId = browser
+    ? Number(new URL(window.location.href).searchParams.get('hl')) || 0
+    : 0;
+  let pendingSectionAdjusted = false;
 
   function scheduleHighlightRender(highlights: BooksDbHighlight[]) {
     cancelAnimationFrame(hlRafId);
@@ -640,6 +645,38 @@
       const el = getBookContentEl();
       if (el) {
         renderHighlights(el, highlights);
+        if (pendingScrollHlId) {
+          const target = highlights.find((h) => h.id === pendingScrollHlId);
+          if (target) {
+            const mark = el.querySelector(`mark[data-hl-id="${pendingScrollHlId}"]`);
+            if (mark) {
+              scrollToHighlight(el, target);
+              pendingScrollHlId = 0;
+              pendingSectionAdjusted = false;
+              const url = new URL(window.location.href);
+              url.searchParams.delete('hl');
+              window.history.replaceState({}, '', url.toString());
+            } else if (
+              !pendingSectionAdjusted &&
+              $viewMode$ === ViewMode.Paginated &&
+              $sectionData$ &&
+              $sectionData$.length
+            ) {
+              const secStarts = $sectionData$.map((s) => s.startCharacter ?? 0);
+              let idx = 0;
+              for (let i = secStarts.length - 1; i >= 0; i--) {
+                if (target.startOffset >= secStarts[i]) {
+                  idx = i;
+                  break;
+                }
+              }
+              if (idx !== currentSectionIndex) {
+                currentSectionIndex = idx;
+              }
+              pendingSectionAdjusted = true;
+            }
+          }
+        }
       } else {
         hlRafId = requestAnimationFrame(retry);
       }
@@ -1384,7 +1421,8 @@
           StorageDataType.STATISTICS,
           StorageDataType.READING_GOALS,
           StorageDataType.AUDIOBOOK,
-          StorageDataType.SUBTITLE
+          StorageDataType.SUBTITLE,
+          StorageDataType.HIGHLIGHT
         ]
       );
 
@@ -1505,6 +1543,7 @@
     if (hlMenuMode === 'create' && hlPendingRange) {
       hlMemoSelectedText = hlPendingRange.toString();
       hlMemoText = '';
+      hlMemoTags = [];
       hlPendingColor = 'yellow';
       hlMemoDialogOpen = true;
       skipKeyDownListener$.next(true);
@@ -1516,24 +1555,26 @@
     if (hlEditTarget) {
       hlMemoSelectedText = hlEditTarget.text;
       hlMemoText = hlEditTarget.memo;
+      hlMemoTags = hlEditTarget.tags || [];
       skipKeyDownListener$.next(true);
       hlMemoDialogOpen = true;
     }
     hlMenuVisible = false;
   }
 
-  async function handleHlMemoSave(memo: string) {
+  async function handleHlMemoSave(payload: { memo: string; tags: string[] }) {
+    const { memo, tags } = payload;
     const container = getBookContentEl();
     if (!container) return;
 
     if (hlEditTarget) {
-      await updateHl(hlEditTarget.id, { memo });
+      await updateHl(hlEditTarget.id, { memo, tags });
       hlEditTarget = undefined;
     } else if (hlPendingRange) {
       const offsets = rangeToOffsets(container, hlPendingRange);
       if (offsets) {
         const text = hlPendingRange.toString();
-        await addHl(offsets.start, offsets.end, text, hlPendingColor, memo);
+        await addHl(offsets.start, offsets.end, text, hlPendingColor, memo, tags);
       }
       window.getSelection()?.removeAllRanges();
       hlPendingRange = undefined;
@@ -2268,6 +2309,7 @@
   <HighlightMemoDialog
     memo={hlMemoText}
     selectedText={hlMemoSelectedText}
+    tags={hlMemoTags}
     on:save={({ detail }) => handleHlMemoSave(detail)}
     on:cancel={() => { hlMemoDialogOpen = false; hlEditTarget = undefined; skipKeyDownListener$.next(false); }}
   />

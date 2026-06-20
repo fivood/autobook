@@ -9,6 +9,7 @@ import type {
   BooksDbBookData,
   BooksDbBookmarkData,
   BooksDbHighlight,
+  BooksDbHighlightFolder,
   BooksDbReadingGoal,
   BooksDbStatistic,
   BooksDbStorageSource,
@@ -446,6 +447,53 @@ export class DatabaseService {
     return db.getAll('highlight');
   }
 
+  async getHighlightsForTitle(title: string): Promise<BooksDbHighlight[]> {
+    const db = await this.db;
+    const all = await db.getAll('highlight');
+    return all.filter((h) => h.bookTitle === title);
+  }
+
+  async storeHighlightsForTitle(
+    title: string,
+    incoming: BooksDbHighlight[],
+    saveBehavior: ReplicationSaveBehavior
+  ): Promise<void> {
+    if (!incoming.length) return;
+    const db = await this.db;
+    const dataByTitle = await this.getDataByTitle(title);
+    const resolvedDataId = dataByTitle?.id ?? -1;
+    const existing = await this.getHighlightsForTitle(title);
+    const existingByKey = new Map<string, BooksDbHighlight>();
+    for (const h of existing) {
+      existingByKey.set(`${h.startOffset}_${h.endOffset}_${h.text}`, h);
+    }
+    const tx = db.transaction('highlight', 'readwrite');
+    for (const raw of incoming) {
+      const key = `${raw.startOffset}_${raw.endOffset}_${raw.text}`;
+      const prior = existingByKey.get(key);
+      const merged: BooksDbHighlight = {
+        ...raw,
+        bookTitle: title,
+        dataId: resolvedDataId
+      };
+      if (prior) {
+        if (
+          saveBehavior === ReplicationSaveBehavior.NewOnly &&
+          (prior.lastModified || 0) >= (raw.lastModified || 0)
+        ) {
+          continue;
+        }
+        merged.id = prior.id;
+        await tx.store.put(merged);
+      } else {
+        const { id: _ignoredId, ...rest } = merged;
+        await tx.store.add(rest as BooksDbHighlight);
+      }
+    }
+    await tx.done;
+    this.highlightsChanged$.next();
+  }
+
   async putHighlight(highlight: BooksDbHighlight): Promise<number> {
     const db = await this.db;
     const id = await db.put('highlight', highlight);
@@ -466,14 +514,117 @@ export class DatabaseService {
     this.highlightsChanged$.next();
   }
 
-  async deleteHighlightsForBook(dataId: number): Promise<void> {
+  async getHighlightFolders(): Promise<BooksDbHighlightFolder[]> {
     const db = await this.db;
-    const keys = await db.getAllKeysFromIndex('highlight', 'dataId', dataId);
+    const list = await db.getAll('highlightFolder');
+    return list.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  }
+
+  async addHighlightFolder(name: string, parentId?: number): Promise<number> {
+    const db = await this.db;
+    const existing = await db.getAll('highlightFolder');
+    const sortOrder = existing.length
+      ? Math.max(...existing.map((f) => f.sortOrder)) + 1
+      : 0;
+    const now = Date.now();
+    const id = await db.add('highlightFolder', {
+      name,
+      ...(parentId !== undefined ? { parentId } : {}),
+      sortOrder,
+      createdAt: now,
+      lastModified: now
+    } as BooksDbHighlightFolder);
+    this.highlightsChanged$.next();
+    return id;
+  }
+
+  async renameHighlightFolder(id: number, name: string): Promise<void> {
+    const db = await this.db;
+    const folder = await db.get('highlightFolder', id);
+    if (!folder) return;
+    await db.put('highlightFolder', { ...folder, name, lastModified: Date.now() });
+    this.highlightsChanged$.next();
+  }
+
+  async deleteHighlightFolder(id: number): Promise<void> {
+    const db = await this.db;
+    const all = await db.getAll('highlight');
+    const tx = db.transaction(['highlight', 'highlightFolder'], 'readwrite');
+    for (const h of all) {
+      if (h.folderId === id) {
+        const { folderId: _drop, ...rest } = h;
+        await tx.objectStore('highlight').put(rest as BooksDbHighlight);
+      }
+    }
+    await tx.objectStore('highlightFolder').delete(id);
+    await tx.done;
+    this.highlightsChanged$.next();
+  }
+
+  async setHighlightFolder(highlightId: number, folderId: number | undefined): Promise<void> {
+    const db = await this.db;
+    const h = await db.get('highlight', highlightId);
+    if (!h) return;
+    const updated: BooksDbHighlight = {
+      ...h,
+      lastModified: Date.now()
+    };
+    if (folderId === undefined) delete updated.folderId;
+    else updated.folderId = folderId;
+    await db.put('highlight', updated);
+    this.highlightsChanged$.next();
+  }
+
+  async linkHighlights(aId: number, bId: number): Promise<void> {
+    if (aId === bId) return;
+    const db = await this.db;
     const tx = db.transaction('highlight', 'readwrite');
-    for (const key of keys) {
-      await tx.store.delete(key);
+    const [a, b] = await Promise.all([
+      tx.store.get(aId),
+      tx.store.get(bId)
+    ]);
+    if (!a || !b) {
+      await tx.done;
+      return;
+    }
+    const now = Date.now();
+    const aLinks = new Set(a.linkedIds || []);
+    const bLinks = new Set(b.linkedIds || []);
+    aLinks.add(bId);
+    bLinks.add(aId);
+    await tx.store.put({ ...a, linkedIds: [...aLinks], lastModified: now });
+    await tx.store.put({ ...b, linkedIds: [...bLinks], lastModified: now });
+    await tx.done;
+    this.highlightsChanged$.next();
+  }
+
+  async unlinkHighlights(aId: number, bId: number): Promise<void> {
+    const db = await this.db;
+    const tx = db.transaction('highlight', 'readwrite');
+    const [a, b] = await Promise.all([
+      tx.store.get(aId),
+      tx.store.get(bId)
+    ]);
+    const now = Date.now();
+    if (a) {
+      const next = (a.linkedIds || []).filter((id) => id !== bId);
+      await tx.store.put({ ...a, linkedIds: next.length ? next : undefined, lastModified: now });
+    }
+    if (b) {
+      const next = (b.linkedIds || []).filter((id) => id !== aId);
+      await tx.store.put({ ...b, linkedIds: next.length ? next : undefined, lastModified: now });
     }
     await tx.done;
+    this.highlightsChanged$.next();
+  }
+
+  async markHighlightReviewed(id: number): Promise<void> {
+    const db = await this.db;
+    const h = await db.get('highlight', id);
+    if (!h) return;
+    const now = Date.now();
+    await db.put('highlight', { ...h, lastReviewedAt: now, lastModified: now });
+    this.highlightsChanged$.next();
   }
 
   async getStorageSources() {

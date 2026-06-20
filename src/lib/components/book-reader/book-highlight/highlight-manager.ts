@@ -33,7 +33,8 @@ export async function addHighlight(
   endOffset: number,
   text: string,
   color: HighlightColor,
-  memo = ''
+  memo = '',
+  tags: string[] = []
 ): Promise<BooksDbHighlight | undefined> {
   if (!dbService || currentDataId < 0) return undefined;
   const now = Date.now();
@@ -46,7 +47,8 @@ export async function addHighlight(
     memo,
     color,
     createdAt: now,
-    lastModified: now
+    lastModified: now,
+    ...(tags.length ? { tags } : {})
   };
   const id = await dbService.addHighlight(highlight);
   const saved = { ...highlight, id } as BooksDbHighlight;
@@ -60,7 +62,7 @@ export async function addHighlight(
 
 export async function updateHighlight(
   id: number,
-  updates: Partial<Pick<BooksDbHighlight, 'memo' | 'color'>>
+  updates: Partial<Pick<BooksDbHighlight, 'memo' | 'color' | 'tags'>>
 ) {
   if (!dbService) return;
   let found: BooksDbHighlight | undefined;

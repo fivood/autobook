@@ -14,7 +14,8 @@ import type {
   BooksDbBookmarkData,
   BooksDbReadingGoal,
   BooksDbStatistic,
-  BooksDbSubtitleData
+  BooksDbSubtitleData,
+  BooksDbHighlight
 } from '$lib/data/database/books-db/versions/books-db';
 
 import { database } from '$lib/data/store';
@@ -282,6 +283,20 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     );
   }
 
+  async areHighlightsPresentAndUpToDate(referenceFilename: string | undefined) {
+    if (!referenceFilename) {
+      BaseStorageHandler.reportProgress();
+      return false;
+    }
+    const { file } = await this.getExternalFile(FilePrefix.HIGHLIGHT, 1);
+    return BaseStorageHandler.checkIsPresentAndUpToDate(
+      BaseStorageHandler.getHighlightsMetadata,
+      'lastHighlightModified',
+      referenceFilename,
+      file?.name
+    );
+  }
+
   async getBook() {
     const { file } = await this.getExternalFile('bookdata_', this.isForBrowser ? 0.4 : 0.8);
     if (!file) return undefined;
@@ -365,6 +380,18 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
       return subtitleData;
     }
     return fileFromBytes(bytes, file.name);
+  }
+
+  async getHighlightData() {
+    const { file } = await this.getExternalFile(FilePrefix.HIGHLIGHT, 0.6);
+    if (!file) return { highlights: undefined, lastHighlightModified: 0 };
+    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const highlights = JSON.parse(new TextDecoder().decode(bytes));
+    BaseStorageHandler.reportProgress(0.4);
+    return {
+      highlights,
+      lastHighlightModified: BaseStorageHandler.getHighlightsMetadata(file.name).lastHighlightModified
+    };
   }
 
   async saveBook(data: Omit<BooksDbBookData, 'id'> | File, skipTimestampFallback = true) {
@@ -521,6 +548,16 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   async saveSubtitleData(data: BooksDbSubtitleData | File) {
     const filename = BaseStorageHandler.getSubtitleDataFileName(data);
     const { file, files, dirPath } = await this.getExternalFile(FilePrefix.SUBTITLE);
+    const bytes =
+      data instanceof File
+        ? new Uint8Array(await data.arrayBuffer())
+        : new TextEncoder().encode(JSON.stringify(data));
+    await this.writeFileTo(dirPath, filename, bytes, files, file, 0.6);
+  }
+
+  async saveHighlightData(data: BooksDbHighlight[] | File, lastHighlightModified: number) {
+    const filename = BaseStorageHandler.getHighlightsFileName(data, lastHighlightModified);
+    const { file, files, dirPath } = await this.getExternalFile(FilePrefix.HIGHLIGHT);
     const bytes =
       data instanceof File
         ? new Uint8Array(await data.arrayBuffer())

@@ -9,7 +9,7 @@ import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 8, {
+  return openDB<BooksDb>(name, 9, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -59,6 +59,12 @@ export function createBooksDb(name = 'books') {
           });
           freshHighlightStore.createIndex('dataId', 'dataId');
           freshHighlightStore.createIndex('dataIdStartOffset', ['dataId', 'startOffset']);
+
+          const freshHighlightFolderStore = oldDb.createObjectStore('highlightFolder', {
+            keyPath: 'id',
+            autoIncrement: true
+          });
+          freshHighlightFolderStore.createIndex('sortOrder', 'sortOrder');
 
           const freshFolderStore = oldDb.createObjectStore('folder', {
             keyPath: 'id',
@@ -147,6 +153,17 @@ export function createBooksDb(name = 'books') {
             });
             highlightStore.createIndex('dataId', 'dataId');
             highlightStore.createIndex('dataIdStartOffset', ['dataId', 'startOffset']);
+          }
+          // Fall through to v8 → v9 upgrade.
+        }
+        // eslint-disable-next-line no-fallthrough
+        case 8: {
+          if (!oldDb.objectStoreNames.contains('highlightFolder')) {
+            const highlightFolderStore = oldDb.createObjectStore('highlightFolder', {
+              keyPath: 'id',
+              autoIncrement: true
+            });
+            highlightFolderStore.createIndex('sortOrder', 'sortOrder');
           }
           break;
         }

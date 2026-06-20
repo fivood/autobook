@@ -14,6 +14,8 @@ export interface BooksDbV8Highlight {
   color: HighlightColor;
   createdAt: number;
   lastModified: number;
+  tags?: string[];
+  kind?: 'note';
 }
 
 export default interface BooksDbV8 extends DBSchema {

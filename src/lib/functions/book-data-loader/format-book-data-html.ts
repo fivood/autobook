@@ -32,6 +32,7 @@ export default function formatBookDataHtml(
       removeSvgDimensions(element);
       addSpoilerTags(element, document, blurMode);
       removeOldBrTagSolution(element);
+      stripInlineColor(element);
 
       return element.innerHTML;
     })
@@ -154,6 +155,19 @@ function removeOldBrTagSolution(el: HTMLElement) {
   el.querySelectorAll('.placeholder-br').forEach((placeholderEl) => {
     placeholderEl.parentElement!.removeChild(placeholderEl);
   });
+}
+
+function stripInlineColor(el: HTMLElement) {
+  el.querySelectorAll<HTMLElement>('[style]').forEach((node) => {
+    const cleaned = node
+      .getAttribute('style')!
+      .replace(/(^|;)\s*color\s*:\s*[^;]*/gi, '$1')
+      .replace(/^;+|;+$/g, '')
+      .trim();
+    if (cleaned) node.setAttribute('style', cleaned);
+    else node.removeAttribute('style');
+  });
+  el.querySelectorAll('font[color]').forEach((node) => node.removeAttribute('color'));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
