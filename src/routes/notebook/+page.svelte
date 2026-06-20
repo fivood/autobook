@@ -27,6 +27,9 @@
   import NotebookFolderSidebar from '$lib/components/notebook/notebook-folder-sidebar.svelte';
   import NotebookLinkPicker from '$lib/components/notebook/notebook-link-picker.svelte';
   import NotebookReviewModal from '$lib/components/notebook/notebook-review-modal.svelte';
+  import { isTauri } from '$lib/data/env';
+  import { obsidianVaultPath$ } from '$lib/data/store';
+  import { buildSyncPlan } from '$lib/functions/notebook/obsidian-sync';
 
   const STANDALONE_TITLE = '__standalone__';
   const REVIEW_BATCH = 10;
@@ -57,6 +60,8 @@
   let linkPickerSource: BooksDbHighlight | undefined;
   let reviewQueue: BooksDbHighlight[] = [];
   let reviewOpen = false;
+  let syncing = false;
+  let syncMessage = '';
 
   $: highlightById = new Map(highlights.map((h) => [h.id, h]));
   $: folderIdSet = new Set(folders.map((f) => f.id));
@@ -322,6 +327,58 @@
     if (!pool.length) alert('暂无可回顾的内容');
   }
 
+  async function pickVaultFolder() {
+    if (!isTauri()) {
+      alert('文件夹选择只在桌面端可用');
+      return;
+    }
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const picked = await open({ directory: true, multiple: false, title: '选择 Obsidian vault 目录' });
+    if (typeof picked === 'string') {
+      obsidianVaultPath$.next(picked);
+    }
+  }
+
+  async function syncToVault() {
+    if (!isTauri()) {
+      alert('vault 同步只在桌面端可用');
+      return;
+    }
+    const vault = $obsidianVaultPath$;
+    if (!vault) {
+      alert('请先选择 Obsidian vault 目录');
+      return;
+    }
+    syncing = true;
+    syncMessage = '';
+    try {
+      const folderNameById = new Map(folders.map((f) => [f.id, f.name]));
+      const plan = buildSyncPlan(highlights, folderNameById);
+      const { writeTextFile, mkdir, exists } = await import('@tauri-apps/plugin-fs');
+      const rootPath = `${vault}/${plan.rootDirName}`;
+      if (!(await exists(rootPath))) {
+        await mkdir(rootPath, { recursive: true });
+      }
+      const dirsCreated = new Set<string>();
+      for (const f of plan.files) {
+        const fullPath = `${rootPath}/${f.relativePath}`;
+        const dirPath = fullPath.slice(0, fullPath.lastIndexOf('/'));
+        if (!dirsCreated.has(dirPath)) {
+          if (!(await exists(dirPath))) {
+            await mkdir(dirPath, { recursive: true });
+          }
+          dirsCreated.add(dirPath);
+        }
+        await writeTextFile(fullPath, f.content);
+      }
+      syncMessage = `已同步 ${plan.files.length} 条到 ${plan.rootDirName}/`;
+    } catch (err: any) {
+      syncMessage = `同步失败：${err?.message || err}`;
+    } finally {
+      syncing = false;
+    }
+  }
+
   async function handleReviewMark(id: number) {
     await database.markHighlightReviewed(id);
     const now = Date.now();
@@ -429,7 +486,34 @@
       on:click={exportMarkdown}
       disabled={!filtered.length}
     ><Fa icon={faDownload} size="xs" /> 导出 .md</button>
+    {#if isTauri()}
+      {#if $obsidianVaultPath$}
+        <button
+          type="button"
+          class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
+          on:click={syncToVault}
+          disabled={syncing || !highlights.length}
+          title="vault: {$obsidianVaultPath$}"
+        ><Fa icon={faDownload} size="xs" /> {syncing ? '同步中…' : '同步到 vault'}</button>
+        <button
+          type="button"
+          class="text-xs opacity-50 hover:opacity-100"
+          title="vault: {$obsidianVaultPath$}"
+          on:click={pickVaultFolder}
+        >更换</button>
+      {:else}
+        <button
+          type="button"
+          class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
+          on:click={pickVaultFolder}
+        ><Fa icon={faFolder} size="xs" /> 选择 vault</button>
+      {/if}
+    {/if}
   </header>
+
+  {#if syncMessage}
+    <div class="border-b border-current/10 px-4 py-2 text-xs opacity-70">{syncMessage}</div>
+  {/if}
 
   {#if allTags.length}
     <div class="flex flex-wrap items-center gap-2 border-b border-current/10 px-4 py-2 text-xs">

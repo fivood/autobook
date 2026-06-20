@@ -62,6 +62,7 @@ import { writableSetLocalStorageSubject } from './internal/writable-set-local-st
 import { writableStringLocalStorageSubject } from './internal/writable-string-local-storage-subject';
 
 export const theme$ = writableStringLocalStorageSubject()('theme', 'sage-green-theme');
+export const obsidianVaultPath$ = writableStringLocalStorageSubject()('obsidianVaultPath', '');
 export const customThemes$ = writableObjectLocalStorageSubject<Record<string, ThemeOption>>()(
   'customThemes',
   {}
