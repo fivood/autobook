@@ -17,12 +17,17 @@
     "fs:allow-read-file",
     "shell:default",
     "shell:allow-open",
+    "dialog:default",
+    "fs:allow-write-text-file",
+    "fs:allow-mkdir",
+    "fs:allow-exists",
     {
       "identifier": "fs:scope",
       "allow": [
         { "path": "$DOCUMENT/AutoBook" },
         { "path": "$DOCUMENT/AutoBook/**" },
-        { "path": "$DOCUMENT/AutoBook/*" }
+        { "path": "$DOCUMENT/AutoBook/*" },
+        { "path": "**" }
       ]
     }
   ]

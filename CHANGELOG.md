@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.1
+
+- Obsidian vault 联动：笔记本顶部「选择 vault」按钮选定一个本地目录，「同步到 vault」一键单向推送
+- 每条高亮/笔记导出为独立 .md（atomic note），按 vault/AutoBook/{书名 or StandaloneNotes}/{id}-{slug}.md 组织
+- 文件 frontmatter 带 id / kind / book / color / tags / created / modified / reviewed / links，Obsidian 的 graph / backlinks / tag 全部直接可用
+- 高亮间的「链接」生成为正文 wiki-link `[[...]]`，可在 Obsidian 中点击穿透
+- vault 路径持久化（localStorage），后续打开自动记得；按钮 hover 显示当前 vault 路径
+
 ## 1.7.0
 
 - 笔记本视图：书库顶部菜单新增「笔记本」入口，跨书浏览所有高亮
