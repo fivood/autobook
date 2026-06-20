@@ -170,7 +170,8 @@ export async function importBackup(
       StorageDataType.STATISTICS,
       StorageDataType.READING_GOALS,
       StorageDataType.AUDIOBOOK,
-      StorageDataType.SUBTITLE
+      StorageDataType.SUBTITLE,
+      StorageDataType.HIGHLIGHT
     ],
     cancelSignal
   );
@@ -199,6 +200,7 @@ export async function replicateData(
   const processReadingGoals = dataToReplicate.includes(StorageDataType.READING_GOALS);
   const processAudioBook = dataToReplicate.includes(StorageDataType.AUDIOBOOK);
   const processSubtitleData = dataToReplicate.includes(StorageDataType.SUBTITLE);
+  const processHighlights = dataToReplicate.includes(StorageDataType.HIGHLIGHT);
   const replicationLimiter = pLimit(1);
   const replicationTasks: Promise<void>[] = [];
 
@@ -337,6 +339,29 @@ export async function replicateData(
               }
 
               checkCancelAndProgress(cancelSignal, !dataProcessed, !subtitleData);
+            }
+          }
+
+          if (processHighlights) {
+            if (
+              await targetHandler.areHighlightsPresentAndUpToDate(
+                await sourceHandler.getFilenameForRecentCheck(FilePrefix.HIGHLIGHT)
+              )
+            ) {
+              checkCancelAndProgress(cancelSignal, !dataProcessed, true);
+              checkCancelAndProgress(cancelSignal, !dataProcessed, true);
+            } else {
+              const { highlights, lastHighlightModified } = await sourceHandler.getHighlightData();
+
+              checkCancelAndProgress(cancelSignal, !dataProcessed);
+
+              if (highlights) {
+                await targetHandler.saveHighlightData(highlights, lastHighlightModified);
+
+                dataProcessed = true;
+              }
+
+              checkCancelAndProgress(cancelSignal, !dataProcessed, !highlights);
             }
           }
 

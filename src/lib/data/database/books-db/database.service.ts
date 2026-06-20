@@ -446,6 +446,53 @@ export class DatabaseService {
     return db.getAll('highlight');
   }
 
+  async getHighlightsForTitle(title: string): Promise<BooksDbHighlight[]> {
+    const db = await this.db;
+    const all = await db.getAll('highlight');
+    return all.filter((h) => h.bookTitle === title);
+  }
+
+  async storeHighlightsForTitle(
+    title: string,
+    incoming: BooksDbHighlight[],
+    saveBehavior: ReplicationSaveBehavior
+  ): Promise<void> {
+    if (!incoming.length) return;
+    const db = await this.db;
+    const dataByTitle = await this.getDataByTitle(title);
+    const resolvedDataId = dataByTitle?.id ?? -1;
+    const existing = await this.getHighlightsForTitle(title);
+    const existingByKey = new Map<string, BooksDbHighlight>();
+    for (const h of existing) {
+      existingByKey.set(`${h.startOffset}_${h.endOffset}_${h.text}`, h);
+    }
+    const tx = db.transaction('highlight', 'readwrite');
+    for (const raw of incoming) {
+      const key = `${raw.startOffset}_${raw.endOffset}_${raw.text}`;
+      const prior = existingByKey.get(key);
+      const merged: BooksDbHighlight = {
+        ...raw,
+        bookTitle: title,
+        dataId: resolvedDataId
+      };
+      if (prior) {
+        if (
+          saveBehavior === ReplicationSaveBehavior.NewOnly &&
+          (prior.lastModified || 0) >= (raw.lastModified || 0)
+        ) {
+          continue;
+        }
+        merged.id = prior.id;
+        await tx.store.put(merged);
+      } else {
+        const { id: _ignoredId, ...rest } = merged;
+        await tx.store.add(rest as BooksDbHighlight);
+      }
+    }
+    await tx.done;
+    this.highlightsChanged$.next();
+  }
+
   async putHighlight(highlight: BooksDbHighlight): Promise<number> {
     const db = await this.db;
     const id = await db.put('highlight', highlight);
@@ -464,16 +511,6 @@ export class DatabaseService {
     const db = await this.db;
     await db.delete('highlight', id);
     this.highlightsChanged$.next();
-  }
-
-  async deleteHighlightsForBook(dataId: number): Promise<void> {
-    const db = await this.db;
-    const keys = await db.getAllKeysFromIndex('highlight', 'dataId', dataId);
-    const tx = db.transaction('highlight', 'readwrite');
-    for (const key of keys) {
-      await tx.store.delete(key);
-    }
-    await tx.done;
   }
 
   async getStorageSources() {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1
+
+- 高亮笔记接入备份/恢复/云同步：导出 zip、Tauri FS 同步、自动同步链路新增 highlights_ 文件
+- 导出对话框新增「高亮笔记」勾选项
+- 数据库新增 storeHighlightsForTitle：按书名匹配并合并高亮，遵守 NewOnly 行为，跨设备恢复时按 startOffset+endOffset+text 去重
+
 ## 1.6.0
 
 - 高亮笔记：选中文字右键弹出菜单，支持 4 色高亮（黄/蓝/绿/粉）+ 备注

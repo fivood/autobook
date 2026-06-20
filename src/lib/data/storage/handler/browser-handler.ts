@@ -11,7 +11,8 @@ import type {
   BooksDbBookmarkData,
   BooksDbReadingGoal,
   BooksDbStatistic,
-  BooksDbSubtitleData
+  BooksDbSubtitleData,
+  BooksDbHighlight
 } from '$lib/data/database/books-db/versions/books-db';
 import { database, lastReadingGoalsModified$ } from '$lib/data/store';
 
@@ -151,6 +152,13 @@ export class BrowserStorageHandler extends BaseStorageHandler {
       fileName = subtitleData
         ? BaseStorageHandler.getSubtitleDataFileName(subtitleData)
         : undefined;
+    } else if (fileIdentifier === FilePrefix.HIGHLIGHT) {
+      const { highlights, lastHighlightModified } = await this.getHighlightData();
+
+      fileName =
+        highlights && highlights.length
+          ? BaseStorageHandler.getHighlightsFileName(highlights, lastHighlightModified)
+          : undefined;
     }
 
     BrowserStorageHandler.reportProgress(0.5);
@@ -267,6 +275,26 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     );
   }
 
+  async areHighlightsPresentAndUpToDate(referenceFilename: string | undefined) {
+    if (!referenceFilename) {
+      BaseStorageHandler.reportProgress();
+      return false;
+    }
+
+    const { highlights, lastHighlightModified } = await this.getHighlightData();
+    const fileName =
+      highlights && highlights.length
+        ? BaseStorageHandler.getHighlightsFileName(highlights, lastHighlightModified)
+        : undefined;
+
+    return BaseStorageHandler.checkIsPresentAndUpToDate(
+      BaseStorageHandler.getHighlightsMetadata,
+      'lastHighlightModified',
+      referenceFilename,
+      fileName
+    );
+  }
+
   async getBook() {
     const book = this.currentContext.id
       ? await database.getData(this.currentContext.id)
@@ -328,6 +356,21 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     BaseStorageHandler.reportProgress();
 
     return subtitleData;
+  }
+
+  async getHighlightData() {
+    const highlights = await database.getHighlightsForTitle(this.currentContext.title);
+    let lastHighlightModified = 0;
+    for (const h of highlights) {
+      if (h.lastModified > lastHighlightModified) lastHighlightModified = h.lastModified;
+    }
+
+    BaseStorageHandler.reportProgress();
+
+    if (!highlights.length) {
+      return { highlights: undefined, lastHighlightModified: 0 };
+    }
+    return { highlights, lastHighlightModified };
   }
 
   async saveBook(
@@ -470,6 +513,15 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     }
 
     await database.putSubtitleData(data);
+  }
+
+  async saveHighlightData(data: BooksDbHighlight[] | File, _lastHighlightModified: number) {
+    if (data instanceof File) {
+      BaseStorageHandler.reportProgress();
+      return;
+    }
+    await database.storeHighlightsForTitle(this.currentContext.title, data, this.saveBehavior);
+    BaseStorageHandler.reportProgress();
   }
 
   async deleteBookData(

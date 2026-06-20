@@ -1384,7 +1384,8 @@
           StorageDataType.STATISTICS,
           StorageDataType.READING_GOALS,
           StorageDataType.AUDIOBOOK,
-          StorageDataType.SUBTITLE
+          StorageDataType.SUBTITLE,
+          StorageDataType.HIGHLIGHT
         ]
       );
 

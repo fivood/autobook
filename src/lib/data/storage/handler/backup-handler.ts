@@ -10,7 +10,8 @@ import type {
   BooksDbBookmarkData,
   BooksDbReadingGoal,
   BooksDbStatistic,
-  BooksDbSubtitleData
+  BooksDbSubtitleData,
+  BooksDbHighlight
 } from '$lib/data/database/books-db/versions/books-db';
 import type { MergeMode } from '$lib/data/merge-mode';
 import { readingGoalSortFunction } from '$lib/data/reading-goal';
@@ -64,6 +65,11 @@ export class BackupStorageHandler extends BaseStorageHandler {
   }
 
   isSubtitleDataPresentAndUpToDate() {
+    BaseStorageHandler.reportProgress();
+    return Promise.resolve(false);
+  }
+
+  areHighlightsPresentAndUpToDate() {
     BaseStorageHandler.reportProgress();
     return Promise.resolve(false);
   }
@@ -273,6 +279,21 @@ export class BackupStorageHandler extends BaseStorageHandler {
     return new File([subtitleDataBlob], filename, { type: 'application/json' });
   }
 
+  async getHighlightData() {
+    const { zipEntry, filename } = this.findEntry(FilePrefix.HIGHLIGHT);
+
+    if (!zipEntry) {
+      return { highlights: undefined, lastHighlightModified: 0 };
+    }
+
+    const highlights = await this.extractAsJSON(zipEntry, '无法读取高亮数据');
+
+    return {
+      highlights,
+      lastHighlightModified: BaseStorageHandler.getHighlightsMetadata(filename).lastHighlightModified
+    };
+  }
+
   async saveBook(data: Omit<BooksDbBookData, 'id'> | File) {
     const filename = `${this.sanitizedTitle}/${BaseStorageHandler.getBookFileName(data)}`;
 
@@ -361,6 +382,23 @@ export class BackupStorageHandler extends BaseStorageHandler {
 
   async saveSubtitleData(data: BooksDbSubtitleData | File) {
     const filename = `${this.sanitizedTitle}/${BaseStorageHandler.getSubtitleDataFileName(data)}`;
+
+    if (data instanceof File) {
+      this.exportZipWriter = await this.addDataToZip(filename, data, this.exportZipWriter);
+    } else {
+      this.exportZipWriter = await this.addDataToZip(
+        filename,
+        JSON.stringify(data),
+        this.exportZipWriter
+      );
+    }
+  }
+
+  async saveHighlightData(data: BooksDbHighlight[] | File, lastHighlightModified: number) {
+    const filename = `${this.sanitizedTitle}/${BaseStorageHandler.getHighlightsFileName(
+      data,
+      lastHighlightModified
+    )}`;
 
     if (data instanceof File) {
       this.exportZipWriter = await this.addDataToZip(filename, data, this.exportZipWriter);

@@ -74,4 +74,14 @@
     />
     <label for="subtitle">字幕</label>
   </div>
+  <div>
+    <input
+      type="checkbox"
+      id="highlight"
+      name="highlight"
+      value="highlight"
+      bind:group={dataToReplicate}
+    />
+    <label for="highlight">高亮笔记</label>
+  </div>
 </div>
