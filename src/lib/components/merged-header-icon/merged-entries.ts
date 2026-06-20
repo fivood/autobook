@@ -5,6 +5,7 @@
  */
 
 import {
+  faBookmark,
   faBug,
   faChartLine,
   faCloudArrowDown,
@@ -31,6 +32,12 @@ export const mergeEntries = {
     label: '统计',
     icon: faChartLine,
     title: '阅读统计'
+  },
+  NOTEBOOK: {
+    routeId: '/notebook',
+    label: '笔记本',
+    icon: faBookmark,
+    title: '高亮笔记本（跨书）'
   },
   JUMP_TO_POSITION: {
     routeId: '',

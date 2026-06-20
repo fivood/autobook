@@ -633,6 +633,10 @@
   );
 
   let hlRafId = 0;
+  let pendingScrollHlId = browser
+    ? Number(new URL(window.location.href).searchParams.get('hl')) || 0
+    : 0;
+  let pendingSectionAdjusted = false;
 
   function scheduleHighlightRender(highlights: BooksDbHighlight[]) {
     cancelAnimationFrame(hlRafId);
@@ -640,6 +644,38 @@
       const el = getBookContentEl();
       if (el) {
         renderHighlights(el, highlights);
+        if (pendingScrollHlId) {
+          const target = highlights.find((h) => h.id === pendingScrollHlId);
+          if (target) {
+            const mark = el.querySelector(`mark[data-hl-id="${pendingScrollHlId}"]`);
+            if (mark) {
+              scrollToHighlight(el, target);
+              pendingScrollHlId = 0;
+              pendingSectionAdjusted = false;
+              const url = new URL(window.location.href);
+              url.searchParams.delete('hl');
+              window.history.replaceState({}, '', url.toString());
+            } else if (
+              !pendingSectionAdjusted &&
+              $viewMode$ === ViewMode.Paginated &&
+              $sectionData$ &&
+              $sectionData$.length
+            ) {
+              const secStarts = $sectionData$.map((s) => s.startCharacter ?? 0);
+              let idx = 0;
+              for (let i = secStarts.length - 1; i >= 0; i--) {
+                if (target.startOffset >= secStarts[i]) {
+                  idx = i;
+                  break;
+                }
+              }
+              if (idx !== currentSectionIndex) {
+                currentSectionIndex = idx;
+              }
+              pendingSectionAdjusted = true;
+            }
+          }
+        }
       } else {
         hlRafId = requestAnimationFrame(retry);
       }

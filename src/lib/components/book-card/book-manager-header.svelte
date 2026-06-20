@@ -481,7 +481,12 @@
               items={[
                 ...(isOldUrl
                   ? [mergeEntries.MANAGE, mergeEntries.DOMAIN_HINT, mergeEntries.SETTINGS]
-                  : [mergeEntries.MANAGE, mergeEntries.STATISTICS, mergeEntries.SETTINGS]),
+                  : [
+                      mergeEntries.MANAGE,
+                      mergeEntries.STATISTICS,
+                      mergeEntries.NOTEBOOK,
+                      mergeEntries.SETTINGS
+                    ]),
                 ...(isTauri() ? [mergeEntries.CHECK_UPDATE] : [])
               ]}
               on:action={({ detail }) => {
