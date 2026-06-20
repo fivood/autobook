@@ -1,15 +1,28 @@
 <script lang="ts">
-  import { afterUpdate, createEventDispatcher } from 'svelte';
+  import { onMount, tick, createEventDispatcher } from 'svelte';
 
   export let html: string;
+
+  let el: HTMLDivElement;
+  let currentHtml = '';
 
   const dispatch = createEventDispatcher<{
     load: void;
   }>();
 
-  afterUpdate(() => {
-    dispatch('load');
+  onMount(() => {
+    if (html) {
+      currentHtml = html;
+      el.innerHTML = html;
+      tick().then(() => dispatch('load'));
+    }
   });
+
+  $: if (el && html && html !== currentHtml) {
+    currentHtml = html;
+    el.innerHTML = html;
+    tick().then(() => dispatch('load'));
+  }
 </script>
 
-{@html html}
+<div bind:this={el} style="display:contents" />

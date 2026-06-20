@@ -16,7 +16,8 @@ export enum StorageDataType {
   STATISTICS = 'statistic',
   READING_GOALS = 'readingGoal',
   AUDIOBOOK = 'audioBook',
-  SUBTITLE = 'subtitle'
+  SUBTITLE = 'subtitle',
+  HIGHLIGHT = 'highlight'
 }
 
 export enum InternalStorageSources {

@@ -9,7 +9,7 @@ import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 7, {
+  return openDB<BooksDb>(name, 8, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -53,6 +53,13 @@ export function createBooksDb(name = 'books') {
           oldDb.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
 
           // v7: library folders.
+          const freshHighlightStore = oldDb.createObjectStore('highlight', {
+            keyPath: 'id',
+            autoIncrement: true
+          });
+          freshHighlightStore.createIndex('dataId', 'dataId');
+          freshHighlightStore.createIndex('dataIdStartOffset', ['dataId', 'startOffset']);
+
           const freshFolderStore = oldDb.createObjectStore('folder', {
             keyPath: 'id',
             autoIncrement: true
@@ -97,28 +104,50 @@ export function createBooksDb(name = 'books') {
           break;
         }
         case 5: {
-          oldDb.createObjectStore('audioBook', { keyPath: 'title' });
+          if (!oldDb.objectStoreNames.contains('audioBook')) {
+            oldDb.createObjectStore('audioBook', { keyPath: 'title' });
+          }
 
-          oldDb.createObjectStore('subtitle', { keyPath: 'title' });
+          if (!oldDb.objectStoreNames.contains('subtitle')) {
+            oldDb.createObjectStore('subtitle', { keyPath: 'title' });
+          }
 
-          oldDb.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
+          if (!oldDb.objectStoreNames.contains('handle')) {
+            oldDb.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
+          }
 
           // Fall through to v6 → v7 upgrade.
         }
         // eslint-disable-next-line no-fallthrough
         case 6: {
-          const folderStore = oldDb.createObjectStore('folder', {
-            keyPath: 'id',
-            autoIncrement: true
-          });
-          folderStore.createIndex('sortOrder', 'sortOrder');
+          if (!oldDb.objectStoreNames.contains('folder')) {
+            const folderStore = oldDb.createObjectStore('folder', {
+              keyPath: 'id',
+              autoIncrement: true
+            });
+            folderStore.createIndex('sortOrder', 'sortOrder');
+          }
 
-          const bookFolderStore = oldDb.createObjectStore('bookFolder', {
-            keyPath: ['bookId', 'folderId']
-          });
-          bookFolderStore.createIndex('bookId', 'bookId');
-          bookFolderStore.createIndex('folderId', 'folderId');
+          if (!oldDb.objectStoreNames.contains('bookFolder')) {
+            const bookFolderStore = oldDb.createObjectStore('bookFolder', {
+              keyPath: ['bookId', 'folderId']
+            });
+            bookFolderStore.createIndex('bookId', 'bookId');
+            bookFolderStore.createIndex('folderId', 'folderId');
+          }
 
+          // Fall through to v7 → v8 upgrade.
+        }
+        // eslint-disable-next-line no-fallthrough
+        case 7: {
+          if (!oldDb.objectStoreNames.contains('highlight')) {
+            const highlightStore = oldDb.createObjectStore('highlight', {
+              keyPath: 'id',
+              autoIncrement: true
+            });
+            highlightStore.createIndex('dataId', 'dataId');
+            highlightStore.createIndex('dataIdStartOffset', ['dataId', 'startOffset']);
+          }
           break;
         }
       }

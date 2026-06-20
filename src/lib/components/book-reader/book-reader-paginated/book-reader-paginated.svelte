@@ -153,8 +153,6 @@
 
   let displayedHtml = '';
 
-  let skipFirstHtmlLoad = true;
-
   let previousIntendedCount = 0;
 
   let useExploredCharCount = false;
@@ -518,10 +516,6 @@
   }
 
   function onHtmlLoad() {
-    if (skipFirstHtmlLoad) {
-      skipFirstHtmlLoad = false;
-      return;
-    }
     if (!scrollEl) return;
 
     autoReaderConcrete?.prepare();

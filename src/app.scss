@@ -68,6 +68,12 @@
   overflow-clip-margin: unset;
 }
 
+mark.hl-yellow { background: rgba(255, 235, 59, 0.5); }
+mark.hl-blue { background: rgba(100, 181, 246, 0.5); }
+mark.hl-green { background: rgba(129, 199, 132, 0.5); }
+mark.hl-pink { background: rgba(244, 143, 177, 0.5); }
+mark[data-hl-id] { cursor: pointer; border-radius: 2px; }
+
 ::selection {
   background-color: var(--selection-background, #5f7e7b);
   color: var(--selection-foreground, #f0efe6);

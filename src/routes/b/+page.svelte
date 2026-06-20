@@ -114,10 +114,29 @@
     verticalTextOrientation$,
     ttsAutoAdvanceSection$,
     ttsPositions$,
-    ttsToggleRequest$
+    ttsToggleRequest$,
+    highlightSidebarOpen$
   } from '$lib/data/store';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
+  import HighlightContextMenu from '$lib/components/book-reader/book-highlight/highlight-context-menu.svelte';
+  import HighlightMemoDialog from '$lib/components/book-reader/book-highlight/highlight-memo-dialog.svelte';
+  import HighlightSidebar from '$lib/components/book-reader/book-highlight/highlight-sidebar.svelte';
+  import {
+    highlights$ as hlStore$,
+    initHighlightManager,
+    disposeHighlightManager,
+    addHighlight as addHl,
+    updateHighlight as updateHl,
+    removeHighlight as removeHl
+  } from '$lib/components/book-reader/book-highlight/highlight-manager';
+  import {
+    rangeToOffsets,
+    renderHighlights,
+    scrollToHighlight,
+    getHighlightIdFromElement
+  } from '$lib/components/book-reader/book-highlight/highlight-renderer';
+  import type { BooksDbHighlight, HighlightColor } from '$lib/data/database/books-db/versions/books-db';
   import {
     readerImageGalleryPictures$,
     toggleImageGalleryPictureSpoiler$,
@@ -204,6 +223,11 @@
   } from '$lib/functions/range-util';
 
   let showSpinner = true;
+
+  $: if (browser) {
+    // eslint-disable-next-line no-console
+    console.log('[showSpinner] reactive value:', showSpinner);
+  }
   let showHeader = false;
   let headerEnterTimer: ReturnType<typeof setTimeout> | undefined;
   let isBookmarkScreen = false;
@@ -245,6 +269,16 @@
   let confettiMaxRuns = 0;
   let showReaderImageGallery = false;
   let dismissDialogs = true;
+  let hlMenuVisible = false;
+  let hlMenuX = 0;
+  let hlMenuY = 0;
+  let hlMenuMode: 'create' | 'edit' = 'create';
+  let hlEditTarget: BooksDbHighlight | undefined;
+  let hlMemoDialogOpen = false;
+  let hlMemoText = '';
+  let hlMemoSelectedText = '';
+  let hlPendingColor: HighlightColor = 'yellow';
+  let hlPendingRange: Range | undefined;
   let syncedResolver: () => void;
 
   const syncedPromise = new Promise<void>((resolver) => {
@@ -265,11 +299,14 @@
   );
 
   const rawBookData$ = bookId$.pipe(
-    switchMap(async (id) => {
-      let bookData: BooksDbBookData | undefined;
+    switchMap((id) => {
+      const loadPromise = (async () => {
+        let bookData: BooksDbBookData | undefined;
 
-      try {
-        localStorageHandler = getStorageHandler(
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[loadBook] start', id);
+          localStorageHandler = getStorageHandler(
           window,
           StorageKey.BROWSER,
           undefined,
@@ -281,7 +318,11 @@
         );
 
         localStorageHandler.startContext({ id, title: '' });
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] before getBook');
         bookData = await localStorageHandler.getBook();
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] after getBook', bookData?.title, bookData?.storageSource, !!bookData?.elementHtml);
 
         if (!bookData) {
           return bookData;
@@ -296,27 +337,52 @@
         localStorageHandler.startContext(currentContext);
 
         if (bookData.storageSource) {
+          // eslint-disable-next-line no-console
+          console.log('[loadBook] before getStorageHandlerByName', bookData.storageSource);
           externalStorageHandler = await getStorageHandlerByName(bookData.storageSource, true);
+          // eslint-disable-next-line no-console
+          console.log('[loadBook] after getStorageHandlerByName');
         } else if ($autoReplication$ !== AutoReplicationType.Off) {
+          // eslint-disable-next-line no-console
+          console.log('[loadBook] before getStorageHandlerByName syncTarget', $syncTarget$);
           externalStorageHandler = await getStorageHandlerByName($syncTarget$);
+          // eslint-disable-next-line no-console
+          console.log('[loadBook] after getStorageHandlerByName syncTarget');
         }
 
         bookData.lastBookOpen = new Date().getTime();
 
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] before updateLastRead (browser)');
         await localStorageHandler.updateLastRead(bookData);
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] after updateLastRead (browser)');
+
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] before syncDownData');
         await syncDownData(externalStorageHandler, currentContext);
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] after syncDownData');
 
         if (!$statisticsEnabled$) {
+          // eslint-disable-next-line no-console
+          console.log('[loadBook] before setFirstBookRead');
           const wasNew = (
             await database.setFirstBookRead(currentContext.title, $startDayHoursForTracker$)
           )[1];
+          // eslint-disable-next-line no-console
+          console.log('[loadBook] after setFirstBookRead', wasNew);
 
           if (wasNew) {
             scheduleReplication(StorageDataType.STATISTICS);
           }
         }
 
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] before saveExternalLastRead');
         bookData = await saveExternalLastRead(externalStorageHandler, bookData);
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] after saveExternalLastRead', !!bookData?.elementHtml);
 
         if (bookData.language) {
           document.documentElement.lang = bookData.language;
@@ -337,9 +403,13 @@
         ]);
         return undefined;
       } finally {
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] finally running, showSpinner -> false');
         syncedResolver();
 
         showSpinner = false;
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] showSpinner after assignment:', showSpinner);
       }
 
       if (externalStorageHandler) {
@@ -355,7 +425,34 @@
         );
       }
 
-      return bookData;
+        // eslint-disable-next-line no-console
+        console.log('[loadBook] before return', !!bookData?.elementHtml);
+        return bookData;
+      })();
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(
+          () => reject(new Error('书籍加载超时（60秒），请检查控制台 [loadBook] 日志定位卡住的步骤')),
+          60000
+        );
+      });
+
+      return Promise.race([loadPromise, timeoutPromise]).catch((error: any) => {
+        showSpinner = false;
+        syncedResolver();
+
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: '加载超时',
+              message: error.message
+            }
+          }
+        ]);
+
+        return undefined;
+      });
     }),
     share()
   );
@@ -379,17 +476,24 @@
 
   const bookData$ = rawBookData$.pipe(
     switchMap((rawBookData) => {
+      // eslint-disable-next-line no-console
+      console.log('[bookData$] received rawBookData', !!rawBookData?.elementHtml);
       if (!rawBookData) return EMPTY;
 
       sectionList$.next(rawBookData.sections || []);
+      initHighlightManager(database, rawBookData.id, rawBookData.title);
 
       const isPaginated = $viewMode$ === ViewMode.Paginated;
       const cacheKey = `${rawBookData.id}|${isPaginated ? 'p' : 'c'}|${$hideSpoilerImageMode$}|${rawBookData.lastBookModified || 0}`;
       const cached = formattedBookCache.get(cacheKey);
       if (cached) {
+        // eslint-disable-next-line no-console
+        console.log('[bookData$] returning cached');
         return of(cached);
       }
 
+      // eslint-disable-next-line no-console
+      console.log('[bookData$] before loadBookData');
       return loadBookData(
         rawBookData,
         '.book-content',
@@ -398,6 +502,8 @@
         $hideSpoilerImageMode$
       ).pipe(
         tap((data) => {
+          // eslint-disable-next-line no-console
+          console.log('[bookData$] after loadBookData', !!data?.htmlContent);
           // Keep only last entry; freeing the prior URLs is risky since other refs may exist.
           formattedBookCache.clear();
           formattedBookCache.set(cacheKey, data);
@@ -525,6 +631,27 @@
     }),
     reduceToEmptyString()
   );
+
+  let hlRafId = 0;
+
+  function scheduleHighlightRender(highlights: BooksDbHighlight[]) {
+    cancelAnimationFrame(hlRafId);
+    hlRafId = requestAnimationFrame(function retry() {
+      const el = getBookContentEl();
+      if (el) {
+        renderHighlights(el, highlights);
+      } else {
+        hlRafId = requestAnimationFrame(retry);
+      }
+    });
+  }
+
+  $: scheduleHighlightRender($hlStore$);
+
+  $: if ($highlightSidebarOpen$) {
+    autoScroller?.off();
+    autoReader?.off();
+  }
 
   $: if ($tocIsOpen$) {
     autoScroller?.off();
@@ -723,7 +850,23 @@
     document.dispatchEvent(new CustomEvent(SKIPKEYLISTENER, { detail: $skipKeyDownListener$ }));
   }
 
-  onMount(() => document.addEventListener('ttu-action', handleAction, false));
+  function handleGlobalContextMenu(ev: MouseEvent) {
+    const target = ev.target as HTMLElement;
+    if (!target.closest('.book-content')) return;
+    handleBookContentContextMenu(ev);
+  }
+
+  function handleGlobalClick(ev: MouseEvent) {
+    const target = ev.target as HTMLElement;
+    if (!target.closest('.book-content')) return;
+    handleBookContentClick(ev);
+  }
+
+  onMount(() => {
+    document.addEventListener('ttu-action', handleAction, false);
+    document.addEventListener('contextmenu', handleGlobalContextMenu);
+    document.addEventListener('click', handleGlobalClick);
+  });
 
   // Tray menu / global shortcut request TTS toggle. Works in both view modes
   // (continuous + paginated) since AutoReaderContinuous is wired in both.
@@ -765,10 +908,14 @@
   onDestroy(() => {
     if (browser) {
       document.removeEventListener('ttu-action', handleAction, false);
+      document.removeEventListener('contextmenu', handleGlobalContextMenu);
+      document.removeEventListener('click', handleGlobalClick);
       document.documentElement.lang = 'ja';
     }
 
     readerImageGalleryPictures$.next([]);
+    cancelAnimationFrame(hlRafId);
+    disposeHighlightManager();
 
     if (dismissDialogs) {
       dialogManager.dialogs$.next([]);
@@ -1164,7 +1311,13 @@
     if (localBookData.storageSource) {
       const externalBookData = await storageHandler.getBook();
 
-      if (externalBookData && !(externalBookData instanceof File)) {
+      if (externalBookData instanceof File) {
+        throw new Error(
+          `外部书籍数据格式错误（返回了文件而非解析后的数据）：${localBookData.title}`
+        );
+      }
+
+      if (externalBookData) {
         bookData = {
           ...externalBookData,
           ...{
@@ -1173,6 +1326,14 @@
             storageSource: localBookData.storageSource
           }
         };
+      } else if (!localBookData.elementHtml) {
+        throw new Error(
+          `未找到外部书籍数据：${localBookData.storageSource} 中不存在《${localBookData.title}》的书籍文件`
+        );
+      } else {
+        logger.warn(
+          `外部存储 ${localBookData.storageSource} 中未找到《${localBookData.title}》的数据，使用本地缓存`
+        );
       }
     } else if (!localBookData.elementHtml) {
       throw new Error('书籍没有存储数据');
@@ -1274,6 +1435,138 @@
     let bookId: number | undefined;
     bookId$.subscribe((x) => (bookId = x)).unsubscribe();
     return bookId;
+  }
+
+  function getBookContentEl(): HTMLElement | null {
+    return document.querySelector('.book-content');
+  }
+
+  function handleBookContentContextMenu(ev: MouseEvent) {
+    const target = ev.target as HTMLElement;
+    const existingHlId = getHighlightIdFromElement(target);
+
+    if (existingHlId !== undefined) {
+      ev.preventDefault();
+      const hl = $hlStore$.find((h) => h.id === existingHlId);
+      if (!hl) return;
+      hlEditTarget = hl;
+      hlMenuMode = 'edit';
+      hlMenuX = ev.clientX;
+      hlMenuY = ev.clientY;
+      hlMenuVisible = true;
+      return;
+    }
+
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+
+    ev.preventDefault();
+    hlPendingRange = sel.getRangeAt(0);
+    hlMenuMode = 'create';
+    hlMenuX = ev.clientX;
+    hlMenuY = ev.clientY;
+    hlMenuVisible = true;
+  }
+
+  function handleBookContentClick(ev: MouseEvent) {
+    const target = ev.target as HTMLElement;
+    const existingHlId = getHighlightIdFromElement(target);
+    if (existingHlId === undefined) return;
+
+    const hl = $hlStore$.find((h) => h.id === existingHlId);
+    if (!hl) return;
+    hlEditTarget = hl;
+    hlMenuMode = 'edit';
+    hlMenuX = ev.clientX;
+    hlMenuY = ev.clientY;
+    hlMenuVisible = true;
+  }
+
+  async function handleHlColor(color: HighlightColor) {
+    const container = getBookContentEl();
+    if (!container) return;
+
+    if (hlMenuMode === 'create' && hlPendingRange) {
+      const offsets = rangeToOffsets(container, hlPendingRange);
+      if (!offsets) return;
+      const text = hlPendingRange.toString();
+      await addHl(offsets.start, offsets.end, text, color);
+      window.getSelection()?.removeAllRanges();
+      hlPendingRange = undefined;
+    } else if (hlMenuMode === 'edit' && hlEditTarget) {
+      await updateHl(hlEditTarget.id, { color });
+    }
+
+    hlMenuVisible = false;
+    hlEditTarget = undefined;
+  }
+
+  function handleHlMemoRequest() {
+    if (hlMenuMode === 'create' && hlPendingRange) {
+      hlMemoSelectedText = hlPendingRange.toString();
+      hlMemoText = '';
+      hlPendingColor = 'yellow';
+      hlMemoDialogOpen = true;
+      skipKeyDownListener$.next(true);
+    }
+    hlMenuVisible = false;
+  }
+
+  function handleHlEditMemoRequest() {
+    if (hlEditTarget) {
+      hlMemoSelectedText = hlEditTarget.text;
+      hlMemoText = hlEditTarget.memo;
+      skipKeyDownListener$.next(true);
+      hlMemoDialogOpen = true;
+    }
+    hlMenuVisible = false;
+  }
+
+  async function handleHlMemoSave(memo: string) {
+    const container = getBookContentEl();
+    if (!container) return;
+
+    if (hlEditTarget) {
+      await updateHl(hlEditTarget.id, { memo });
+      hlEditTarget = undefined;
+    } else if (hlPendingRange) {
+      const offsets = rangeToOffsets(container, hlPendingRange);
+      if (offsets) {
+        const text = hlPendingRange.toString();
+        await addHl(offsets.start, offsets.end, text, hlPendingColor, memo);
+      }
+      window.getSelection()?.removeAllRanges();
+      hlPendingRange = undefined;
+    }
+
+    hlMemoDialogOpen = false;
+    skipKeyDownListener$.next(false);
+  }
+
+  async function handleHlDelete() {
+    if (!hlEditTarget) return;
+    await removeHl(hlEditTarget.id);
+    hlEditTarget = undefined;
+    hlMenuVisible = false;
+  }
+
+  function handleHlNavigate(hl: BooksDbHighlight) {
+    const container = getBookContentEl();
+    if (!container) return;
+    scrollToHighlight(container, hl);
+    highlightSidebarOpen$.next(false);
+  }
+
+  async function handleHlSidebarDelete(hl: BooksDbHighlight) {
+    await removeHl(hl.id);
+  }
+
+  function handleHlSidebarEditMemo(hl: BooksDbHighlight) {
+    hlEditTarget = hl;
+    hlMemoSelectedText = hl.text;
+    hlMemoText = hl.memo;
+    skipKeyDownListener$.next(true);
+    hlMemoDialogOpen = true;
   }
 
   async function bookmarkPage() {
@@ -1766,6 +2059,11 @@
         showHeader = false;
         tocIsOpen$.next(true);
       }}
+      on:highlightClick={() => {
+        pauseTracker();
+        showHeader = false;
+        highlightSidebarOpen$.next(true);
+      }}
       on:jumpClick={handleJump}
       on:completeBook={completeBook}
       on:setCustomReadingPoint={handleSetCustomReadingPoint}
@@ -1935,6 +2233,44 @@
       {wasTrackerPaused}
     />
   </div>
+{/if}
+
+{#if $highlightSidebarOpen$}
+  <HighlightSidebar
+    highlights={$hlStore$}
+    sections={$sectionData$ || []}
+    on:navigate={({ detail }) => handleHlNavigate(detail)}
+    on:editMemo={({ detail }) => handleHlSidebarEditMemo(detail)}
+    on:delete={({ detail }) => handleHlSidebarDelete(detail)}
+    on:close={() => {
+      if ($statisticsEnabled$ && !wasTrackerPaused) {
+        isTrackerPaused$.next(false);
+      }
+      highlightSidebarOpen$.next(false);
+    }}
+  />
+{/if}
+
+<HighlightContextMenu
+  x={hlMenuX}
+  y={hlMenuY}
+  visible={hlMenuVisible}
+  mode={hlMenuMode}
+  hasMemo={hlEditTarget?.memo ? true : false}
+  on:color={({ detail }) => handleHlColor(detail)}
+  on:memo={handleHlMemoRequest}
+  on:editMemo={handleHlEditMemoRequest}
+  on:delete={handleHlDelete}
+  on:close={() => { hlMenuVisible = false; hlEditTarget = undefined; }}
+/>
+
+{#if hlMemoDialogOpen}
+  <HighlightMemoDialog
+    memo={hlMemoText}
+    selectedText={hlMemoSelectedText}
+    on:save={({ detail }) => handleHlMemoSave(detail)}
+    on:cancel={() => { hlMemoDialogOpen = false; hlEditTarget = undefined; skipKeyDownListener$.next(false); }}
+  />
 {/if}
 
 {#if showReaderImageGallery}

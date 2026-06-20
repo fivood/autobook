@@ -207,7 +207,15 @@
   );
 
   const imageLoadingState$ = contentEl$.pipe(
+    tap((contentEl) => {
+      // eslint-disable-next-line no-console
+      console.log('[book-reader] contentChange received', contentEl?.className, contentEl?.querySelectorAll('img').length);
+    }),
     mergeMap((contentEl) => imageLoadingState(contentEl)),
+    tap((loading) => {
+      // eslint-disable-next-line no-console
+      console.log('[book-reader] imageLoadingState changed:', loading);
+    }),
     share()
   );
 

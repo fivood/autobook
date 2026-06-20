@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0
+
+- 高亮笔记：选中文字右键弹出菜单，支持 4 色高亮（黄/蓝/绿/粉）+ 备注
+- 高亮侧栏：顶部菜单新增笔记按钮，打开侧栏浏览当前书所有高亮，按章节分组，点击跳转到对应位置
+- 高亮编辑：点击已有高亮可修改颜色、编辑/添加备注、删除
+- 高亮独立存储：高亮数据不随书籍删除而丢失，保留书名供后续跨书搜索
+- 修复 HtmlRenderer insertBefore 崩溃：重写渲染器绕过 Svelte 4 HtmlTagHydration 的 DOM 锚点失效问题
+
 ## 1.4.12
 
 - MOBI 中文乱码彻底解决：放弃 mobi crate 的 String::from_utf8_lossy 输出（会把 GBK 字节永久转成 U+FFFD），改成自己从 records 拉原始字节、直接做 PalmDoc 解压，再按 UTF-8 → GB18030 → GBK → Big5 优先级嗅探

@@ -4,7 +4,10 @@
  * All rights reserved.
  */
 
-import { combineLatest, fromEvent, Observable, of, race } from 'rxjs';
+import { combineLatest, fromEvent, Observable, of, race, timer } from 'rxjs';
+import { map, take } from 'rxjs/operators';
+
+const IMAGE_LOAD_TIMEOUT_MS = 10000;
 
 export function imageLoadingState(contentEl: HTMLElement) {
   const elements = Array.from(contentEl.getElementsByTagName('img'));
@@ -31,5 +34,16 @@ function imageLoadComplete(imgEl: HTMLImageElement) {
   if (imgEl.complete) {
     return of(1);
   }
-  return race(fromEvent(imgEl, 'load'), fromEvent(imgEl, 'error'));
+
+  return race(
+    fromEvent(imgEl, 'load'),
+    fromEvent(imgEl, 'error'),
+    timer(IMAGE_LOAD_TIMEOUT_MS).pipe(
+      map(() => {
+        // eslint-disable-next-line no-console
+        console.warn('[imageLoadingState] image load timeout:', imgEl.src);
+        return 1;
+      })
+    )
+  ).pipe(take(1));
 }
