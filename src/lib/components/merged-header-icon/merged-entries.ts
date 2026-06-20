@@ -8,6 +8,7 @@ import {
   faBookmark,
   faBug,
   faChartLine,
+  faClockRotateLeft,
   faCloudArrowDown,
   faCog,
   faFileArrowUp,
@@ -71,5 +72,11 @@ export const mergeEntries = {
     label: '检查更新',
     icon: faCloudArrowDown,
     title: '检查桌面端更新'
+  },
+  CHANGELOG: {
+    routeId: '/changelog',
+    label: '更新历史',
+    icon: faClockRotateLeft,
+    title: '查看版本更新记录'
   }
 };
