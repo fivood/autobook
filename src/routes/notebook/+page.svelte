@@ -8,17 +8,29 @@
     faExternalLinkAlt,
     faPlus,
     faDownload,
-    faPen
+    faPen,
+    faLink,
+    faUnlink,
+    faShuffle,
+    faFolder
   } from '@fortawesome/free-solid-svg-icons';
   import { onMount } from 'svelte';
-  import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
+  import type {
+    BooksDbHighlight,
+    BooksDbHighlightFolder
+  } from '$lib/data/database/books-db/versions/books-db';
   import { database } from '$lib/data/store';
   import { pagePath } from '$lib/data/env';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import HighlightMemoDialog from '$lib/components/book-reader/book-highlight/highlight-memo-dialog.svelte';
+  import NotebookFolderSidebar from '$lib/components/notebook/notebook-folder-sidebar.svelte';
+  import NotebookLinkPicker from '$lib/components/notebook/notebook-link-picker.svelte';
+  import NotebookReviewModal from '$lib/components/notebook/notebook-review-modal.svelte';
 
   const STANDALONE_TITLE = '__standalone__';
+  const REVIEW_BATCH = 10;
+  const FRESH_REVIEW_MS = 1000 * 60 * 60 * 24 * 7; // less than 7d since reviewed = down-weight
 
   const colorDot: Record<string, string> = {
     yellow: 'rgba(255,235,59,0.8)',
@@ -28,9 +40,11 @@
   };
 
   let highlights: BooksDbHighlight[] = [];
+  let folders: BooksDbHighlightFolder[] = [];
   let titleToId = new Map<string, number>();
   let query = '';
   let selectedTags = new Set<string>();
+  let selectedView = 'all'; // 'all' | 'unfiled' | 'standalone' | 'folder:<id>'
   let loaded = false;
 
   let editTarget: BooksDbHighlight | undefined;
@@ -40,9 +54,17 @@
   let dialogText = '';
   let dialogTags: string[] = [];
 
-  $: filtered = filterHighlights(highlights, query, selectedTags);
+  let linkPickerSource: BooksDbHighlight | undefined;
+  let reviewQueue: BooksDbHighlight[] = [];
+  let reviewOpen = false;
+
+  $: highlightById = new Map(highlights.map((h) => [h.id, h]));
+  $: folderIdSet = new Set(folders.map((f) => f.id));
+  $: viewFiltered = applyView(highlights, selectedView);
+  $: filtered = filterHighlights(viewFiltered, query, selectedTags);
   $: groups = groupByBook(filtered);
-  $: allTags = collectTags(highlights);
+  $: allTags = collectTags(viewFiltered);
+  $: counts = computeCounts(highlights);
 
   onMount(async () => {
     if (!browser) return;
@@ -51,8 +73,9 @@
   });
 
   async function refresh() {
-    const [all, books] = await Promise.all([
+    const [all, folderList, books] = await Promise.all([
       database.getAllHighlights(),
+      database.getHighlightFolders(),
       (async () => {
         const db = await database.db;
         return db.getAll('data');
@@ -60,6 +83,37 @@
     ]);
     titleToId = new Map(books.map((b) => [b.title, b.id]));
     highlights = all.sort((a, b) => b.lastModified - a.lastModified);
+    folders = folderList;
+  }
+
+  function effectiveFolderId(h: BooksDbHighlight): number | undefined {
+    return h.folderId !== undefined && folderIdSet.has(h.folderId) ? h.folderId : undefined;
+  }
+
+  function computeCounts(list: BooksDbHighlight[]): Record<string, number> {
+    const result: Record<string, number> = {
+      all: list.length,
+      unfiled: 0,
+      standalone: 0
+    };
+    for (const h of list) {
+      if (h.kind === 'note') result.standalone += 1;
+      const fid = effectiveFolderId(h);
+      if (fid === undefined) result.unfiled += 1;
+      else result[`folder:${fid}`] = (result[`folder:${fid}`] || 0) + 1;
+    }
+    return result;
+  }
+
+  function applyView(list: BooksDbHighlight[], view: string): BooksDbHighlight[] {
+    if (view === 'all') return list;
+    if (view === 'unfiled') return list.filter((h) => effectiveFolderId(h) === undefined);
+    if (view === 'standalone') return list.filter((h) => h.kind === 'note');
+    if (view.startsWith('folder:')) {
+      const id = Number(view.slice('folder:'.length));
+      return list.filter((h) => effectiveFolderId(h) === id);
+    }
+    return list;
   }
 
   function collectTags(list: BooksDbHighlight[]): string[] {
@@ -105,19 +159,19 @@
       arr.push(h);
       map.set(key, arr);
     }
-    const groups = [...map.entries()].map(([title, items]) => ({
+    const out = [...map.entries()].map(([title, items]) => ({
       title,
       items:
         title === STANDALONE_TITLE
           ? items.sort((a, b) => b.lastModified - a.lastModified)
           : items.sort((a, b) => a.startOffset - b.startOffset)
     }));
-    groups.sort((a, b) => {
+    out.sort((a, b) => {
       if (a.title === STANDALONE_TITLE) return -1;
       if (b.title === STANDALONE_TITLE) return 1;
       return a.title.localeCompare(b.title);
     });
-    return groups;
+    return out;
   }
 
   function toggleTag(tag: string) {
@@ -174,6 +228,8 @@
         dialogOpen = false;
         return;
       }
+      const folderId =
+        selectedView.startsWith('folder:') ? Number(selectedView.slice(7)) : undefined;
       const now = Date.now();
       const note: Omit<BooksDbHighlight, 'id'> = {
         dataId: -1,
@@ -186,7 +242,8 @@
         createdAt: now,
         lastModified: now,
         kind: 'note',
-        ...(tags.length ? { tags } : {})
+        ...(tags.length ? { tags } : {}),
+        ...(folderId !== undefined ? { folderId } : {})
       };
       const id = await database.addHighlight(note);
       highlights = [{ ...note, id } as BooksDbHighlight, ...highlights];
@@ -205,6 +262,74 @@
     createMode = false;
   }
 
+  async function moveToFolder(h: BooksDbHighlight, folderId: number | undefined) {
+    await database.setHighlightFolder(h.id, folderId);
+    highlights = highlights.map((x) =>
+      x.id === h.id ? { ...x, folderId, lastModified: Date.now() } : x
+    );
+  }
+
+  function handleFolderChange(h: BooksDbHighlight, ev: Event) {
+    const v = (ev.currentTarget as HTMLSelectElement).value;
+    moveToFolder(h, v ? Number(v) : undefined);
+  }
+
+  async function handleCreateFolder(name: string) {
+    const id = await database.addHighlightFolder(name);
+    folders = await database.getHighlightFolders();
+    selectedView = `folder:${id}`;
+  }
+
+  async function handleRenameFolder(id: number, name: string) {
+    await database.renameHighlightFolder(id, name);
+    folders = await database.getHighlightFolders();
+  }
+
+  async function handleDeleteFolder(id: number) {
+    await database.deleteHighlightFolder(id);
+    folders = await database.getHighlightFolders();
+    highlights = highlights.map((h) =>
+      h.folderId === id ? { ...h, folderId: undefined, lastModified: Date.now() } : h
+    );
+    if (selectedView === `folder:${id}`) selectedView = 'all';
+  }
+
+  async function pickLinkTarget(targetId: number) {
+    if (!linkPickerSource) return;
+    await database.linkHighlights(linkPickerSource.id, targetId);
+    linkPickerSource = undefined;
+    await refresh();
+  }
+
+  async function unlinkOne(h: BooksDbHighlight, otherId: number) {
+    await database.unlinkHighlights(h.id, otherId);
+    await refresh();
+  }
+
+  function openReview() {
+    const now = Date.now();
+    const pool = highlights
+      .map((h) => {
+        const since = h.lastReviewedAt ? now - h.lastReviewedAt : now - h.createdAt;
+        const weight = Math.max(1, since / FRESH_REVIEW_MS);
+        return { h, weight: weight * Math.random() };
+      })
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, REVIEW_BATCH)
+      .map(({ h }) => h);
+    reviewQueue = pool;
+    reviewOpen = pool.length > 0;
+    if (!pool.length) alert('暂无可回顾的内容');
+  }
+
+  async function handleReviewMark(id: number) {
+    await database.markHighlightReviewed(id);
+    const now = Date.now();
+    highlights = highlights.map((h) =>
+      h.id === id ? { ...h, lastReviewedAt: now, lastModified: now } : h
+    );
+  }
+
   function exportMarkdown() {
     const lines: string[] = [];
     lines.push(`# 笔记本导出`);
@@ -212,6 +337,15 @@
     lines.push(`> 共 ${filtered.length} 条 · ${formatTime(Date.now())}`);
     if (query.trim()) lines.push(`> 搜索：${query.trim()}`);
     if (selectedTags.size) lines.push(`> 标签：${[...selectedTags].map((t) => `#${t}`).join(' ')}`);
+    if (selectedView !== 'all') {
+      const label =
+        selectedView === 'unfiled'
+          ? '未归档'
+          : selectedView === 'standalone'
+            ? '独立笔记'
+            : folders.find((f) => `folder:${f.id}` === selectedView)?.name || selectedView;
+      lines.push(`> 视图：${label}`);
+    }
     lines.push('');
     for (const g of groups) {
       lines.push(`## ${g.title === STANDALONE_TITLE ? '独立笔记' : g.title}`);
@@ -249,6 +383,12 @@
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
+
+  function getLinked(h: BooksDbHighlight): BooksDbHighlight[] {
+    return (h.linkedIds || [])
+      .map((id) => highlightById.get(id))
+      .filter((x): x is BooksDbHighlight => !!x);
+  }
 </script>
 
 <svelte:head>
@@ -264,7 +404,7 @@
       on:click={() => goto(`${pagePath}${mergeEntries.MANAGE.routeId}`)}
     ><Fa icon={faArrowLeft} /></button>
     <h1 class="text-xl font-medium">笔记本</h1>
-    <span class="text-sm opacity-50">{filtered.length}/{highlights.length} · {groups.length} 组</span>
+    <span class="text-sm opacity-50">{filtered.length}/{highlights.length}</span>
     <div class="flex-1" />
     <input
       type="search"
@@ -275,13 +415,17 @@
     <button
       type="button"
       class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
-      title="新建独立笔记"
+      title="今日回顾：随机选 10 条久未回看的内容"
+      on:click={openReview}
+    ><Fa icon={faShuffle} size="xs" /> 回顾</button>
+    <button
+      type="button"
+      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
       on:click={openCreateNote}
     ><Fa icon={faPlus} size="xs" /> 新建笔记</button>
     <button
       type="button"
       class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
-      title="导出为 Markdown"
       on:click={exportMarkdown}
       disabled={!filtered.length}
     ><Fa icon={faDownload} size="xs" /> 导出 .md</button>
@@ -294,9 +438,9 @@
         <button
           type="button"
           class="rounded-full border px-2 py-0.5 transition-colors"
-          class:bg-current={selectedTags.has(tag)}
-          class:text-white={selectedTags.has(tag)}
           style:border-color={selectedTags.has(tag) ? 'transparent' : 'currentColor'}
+          style:background={selectedTags.has(tag) ? 'currentColor' : 'transparent'}
+          style:color={selectedTags.has(tag) ? 'var(--background-color)' : 'inherit'}
           style:opacity={selectedTags.has(tag) ? 1 : 0.65}
           on:click={() => toggleTag(tag)}
         >#{tag}</button>
@@ -311,82 +455,133 @@
     </div>
   {/if}
 
-  <main class="mx-auto w-full max-w-4xl flex-1 px-4 py-6">
-    {#if !loaded}
-      <p class="py-12 text-center opacity-50">加载中…</p>
-    {:else if !highlights.length}
-      <p class="py-12 text-center opacity-50">还没有内容。打开书右键添加高亮，或点上方「新建笔记」记录碎片心得</p>
-    {:else if !groups.length}
-      <p class="py-12 text-center opacity-50">没有匹配的结果</p>
-    {:else}
-      {#each groups as group (group.title)}
-        {@const isStandalone = group.title === STANDALONE_TITLE}
-        {@const bookExists = !isStandalone && titleToId.has(group.title)}
-        <section class="mb-8">
-          <div class="mb-3 flex items-baseline gap-3 border-b border-current/10 pb-2">
-            <h2 class="text-lg font-medium">{isStandalone ? '独立笔记' : group.title}</h2>
-            <span class="text-xs opacity-50">{group.items.length} 条</span>
-            {#if !isStandalone && !bookExists}
-              <span class="rounded bg-current/10 px-2 py-0.5 text-xs opacity-70">书已删除</span>
-            {/if}
-          </div>
-          <ul class="space-y-2">
-            {#each group.items as h (h.id)}
-              <li class="rounded-lg border border-current/10 p-3">
-                <div class="flex items-start gap-3">
-                  <span
-                    class="mt-1.5 inline-block h-3 w-3 flex-shrink-0 rounded-full"
-                    style="background:{colorDot[h.color] || colorDot.yellow}"
-                  />
-                  <div class="min-w-0 flex-1">
-                    {#if h.kind === 'note'}
-                      <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{h.memo}</p>
-                    {:else}
-                      <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{h.text}</p>
-                      {#if h.memo}
-                        <p class="mt-2 whitespace-pre-wrap break-words rounded bg-current/5 px-2 py-1.5 text-sm italic opacity-80">📝 {h.memo}</p>
+  <div class="flex flex-1">
+    <NotebookFolderSidebar
+      {folders}
+      {counts}
+      selectedKey={selectedView}
+      on:select={({ detail }) => (selectedView = detail)}
+      on:create={({ detail }) => handleCreateFolder(detail)}
+      on:rename={({ detail }) => handleRenameFolder(detail.id, detail.name)}
+      on:delete={({ detail }) => handleDeleteFolder(detail)}
+    />
+
+    <main class="mx-auto w-full max-w-4xl flex-1 px-4 py-6">
+      {#if !loaded}
+        <p class="py-12 text-center opacity-50">加载中…</p>
+      {:else if !highlights.length}
+        <p class="py-12 text-center opacity-50">还没有内容。打开书右键添加高亮，或点上方「新建笔记」记录碎片心得</p>
+      {:else if !groups.length}
+        <p class="py-12 text-center opacity-50">没有匹配的结果</p>
+      {:else}
+        {#each groups as group (group.title)}
+          {@const isStandalone = group.title === STANDALONE_TITLE}
+          {@const bookExists = !isStandalone && titleToId.has(group.title)}
+          <section class="mb-8">
+            <div class="mb-3 flex items-baseline gap-3 border-b border-current/10 pb-2">
+              <h2 class="text-lg font-medium">{isStandalone ? '独立笔记' : group.title}</h2>
+              <span class="text-xs opacity-50">{group.items.length} 条</span>
+              {#if !isStandalone && !bookExists}
+                <span class="rounded bg-current/10 px-2 py-0.5 text-xs opacity-70">书已删除</span>
+              {/if}
+            </div>
+            <ul class="space-y-2">
+              {#each group.items as h (h.id)}
+                <li class="rounded-lg border border-current/10 p-3">
+                  <div class="flex items-start gap-3">
+                    <span
+                      class="mt-1.5 inline-block h-3 w-3 flex-shrink-0 rounded-full"
+                      style="background:{colorDot[h.color] || colorDot.yellow}"
+                    />
+                    <div class="min-w-0 flex-1">
+                      {#if h.kind === 'note'}
+                        <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{h.memo}</p>
+                      {:else}
+                        <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{h.text}</p>
+                        {#if h.memo}
+                          <p class="mt-2 whitespace-pre-wrap break-words rounded bg-current/5 px-2 py-1.5 text-sm italic opacity-80">📝 {h.memo}</p>
+                        {/if}
                       {/if}
-                    {/if}
-                    {#if h.tags && h.tags.length}
-                      <div class="mt-2 flex flex-wrap gap-1">
-                        {#each h.tags as t (t)}
+                      {#if h.tags && h.tags.length}
+                        <div class="mt-2 flex flex-wrap gap-1">
+                          {#each h.tags as t (t)}
+                            <button
+                              type="button"
+                              class="rounded-full border border-current/20 px-2 py-0.5 text-xs opacity-70 hover:opacity-100"
+                              on:click={() => toggleTag(t)}
+                            >#{t}</button>
+                          {/each}
+                        </div>
+                      {/if}
+                      {#if getLinked(h).length}
+                        <div class="mt-2 space-y-1 rounded border border-current/10 bg-current/5 p-2">
+                          <p class="text-xs opacity-50">关联 {getLinked(h).length} 条</p>
+                          {#each getLinked(h) as lnk (lnk.id)}
+                            <div class="flex items-start gap-2 text-xs">
+                              <Fa icon={faLink} size="xs" class="mt-1 opacity-50" />
+                              <p class="line-clamp-1 flex-1 break-all opacity-80">
+                                {(lnk.kind === 'note' ? lnk.memo : lnk.text).slice(0, 80)}
+                                <span class="opacity-50">— {lnk.bookTitle || '独立笔记'}</span>
+                              </p>
+                              <button
+                                type="button"
+                                class="opacity-50 hover:text-red-500 hover:opacity-100"
+                                title="解除链接"
+                                on:click={() => unlinkOne(h, lnk.id)}
+                              ><Fa icon={faUnlink} size="xs" /></button>
+                            </div>
+                          {/each}
+                        </div>
+                      {/if}
+                      <div class="mt-2 flex flex-wrap items-center gap-3 text-xs opacity-50">
+                        <span>{formatTime(h.createdAt)}</span>
+                        {#if !isStandalone && bookExists}
                           <button
                             type="button"
-                            class="rounded-full border border-current/20 px-2 py-0.5 text-xs opacity-70 hover:opacity-100"
-                            on:click={() => toggleTag(t)}
-                          >#{t}</button>
-                        {/each}
-                      </div>
-                    {/if}
-                    <div class="mt-2 flex items-center gap-3 text-xs opacity-50">
-                      <span>{formatTime(h.createdAt)}</span>
-                      {#if !isStandalone && bookExists}
+                            class="flex items-center gap-1 hover:opacity-100"
+                            on:click={() => openHighlight(h)}
+                          ><Fa icon={faExternalLinkAlt} size="xs" /> 跳转</button>
+                        {/if}
                         <button
                           type="button"
                           class="flex items-center gap-1 hover:opacity-100"
-                          on:click={() => openHighlight(h)}
-                        ><Fa icon={faExternalLinkAlt} size="xs" /> 跳转</button>
-                      {/if}
-                      <button
-                        type="button"
-                        class="flex items-center gap-1 hover:opacity-100"
-                        on:click={() => openEdit(h)}
-                      ><Fa icon={faPen} size="xs" /> 编辑</button>
-                      <button
-                        type="button"
-                        class="flex items-center gap-1 hover:text-red-500 hover:opacity-100"
-                        on:click={() => removeOne(h)}
-                      ><Fa icon={faTrash} size="xs" /> 删除</button>
+                          on:click={() => openEdit(h)}
+                        ><Fa icon={faPen} size="xs" /> 编辑</button>
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 hover:opacity-100"
+                          on:click={() => (linkPickerSource = h)}
+                        ><Fa icon={faLink} size="xs" /> 链接</button>
+                        <label class="flex items-center gap-1">
+                          <Fa icon={faFolder} size="xs" />
+                          <select
+                            class="bg-transparent text-xs opacity-100"
+                            style="color:var(--font-color);"
+                            value={h.folderId ?? ''}
+                            on:change={(ev) => handleFolderChange(h, ev)}
+                          >
+                            <option value="" style="color:#000;">未归档</option>
+                            {#each folders as f (f.id)}
+                              <option value={f.id} style="color:#000;">{f.name}</option>
+                            {/each}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 hover:text-red-500 hover:opacity-100"
+                          on:click={() => removeOne(h)}
+                        ><Fa icon={faTrash} size="xs" /> 删除</button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </li>
-            {/each}
-          </ul>
-        </section>
-      {/each}
-    {/if}
-  </main>
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/each}
+      {/if}
+    </main>
+  </div>
 </div>
 
 {#if dialogOpen}
@@ -400,5 +595,22 @@
       editTarget = undefined;
       createMode = false;
     }}
+  />
+{/if}
+
+{#if linkPickerSource}
+  <NotebookLinkPicker
+    source={linkPickerSource}
+    candidates={highlights}
+    on:pick={({ detail }) => pickLinkTarget(detail)}
+    on:cancel={() => (linkPickerSource = undefined)}
+  />
+{/if}
+
+{#if reviewOpen}
+  <NotebookReviewModal
+    queue={reviewQueue}
+    on:markReviewed={({ detail }) => handleReviewMark(detail)}
+    on:close={() => (reviewOpen = false)}
   />
 {/if}
