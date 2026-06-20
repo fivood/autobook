@@ -3,21 +3,41 @@
 
   export let memo = '';
   export let selectedText = '';
+  export let tags: string[] = [];
 
-  const dispatch = createEventDispatcher<{ save: string; cancel: void }>();
+  const dispatch = createEventDispatcher<{
+    save: { memo: string; tags: string[] };
+    cancel: void;
+  }>();
 
   let value = memo;
+  let tagsInput = tags.join(' ');
   let textareaEl: HTMLTextAreaElement;
 
   onMount(() => {
     textareaEl?.focus();
   });
 
+  function parseTags(s: string): string[] {
+    return Array.from(
+      new Set(
+        s
+          .split(/[\s,，]+/)
+          .map((t) => t.replace(/^#/, '').trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
+  function commit() {
+    dispatch('save', { memo: value, tags: parseTags(tagsInput) });
+  }
+
   function handleKeydown(ev: KeyboardEvent) {
     if (ev.key === 'Escape') {
       dispatch('cancel');
     } else if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
-      dispatch('save', value);
+      commit();
     }
   }
 </script>
@@ -45,6 +65,13 @@
       placeholder="写点备注…"
       on:keydown={handleKeydown}
     />
+    <input
+      type="text"
+      bind:value={tagsInput}
+      class="mt-2 w-full rounded border border-current/20 bg-transparent px-2 py-1.5 text-sm"
+      placeholder="标签，空格或逗号分隔（如 写作 叙事 结构）"
+      on:keydown={handleKeydown}
+    />
     <div class="mt-3 flex justify-end gap-2">
       <button
         type="button"
@@ -55,7 +82,7 @@
         type="button"
         class="rounded px-4 py-1.5 text-sm font-medium"
         style="background:rgba(95,126,123,0.9);color:#f0efe6;"
-        on:click={() => dispatch('save', value)}
+        on:click={commit}
       >保存 (Ctrl+Enter)</button>
     </div>
   </div>

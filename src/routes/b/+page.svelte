@@ -277,6 +277,7 @@
   let hlMemoDialogOpen = false;
   let hlMemoText = '';
   let hlMemoSelectedText = '';
+  let hlMemoTags: string[] = [];
   let hlPendingColor: HighlightColor = 'yellow';
   let hlPendingRange: Range | undefined;
   let syncedResolver: () => void;
@@ -1542,6 +1543,7 @@
     if (hlMenuMode === 'create' && hlPendingRange) {
       hlMemoSelectedText = hlPendingRange.toString();
       hlMemoText = '';
+      hlMemoTags = [];
       hlPendingColor = 'yellow';
       hlMemoDialogOpen = true;
       skipKeyDownListener$.next(true);
@@ -1553,24 +1555,26 @@
     if (hlEditTarget) {
       hlMemoSelectedText = hlEditTarget.text;
       hlMemoText = hlEditTarget.memo;
+      hlMemoTags = hlEditTarget.tags || [];
       skipKeyDownListener$.next(true);
       hlMemoDialogOpen = true;
     }
     hlMenuVisible = false;
   }
 
-  async function handleHlMemoSave(memo: string) {
+  async function handleHlMemoSave(payload: { memo: string; tags: string[] }) {
+    const { memo, tags } = payload;
     const container = getBookContentEl();
     if (!container) return;
 
     if (hlEditTarget) {
-      await updateHl(hlEditTarget.id, { memo });
+      await updateHl(hlEditTarget.id, { memo, tags });
       hlEditTarget = undefined;
     } else if (hlPendingRange) {
       const offsets = rangeToOffsets(container, hlPendingRange);
       if (offsets) {
         const text = hlPendingRange.toString();
-        await addHl(offsets.start, offsets.end, text, hlPendingColor, memo);
+        await addHl(offsets.start, offsets.end, text, hlPendingColor, memo, tags);
       }
       window.getSelection()?.removeAllRanges();
       hlPendingRange = undefined;
@@ -2305,6 +2309,7 @@
   <HighlightMemoDialog
     memo={hlMemoText}
     selectedText={hlMemoSelectedText}
+    tags={hlMemoTags}
     on:save={({ detail }) => handleHlMemoSave(detail)}
     on:cancel={() => { hlMemoDialogOpen = false; hlEditTarget = undefined; skipKeyDownListener$.next(false); }}
   />
