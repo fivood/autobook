@@ -84,7 +84,7 @@
         <div
           tabindex="0"
           role="button"
-          class="mdc-elevation--z2 hover:mdc-elevation--z8 mdc-elevation-transition absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-400"
+          class="mdc-elevation--z2 hover:mdc-elevation--z8 mdc-elevation-transition absolute top-1 right-1 h-6 w-6 rounded-full bg-red-400"
           on:click={() => dispatch('removeBookClick', { id: bookCard.id })}
           on:keyup={dummyFn}
         >

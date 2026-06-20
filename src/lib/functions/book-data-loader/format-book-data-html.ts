@@ -103,6 +103,17 @@ function removeSvgDimensions(el: HTMLElement) {
   });
 }
 
+function isInlineImage(img: HTMLImageElement): boolean {
+  const parent = img.parentElement;
+  if (!parent) return false;
+  for (const node of Array.from(parent.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE && node.textContent && node.textContent.trim().length > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function addSpoilerTags(el: HTMLElement, document: Document, blurMode: BlurMode) {
   const getChildNodesAfterTableOfContents = () => {
     let childNodes = [...el.children];
@@ -130,7 +141,7 @@ function addSpoilerTags(el: HTMLElement, document: Document, blurMode: BlurMode)
     : [...el.children]
   ).forEach((childNode) => {
     Array.from(childNode.getElementsByTagName('img'))
-      .filter((tag) => !isElementGaiji(tag) && !tag.hasAttribute('data-pdf-page'))
+      .filter((tag) => !isElementGaiji(tag) && !tag.hasAttribute('data-pdf-page') && !isInlineImage(tag))
       .forEach((tag) => createWrapper(tag, childNode));
 
     Array.from(childNode.getElementsByTagName('svg'))

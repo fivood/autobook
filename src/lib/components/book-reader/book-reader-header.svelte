@@ -6,6 +6,7 @@
     faCrosshairs,
     faExpand,
     faFlag,
+    faHighlighter,
     faList,
     faRotateLeft,
     type IconDefinition
@@ -36,6 +37,7 @@
 
   const dispatch = createEventDispatcher<{
     tocClick: void;
+    highlightClick: void;
     bookmarkClick: void;
     scrollToBookmarkClick: void;
     jumpClick: void;
@@ -113,6 +115,16 @@
         <Fa icon={faList} />
       </div>
     {/if}
+    <div
+      tabindex="0"
+      role="button"
+      title="高亮笔记"
+      class={baseIconClasses}
+      on:click={() => dispatch('highlightClick')}
+      on:keyup={dummyFn}
+    >
+      <Fa icon={faHighlighter} />
+    </div>
     <div
       tabindex="0"
       role="button"

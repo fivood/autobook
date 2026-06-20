@@ -8,6 +8,7 @@ import type {
   BooksDbAudioBook,
   BooksDbBookData,
   BooksDbBookmarkData,
+  BooksDbHighlight,
   BooksDbReadingGoal,
   BooksDbStatistic,
   BooksDbStorageSource,
@@ -113,6 +114,8 @@ export class DatabaseService {
       shareReplay({ refCount: true, bufferSize: 1 })
     )
   );
+
+  highlightsChanged$ = new Subject<void>();
 
   bookmarksChanged$ = new Subject<void>();
 
@@ -431,6 +434,46 @@ export class DatabaseService {
     replicationProgress$.next({ progressToAdd: 1 });
 
     return dataId;
+  }
+
+  async getHighlights(dataId: number): Promise<BooksDbHighlight[]> {
+    const db = await this.db;
+    return db.getAllFromIndex('highlight', 'dataId', dataId);
+  }
+
+  async getAllHighlights(): Promise<BooksDbHighlight[]> {
+    const db = await this.db;
+    return db.getAll('highlight');
+  }
+
+  async putHighlight(highlight: BooksDbHighlight): Promise<number> {
+    const db = await this.db;
+    const id = await db.put('highlight', highlight);
+    this.highlightsChanged$.next();
+    return id;
+  }
+
+  async addHighlight(highlight: Omit<BooksDbHighlight, 'id'>): Promise<number> {
+    const db = await this.db;
+    const id = await db.add('highlight', highlight as BooksDbHighlight);
+    this.highlightsChanged$.next();
+    return id;
+  }
+
+  async deleteHighlight(id: number): Promise<void> {
+    const db = await this.db;
+    await db.delete('highlight', id);
+    this.highlightsChanged$.next();
+  }
+
+  async deleteHighlightsForBook(dataId: number): Promise<void> {
+    const db = await this.db;
+    const keys = await db.getAllKeysFromIndex('highlight', 'dataId', dataId);
+    const tx = db.transaction('highlight', 'readwrite');
+    for (const key of keys) {
+      await tx.store.delete(key);
+    }
+    await tx.done;
   }
 
   async getStorageSources() {

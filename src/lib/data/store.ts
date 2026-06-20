@@ -123,6 +123,8 @@ export const ttsAutoAdvanceSection$ = writableBooleanLocalStorageSubject()(
 
 export const ttsShortcut$ = writableStringLocalStorageSubject()('ttsShortcut', 'ctrl+alt+p');
 
+export const highlightSidebarOpen$ = writableBooleanLocalStorageSubject()('highlightSidebarOpen', false);
+
 export const ttsEngine$ = writableStringLocalStorageSubject()('ttsEngine', 'web');
 export const ttsSapiVoiceId$ = writableStringLocalStorageSubject()('ttsSapiVoiceId', '');
 

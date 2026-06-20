@@ -40,7 +40,15 @@ function readDimension(el: HTMLImageElement, attr: 'width' | 'height'): number |
  * carries the `gaiji` class (upstream convention) OR its declared width and
  * height both fit within an inline run. */
 export function isElementGaiji(el: HTMLImageElement) {
-  if (Array.from(el.classList).some((className) => className.includes('gaiji'))) {
+  const classList = Array.from(el.classList);
+  if (classList.some((c) => /gaiji|footnote|note|icon|inline/i.test(c))) {
+    return true;
+  }
+  if (el.closest('sup, sub, ruby')) {
+    return true;
+  }
+  const alt = (el.getAttribute('alt') || '').toLowerCase();
+  if (/^(note|注|footnote|marker)$/i.test(alt)) {
     return true;
   }
   const w = readDimension(el, 'width');
