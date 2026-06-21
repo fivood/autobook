@@ -163,14 +163,21 @@
 </script>
 
 {#if autoReader}
-  <div bind:this={settingsRoot} class="fixed bottom-6 right-20 z-30 flex flex-col items-end gap-2">
+  <div bind:this={settingsRoot} class="group fixed bottom-6 right-20 z-30 flex flex-col items-end gap-2">
     <button
       type="button"
       title={enabled ? '暂停朗读 (V)' : '开始朗读 (V)'}
       on:click={toggle}
-      class="relative flex h-12 w-12 items-center justify-center rounded-full shadow-lg backdrop-blur"
-      class:opacity-90={!enabled}
-      class:opacity-100={enabled}
+      class="relative flex items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-150"
+      class:h-12={enabled || showSettings}
+      class:w-12={enabled || showSettings}
+      class:h-9={!enabled && !showSettings}
+      class:w-9={!enabled && !showSettings}
+      class:opacity-100={enabled || showSettings}
+      class:opacity-30={!enabled && !showSettings}
+      class:group-hover:opacity-95={!enabled && !showSettings}
+      class:group-hover:h-12={!enabled && !showSettings}
+      class:group-hover:w-12={!enabled && !showSettings}
       style="background-color: rgba(95, 126, 123, 0.92); color: #f0efe6;"
     >
       <Fa icon={enabled ? faVolumeHigh : faVolumeXmark} size="lg" />
@@ -181,7 +188,11 @@
       type="button"
       title="语音设置"
       on:click={() => (showSettings = !showSettings)}
-      class="flex h-9 w-9 items-center justify-center rounded-full shadow backdrop-blur"
+      class="flex h-9 w-9 items-center justify-center rounded-full shadow backdrop-blur transition-all duration-150"
+      class:opacity-0={!enabled && !showSettings}
+      class:pointer-events-none={!enabled && !showSettings}
+      class:group-hover:opacity-100={!enabled && !showSettings}
+      class:group-hover:pointer-events-auto={!enabled && !showSettings}
       style="background-color: rgba(195, 193, 175, 0.9); color: #405a5c;"
     >
       <Fa icon={faGears} />

@@ -5,7 +5,6 @@
  */
 
 import {
-  faBookmark,
   faBug,
   faChartLine,
   faClockRotateLeft,
@@ -16,6 +15,7 @@ import {
   faFolderPlus,
   faHashtag,
   faImages,
+  faLightbulb,
   faSignOutAlt,
   faTriangleExclamation
 } from '@fortawesome/free-solid-svg-icons';
@@ -37,7 +37,7 @@ export const mergeEntries = {
   NOTEBOOK: {
     routeId: '/notebook',
     label: '笔记本',
-    icon: faBookmark,
+    icon: faLightbulb,
     title: '高亮笔记本（跨书）'
   },
   JUMP_TO_POSITION: {

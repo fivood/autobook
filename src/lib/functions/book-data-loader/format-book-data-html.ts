@@ -116,14 +116,19 @@ function isInlineImage(img: HTMLImageElement): boolean {
 }
 
 function addSpoilerTags(el: HTMLElement, document: Document, blurMode: BlurMode) {
-  const getChildNodesAfterTableOfContents = () => {
-    let childNodes = [...el.children];
-    const afterContentsDivIndex =
-      childNodes.findIndex((childNode) => childNode.getElementsByTagName('a').length > 1) + 1;
-    if (afterContentsDivIndex > 0 && afterContentsDivIndex < childNodes.length) {
-      childNodes = childNodes.slice(afterContentsDivIndex);
-    }
-    return childNodes;
+  if (blurMode === BlurMode.NONE) return;
+
+  const getNonCoverChildren = () => {
+    const childNodes = [...el.children];
+    // Expose only the very first child (the front cover the user picked) and
+    // blur everything else — including back cover, title page, synopsis, TOC,
+    // forewords, and chapter bodies. Back cover with spoilery blurbs is
+    // common front-matter, so blanket exposing "front matter" is unsafe.
+    //
+    // If the first child is already long-form text (>200 chars), it's chapter
+    // content rather than a cover, so don't grant it the exception.
+    const firstLen = childNodes[0]?.textContent?.trim().length || 0;
+    return firstLen >= 200 ? childNodes : childNodes.slice(1);
   };
 
   const createWrapper = (tag: Element, childNode: Element) => {
@@ -138,7 +143,7 @@ function addSpoilerTags(el: HTMLElement, document: Document, blurMode: BlurMode)
   };
 
   (blurMode === BlurMode.AFTER_TOC
-    ? getChildNodesAfterTableOfContents()
+    ? getNonCoverChildren()
     : [...el.children]
   ).forEach((childNode) => {
     Array.from(childNode.getElementsByTagName('img'))

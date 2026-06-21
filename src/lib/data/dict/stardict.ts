@@ -100,7 +100,6 @@ export function buildStarDict(
   idx: { index: Map<string, Array<[number, number]>>; originalCase: Map<string, string> },
   dictBytes: Uint8Array
 ): StarDict {
-  const decoder = new TextDecoder('utf-8');
   return {
     meta,
     index: idx.index,
@@ -111,11 +110,70 @@ export function buildStarDict(
       for (const v of variants) {
         const entries = idx.index.get(v);
         if (!entries) continue;
-        return entries.map(([off, len]) => decoder.decode(dictBytes.subarray(off, off + len)));
+        return entries.map(([off, len]) =>
+          decodeEntry(dictBytes.subarray(off, off + len), meta.sameTypeSequence)
+        );
       }
       return [];
     }
   };
+}
+
+/**
+ * StarDict's "sametypesequence" packs multiple typed fields into a single dict
+ * entry, NUL-separated for lowercase types. Without splitting on NUL the
+ * separator gets decoded as a control char and the renderer shows a box.
+ * Reference: https://github.com/huzheng001/stardict-3/blob/master/dict/doc/StarDictFileFormat
+ */
+function decodeEntry(bytes: Uint8Array, sameTypeSequence: string): string {
+  const decoder = new TextDecoder('utf-8');
+  if (!sameTypeSequence) {
+    return decoder.decode(bytes).replace(/\0/g, '\n');
+  }
+  const types = sameTypeSequence.split('');
+  const parts: string[] = [];
+  let cursor = 0;
+  for (let i = 0; i < types.length; i++) {
+    const t = types[i];
+    const isLast = i === types.length - 1;
+    const isLower = t === t.toLowerCase();
+    if (isLower) {
+      if (isLast) {
+        parts.push(decoder.decode(bytes.subarray(cursor)));
+        cursor = bytes.length;
+      } else {
+        let end = cursor;
+        while (end < bytes.length && bytes[end] !== 0) end++;
+        parts.push(decoder.decode(bytes.subarray(cursor, end)));
+        cursor = end + 1;
+      }
+    } else {
+      // Uppercase types use a 4-byte BE length prefix and carry binary data.
+      // Skip the bytes; render a placeholder so the field isn't silently dropped.
+      if (cursor + 4 > bytes.length) break;
+      const dv = new DataView(bytes.buffer, bytes.byteOffset + cursor, 4);
+      const len = dv.getUint32(0, false);
+      cursor += 4 + len;
+      parts.push(`[${t}: ${len} bytes]`);
+    }
+  }
+  return parts
+    .map((p, i) => formatField(p, types[i] || 'm'))
+    .filter(Boolean)
+    .join('\n');
+}
+
+function formatField(raw: string, type: string): string {
+  const s = raw.replace(/\0/g, '').trim();
+  if (!s) return '';
+  switch (type) {
+    case 't':
+      return `[${s}]`;
+    case 'y':
+      return `(${s})`;
+    default:
+      return s;
+  }
 }
 
 /**

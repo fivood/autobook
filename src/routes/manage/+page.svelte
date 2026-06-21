@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { faUpload } from '@fortawesome/free-solid-svg-icons';
+  import { faCheck, faUpload } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
   import FolderSidebar from '$lib/components/library-folders/folder-sidebar.svelte';
   import {
@@ -179,12 +179,30 @@
     if (filter === 'all' || filter === 'uncategorized') return;
     const folderId = Number(filter);
     if (!Number.isFinite(folderId)) return;
-    await removeBooksFromFolder(Array.from(selectedBookIds), folderId);
+    const ids = Array.from(selectedBookIds);
+    await removeBooksFromFolder(ids, folderId);
     selectedBookIds = new Set();
+    activeFolderFilter$.next('uncategorized');
+    flashToast(`已移出当前分类（${ids.length} 本），已切到未分类视图`);
   }
 
   async function addSelectedToFolder(folderId: number) {
-    await addBooksToFolder(Array.from(selectedBookIds), folderId);
+    const ids = Array.from(selectedBookIds);
+    await addBooksToFolder(ids, folderId);
+    flashToast(`已加入分类（${ids.length} 本）`);
+  }
+
+  let toastMessage = '';
+  let toastVisible = false;
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function flashToast(message: string) {
+    toastMessage = message;
+    toastVisible = true;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toastVisible = false;
+    }, 1800);
   }
 
   function bookmarkToProgress(b: BooksDbBookmarkData | undefined) {
@@ -522,6 +540,23 @@
     gotoBook(currentBookId);
   }
 
+  /** Card X / multi-select "remove" inside a folder view: only detach from the
+   * current folder, don't delete the book. Library-wide views (全部 / 未分类)
+   * still delete. */
+  async function handleRemove(bookIds: number[]) {
+    const filter = $activeFolderFilter$;
+    if (filter !== 'all' && filter !== 'uncategorized') {
+      const folderId = Number(filter);
+      if (Number.isFinite(folderId)) {
+        await removeBooksFromFolder(bookIds, folderId);
+        selectedBookIds = new Set();
+        flashToast(`已从当前分类移出（${bookIds.length} 本，未删除）`);
+        return;
+      }
+    }
+    await removeBooks(bookIds);
+  }
+
   async function removeBooks(bookIds: number[]) {
     if (!operationAllowed()) {
       return;
@@ -811,7 +846,7 @@
     bind:selectMode
     on:selectAllClick={onSelectAllBooks}
     on:backToBookClick={backToCurrentBook}
-    on:removeClick={() => removeBooks(Array.from(selectedBookIds))}
+    on:removeClick={() => handleRemove(Array.from(selectedBookIds))}
     on:filesChange={(ev) => onFilesChange(ev.detail)}
     on:domainHintClick={onDomainHintClick}
     on:cancelReplication={() => {
@@ -834,7 +869,10 @@
 </div>
 
 <div class="flex min-h-screen pt-16 xl:pt-14">
-  <FolderSidebar totalBookCount={$bookCards$?.length ?? 0} />
+  <FolderSidebar
+    totalBookCount={$bookCards$?.length ?? 0}
+    on:booksAddedToFolder={({ detail }) => flashToast(`已加入分类（${detail.count} 本）`)}
+  />
   <div
     tabindex="0"
     role="button"
@@ -892,7 +930,7 @@
       {selectedBookIds}
       bookCards={$filteredBookCards$}
       on:bookClick={(ev) => onBookClick(ev.detail.id)}
-      on:removeBookClick={(ev) => removeBooks([ev.detail.id])}
+      on:removeBookClick={(ev) => handleRemove([ev.detail.id])}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />
   {:else if $activeFolderFilter$ !== 'all'}
@@ -918,3 +956,18 @@
   {/if}
   </div>
 </div>
+
+{#if toastVisible}
+  <div
+    class="pointer-events-none fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 transform"
+    style="transition: opacity 200ms ease;"
+  >
+    <div
+      class="flex items-center gap-2 rounded-full px-4 py-2 shadow-lg"
+      style="background: rgba(95,126,123,0.95); color: #f0efe6;"
+    >
+      <Fa icon={faCheck} />
+      <span class="text-sm">{toastMessage}</span>
+    </div>
+  </div>
+{/if}
