@@ -32,9 +32,10 @@
   {#each bookCards as bookCard (bookCard.id)}
     <div
       role="banner"
-      class="relative"
+      class="relative cursor-grab active:cursor-grabbing"
       class:opacity-60={bookCard.isPlaceholder}
       draggable="true"
+      title="可拖入左侧分类"
       on:dragstart={(ev) => dispatch('cardDragStart', { id: bookCard.id, event: ev })}
       on:mouseenter={() => (hoveringBookId = bookCard.id)}
       on:mouseleave={() => (hoveringBookId = undefined)}

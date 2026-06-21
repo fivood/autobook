@@ -734,7 +734,11 @@
     },
     {
       id: BlurMode.AFTER_TOC,
-      text: '目录之后'
+      text: '封面外'
+    },
+    {
+      id: BlurMode.NONE,
+      text: '不模糊'
     }
   ];
 
@@ -945,39 +949,41 @@
           }}
         >
           {#if browser}
-            <button
-              title="新建主题"
-              class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
-              on:click={handleNewTheme}
-            >
-              <Fa icon={faPlus} class="mx-2" />
-              <Ripple />
-            </button>
-            <button
-              title="导出自定义主题"
-              class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
-              disabled={!Object.keys($customThemes$).length}
-              class:opacity-40={!Object.keys($customThemes$).length}
-              on:click={exportCustomThemes}
-            >
-              <Fa icon={faFileArrowUp} class="mx-2" />
-              <Ripple />
-            </button>
-            <button
-              title="导入自定义主题"
-              class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
-              on:click={() => themeImportInput?.click()}
-            >
-              <Fa icon={faFileArrowDown} class="mx-2" />
-              <Ripple />
-            </button>
-            <input
-              type="file"
-              accept="application/json,.json"
-              class="hidden"
-              bind:this={themeImportInput}
-              on:change={importCustomThemes}
-            />
+            <div class="flex">
+              <button
+                title="新建主题"
+                class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+                on:click={handleNewTheme}
+              >
+                <Fa icon={faPlus} class="mx-2" />
+                <Ripple />
+              </button>
+              <button
+                title="导出自定义主题"
+                class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+                disabled={!Object.keys($customThemes$).length}
+                class:opacity-40={!Object.keys($customThemes$).length}
+                on:click={exportCustomThemes}
+              >
+                <Fa icon={faFileArrowUp} class="mx-2" />
+                <Ripple />
+              </button>
+              <button
+                title="导入自定义主题"
+                class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+                on:click={() => themeImportInput?.click()}
+              >
+                <Fa icon={faFileArrowDown} class="mx-2" />
+                <Ripple />
+              </button>
+              <input
+                type="file"
+                accept="application/json,.json"
+                class="hidden"
+                bind:this={themeImportInput}
+                on:change={importCustomThemes}
+              />
+            </div>
           {/if}
         </ButtonToggleGroup>
         {#if inlineEditTheme}
@@ -1537,7 +1543,7 @@
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
       </SettingsItemGroup>
       {#if blurImage}
-        <SettingsItemGroup title="模糊范围" tooltip="选择模糊所有图片，还是仅模糊目录之后的图片">
+        <SettingsItemGroup title="模糊范围" tooltip="模糊范围：全部 / 仅封面外（保留封面，封底+正文图片都模糊）/ 不模糊">
           <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
         </SettingsItemGroup>
       {/if}
@@ -1903,7 +1909,7 @@
       {#if blurImage}
         <SettingsItemGroup
           title="模糊范围"
-          tooltip="选择模糊所有图片，还是仅模糊目录之后的图片"
+          tooltip="模糊范围：全部 / 仅封面外（保留封面，封底+正文图片都模糊）/ 不模糊"
         >
           <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
         </SettingsItemGroup>

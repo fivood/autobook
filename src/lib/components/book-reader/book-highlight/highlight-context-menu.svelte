@@ -12,6 +12,7 @@
     color: HighlightColor;
     memo: void;
     editMemo: void;
+    lookup: void;
     delete: void;
     close: void;
   }>();
@@ -40,8 +41,8 @@
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="fixed inset-0 z-[80]" on:click={() => dispatch('close')} on:contextmenu|preventDefault={() => dispatch('close')} />
   <div
-    class="fixed z-[81] flex items-center gap-1 rounded-lg px-2 py-1.5 shadow-lg"
-    style="left:{menuX}px;top:{menuY}px;background:rgba(43,90,105,0.95);color:#f0efe6;"
+    class="fixed z-[81] flex items-center gap-1 rounded-lg px-2 py-1.5"
+    style="left:{menuX}px;top:{menuY}px;background:var(--menu-background);color:var(--menu-foreground);box-shadow:0 8px 24px rgba(0,0,0,0.35),0 0 0 1px rgba(255,255,255,0.08) inset,0 0 0 1px rgba(0,0,0,0.15);"
   >
     {#if mode === 'create'}
       {#each colors as c (c.id)}
@@ -60,6 +61,12 @@
         title="添加备注"
         on:click={() => dispatch('memo')}
       >备注</button>
+      <button
+        type="button"
+        class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
+        title="查词典"
+        on:click={() => dispatch('lookup')}
+      >查词</button>
     {:else}
       {#each colors as c (c.id)}
         <button

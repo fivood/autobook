@@ -6,5 +6,6 @@
 
 export enum BlurMode {
   ALL = 'all',
-  AFTER_TOC = 'afterToc'
+  AFTER_TOC = 'afterToc',
+  NONE = 'none'
 }

@@ -80,6 +80,14 @@
   function needsResetButton(callouts: string[]): boolean {
     return callouts.some((c) => /重置|reset/i.test(c));
   }
+
+  function handleBack() {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+    } else {
+      goto(`${pagePath}${mergeEntries.MANAGE.routeId}`);
+    }
+  }
 </script>
 
 <svelte:head>
@@ -90,9 +98,9 @@
   <header class="sticky top-0 z-10 flex items-center gap-4 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
     <button
       type="button"
-      class="rounded p-2 hover:bg-black/5"
-      title="返回书库"
-      on:click={() => goto(`${pagePath}${mergeEntries.MANAGE.routeId}`)}
+      class="relative z-20 rounded p-2 hover:bg-black/5"
+      title="返回"
+      on:click={handleBack}
     ><Fa icon={faArrowLeft} /></button>
     <h1 class="text-xl font-medium">更新历史</h1>
     <span class="text-sm opacity-50">共 {sections.length} 个版本</span>
