@@ -67,6 +67,7 @@ export const aiProvider$ = writableStringLocalStorageSubject()('aiProvider', 'an
 export const aiApiKey$ = writableStringLocalStorageSubject()('aiApiKey', '');
 export const aiBaseUrl$ = writableStringLocalStorageSubject()('aiBaseUrl', '');
 export const aiModel$ = writableStringLocalStorageSubject()('aiModel', 'claude-sonnet-4-6');
+export const dictFolderPath$ = writableStringLocalStorageSubject()('dictFolderPath', '');
 export const customThemes$ = writableObjectLocalStorageSubject<Record<string, ThemeOption>>()(
   'customThemes',
   {}

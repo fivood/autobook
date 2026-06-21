@@ -12,6 +12,7 @@
     color: HighlightColor;
     memo: void;
     editMemo: void;
+    lookup: void;
     delete: void;
     close: void;
   }>();
@@ -60,6 +61,12 @@
         title="添加备注"
         on:click={() => dispatch('memo')}
       >备注</button>
+      <button
+        type="button"
+        class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
+        title="查词典"
+        on:click={() => dispatch('lookup')}
+      >查词</button>
     {:else}
       {#each colors as c (c.id)}
         <button

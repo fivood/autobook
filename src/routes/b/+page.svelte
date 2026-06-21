@@ -123,6 +123,9 @@
   import HighlightMemoDialog from '$lib/components/book-reader/book-highlight/highlight-memo-dialog.svelte';
   import HighlightSidebar from '$lib/components/book-reader/book-highlight/highlight-sidebar.svelte';
   import AiReaderDrawer from '$lib/components/ai/ai-reader-drawer.svelte';
+  import DictPopup from '$lib/components/dict/dict-popup.svelte';
+  import { dictFolderPath$ } from '$lib/data/store';
+  import { scanDictFolder, loadedDicts$ } from '$lib/data/dict/dict-manager';
   import {
     highlights$ as hlStore$,
     initHighlightManager,
@@ -280,6 +283,10 @@
   let hlMemoSelectedText = '';
   let hlMemoTags: string[] = [];
   let aiDrawerOpen = false;
+  let dictPopupOpen = false;
+  let dictPopupWord = '';
+  let dictPopupX = 0;
+  let dictPopupY = 0;
   let hlPendingColor: HighlightColor = 'yellow';
   let hlPendingRange: Range | undefined;
   let syncedResolver: () => void;
@@ -1553,6 +1560,23 @@
     hlMenuVisible = false;
   }
 
+  function handleHlLookup() {
+    if (!hlPendingRange) {
+      hlMenuVisible = false;
+      return;
+    }
+    const text = hlPendingRange.toString().trim();
+    if (!text) {
+      hlMenuVisible = false;
+      return;
+    }
+    dictPopupWord = text;
+    dictPopupX = hlMenuX;
+    dictPopupY = hlMenuY + 30;
+    dictPopupOpen = true;
+    hlMenuVisible = false;
+  }
+
   function handleHlEditMemoRequest() {
     if (hlEditTarget) {
       hlMemoSelectedText = hlEditTarget.text;
@@ -2319,9 +2343,19 @@
   on:color={({ detail }) => handleHlColor(detail)}
   on:memo={handleHlMemoRequest}
   on:editMemo={handleHlEditMemoRequest}
+  on:lookup={handleHlLookup}
   on:delete={handleHlDelete}
   on:close={() => { hlMenuVisible = false; hlEditTarget = undefined; }}
 />
+
+{#if dictPopupOpen}
+  <DictPopup
+    word={dictPopupWord}
+    x={dictPopupX}
+    y={dictPopupY}
+    on:close={() => (dictPopupOpen = false)}
+  />
+{/if}
 
 {#if hlMemoDialogOpen}
   <HighlightMemoDialog
