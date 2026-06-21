@@ -8,6 +8,7 @@
     faFlag,
     faHighlighter,
     faList,
+    faRobot,
     faRotateLeft,
     type IconDefinition
   } from '@fortawesome/free-solid-svg-icons';
@@ -38,6 +39,7 @@
   const dispatch = createEventDispatcher<{
     tocClick: void;
     highlightClick: void;
+    aiClick: void;
     bookmarkClick: void;
     scrollToBookmarkClick: void;
     jumpClick: void;
@@ -124,6 +126,16 @@
       on:keyup={dummyFn}
     >
       <Fa icon={faHighlighter} />
+    </div>
+    <div
+      tabindex="0"
+      role="button"
+      title="AI 助手（剧透安全）"
+      class={baseIconClasses}
+      on:click={() => dispatch('aiClick')}
+      on:keyup={dummyFn}
+    >
+      <Fa icon={faRobot} />
     </div>
     <div
       tabindex="0"

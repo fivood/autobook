@@ -122,6 +122,7 @@
   import HighlightContextMenu from '$lib/components/book-reader/book-highlight/highlight-context-menu.svelte';
   import HighlightMemoDialog from '$lib/components/book-reader/book-highlight/highlight-memo-dialog.svelte';
   import HighlightSidebar from '$lib/components/book-reader/book-highlight/highlight-sidebar.svelte';
+  import AiReaderDrawer from '$lib/components/ai/ai-reader-drawer.svelte';
   import {
     highlights$ as hlStore$,
     initHighlightManager,
@@ -278,6 +279,7 @@
   let hlMemoText = '';
   let hlMemoSelectedText = '';
   let hlMemoTags: string[] = [];
+  let aiDrawerOpen = false;
   let hlPendingColor: HighlightColor = 'yellow';
   let hlPendingRange: Range | undefined;
   let syncedResolver: () => void;
@@ -2105,6 +2107,11 @@
         showHeader = false;
         highlightSidebarOpen$.next(true);
       }}
+      on:aiClick={() => {
+        pauseTracker();
+        showHeader = false;
+        aiDrawerOpen = true;
+      }}
       on:jumpClick={handleJump}
       on:completeBook={completeBook}
       on:setCustomReadingPoint={handleSetCustomReadingPoint}
@@ -2274,6 +2281,17 @@
       {wasTrackerPaused}
     />
   </div>
+{/if}
+
+{#if aiDrawerOpen && $rawBookData$}
+  <AiReaderDrawer
+    bookId={$rawBookData$.id}
+    bookTitle={$rawBookData$.title}
+    elementHtml={$rawBookData$.elementHtml}
+    {exploredCharCount}
+    {bookCharCount}
+    on:close={() => (aiDrawerOpen = false)}
+  />
 {/if}
 
 {#if $highlightSidebarOpen$}

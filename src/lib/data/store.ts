@@ -63,6 +63,10 @@ import { writableStringLocalStorageSubject } from './internal/writable-string-lo
 
 export const theme$ = writableStringLocalStorageSubject()('theme', 'sage-green-theme');
 export const obsidianVaultPath$ = writableStringLocalStorageSubject()('obsidianVaultPath', '');
+export const aiProvider$ = writableStringLocalStorageSubject()('aiProvider', 'anthropic');
+export const aiApiKey$ = writableStringLocalStorageSubject()('aiApiKey', '');
+export const aiBaseUrl$ = writableStringLocalStorageSubject()('aiBaseUrl', '');
+export const aiModel$ = writableStringLocalStorageSubject()('aiModel', 'claude-sonnet-4-6');
 export const customThemes$ = writableObjectLocalStorageSubject<Record<string, ThemeOption>>()(
   'customThemes',
   {}

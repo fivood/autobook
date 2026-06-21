@@ -485,7 +485,8 @@
                       mergeEntries.MANAGE,
                       mergeEntries.STATISTICS,
                       mergeEntries.NOTEBOOK,
-                      mergeEntries.SETTINGS
+                      mergeEntries.SETTINGS,
+                      mergeEntries.CHANGELOG
                     ]),
                 ...(isTauri() ? [mergeEntries.CHECK_UPDATE] : [])
               ]}

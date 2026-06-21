@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.0
+
+> ⚠ 阅读界面新增了机器人图标按钮。如果之前的 UI 自定义导致图标错位或不显示，请「重置 UI」后重启。
+
+- 阅读时 AI 助手（剧透安全）：阅读界面顶部新增机器人图标，打开右侧抽屉问答
+- RAG 仅基于"当前阅读进度之前"的文本：按 exploredCharCount/bookCharCount 比例切分纯文本索引，超出阅读位置的 chunk 一概不送进上下文
+- 检索策略：BM25 取 top-6 相关片段 + 最近 2000 字尾部上下文，喂给 LLM
+- 系统提示强制剧透安全：未读到的内容回答"还没读到，不能剧透"
+- 支持 Anthropic 直连（带 dangerous-direct-browser-access 头）和 OpenAI 兼容协议（OpenAI 官方 / OpenRouter / 本地 Ollama）
+- 抽屉内可即时配置 provider / api key / base url / model，本地保存
+- 流式响应、可中途停止、可清空对话
+
 ## 1.7.1
 
 - Obsidian vault 联动：笔记本顶部「选择 vault」按钮选定一个本地目录，「同步到 vault」一键单向推送
