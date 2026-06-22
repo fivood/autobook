@@ -61,7 +61,10 @@ export function createTypewriter(opts: { total: number; speed: number }): Typewr
 
   const tick = (now: number) => {
     if (!lastTick) lastTick = now;
-    const dt = now - lastTick;
+    // Cap the delta so a tab returning from background (browser throttles
+    // rAF when hidden) doesn't dump a huge chunk of revealed chars all at
+    // once — we'd rather pretend no time passed than spoil a paragraph.
+    const dt = Math.min(now - lastTick, 1000);
     lastTick = now;
     revealAccumulator += (charsPerSec * dt) / 1000;
     let stepped = Math.floor(revealAccumulator);
