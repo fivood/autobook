@@ -21,8 +21,20 @@ export interface Chapter {
   charCount: number;
 }
 
+export interface Segment {
+  type: 'h2' | 'p';
+  text: string;
+  /** Char range in flatText (inclusive, exclusive) so the typewriter reveal
+   * can slice into individual segments cleanly. */
+  startChar: number;
+  endChar: number;
+}
+
 export interface ParsedBook {
   chapters: Chapter[];
+  /** Flat list of structural segments. Each segment occupies a contiguous
+   * range of flatText so the cursor's char position maps onto exactly one. */
+  segments: Segment[];
   totalChars: number;
   /** Concatenated text for char-offset based seeking. */
   flatText: string;
@@ -80,18 +92,33 @@ export function parseText(raw: string): ParsedBook {
   }
 
   // Build a flat text representation that exactly matches what the typewriter
-  // will reveal: title + paragraphs joined by single newlines. Char offsets
-  // into flatText line up with chapter.startChar / charCount.
+  // will reveal AND a parallel segment list so the renderer can give each
+  // chapter title and paragraph the right tag (and the cursor falls into
+  // exactly one segment at any reveal index).
   const parts: string[] = [];
+  const segments: Segment[] = [];
   let total = 0;
   for (const ch of chapters) {
     ch.startChar = total;
     let chLen = 0;
     if (ch.title) {
+      segments.push({
+        type: 'h2',
+        text: ch.title,
+        startChar: total + chLen,
+        endChar: total + chLen + ch.title.length
+      });
       parts.push(ch.title);
       chLen += ch.title.length;
     }
     for (const p of ch.paragraphs) {
+      if (!p) continue; // blank-line spacers — segment spacing handles visual gap
+      segments.push({
+        type: 'p',
+        text: p,
+        startChar: total + chLen,
+        endChar: total + chLen + p.length
+      });
       parts.push(p);
       chLen += p.length;
     }
@@ -101,6 +128,7 @@ export function parseText(raw: string): ParsedBook {
 
   return {
     chapters,
+    segments,
     totalChars: total,
     flatText: parts.join('\n')
   };

@@ -44,10 +44,37 @@
   let tickTimer: ReturnType<typeof setInterval> | undefined;
   let todaySeconds = 0;
 
-  $: revealedText = book ? book.flatText.slice(0, revealed) : '';
-  $: pendingText = book ? book.flatText.slice(revealed, revealed + 800) : '';
   $: currentChapterTitle = book ? book.chapters[chapterIdx]?.title || '' : '';
   $: progressPct = total > 0 ? Math.round((revealed / total) * 100) : 0;
+
+  /** Per-segment render state: reveal slice + a small lookahead of pending
+   * text after the cursor so the reader can see "what's about to appear"
+   * (dimmed). Limits the lookahead window so very long paragraphs don't
+   * dump the entire chapter on screen. */
+  $: visibleSegments = book
+    ? book.segments
+        .filter((seg) => seg.startChar < revealed + 1500)
+        .map((seg) => {
+          if (seg.endChar <= revealed) {
+            return { ...seg, revealed: seg.text, pending: '', hasCursor: false };
+          }
+          if (seg.startChar >= revealed) {
+            return {
+              ...seg,
+              revealed: '',
+              pending: seg.text.slice(0, Math.max(0, revealed + 800 - seg.startChar)),
+              hasCursor: false
+            };
+          }
+          const cut = revealed - seg.startChar;
+          return {
+            ...seg,
+            revealed: seg.text.slice(0, cut),
+            pending: seg.text.slice(cut, cut + 800),
+            hasCursor: true
+          };
+        })
+    : [];
 
   let visible = true;
   let lastTickMs = 0;
@@ -327,14 +354,25 @@
 
     <div class="viewport" bind:this={viewport}>
       <div class="page">
-        <span class="revealed">{revealedText}</span><span
-          class="cursor"
-          bind:this={cursorEl}
-          class:cursor-on={playing}
-        />
-        {#if pendingText}
-          <span class="pending">{pendingText}</span>
-        {/if}
+        {#each visibleSegments as seg (seg.startChar)}
+          {#if seg.type === 'h2'}
+            <h2 class="ch-title">
+              <span class="revealed">{seg.revealed}</span>{#if seg.hasCursor}<span
+                  class="cursor"
+                  bind:this={cursorEl}
+                  class:cursor-on={playing}
+                />{/if}{#if seg.pending}<span class="pending">{seg.pending}</span>{/if}
+            </h2>
+          {:else}
+            <p class="ch-para">
+              <span class="revealed">{seg.revealed}</span>{#if seg.hasCursor}<span
+                  class="cursor"
+                  bind:this={cursorEl}
+                  class:cursor-on={playing}
+                />{/if}{#if seg.pending}<span class="pending">{seg.pending}</span>{/if}
+            </p>
+          {/if}
+        {/each}
       </div>
     </div>
 
@@ -534,8 +572,23 @@
   .page {
     max-width: 36em;
     margin: 0 auto;
-    white-space: pre-wrap;
     word-break: break-word;
+  }
+  .ch-title {
+    margin: 2.2em 0 1em;
+    font-size: 1.35em;
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+  .ch-title:first-child {
+    margin-top: 0.5em;
+  }
+  .ch-para {
+    margin: 0 0 1em;
+    text-indent: 2em;
+    white-space: pre-wrap;
   }
   .pending {
     opacity: 0.12;
