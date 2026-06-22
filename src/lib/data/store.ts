@@ -68,6 +68,10 @@ export const aiApiKey$ = writableStringLocalStorageSubject()('aiApiKey', '');
 export const aiBaseUrl$ = writableStringLocalStorageSubject()('aiBaseUrl', '');
 export const aiModel$ = writableStringLocalStorageSubject()('aiModel', 'claude-sonnet-4-6');
 export const dictFolderPath$ = writableStringLocalStorageSubject()('dictFolderPath', '');
+export const syncToken$ = writableStringLocalStorageSubject()('syncToken', '');
+export const syncDeviceId$ = writableStringLocalStorageSubject()('syncDeviceId', '');
+export const syncEnabled$ = writableBooleanLocalStorageSubject()('syncEnabled', false);
+export const syncLastAt$ = writableNumberLocalStorageSubject()('syncLastAt', 0);
 export const customThemes$ = writableObjectLocalStorageSubject<Record<string, ThemeOption>>()(
   'customThemes',
   {}

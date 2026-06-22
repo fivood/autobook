@@ -7,8 +7,8 @@ compatibility_date = "2025-01-01"
 # wrangler kv namespace create STATS 也可以从命令行建。
 [[kv_namespaces]]
 binding = "STATS"
-id = "REPLACE_WITH_KV_ID"
+id = "8a689afa586b40a680af5bf0439433dd"
 # preview_id = "REPLACE_WITH_PREVIEW_KV_ID"
 
-[observability.logs]
+[observability]
 enabled = true

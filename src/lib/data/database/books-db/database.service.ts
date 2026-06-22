@@ -118,6 +118,9 @@ export class DatabaseService {
 
   highlightsChanged$ = new Subject<void>();
 
+  /** Fires whenever storeStatistics finishes, so cross-device sync can push. */
+  statisticsChanged$ = new Subject<void>();
+
   bookmarksChanged$ = new Subject<void>();
 
   bookmarks$ = this.bookmarksChanged$.pipe(
@@ -809,6 +812,7 @@ export class DatabaseService {
 
       await Promise.all(tasks);
       await tx.done;
+      this.statisticsChanged$.next();
     } catch (error: any) {
       try {
         tx.abort();
@@ -842,6 +846,7 @@ export class DatabaseService {
     };
 
     await db.put('statistic', existingStatistic);
+    this.statisticsChanged$.next();
   }
 
   async clearZombieStatistics() {

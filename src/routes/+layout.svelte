@@ -11,10 +11,13 @@
   import {
     customThemes$,
     pendingLaunchFiles$,
+    syncEnabled$,
+    syncToken$,
     theme$,
     ttsShortcut$,
     ttsToggleRequest$
   } from '$lib/data/store';
+  import { startSyncLoop } from '$lib/data/sync/sync-manager';
   import { availableThemes } from '$lib/data/theme-option';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -118,6 +121,9 @@
   page.subscribe((p) => (path = p.url.pathname));
 
   onMount(async () => {
+    if (browser && syncEnabled$.getValue() && syncToken$.getValue()) {
+      startSyncLoop();
+    }
     if (!isTauri()) return;
 
     // Books opened via file association / CLI: queue paths and land on the
