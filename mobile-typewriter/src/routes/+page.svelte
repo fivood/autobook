@@ -49,12 +49,24 @@
   $: currentChapterTitle = book ? book.chapters[chapterIdx]?.title || '' : '';
   $: progressPct = total > 0 ? Math.round((revealed / total) * 100) : 0;
 
+  let visible = true;
+  let lastTickMs = 0;
+
+  function onVisibilityChange() {
+    visible = document.visibilityState === 'visible';
+    // Reset the wall-clock anchor so resuming after a long background gap
+    // doesn't dump the gap into reading time.
+    if (visible) lastTickMs = Date.now();
+  }
+
   onMount(async () => {
     speed = Number(localStorage.getItem(SPEED_KEY)) || 8;
     stopAtChapter = localStorage.getItem(STOP_KEY) === '1';
     recents = listRecent();
     getDeviceId();
     startSyncLoop();
+    visible = document.visibilityState === 'visible';
+    document.addEventListener('visibilitychange', onVisibilityChange);
     try {
       const pulled = await pullNow();
       if (pulled) remoteCache = pulled;
@@ -66,14 +78,29 @@
   onDestroy(() => {
     engine?.destroy();
     if (tickTimer) clearInterval(tickTimer);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    }
   });
 
+  // Wall-clock-aware tick: count actual elapsed seconds since last tick, but
+  // cap each tick at 2s so a throttled background timer can't dump a 30-second
+  // delta on the next firing. Only counts while the page is visible AND the
+  // typewriter is actively revealing — paused or backgrounded reading doesn't
+  // contribute, and a sleeping screen doesn't either.
   $: if (typeof window !== 'undefined') {
-    if (playing && title) {
+    if (playing && title && visible) {
       if (!tickTimer) {
+        lastTickMs = Date.now();
         tickTimer = setInterval(() => {
-          addReadingSeconds(title, 1);
-          todaySeconds = getTodayTotal(title, remoteCache);
+          const now = Date.now();
+          const elapsedMs = Math.min(now - lastTickMs, 2000);
+          lastTickMs = now;
+          const seconds = Math.round(elapsedMs / 1000);
+          if (seconds > 0) {
+            addReadingSeconds(title, seconds);
+            todaySeconds = getTodayTotal(title, remoteCache);
+          }
         }, 1000);
       }
     } else if (tickTimer) {
