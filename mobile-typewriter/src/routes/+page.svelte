@@ -264,12 +264,12 @@
 </script>
 
 <svelte:head>
-  <title>{book ? `${title} · 打字机` : 'AutoBook 打字机'}</title>
+  <title>{book ? `${title} · AutoBook` : 'AutoBook'}</title>
 </svelte:head>
 
 {#if !book}
   <main class="landing">
-    <h1>AutoBook 打字机</h1>
+    <h1>AutoBook</h1>
     <p class="lead">逐字浮现的阅读节奏。支持 .txt / .epub / .md。</p>
 
     <label class="upload">

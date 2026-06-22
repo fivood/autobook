@@ -1,7 +1,7 @@
 {
-  "name": "AutoBook 打字机",
-  "short_name": "打字机阅读",
-  "description": "逐字浮现的阅读节奏。上传 .txt 文件，调节速度，沉浸阅读。",
+  "name": "AutoBook",
+  "short_name": "AutoBook",
+  "description": "逐字浮现的阅读节奏，跨设备同步阅读时长。",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -11,10 +11,28 @@
   "lang": "zh-CN",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/maskable-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
