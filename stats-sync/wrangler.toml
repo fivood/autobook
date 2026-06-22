@@ -1,0 +1,14 @@
+name = "autobook-stats-sync"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# CF Pages 控制台 → Settings → Functions → KV namespace bindings 创建一个，
+# 把它的 id 填进下面的 STATS_KV.id 字段（preview_id 可选）。
+# wrangler kv namespace create STATS 也可以从命令行建。
+[[kv_namespaces]]
+binding = "STATS"
+id = "REPLACE_WITH_KV_ID"
+# preview_id = "REPLACE_WITH_PREVIEW_KV_ID"
+
+[observability.logs]
+enabled = true
