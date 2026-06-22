@@ -287,7 +287,7 @@
           class:mt-3={statistic.id !== '累计' && statistic.id !== '已完成'}
           on:click={() => handleBlurredKey('charactersRead')}
         >
-          已读字数:
+          {statistic.sectionsTotal ? '已读页数:' : '已读字数:'}
         </button>
         <div
           role="button"
@@ -297,7 +297,11 @@
           on:click={() => handleBlurredKey('charactersRead')}
           on:keyup={dummyFn}
         >
-          {statistic.charactersRead}
+          {#if statistic.sectionsTotal}
+            {statistic.sectionsRead ?? 0} / {statistic.sectionsTotal}
+          {:else}
+            {statistic.charactersRead}
+          {/if}
         </div>
         <button class="text-left" on:click={() => handleBlurredKey('lastReadingSpeed')}>
           阅读速度:

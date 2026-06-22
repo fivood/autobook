@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.10.0
+
+> ⚠ 设置 → 数据 顶部新增「跨设备同步阅读统计」面板。如果之前的 UI 自定义导致面板错位，请「重置 UI」后重启。
+
+- 跨设备阅读时长同步：自带 32 字符 token 跨设备配对（无需注册账号），通过 sync.fivood.com（Cloudflare Worker + KV）合并桌面 + 手机端的每日阅读时长
+- 合并策略：服务端按设备分桶取 max，客户端聚合时排除自身贡献后加进本地，多设备非并发使用时长会正确累加
+- 桌面端：设置 → 数据 顶部新增同步面板，支持生成/保存/复制 token、立刻推送/拉取、重置 device-id；启用后默认 30 秒 debounce push + 5 分钟 pull
+- 手机端 book.fivood.com PWA：阅读时右上 ⇅ 按钮、落地页脚链接均可打开同步面板；阅读时顶栏进度旁显示「今日 X 分」实时合并多设备贡献；typewriter 播放期间每秒累计阅读时长
+- 顺手修了手机端 EPUB / Markdown 上传被识别成 txt 的 bug（handleFile 和 resumeFromRecent 之前都直接调 extractTxt，loader dispatcher 没生效）
+- PDF 页数统计：阅读追踪器自动识别 PDF 书（基于 sections 引用前缀），每页停留满 3 秒才计入"已访问"集合，避免快速滚动虚加；阅读时点统计图标自动把"已读字数"换成"已读页数: X / Y"，纯图 PDF 也能拿到有意义的日报
+- BooksDbStatistic 新增 sectionsRead / sectionsTotal 可选字段（IDB schemaless，无需 schema 升级）
+
 ## 1.9.1
 
 > ⚠ 1.9.1 之前的版本如果自动更新升级后菜单图标没变（窗口标题显示新版本但 UI 是旧的），需要去 GitHub Releases 下载 NSIS installer 手动重装一次。1.9.1 起的版本自动更新会自动 kill webview 子进程，避免再踩这个坑。

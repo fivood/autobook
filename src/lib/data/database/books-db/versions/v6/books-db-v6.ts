@@ -77,6 +77,13 @@ interface BooksDbV6Statistic {
   lastStatisticModified: number;
   completedBook?: number;
   completedData?: Omit<BooksDbV6Statistic, 'title' | 'lastStatisticModified'>;
+  /** Unique section indices visited today (for PDF format = pages read).
+   * Stored as the daily count rather than a per-day delta; tracker maintains
+   * the set and writes its size on each flush. */
+  sectionsRead?: number;
+  /** Total sections in the book at the time the tracker last ran. Used by the
+   * statistics UI to render "X / Y pages". */
+  sectionsTotal?: number;
 }
 
 interface BooksDbV6ReadingGoal extends ReadingGoal {

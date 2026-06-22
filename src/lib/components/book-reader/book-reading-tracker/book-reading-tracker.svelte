@@ -68,6 +68,10 @@
   export let frozenPosition: number;
   export let autoScroller: AutoScroller | undefined;
   export let blockDataUpdates: boolean;
+  /** When true, treat each section as one page and track unique pages visited
+   * (with a dwell threshold) so pure-image PDFs still get a meaningful daily
+   * statistic. Set by /b based on the loaded book's format. */
+  export let isPdfBook = false;
 
   export function processStatistics(
     characterDiff: number,
@@ -146,6 +150,14 @@
       );
     } else {
       updateStatistic(todaysStatistics, 0, 0, lastStatisticModified);
+    }
+
+    if (isPdfBook && todayKey === referenceDateKey) {
+      tickPageDwell(todayKey, Math.max(0, timeDiffForToday * 1000));
+      todaysStatistics.sectionsRead = pageVisitedToday.size;
+      todaysStatistics.sectionsTotal = sectionData?.length || 0;
+      sessionStatistics.sectionsRead = pageVisitedToday.size;
+      sessionStatistics.sectionsTotal = sectionData?.length || 0;
     }
 
     statistics.set(todayKey, todaysStatistics);
@@ -275,6 +287,51 @@
   let lastExploredCharCountScroller = exploredCharCount;
   let statisticsToStore = new Set<string>();
   let lastTrackerTick = 0;
+
+  // Page dwell tracker — runs in parallel with the character tracker so
+  // pure-image PDFs still produce a useful daily "pages visited" stat.
+  const PAGE_DWELL_THRESHOLD_MS = 3000;
+  let pageDwellDateKey = '';
+  let pageDwellSection = -1;
+  let pageDwellMs = 0;
+  let pageVisitedToday = new Set<number>();
+
+  function currentSectionFromExplored(): number {
+    if (!sectionData || !sectionData.length) return -1;
+    let lo = 0;
+    let hi = sectionData.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >>> 1;
+      const start = sectionData[mid].startCharacter ?? 0;
+      if (start <= exploredCharCount) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  function tickPageDwell(dateKey: string, elapsedMs: number) {
+    if (!isPdfBook) return;
+    if (pageDwellDateKey !== dateKey) {
+      pageDwellDateKey = dateKey;
+      pageVisitedToday = new Set();
+      pageDwellSection = -1;
+      pageDwellMs = 0;
+    }
+    const idx = currentSectionFromExplored();
+    if (idx < 0) return;
+    if (pageDwellSection !== idx) {
+      pageDwellSection = idx;
+      pageDwellMs = 0;
+      return;
+    }
+    pageDwellMs += elapsedMs;
+    if (pageDwellMs >= PAGE_DWELL_THRESHOLD_MS && !pageVisitedToday.has(idx)) {
+      pageVisitedToday.add(idx);
+      // mutate-then-reassign so the reactivity downstream picks up the new size
+      pageVisitedToday = pageVisitedToday;
+    }
+  }
+
   let lastTrackerFlushTime = 0;
   let trackerIdleTime = 0;
 
