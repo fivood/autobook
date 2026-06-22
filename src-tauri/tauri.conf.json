@@ -34,7 +34,8 @@
         "installMode": "currentUser",
         "compression": "zlib",
         "displayLanguageSelector": false,
-        "languages": ["English"]
+        "languages": ["English"],
+        "installerHooks": "installer-hooks.nsh"
       }
     },
     "fileAssociations": [
