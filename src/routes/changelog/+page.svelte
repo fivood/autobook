@@ -47,6 +47,12 @@
 
   let activeIdx = 0;
   let resetting = false;
+  let mainEl: HTMLElement | undefined;
+
+  function selectVersion(i: number) {
+    activeIdx = i;
+    if (mainEl) mainEl.scrollTop = 0;
+  }
 
   async function performReset() {
     if (
@@ -94,8 +100,8 @@
   <title>{formatPageTitle('更新历史')}</title>
 </svelte:head>
 
-<div class="flex min-h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">
-  <header class="sticky top-0 z-10 flex items-center gap-4 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
+<div class="flex h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">
+  <header class="flex flex-shrink-0 items-center gap-4 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
     <button
       type="button"
       class="relative z-20 rounded p-2 hover:bg-black/5"
@@ -106,15 +112,15 @@
     <span class="text-sm opacity-50">共 {sections.length} 个版本</span>
   </header>
 
-  <div class="flex flex-1">
-    <aside class="flex w-40 flex-shrink-0 flex-col gap-1 border-r border-current/10 p-3 text-sm">
+  <div class="flex flex-1 overflow-hidden">
+    <aside class="flex w-40 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-current/10 p-3 text-sm">
       {#each sections as s, i (s.version)}
         <button
           type="button"
           class="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-left hover:bg-black/5"
           style:font-weight={activeIdx === i ? '600' : '400'}
           style:opacity={activeIdx === i ? 1 : 0.7}
-          on:click={() => (activeIdx = i)}
+          on:click={() => selectVersion(i)}
         >
           <span>v{s.version}</span>
           {#if s.callouts.length}
@@ -124,7 +130,7 @@
       {/each}
     </aside>
 
-    <main class="mx-auto w-full max-w-3xl flex-1 px-6 py-6">
+    <main bind:this={mainEl} class="w-full max-w-3xl flex-1 overflow-y-auto px-6 py-6">
       {#if !sections.length}
         <p class="py-12 text-center opacity-50">CHANGELOG 为空</p>
       {:else}
