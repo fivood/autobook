@@ -2195,6 +2195,7 @@
       backgroundColor={$backgroundColor$}
       bookTitle={$rawBookData$.title}
       sectionData={$sectionData$}
+      isPdfBook={!!$rawBookData$.sections?.[0]?.reference?.startsWith('pdf-page-')}
       {frozenPosition}
       {exploredCharCount}
       {bookCharCount}
