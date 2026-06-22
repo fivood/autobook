@@ -22,6 +22,9 @@
     "vite": "5.4.21"
   },
   "dependencies": {
-    "@zip.js/zip.js": "^2.8.26"
+    "@fortawesome/fontawesome-svg-core": "^7.2.0",
+    "@fortawesome/free-solid-svg-icons": "^7.2.0",
+    "@zip.js/zip.js": "^2.8.26",
+    "svelte-fa": "^4.0.4"
   }
 }
