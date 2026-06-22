@@ -191,11 +191,16 @@
 {#if !book}
   <main class="landing">
     <h1>AutoBook 打字机</h1>
-    <p class="lead">逐字浮现的阅读节奏。上传一个 .txt 文件开始。</p>
+    <p class="lead">逐字浮现的阅读节奏。支持 .txt / .epub / .md。</p>
 
     <label class="upload">
-      <input type="file" accept=".txt,text/plain" on:change={handleFile} disabled={busy} />
-      <span>{busy ? '读取中…' : '选择 .txt 文件'}</span>
+      <input
+        type="file"
+        accept=".txt,.epub,.md,.markdown,text/plain,application/epub+zip"
+        on:change={handleFile}
+        disabled={busy}
+      />
+      <span>{busy ? '读取中…' : '选择文件'}</span>
     </label>
 
     {#if error}
