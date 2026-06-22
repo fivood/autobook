@@ -1,0 +1,20 @@
+{
+  "name": "AutoBook 打字机",
+  "short_name": "打字机阅读",
+  "description": "逐字浮现的阅读节奏。上传 .txt 文件，调节速度，沉浸阅读。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f0efe6",
+  "theme_color": "#5f7e7b",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
