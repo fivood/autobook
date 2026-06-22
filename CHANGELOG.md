@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.1
+
+> ⚠ 1.9.1 之前的版本如果自动更新升级后菜单图标没变（窗口标题显示新版本但 UI 是旧的），需要去 GitHub Releases 下载 NSIS installer 手动重装一次。1.9.1 起的版本自动更新会自动 kill webview 子进程，避免再踩这个坑。
+
+- 修自动更新后前端 bundle 未替换的问题：NSIS 安装器加 PREINSTALL hook，先 taskkill app.exe / AutoBook.exe / msedgewebview2.exe 再 SetOverwrite on，确保 webview 不会持有 resources 文件导致 silent skip
+
 ## 1.9.0
 
 > ⚠ 高亮右键菜单新增「查词」入口、笔记本图标从书签改为灯泡。如果之前的 UI 自定义导致菜单/图标错位，请「重置 UI」后重启。
