@@ -471,16 +471,26 @@
     align-items: stretch;
     gap: 0.3rem;
     margin-bottom: 0.5rem;
+    min-width: 0;
   }
   .recent {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
     text-align: left;
     padding: 0.7rem 0.9rem;
     border: 1px solid var(--fg-dim);
     border-radius: 0.6rem;
+    overflow: hidden;
   }
   .recent-title {
     font-weight: 600;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .recent-meta {
     font-size: 0.8rem;
@@ -491,10 +501,12 @@
     white-space: nowrap;
   }
   .recent-del {
-    padding: 0 0.7rem;
+    flex: 0 0 auto;
+    padding: 0 0.8rem;
     border: 1px solid var(--fg-dim);
     border-radius: 0.6rem;
     color: var(--fg-dim);
+    font-size: 1.2rem;
   }
   .hint {
     font-size: 0.75rem;
