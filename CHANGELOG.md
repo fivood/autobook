@@ -73,6 +73,39 @@
 - 高亮独立存储：高亮数据不随书籍删除而丢失，保留书名供后续跨书搜索
 - 修复 HtmlRenderer insertBefore 崩溃：重写渲染器绕过 Svelte 4 HtmlTagHydration 的 DOM 锚点失效问题
 
+## 1.5.2
+
+- 移除 Edge 在线 TTS 引擎：微软反爬持续 HTTP 403，可用率长期为零，不再维护；本地高音质改用 SAPI + Windows 11 自然语音（设置 → 辅助功能 → 讲述人 → 添加自然语音）或自定义 HTTP TTS
+- 砍掉网页版残留代码：云存储（GDrive / OneDrive）、OAuth、PWA service worker、GitHub Pages 部署脚本、网页域名提示全部移除；桌面端不再受这些遗留模块影响构建体积和启动时间
+
+## 1.5.1
+
+- 新增 PDF 支持（MVP）：基于 PDF.js 抽文本 + 整页 JPEG 渲染，按页切 section 并自动生成目录。文字层走打字机/朗读完全正常；图片占位走现有图库流程。复杂排版（多栏 / 表格 / 公式）的还原度有限，纯文字 PDF 最稳
+- 更新对话框支持 markdown 渲染：跨版本升级时的合并 release notes 现在按版本折叠展示，列表 / 代码 / 链接都能正常排版
+
+## 1.5.0
+
+- KF8 / AZW3 自研 Rust 解析器：完整实现 Huff/CDIC 解压算法（对齐 Calibre 实现），不再依赖第三方 mobi crate，能原生读没有 Calibre 也能开的 AZW3 文件
+- 修 MOBI6 乱码根因：record trailer 剥离逻辑里反向 varint 字节序和 bit 迭代方向错了，导致 PalmDoc 解压输出被截断混入垃圾。对齐 Calibre 的 sizeof_trailing_entries 后中文 MOBI 不再出现成段乱字符
+- Calibre 智能转换：导入 MOBI / AZW3 时自动检测本机 Calibre，有则调 `ebook-convert` 转 EPUB 获得最佳排版（封面 / 编码 / 字体），无则走内置 parser 并提示安装
+- 彻底移除 mobi crate 依赖：PalmDB 解析、元数据抽取、文本解压全部 in-house，避免上游 crate 不更新带来的 panic 风险
+- MOBI HTML 里嵌入的 font-family 全部剥掉，保证阅读器主字体（思源黑体）一贯到底，避免出版社字体声明覆盖主题
+- 解压后过滤 MOBI 控制字符 0x00 / 0x1E / 0x02，避免阅读器内出现不可见空段
+- 调试用：浏览器控制台输入 `__forceNativeMobi(true)` 可强制走内置 parser 绕过 Calibre（用于对比解析效果）
+
+## 1.4.22
+
+> 1.4.13 → 1.4.22 之间的若干小版本未单独打 tag，统一在 1.4.22 累计发布。
+
+- Calibre `ebook-convert` 集成：导入 MOBI / AZW3 时自动检测本机 Calibre，有则用它转 EPUB（最佳兼容性），无则走内置 parser 并显示安装提示
+- 修文件夹分类显示为空：之前书 ID 用 `getDummyId()` 随机生成，每次重新打开都变，文件夹关联表查不到老书。改成对书名做 FNV-1a 哈希生成稳定 ID
+- 修文件夹删除按钮无效：`ConfirmDialog` 的 resolver 把 wasCanceled 当成 ok 用了，确认即取消、取消即确认
+- 重写 MOBI6 文本提取：绕开 mobi crate 的输出，自己解 PalmDB record 区、剥 trailer、按 UTF-8 + CP1252 fallback 解码，国产中文 MOBI 不再乱码
+- 重写 KF8 解析器：修 `extra_record_data_flags` 偏移（应该是 0xF2 u16，原 crate 算错了）、修 fragment / skeleton record 偏移，AZW3 章节内容能正确抽出
+- 重写 MOBI 图片提取：扫 PalmDB record 区按 magic byte 识别图片类型，不再依赖 crate 的 image_records 索引
+- KF8 EXTH cover offset + author 解析
+- 修 gaiji（外字图）误识别：尺寸阈值放宽，避免把正常小图当成外字过滤掉
+
 ## 1.4.12
 
 - MOBI 中文乱码彻底解决：放弃 mobi crate 的 String::from_utf8_lossy 输出（会把 GBK 字节永久转成 U+FFFD），改成自己从 records 拉原始字节、直接做 PalmDoc 解压，再按 UTF-8 → GB18030 → GBK → Big5 优先级嗅探
