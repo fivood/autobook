@@ -1,7 +1,16 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { extractTxt } from '$lib/extract-txt';
+  import { loadFile } from '$lib/load-file';
   import { parseText, type ParsedBook } from '$lib/parse-text';
+  import {
+    addReadingSeconds,
+    getDeviceId,
+    getTodayTotal,
+    pullNow,
+    startSyncLoop
+  } from '$lib/stats';
+  import type { RemoteState } from '$lib/sync-client';
+  import SyncSettings from '$lib/sync-settings.svelte';
   import { createTypewriter, type TypewriterEngine } from '$lib/typewriter';
   import {
     getPosition,
@@ -30,21 +39,60 @@
   let recents: Array<SavedPosition & { hash: string }> = [];
   let busy = false;
   let error = '';
+  let syncOpen = false;
+  let remoteCache: RemoteState | undefined;
+  let tickTimer: ReturnType<typeof setInterval> | undefined;
+  let todaySeconds = 0;
 
   $: revealedText = book ? book.flatText.slice(0, revealed) : '';
   $: pendingText = book ? book.flatText.slice(revealed, revealed + 800) : '';
   $: currentChapterTitle = book ? book.chapters[chapterIdx]?.title || '' : '';
   $: progressPct = total > 0 ? Math.round((revealed / total) * 100) : 0;
 
-  onMount(() => {
+  onMount(async () => {
     speed = Number(localStorage.getItem(SPEED_KEY)) || 8;
     stopAtChapter = localStorage.getItem(STOP_KEY) === '1';
     recents = listRecent();
+    getDeviceId();
+    startSyncLoop();
+    try {
+      const pulled = await pullNow();
+      if (pulled) remoteCache = pulled;
+    } catch {
+      // offline / not configured — silent
+    }
   });
 
   onDestroy(() => {
     engine?.destroy();
+    if (tickTimer) clearInterval(tickTimer);
   });
+
+  $: if (typeof window !== 'undefined') {
+    if (playing && title) {
+      if (!tickTimer) {
+        tickTimer = setInterval(() => {
+          addReadingSeconds(title, 1);
+          todaySeconds = getTodayTotal(title, remoteCache);
+        }, 1000);
+      }
+    } else if (tickTimer) {
+      clearInterval(tickTimer);
+      tickTimer = undefined;
+    }
+  }
+
+  $: if (title) {
+    todaySeconds = getTodayTotal(title, remoteCache);
+  }
+
+  function formatDuration(seconds: number): string {
+    if (seconds < 60) return `${seconds} 秒`;
+    const m = Math.floor(seconds / 60);
+    if (m < 60) return `${m} 分`;
+    const h = Math.floor(m / 60);
+    return `${h} 时 ${m % 60} 分`;
+  }
 
   $: if (engine) engine.setSpeed(speed);
   $: if (engine) engine.setStopAtChapter(stopAtChapter);
@@ -65,8 +113,8 @@
     busy = true;
     error = '';
     try {
-      const text = await extractTxt(file);
-      await loadBook(file.name.replace(/\.[^.]+$/, ''), text);
+      const { title: detected, text } = await loadFile(file);
+      await loadBook(detected, text);
     } catch (e: any) {
       error = `读取失败：${e?.message || e}`;
     } finally {
@@ -151,17 +199,21 @@
     try {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.txt,text/plain';
+      input.accept = '.txt,.epub,.md,.markdown,text/plain,application/epub+zip';
       input.onchange = async () => {
         const file = input.files?.[0];
         if (!file) return;
-        const text = await extractTxt(file);
-        const h = await hashContent(parseText(text).flatText);
-        if (h !== item.hash) {
-          error = '这不是同一本书：哈希不对。换个文件再试。';
-          return;
+        try {
+          const { text } = await loadFile(file);
+          const h = await hashContent(parseText(text).flatText);
+          if (h !== item.hash) {
+            error = '这不是同一本书：哈希不对。换个文件再试。';
+            return;
+          }
+          await loadBook(item.title, text);
+        } catch (e: any) {
+          error = `读取失败：${e?.message || e}`;
         }
-        await loadBook(item.title, text);
       };
       input.click();
     } finally {
@@ -228,6 +280,7 @@
     {/if}
 
     <footer>
+      <button class="link" on:click={() => (syncOpen = true)}>跨设备同步阅读时长</button>
       <p>桌面完整版（高亮 / 笔记本 / AI / 离线词典 / Obsidian 同步）：<a href="https://github.com/fivood/autobook/releases/latest" rel="noopener">GitHub Releases</a></p>
     </footer>
   </main>
@@ -242,7 +295,7 @@
           <div class="chapter-title">{currentChapterTitle}</div>
         {/if}
       </div>
-      <span class="progress-tag">{progressPct}%</span>
+      <span class="progress-tag" title="今日累计 (含其它设备)">{progressPct}% · {formatDuration(todaySeconds)}</span>
     </header>
 
     <div class="viewport" bind:this={viewport}>
@@ -292,7 +345,12 @@
         <button class="restart" on:click={restart}>从头开始</button>
       </details>
     {/if}
+    <button class="sync-fab" title="同步设置" on:click={() => (syncOpen = true)}>⇅</button>
   </div>
+{/if}
+
+{#if syncOpen}
+  <SyncSettings on:close={() => { syncOpen = false; pullNow().then((r) => { if (r) remoteCache = r; }).catch(() => {}); }} />
 {/if}
 
 <style>
@@ -405,6 +463,15 @@
   .ghost {
     padding: 0.4rem 0.6rem;
     font-size: 0.95rem;
+  }
+  .link {
+    display: block;
+    margin: 0 0 0.6rem;
+    padding: 0;
+    color: inherit;
+    text-decoration: underline;
+    opacity: 0.7;
+    font-size: 0.78rem;
   }
   .header-title {
     flex: 1;
