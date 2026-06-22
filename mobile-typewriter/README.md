@@ -4,7 +4,7 @@
 
 ## 它是什么
 
-- 上传一个 `.txt`，按章节切好（中英章节标题都认）
+- 上传 `.txt` / `.epub` / `.md`，按章节切好（中英章节标题都认）
 - 屏幕上一字一字浮现，1–60 字/秒可调，章止开关
 - 进度按内容哈希存 `localStorage`，下次重新选同一个文件直接续读
 - 装到主屏后离线可用（service worker 缓存）
@@ -45,12 +45,17 @@ npm run build    # 产物在 build/
 
 每次推 main 自动构建部署。
 
-## 不支持的格式（暂时）
+## 支持的格式
 
-- `.epub`：需要 jsZip + OPF 解析，留 phase 2
-- MOBI / AZW3 / PDF：桌面专属，phone 上不做
+- `.txt` — BOM 嗅探 + UTF-8 严格 + GBK/Shift-JIS/BIG5 评分回退
+- `.epub` — unzip → container.xml → OPF spine 按阅读顺序拼接，HTML 转纯文本
+- `.md` / `.markdown` — 剥语法保留正文，`#` 标题当章节头
 
-如果要先在手机上读 EPUB，可以在桌面端 AutoBook 把书打开导出成 `.txt`（章节会保留），再传到手机。
+## 暂不支持
+
+- MOBI / AZW3 / PDF：桌面专属（需要 Rust 解析器或 PDF.js，体积太大不上手机）
+
+如果要在手机上读 MOBI/AZW3，桌面端 AutoBook 打开后另存为 `.epub` 或 `.txt` 再传过来。
 
 ## License
 
