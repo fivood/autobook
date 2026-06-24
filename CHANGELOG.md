@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.10.11
+
+- 按页重 OCR：扫描 PDF / CBZ 的页图上右键 → 「重新识别这页」（用当前 OCR 语言）或「用其它语言识别…」展开 9 语言选择（含 1.10.8 的竖排中日）。新函数 `runOcrOnPage` 走字符串级重写，只替换目标 `<img data-pdf-page>` 之前的 OCR `<p>` 块，整本结构原样保留。识别完直接 `db.put` + reload，底部 toast 显示识别字数
+- 阅读器键盘快捷键面板：按 `?` 弹出（输入框内不触发），或点右下角浮动键盘图标打开。从 `bookReaderKeybindMap$` 实时读取所有绑定，按动作分组合并大小写变体；多个键画 `<kbd>` 标签。`Esc` 关闭
+- 书库新增「筛选」按钮（漏斗图标，排序前面）：popover 多选 chips
+  - **格式**：PDF / EPUB / MOBI / CBZ / TXT / Markdown / HTMLZ / 其他（按 title 后缀名判定）
+  - **完成状态**：全部 / 未读 / 在读 / 已读（按 progress 0 / 0-100 / ≥100 判定）
+  - 当前过滤 active 时漏斗图标右上角橙色小圆点；面板底部「清除全部筛选」按钮；状态 localStorage 持久化
+- 统计筛选面板视觉对齐：之前 `<select>` / `<input type="date">` 一律 `class="text-black"` 硬写黑字在新主题里出戏，批量换成 `.settings-input`，套用「软填充胶囊」（8% 前景填充 + 18% 边框 + 圆角）。`.settings-input option` 加专用规则白底黑字防主题穿透
+- 补全图标 tooltip：
+  - 书库头部「多选模式」SVG 之前完全没 tooltip，加 `<title>` + `aria-label`
+  - 统计页头部「回到当前书」SVG 同上
+  - 目录侧栏「上一章 / 下一章」之前在不可点状态下 title 变空字符串，改成永远显示
+
 ## 1.10.10
 
 - 修笔记本 / 更新历史页面返回按钮在浅色主题下"看不见"：MergedHeaderIcon 之前硬写 `color: var(--menu-foreground)`——设置 / 统计页因为父容器有 `bg-menu` 深色背景所以白色图标显眼，笔记本 / 更新历史用页面背景就完全消失。改为 `color: inherit`，所有调用方都跟着自己父容器的前景色走

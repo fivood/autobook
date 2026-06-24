@@ -167,7 +167,7 @@
   <div
     tabindex="0"
     role="button"
-    title={prevChapterAvailable ? `${verticalMode ? '下一章' : '上一章'}` : ''}
+    title={verticalMode ? '下一章' : '上一章'}
     class:opacity-30={!prevChapterAvailable}
     on:click={() => changeChapter(prevChapterAvailable, verticalMode ? 1 : -1)}
     on:keyup={dummyFn}
@@ -177,7 +177,7 @@
   <div
     tabindex="0"
     role="button"
-    title={nextChapterAvailable ? `${verticalMode ? '上一章' : '下一章'}` : ''}
+    title={verticalMode ? '上一章' : '下一章'}
     class:opacity-30={!nextChapterAvailable}
     on:click={() => changeChapter(nextChapterAvailable, verticalMode ? -1 : 1)}
     on:keyup={dummyFn}

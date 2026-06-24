@@ -364,6 +364,39 @@ export const bookCoverMinWidth$ = writableNumberLocalStorageSubject()(
   170
 );
 
+// Library filter — applied AFTER the folder filter, before sort.
+// Empty formats[] means "all formats"; completion 'all' means no filter.
+// Persisted via localStorage so the user's filter survives reloads.
+export type LibraryCompletion = 'all' | 'unread' | 'reading' | 'done';
+export interface LibraryFilter {
+  formats: string[];
+  completion: LibraryCompletion;
+}
+const _libFilterRaw$ = writableStringLocalStorageSubject()('libraryFilter', '');
+export const libraryFilter$ = writableSubject<LibraryFilter>({
+  formats: [],
+  completion: 'all'
+});
+if (typeof window !== 'undefined') {
+  const initial = _libFilterRaw$.getValue();
+  if (initial) {
+    try {
+      const parsed = JSON.parse(initial);
+      if (parsed && typeof parsed === 'object') {
+        libraryFilter$.next({
+          formats: Array.isArray(parsed.formats) ? parsed.formats : [],
+          completion: ['all', 'unread', 'reading', 'done'].includes(parsed.completion)
+            ? parsed.completion
+            : 'all'
+        });
+      }
+    } catch {
+      /* corrupt entry — fall back to default */
+    }
+  }
+  libraryFilter$.subscribe((v) => _libFilterRaw$.next(JSON.stringify(v)));
+}
+
 export const importHTMLFixMode$ = writableStringLocalStorageSubject<ImportHTMLFixMode>()(
   'importHTMLFixMode',
   ImportHTMLFixMode.OFF

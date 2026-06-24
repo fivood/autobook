@@ -120,6 +120,8 @@
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
   import PdfOcrBanner from '$lib/components/book-reader/pdf-ocr-banner.svelte';
+  import PdfPageContextMenu from '$lib/components/book-reader/pdf-page-context-menu.svelte';
+  import KeyboardShortcutsHelp from '$lib/components/book-reader/keyboard-shortcuts-help.svelte';
   import BookImageZoom from '$lib/components/book-reader/book-image-zoom.svelte';
   import { isScannedPdf } from '$lib/functions/file-loaders/pdf/pdf-ocr-runner';
   import HighlightContextMenu from '$lib/components/book-reader/book-highlight/highlight-context-menu.svelte';
@@ -2113,6 +2115,12 @@
 {/if}
 {#if $rawBookData$ && !isPaginated && /pdf-page-img|cbz-img/.test($rawBookData$.elementHtml || '')}
   <BookImageZoom />
+{/if}
+{#if $rawBookData$ && /data-pdf-page=/.test($rawBookData$.elementHtml || '')}
+  <PdfPageContextMenu book={$rawBookData$} />
+{/if}
+{#if $rawBookData$}
+  <KeyboardShortcutsHelp />
 {/if}
 
 {#if showHeader}

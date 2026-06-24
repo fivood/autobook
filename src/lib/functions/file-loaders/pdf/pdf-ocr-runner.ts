@@ -106,6 +106,85 @@ function findPageImages(html: string): PageMatch[] {
   return result;
 }
 
+/**
+ * Re-run OCR on a single page and write the result back, replacing any
+ * existing <p class="pdf-ocr-text"> blocks that immediately precede this
+ * page's <img data-pdf-page>. Used by the in-reader "re-OCR this page"
+ * context menu so users can fix low-quality pages individually instead
+ * of re-running the entire book.
+ *
+ * Returns the updated BooksDbBookData. Caller is responsible for db.put
+ * and reload.
+ */
+export async function runOcrOnPage(
+  book: BooksDbBookData,
+  pageNum: number,
+  lang: OcrLanguage
+): Promise<{ updated: BooksDbBookData; recognized: string }> {
+  const html = book.elementHtml;
+  const pages = findPageImages(html);
+  const target = pages.find((p) => p.pageNum === pageNum);
+  if (!target) {
+    throw new Error(`OCR 中止：在书中未找到第 ${pageNum} 页的图片标记。`);
+  }
+
+  const pageMarker = String(pageNum);
+  const blob =
+    book.blobs[`pdf-page-${pageMarker}.jpg`] ||
+    book.blobs[`pdf-page-${pageMarker}.png`] ||
+    book.blobs[`cbz-page-${pageMarker}.jpg`] ||
+    book.blobs[`cbz-page-${pageMarker}.png`] ||
+    book.blobs[`cbz-page-${pageMarker}.webp`];
+  if (!blob) {
+    throw new Error(`OCR 中止：找不到第 ${pageNum} 页的原图数据。`);
+  }
+
+  const recognized = await ocrImageBlob(blob, lang);
+
+  // Replace the OCR block immediately preceding the target img. We look
+  // back at most 50KB (handles very long previous OCR insertions safely)
+  // and remove any contiguous run of `<p class="pdf-ocr-text">...</p>`
+  // that ends right before this img.
+  const lookbackStart = Math.max(0, target.start - 50_000);
+  const before = html.slice(lookbackStart, target.start);
+  const oldOcrBlock = /(?:<p\s+class="pdf-ocr-text">[\s\S]*?<\/p>\s*)+$/.exec(before);
+  const trimEnd = oldOcrBlock ? target.start - oldOcrBlock[0].length : target.start;
+
+  const paragraphs = recognized
+    .split(/\n{2,}/)
+    .map((p) => p.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  const ocrHtml = paragraphs.length
+    ? paragraphs.map((p) => `<p class="pdf-ocr-text">${escapeHtml(p)}</p>`).join('\n')
+    : '';
+
+  const newHtml =
+    html.slice(0, trimEnd) +
+    ocrHtml +
+    html.slice(target.start);
+
+  // Sanity: every original image marker must still be present.
+  const newPageCount = countPageImages(newHtml);
+  const originalPageCount = countPageImages(html);
+  if (newPageCount !== originalPageCount) {
+    throw new Error(
+      `OCR 中止：单页重写后页数变化 (${originalPageCount} → ${newPageCount})，未保存。`
+    );
+  }
+
+  const newCharacters = newHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, '').length;
+
+  return {
+    updated: {
+      ...book,
+      elementHtml: newHtml,
+      characters: newCharacters,
+      lastBookModified: Date.now()
+    },
+    recognized
+  };
+}
+
 export async function runOcr(
   book: BooksDbBookData,
   lang: OcrLanguage,

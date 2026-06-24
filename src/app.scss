@@ -16,7 +16,15 @@
 .settings-input {
   background: color-mix(in srgb, currentColor 8%, transparent);
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.375rem;
+  padding: 0.35rem 0.6rem;
   color: inherit;
+  outline: none;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.settings-input option {
+  color: #111;
+  background: #fff;
 }
 .settings-input:hover {
   border-color: color-mix(in srgb, currentColor 32%, transparent);

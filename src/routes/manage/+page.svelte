@@ -41,12 +41,14 @@
     keepLocalStatisticsOnDeletion$,
     lastExportedTarget$,
     lastExportedTypes$,
+    libraryFilter$,
     pendingLaunchFiles$,
     readingGoalsMergeMode$,
     replicationSaveBehavior$,
     showExternalPlaceholder$,
     statisticsMergeMode$
   } from '$lib/data/store';
+  import { detectBookFormat } from '$lib/functions/book-format';
   import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
   import { cloneMutateSet } from '$lib/functions/clone-mutate-set';
   import { getDropEventFiles } from '$lib/functions/file-dom/get-drop-event-files';
@@ -110,20 +112,39 @@
   const filteredBookCards$: Observable<BookCardProps[]> = combineLatest([
     bookCards$,
     bookFolders$,
-    activeFolderFilter$
+    activeFolderFilter$,
+    libraryFilter$
   ]).pipe(
-    map(([cards, bookFolders, filter]) => {
-      if (filter === 'all') return cards;
+    map(([cards, bookFolders, filter, libFilter]) => {
+      let result = cards;
       if (filter === 'uncategorized') {
         const assigned = new Set(bookFolders.map((bf) => bf.bookId));
-        return cards.filter((c) => !assigned.has(c.id));
+        result = result.filter((c) => !assigned.has(c.id));
+      } else if (filter !== 'all') {
+        const folderId = Number(filter);
+        if (Number.isFinite(folderId)) {
+          const inFolder = new Set(
+            bookFolders.filter((bf) => bf.folderId === folderId).map((bf) => bf.bookId)
+          );
+          result = result.filter((c) => inFolder.has(c.id));
+        }
       }
-      const folderId = Number(filter);
-      if (!Number.isFinite(folderId)) return cards;
-      const inFolder = new Set(
-        bookFolders.filter((bf) => bf.folderId === folderId).map((bf) => bf.bookId)
-      );
-      return cards.filter((c) => inFolder.has(c.id));
+
+      if (libFilter.formats.length) {
+        const allowed = new Set(libFilter.formats);
+        result = result.filter((c) => allowed.has(detectBookFormat(c.title)));
+      }
+
+      if (libFilter.completion !== 'all') {
+        result = result.filter((c) => {
+          const p = c.progress || 0;
+          if (libFilter.completion === 'unread') return p === 0;
+          if (libFilter.completion === 'done') return p >= 100;
+          return p > 0 && p < 100;
+        });
+      }
+
+      return result;
     }),
     share()
   );
