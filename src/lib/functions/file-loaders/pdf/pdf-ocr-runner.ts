@@ -50,28 +50,36 @@ export async function runOcr(
 ): Promise<BooksDbBookData> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(book.elementHtml, 'text/html');
-  const sections = Array.from(doc.querySelectorAll('.pdf-section, .cbz-section')) as HTMLElement[];
-  const total = sections.length;
+  // Iterate by image directly instead of by .pdf-section wrapper — a few
+  // edge cases (escaped attributes, very long HTML, malformed markup) make
+  // querySelectorAll('.pdf-section') under-count when DOMParser silently
+  // drops parents but keeps the imgs.
+  const imgs = Array.from(doc.querySelectorAll('img[data-pdf-page]')) as HTMLImageElement[];
+  const total = imgs.length;
 
-  for (let i = 0; i < sections.length; i++) {
+  for (let i = 0; i < imgs.length; i++) {
     if (signal?.aborted) throw new DOMException('OCR aborted', 'AbortError');
 
-    const section = sections[i];
-    const pageNum = i + 1;
+    const img = imgs[i];
+    const pageMarker = img.getAttribute('data-pdf-page') || String(i + 1);
+    const pageNum = Number(pageMarker) || i + 1;
+
+    // Insertion target: the nearest containing section, or the image's
+    // parent as a fallback.
+    const section =
+      (img.closest('.pdf-section, .cbz-section') as HTMLElement | null) ||
+      (img.parentElement as HTMLElement | null);
+    if (!section) continue;
 
     if (section.querySelector('p.pdf-ocr-text')) {
-      // Already OCR'd in a previous run — keep it.
+      onProgress({ page: pageNum, total, text: '' });
       continue;
     }
 
-    const img = section.querySelector<HTMLImageElement>('img[data-pdf-page]');
-    if (!img) continue;
-
     // The img src was rewritten to a blob: URL at runtime by
-    // format-book-data-html when the book was loaded. When we run OCR we
-    // operate on the raw blob from book.blobs by name. The blob is stored
-    // under a name like "pdf-page-N.jpg" / "cbz-page-N.jpg".
-    const pageMarker = img.getAttribute('data-pdf-page') || String(pageNum);
+    // format-book-data-html when the book was loaded. We operate on the
+    // raw blob from book.blobs by name. The blob is stored under
+    // "pdf-page-N.jpg" / "cbz-page-N.jpg".
     const blob =
       book.blobs[`pdf-page-${pageMarker}.jpg`] ||
       book.blobs[`pdf-page-${pageMarker}.png`] ||
@@ -79,6 +87,8 @@ export async function runOcr(
       book.blobs[`cbz-page-${pageMarker}.png`] ||
       book.blobs[`cbz-page-${pageMarker}.webp`];
     if (!blob) {
+      // eslint-disable-next-line no-console
+      console.warn(`[ocr] no blob for page ${pageMarker}`);
       onProgress({ page: pageNum, total, text: '' });
       continue;
     }
@@ -87,7 +97,6 @@ export async function runOcr(
     try {
       recognized = await ocrImageBlob(blob, lang);
     } catch (err) {
-      // Skip page on failure but keep going.
       // eslint-disable-next-line no-console
       console.warn(`[ocr] page ${pageNum} failed`, err);
     }
@@ -102,7 +111,6 @@ export async function runOcr(
         .join('\n');
       const wrapper = doc.createElement('div');
       wrapper.innerHTML = html;
-      // Insert OCR text BEFORE the image so reading order is text-then-image.
       while (wrapper.firstChild) section.insertBefore(wrapper.firstChild, img);
     }
 
