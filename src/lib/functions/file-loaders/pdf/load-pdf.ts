@@ -365,14 +365,24 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
   if (!sampleIndices.includes(doc.numPages)) sampleIndices.push(doc.numPages);
 
   let goodTextPages = 0;
+  let totalSampleChars = 0;
   for (const idx of sampleIndices) {
     const page = await doc.getPage(idx);
     const tc = await page.getTextContent();
     const text = itemsToParagraphs(tc.items as any[]).join('');
     if (!isGarbageText(text)) goodTextPages++;
+    totalSampleChars += text.length;
     page.cleanup();
   }
-  const useTextMode = goodTextPages >= sampleIndices.length * 0.5;
+  // Require both:
+  //   - majority of sampled pages have non-garbage text, AND
+  //   - the average sampled page has at least 150 chars
+  // A page filled with only running heads / page numbers / a chapter
+  // marker can pass isGarbageText with 20+ chars of "real" letters, so
+  // the per-page count rule keeps mostly-scanned books out of text mode.
+  const avgSampleChars = totalSampleChars / sampleIndices.length;
+  const useTextMode =
+    goodTextPages >= sampleIndices.length * 0.5 && avgSampleChars >= 150;
 
   // Cover thumbnail (always render page 1)
   let coverImage: Blob | undefined;
