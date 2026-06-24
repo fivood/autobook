@@ -11,8 +11,11 @@ export async function loadMd(file: File): Promise<string> {
 }
 
 export function mdToPlainText(md: string): string {
+  // Strip YAML frontmatter at file start (---\n...\n---). Common in
+  // Obsidian / Jekyll / Hugo notes; would otherwise read as garbage.
+  let body = md.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
   // Strip fenced code blocks but keep the content as-is for reading.
-  let body = md.replace(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/g, (_, c) => c);
+  body = body.replace(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/g, (_, c) => c);
   // Inline code: keep contents
   body = body.replace(/`([^`]+)`/g, '$1');
   // Images: drop entirely (we don't render them)

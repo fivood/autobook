@@ -73,8 +73,13 @@ export function getFormattedElementMd(data: string) {
   const result = document.createElement('div');
   const sections: Section[] = [];
 
+  // Strip YAML frontmatter (---\n...\n---) before anything else — Obsidian /
+  // Jekyll / Hugo notes routinely start with a metadata block that's not
+  // part of the readable body.
+  const withoutFrontmatter = data.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+
   // Pre-render math so marked doesn't mangle the LaTeX.
-  const withMath = renderMath(data);
+  const withMath = renderMath(withoutFrontmatter);
 
   // Split on top-level headings (# / ##) for TOC sections. Lower-level
   // headings stay inside the section.

@@ -38,15 +38,43 @@ export async function loadEpub(file: File): Promise<LoadedEpub> {
     if (!opfEntry) throw new Error(`OPF 文件不存在：${opfPath}`);
     const opfXml = await opfEntry.getData(new TextWriter('utf-8'));
 
-    const { title, spineHrefs } = parseOpf(opfXml, opfPath);
+    const { title, spineHrefs, tocHref } = parseOpf(opfXml, opfPath);
     if (!spineHrefs.length) throw new Error('OPF 的 spine 为空');
+
+    // Resolve the publisher-supplied TOC (EPUB3 nav.xhtml or EPUB2 .ncx) to
+    // a map of spine-href → chapter title. parse-text.ts recognises those
+    // titles as chapter headings and gives them h2 styling, which is much
+    // more faithful than guessing chapter boundaries from text.
+    const tocLabels = new Map<string, string>();
+    if (tocHref) {
+      const tocEntry = byPath.get(tocHref.toLowerCase());
+      if (tocEntry) {
+        try {
+          const tocXml = await tocEntry.getData(new TextWriter('utf-8'));
+          const tocDir = tocHref.includes('/') ? tocHref.slice(0, tocHref.lastIndexOf('/') + 1) : '';
+          parseTocLabels(tocXml, tocDir, tocLabels);
+        } catch {
+          // toc parse failure → just lose chapter labels, content still loads
+        }
+      }
+    }
 
     const chunks: string[] = [];
     for (const href of spineHrefs) {
       const entry = byPath.get(href.toLowerCase());
       if (!entry) continue;
       const html = await entry.getData(new TextWriter('utf-8'));
-      chunks.push(htmlToPlainText(html));
+      const text = htmlToPlainText(html);
+      if (!text) continue;
+      const label = tocLabels.get(href);
+      if (label && !startsWithLine(text, label)) {
+        // Prefix the chapter title as its own line so parse-text.ts picks it
+        // up as a heading. Skip if the body already starts with that line
+        // (some EPUBs include the title inside the content too).
+        chunks.push(`${label}\n\n${text}`);
+      } else {
+        chunks.push(text);
+      }
     }
 
     const cleanedTitle = title || file.name.replace(/\.[^.]+$/, '');
@@ -54,6 +82,11 @@ export async function loadEpub(file: File): Promise<LoadedEpub> {
   } finally {
     await reader.close();
   }
+}
+
+function startsWithLine(text: string, candidate: string): boolean {
+  const firstLine = text.split('\n', 1)[0].trim();
+  return firstLine === candidate.trim();
 }
 
 function extractOpfPath(containerXml: string): string | null {
@@ -65,6 +98,8 @@ function extractOpfPath(containerXml: string): string | null {
 interface OpfParsed {
   title: string;
   spineHrefs: string[];
+  /** Absolute path to the TOC file (nav.xhtml for EPUB3, .ncx for EPUB2). */
+  tocHref?: string;
 }
 
 function parseOpf(opfXml: string, opfPath: string): OpfParsed {
@@ -73,24 +108,93 @@ function parseOpf(opfXml: string, opfPath: string): OpfParsed {
   const titleEl = doc.querySelector('metadata > title, metadata title');
   const title = titleEl?.textContent?.trim() || '';
 
-  const manifest = new Map<string, string>();
+  const manifest = new Map<string, { href: string; properties: string; mediaType: string }>();
   doc.querySelectorAll('manifest > item, manifest item').forEach((item) => {
     const id = item.getAttribute('id');
     const href = item.getAttribute('href');
-    if (id && href) manifest.set(id, href);
+    if (id && href) {
+      manifest.set(id, {
+        href,
+        properties: item.getAttribute('properties') || '',
+        mediaType: item.getAttribute('media-type') || ''
+      });
+    }
   });
 
   const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+
+  // EPUB3: <item properties="nav">  EPUB2: <spine toc="ncx-id">
+  let tocHref: string | undefined;
+  for (const m of manifest.values()) {
+    if (m.properties.split(/\s+/).includes('nav')) {
+      tocHref = resolvePath(opfDir + m.href);
+      break;
+    }
+  }
+  if (!tocHref) {
+    const spineEl = doc.querySelector('spine');
+    const ncxId = spineEl?.getAttribute('toc');
+    if (ncxId) {
+      const ncxItem = manifest.get(ncxId);
+      if (ncxItem) tocHref = resolvePath(opfDir + ncxItem.href);
+    }
+  }
+
   const spineHrefs: string[] = [];
   doc.querySelectorAll('spine > itemref, spine itemref').forEach((ref) => {
     const idref = ref.getAttribute('idref');
     if (!idref) return;
-    const href = manifest.get(idref);
-    if (!href) return;
-    spineHrefs.push(resolvePath(opfDir + href));
+    const item = manifest.get(idref);
+    if (!item) return;
+    spineHrefs.push(resolvePath(opfDir + item.href));
   });
 
-  return { title, spineHrefs };
+  return { title, spineHrefs, tocHref };
+}
+
+function parseTocLabels(tocXml: string, tocDir: string, labels: Map<string, string>) {
+  // EPUB3 nav.xhtml: <nav epub:type="toc"><ol><li><a href="ch1.xhtml">…</a>
+  // EPUB2 toc.ncx:   <navMap><navPoint><navLabel><text>…</text></navLabel>
+  //                   <content src="ch1.xhtml"/></navPoint>
+  let doc: Document;
+  try {
+    doc = new DOMParser().parseFromString(tocXml, 'application/xhtml+xml');
+    if (doc.querySelector('parsererror')) {
+      doc = new DOMParser().parseFromString(tocXml, 'application/xml');
+    }
+  } catch {
+    doc = new DOMParser().parseFromString(tocXml, 'application/xml');
+  }
+
+  const addLabel = (href: string | null | undefined, label: string) => {
+    if (!href || !label) return;
+    // Strip fragment, resolve relative to TOC dir
+    const cleanHref = href.split('#')[0].trim();
+    if (!cleanHref) return;
+    const abs = resolvePath(tocDir + cleanHref);
+    const trimmed = label.replace(/\s+/g, ' ').trim();
+    if (trimmed && !labels.has(abs)) labels.set(abs, trimmed);
+  };
+
+  // EPUB3 nav element first
+  const navTocElement =
+    doc.querySelector('nav[*|type="toc"]') ||
+    doc.querySelector('nav[epub\\:type="toc"]') ||
+    doc.querySelector('nav#toc') ||
+    doc.querySelector('nav');
+  if (navTocElement) {
+    navTocElement.querySelectorAll('a').forEach((a) => {
+      addLabel(a.getAttribute('href'), a.textContent || '');
+    });
+    if (labels.size > 0) return;
+  }
+
+  // EPUB2 NCX
+  doc.querySelectorAll('navPoint').forEach((np) => {
+    const labelEl = np.querySelector('navLabel > text') || np.querySelector('navLabel text');
+    const contentEl = np.querySelector('content');
+    addLabel(contentEl?.getAttribute('src'), labelEl?.textContent || '');
+  });
 }
 
 function resolvePath(p: string): string {
