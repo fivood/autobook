@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import DomainHint from '$lib/components/domain-hint.svelte';
+  import OcrMiniStatus from '$lib/components/ocr-mini-status.svelte';
   import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
   import { basePath, clearConsoleOnReload, isTauri, pagePath } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
@@ -192,6 +193,8 @@
 />
 
 <slot />
+
+<OcrMiniStatus />
 
 {#if dialogs.length > 0}
   <div class="writing-horizontal-tb fixed inset-0 z-50 h-full w-full" style:z-index={zIndex}>
