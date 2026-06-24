@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import Fa from 'svelte-fa';
@@ -6,13 +7,16 @@
   import { pagePath } from '$lib/data/env';
   import { ocrJob$, clearOcrJob } from '$lib/functions/file-loaders/pdf/ocr-job-manager';
 
-  $: routeId = $page.route.id;
-  $: currentBookId = Number($page.url.searchParams.get('id') || '');
+  // Reading searchParams during prerender is not allowed, and ocrJob$ is
+  // always null on the server (module state hasn't been touched yet). Gate
+  // everything on `browser`.
+  $: routeId = browser ? $page.route.id : '';
+  $: currentBookId = browser ? Number($page.url.searchParams.get('id') || '') : 0;
   $: insideOcrBook = routeId === '/b' && currentBookId === $ocrJob$?.bookId;
   // Hide while the user is already inside the OCRing book — the full
   // banner is showing there. Show everywhere else (library, statistics,
   // notebook, settings).
-  $: visible = $ocrJob$ && !insideOcrBook;
+  $: visible = browser && $ocrJob$ && !insideOcrBook;
 
   function openBook() {
     if (!$ocrJob$) return;
