@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.6
+
+> ⚠ 严重数据完整性修复。如果你在 1.10.3–1.10.5 期间对 PDF 跑过 OCR 且现在书内容大幅缩水，删除该书条目并重新导入原 PDF 文件即可恢复。
+- 修 PDF OCR 写回时静默截断书内容的根因：之前用 DOMParser 把整本 elementHtml 解析成 DOM 树再 serialize 回来，浏览器 HTML 解析器在 800+ 页 PDF 上会沉默地丢节点，导致写回的版本比原书少几百页。这次完全绕开 DOMParser，改用正则定位每个 `<img data-pdf-page>` 后做字符串级插入，章节结构原样保留
+- 加双重防御：runner 启动时若识别到的页数 < 书 sections 数的 90% 直接抛错中止，绝不允许写回；末尾再 verify 写回的 HTML 里 `data-pdf-page` 标记数没少于开始
+
 ## 1.10.5
 
 - PDF OCR 改为后台作业：开了 OCR 之后可以切到别的书 / 书库 / 笔记本 / 设置随便逛，job 在 module 单例里继续跑，不会被路由切换打断
