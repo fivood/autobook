@@ -15,16 +15,23 @@
   export let book: BooksDbBookData;
 
   const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'chi_sim+eng');
+  const ocrSkippedBooks$ = writableStringLocalStorageSubject()('pdfOcrSkippedBookIds', '');
 
   const dispatch = createEventDispatcher<{ dismissed: void }>();
 
+  $: skippedIds = new Set(($ocrSkippedBooks$ || '').split(',').filter(Boolean).map(Number));
+  $: skippedForThisBook = book?.id != null && skippedIds.has(book.id);
+
   const LANGS: Array<{ code: string; label: string }> = [
-    { code: 'chi_sim+eng', label: '简中 + 英' },
-    { code: 'chi_tra+eng', label: '繁中 + 英' },
-    { code: 'chi_sim', label: '简体中文' },
-    { code: 'chi_tra', label: '繁体中文' },
-    { code: 'eng', label: 'English' },
-    { code: 'jpn', label: '日本語' }
+    { code: 'chi_sim+eng', label: '简中 + 英（横排）' },
+    { code: 'chi_tra+eng', label: '繁中 + 英（横排）' },
+    { code: 'chi_sim', label: '简体中文（横排）' },
+    { code: 'chi_tra', label: '繁体中文（横排）' },
+    { code: 'chi_sim_vert', label: '简体中文（竖排）' },
+    { code: 'chi_tra_vert', label: '繁体中文（竖排）' },
+    { code: 'jpn', label: '日本語（横排）' },
+    { code: 'jpn_vert', label: '日本語（縦書き）' },
+    { code: 'eng', label: 'English' }
   ];
 
   let dismissed = false;
@@ -50,9 +57,18 @@
     dismissed = true;
     dispatch('dismissed');
   }
+
+  function dontAskForThisBook() {
+    if (book?.id == null) return;
+    const next = new Set(skippedIds);
+    next.add(book.id);
+    $ocrSkippedBooks$ = Array.from(next).join(',');
+    dismissed = true;
+    dispatch('dismissed');
+  }
 </script>
 
-{#if !dismissed}
+{#if !dismissed && !skippedForThisBook}
   <div class="banner">
     {#if jobForThisBook?.status === 'running'}
       <Fa icon={faMagnifyingGlass} class="ico" />
@@ -99,6 +115,7 @@
         </select>
       </label>
       <button class="btn primary" on:click={start} disabled={otherBookRunning}>开始</button>
+      <button class="btn" on:click={dontAskForThisBook} title="只看原图，不要再为这本书提示">仅看原图</button>
       <button class="btn ghost" on:click={dismiss} title="本次会话不再提示"><Fa icon={faTimes} /></button>
     {/if}
   </div>

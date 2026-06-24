@@ -33,6 +33,7 @@ export default function formatBookDataHtml(
       addSpoilerTags(element, document, blurMode);
       removeOldBrTagSolution(element);
       stripInlineColor(element);
+      optimizeBookPageImages(element);
 
       return element.innerHTML;
     })
@@ -153,6 +154,18 @@ function addSpoilerTags(el: HTMLElement, document: Document, blurMode: BlurMode)
     Array.from(childNode.getElementsByTagName('svg'))
       .filter((tag) => tag.getElementsByTagName('image').length)
       .forEach((tag) => createWrapper(tag, childNode));
+  });
+}
+
+// PDF / CBZ page images: huge image-mode books (e.g. 150MB scanned PDFs) blow
+// up memory in scroll mode because every page decodes at once. loading="lazy"
+// + decoding="async" lets the browser keep most off-screen images undecoded.
+// Also tag them with .book-page-image so the zoom control can target them.
+function optimizeBookPageImages(el: HTMLElement) {
+  el.querySelectorAll<HTMLImageElement>('img.pdf-page-img, img.cbz-img').forEach((img) => {
+    if (!img.hasAttribute('loading')) img.setAttribute('loading', 'lazy');
+    if (!img.hasAttribute('decoding')) img.setAttribute('decoding', 'async');
+    img.classList.add('book-page-image');
   });
 }
 

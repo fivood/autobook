@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.8
+
+- 扫描版 PDF 顶部 OCR 提示条新增「仅看原图」按钮：点一次后这本书永久不再弹 OCR 提示（按书 ID 记忆，存 localStorage 的 `pdfOcrSkippedBookIds`）。原来的 ✕ 仍然只在本次会话隐藏
+- OCR 语言选项加上**竖排中文 / 日文** (`chi_sim_vert` / `chi_tra_vert` / `jpn_vert`)：扫描的竖版繁中 / 日文老书选对应模型后能按右→左、上→下正确识别成横排段落
+- 滚动模式下大型扫描 PDF / 漫画图片不显示：根因是所有页 `<img>` 同时解码触发 WebView2 内存上限，给所有 PDF / CBZ 页图加 `loading="lazy"` + `decoding="async"`，并对历史导入的书在打开时通过 DOM 改写自动补上这两个属性，无需重导
+- 新增右下角浮动「图片缩放」按钮：仅在滚动模式 + 图片型 PDF / CBZ 下出现，12 档预设（50% – 300%），全局 localStorage 持久化跨书复用。点击展开后可缩放、点中间数字回到 100%
+
 ## 1.10.7
 
 - 设置 → 数据 新增「本地数据位置」面板：实时显示三处实际物理路径（IndexedDB 主存储 / localStorage / Documents/AutoBook 同步副本），各自大小，以及「复制」「在资源管理器打开」按钮。一眼能看见数据真的在哪

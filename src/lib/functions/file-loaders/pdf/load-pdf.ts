@@ -463,7 +463,7 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
         const blobName = `pdf-page-${pageNum}.jpg`;
         blobs[blobName] = imgBlob;
         const dummySrc = buildDummyBookImage(blobName);
-        bodyHtml = `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img" data-pdf-page="${pageNum}" style="max-width:100%;height:auto;" />`;
+        bodyHtml = `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img book-page-image" data-pdf-page="${pageNum}" loading="lazy" decoding="async" style="max-width:100%;height:auto;" />`;
         sectionChars = 1;
         hasAnyImage = true;
       } else {
