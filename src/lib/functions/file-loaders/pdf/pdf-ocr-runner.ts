@@ -4,10 +4,18 @@
  * All rights reserved.
  *
  * Orchestrates OCR over an entire PDF book that was previously loaded in
- * "image mode" (scan / pure-image PDF). For each page section, finds the
- * page-image blob in bookdata.blobs, runs Tesseract, and prepends a <p>
- * containing the recognized text before the <img>. The result is saved
- * back into the `data` store so the reader picks it up on the next load.
+ * "image mode" (scan / pure-image PDF). For each page image, runs Tesseract
+ * and inserts a <p> containing the recognized text before the <img>. The
+ * result is saved back into the `data` store so the reader picks it up on
+ * the next load.
+ *
+ * IMPORTANT: We deliberately do NOT use DOMParser on the full elementHtml.
+ * That worked fine on small books but on 800+ page PDFs we hit a silent
+ * truncation issue in the browser's HTML parser — the resulting Document
+ * would have a tiny fraction of the original sections, and re-serializing
+ * back to innerHTML would replace the stored book with the truncated
+ * version. The structure of an image-mode PDF page is regular enough that
+ * a string-level rewrite is both faster and lossless.
  */
 
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
@@ -20,26 +28,63 @@ export interface OcrProgress {
   text: string;
 }
 
-/** Heuristic: is this book a scanned PDF that hasn't been OCRed yet?
- *
- * Counts real prose, not the per-page label numbers ("1", "2", "3"...) the
- * loader injects as <h3 class="pdf-page-label">. Without this exclusion a
- * 100-page image-only book has ~290 plaintext chars just from the labels
- * and the OCR banner never appears. We also skip the OCR text we
- * previously inserted so the second pass doesn't think the book is
- * already done.
- */
+/** Heuristic: is this book a scanned PDF that hasn't been OCRed yet? */
 export function isScannedPdf(book: Pick<BooksDbBookData, 'elementHtml'>): boolean {
   const html = book.elementHtml || '';
-  const imgCount = (html.match(/data-pdf-page=/g) || []).length;
+  const imgCount = countPageImages(html);
   if (imgCount === 0) return false;
-  const realText = html
+  const realText = stripStructuralText(html);
+  return realText.length / imgCount < 50;
+}
+
+function countPageImages(html: string): number {
+  return (html.match(/data-pdf-page=/g) || []).length;
+}
+
+function stripStructuralText(html: string): string {
+  return html
     .replace(/<h3[^>]*class="pdf-page-label"[^>]*>[^<]*<\/h3>/g, '')
     .replace(/<[^>]+>/g, '')
     .replace(/&[a-z]+;/gi, ' ')
     .replace(/\s+/g, '');
-  // Fewer than ~50 chars of real prose per page = scan that needs OCR.
-  return realText.length / imgCount < 50;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+interface PageMatch {
+  /** Full `<img ... />` tag text. */
+  imgTag: string;
+  /** Offset in the source string where the img tag starts. */
+  start: number;
+  /** Offset right after the img tag ends. */
+  end: number;
+  pageNum: number;
+  /** Whether this img already has OCR text inserted before it. */
+  hasOcr: boolean;
+}
+
+function findPageImages(html: string): PageMatch[] {
+  // Match an <img> tag carrying data-pdf-page="N". Tags from our loader
+  // include a self-closing slash; allow either form.
+  const re = /<img\b[^>]*?\bdata-pdf-page="(\d+)"[^>]*?\/?>/g;
+  const result: PageMatch[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const start = m.index;
+    const end = re.lastIndex;
+    const pageNum = Number(m[1]);
+    // Look backwards a few hundred chars for an existing OCR insertion
+    // (a <p class="pdf-ocr-text">) belonging to the same section.
+    const lookback = html.slice(Math.max(0, start - 800), start);
+    const hasOcr = /<p\s+class="pdf-ocr-text"/.test(lookback);
+    result.push({ imgTag: m[0], start, end, pageNum, hasOcr });
+  }
+  return result;
 }
 
 export async function runOcr(
@@ -48,48 +93,63 @@ export async function runOcr(
   onProgress: (p: OcrProgress) => void,
   signal?: AbortSignal
 ): Promise<BooksDbBookData> {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(book.elementHtml, 'text/html');
-  // Iterate by image directly instead of by .pdf-section wrapper — a few
-  // edge cases (escaped attributes, very long HTML, malformed markup) make
-  // querySelectorAll('.pdf-section') under-count when DOMParser silently
-  // drops parents but keeps the imgs.
-  const imgs = Array.from(doc.querySelectorAll('img[data-pdf-page]')) as HTMLImageElement[];
-  const total = imgs.length;
+  const original = book.elementHtml;
+  const pages = findPageImages(original);
+  const total = pages.length;
 
-  for (let i = 0; i < imgs.length; i++) {
+  if (!total) {
+    throw new Error('OCR 中止：未找到任何带 data-pdf-page 的图片，可能不是 image 模式 PDF。');
+  }
+
+  // Sanity guard against catastrophic truncation. If the runner sees far
+  // fewer pages than the book's section count claims, refuse to write back —
+  // a previous bug (v1.10.3 used DOMParser on the full HTML and silently
+  // dropped sections) damaged some books; this guard makes any recurrence
+  // visible rather than silently overwriting.
+  const expected = book.sections?.length || total;
+  if (expected > 10 && total < expected * 0.9) {
+    throw new Error(
+      `OCR 中止：找到的页数 (${total}) 远少于书的目录页数 (${expected})。` +
+        '可能这本书在更早版本里已经被截断，请删除后重新导入原 PDF。'
+    );
+  }
+
+  // Build the new HTML by walking the page matches in order, inserting
+  // recognized text before each img. Chunks of original HTML between
+  // matches pass through verbatim, so nothing outside the OCR insertions
+  // is touched.
+  const chunks: string[] = [];
+  let cursor = 0;
+
+  for (let i = 0; i < pages.length; i++) {
     if (signal?.aborted) throw new DOMException('OCR aborted', 'AbortError');
 
-    const img = imgs[i];
-    const pageMarker = img.getAttribute('data-pdf-page') || String(i + 1);
-    const pageNum = Number(pageMarker) || i + 1;
+    const page = pages[i];
+    // Append the chunk between the previous insertion point and this img.
+    chunks.push(original.slice(cursor, page.start));
 
-    // Insertion target: the nearest containing section, or the image's
-    // parent as a fallback.
-    const section =
-      (img.closest('.pdf-section, .cbz-section') as HTMLElement | null) ||
-      (img.parentElement as HTMLElement | null);
-    if (!section) continue;
-
-    if (section.querySelector('p.pdf-ocr-text')) {
-      onProgress({ page: pageNum, total, text: '' });
+    if (page.hasOcr) {
+      onProgress({ page: page.pageNum, total, text: '' });
+      // No insertion needed; just emit the original img tag.
+      chunks.push(page.imgTag);
+      cursor = page.end;
       continue;
     }
 
-    // The img src was rewritten to a blob: URL at runtime by
-    // format-book-data-html when the book was loaded. We operate on the
-    // raw blob from book.blobs by name. The blob is stored under
-    // "pdf-page-N.jpg" / "cbz-page-N.jpg".
+    const pageMarker = String(page.pageNum);
     const blob =
       book.blobs[`pdf-page-${pageMarker}.jpg`] ||
       book.blobs[`pdf-page-${pageMarker}.png`] ||
       book.blobs[`cbz-page-${pageMarker}.jpg`] ||
       book.blobs[`cbz-page-${pageMarker}.png`] ||
       book.blobs[`cbz-page-${pageMarker}.webp`];
+
     if (!blob) {
       // eslint-disable-next-line no-console
       console.warn(`[ocr] no blob for page ${pageMarker}`);
-      onProgress({ page: pageNum, total, text: '' });
+      onProgress({ page: page.pageNum, total, text: '' });
+      chunks.push(page.imgTag);
+      cursor = page.end;
       continue;
     }
 
@@ -98,7 +158,7 @@ export async function runOcr(
       recognized = await ocrImageBlob(blob, lang);
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn(`[ocr] page ${pageNum} failed`, err);
+      console.warn(`[ocr] page ${page.pageNum} failed`, err);
     }
 
     if (recognized) {
@@ -106,18 +166,32 @@ export async function runOcr(
         .split(/\n{2,}/)
         .map((p) => p.replace(/\s+/g, ' ').trim())
         .filter(Boolean);
-      const html = paragraphs
+      const ocrHtml = paragraphs
         .map((p) => `<p class="pdf-ocr-text">${escapeHtml(p)}</p>`)
         .join('\n');
-      const wrapper = doc.createElement('div');
-      wrapper.innerHTML = html;
-      while (wrapper.firstChild) section.insertBefore(wrapper.firstChild, img);
+      chunks.push(ocrHtml);
+      chunks.push(page.imgTag);
+    } else {
+      chunks.push(page.imgTag);
     }
 
-    onProgress({ page: pageNum, total, text: recognized });
+    cursor = page.end;
+    onProgress({ page: page.pageNum, total, text: recognized });
   }
 
-  const newHtml = doc.body.innerHTML;
+  // Append the tail (everything after the last img).
+  chunks.push(original.slice(cursor));
+  const newHtml = chunks.join('');
+
+  // Final defensive check: the new HTML must still contain every page image
+  // we started with. If not, something went wrong and we won't save.
+  const newPageCount = countPageImages(newHtml);
+  if (newPageCount < total) {
+    throw new Error(
+      `OCR 中止：序列化丢失了页面 (${newPageCount}/${total})，不保存以避免损坏。`
+    );
+  }
+
   const newCharacters = newHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, '').length;
 
   return {
@@ -126,11 +200,4 @@ export async function runOcr(
     characters: newCharacters,
     lastBookModified: Date.now()
   };
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }
