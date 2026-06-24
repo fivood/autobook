@@ -3,9 +3,14 @@
   import Fa from 'svelte-fa';
   import { faTimes, faMagnifyingGlass, faStop } from '@fortawesome/free-solid-svg-icons';
   import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
-  import { database } from '$lib/data/store';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-  import { runOcr, type OcrProgress } from '$lib/functions/file-loaders/pdf/pdf-ocr-runner';
+  import {
+    abortOcrJob,
+    clearOcrJob,
+    isOcrJobRunning,
+    ocrJob$,
+    startOcrJob
+  } from '$lib/functions/file-loaders/pdf/ocr-job-manager';
 
   export let book: BooksDbBookData;
 
@@ -23,43 +28,22 @@
   ];
 
   let dismissed = false;
-  let running = false;
-  let finished = false;
-  let progress: OcrProgress | undefined;
-  let lastError = '';
-  let abortCtrl: AbortController | undefined;
+  // Job state for THIS book only — ignore jobs belonging to other books.
+  $: jobForThisBook = $ocrJob$ && $ocrJob$.bookId === book.id ? $ocrJob$ : null;
+  $: otherBookRunning = !!$ocrJob$ && $ocrJob$.bookId !== book.id && $ocrJob$.status === 'running';
 
-  async function run() {
-    if (running) return;
-    running = true;
-    finished = false;
-    lastError = '';
-    abortCtrl = new AbortController();
-    try {
-      const updated = await runOcr(book, $ocrLang$, (p) => {
-        progress = p;
-      }, abortCtrl.signal);
-      const db = await database.db;
-      await db.put('data', updated);
-      finished = true;
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        lastError = '已中止';
-      } else {
-        lastError = `OCR 失败：${err?.message || err}`;
-      }
-    } finally {
-      running = false;
-      abortCtrl = undefined;
-    }
+  function start() {
+    if (isOcrJobRunning()) return;
+    startOcrJob(book, $ocrLang$);
   }
 
   function applyAndReload() {
+    clearOcrJob();
     window.location.reload();
   }
 
-  function stop() {
-    abortCtrl?.abort();
+  function dismissResult() {
+    clearOcrJob();
   }
 
   function dismiss() {
@@ -70,41 +54,52 @@
 
 {#if !dismissed}
   <div class="banner">
-    {#if running}
+    {#if jobForThisBook?.status === 'running'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">OCR 运行中…{progress ? ` ${progress.page} / ${progress.total} 页` : ''}</div>
-        {#if progress?.text}
-          <div class="meta">{progress.text.slice(0, 80)}…</div>
+        <div class="title">OCR 运行中… {jobForThisBook.progress.page} / {jobForThisBook.progress.total} 页</div>
+        {#if jobForThisBook.progress.text}
+          <div class="meta">{jobForThisBook.progress.text.slice(0, 80)}…</div>
+        {:else}
+          <div class="meta">可以切到其它书继续阅读，OCR 会在后台继续</div>
         {/if}
       </div>
-      <button class="btn danger" on:click={stop}><Fa icon={faStop} size="xs" /> 中止</button>
-    {:else if finished}
+      <button class="btn danger" on:click={abortOcrJob}><Fa icon={faStop} size="xs" /> 中止</button>
+    {:else if jobForThisBook?.status === 'finished'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">OCR 完成{progress ? `（共 ${progress.total} 页）` : ''}</div>
+        <div class="title">OCR 完成（共 {jobForThisBook.progress.total} 页）</div>
         <div class="meta">点「应用」刷新阅读器加载新内容</div>
       </div>
       <button class="btn primary" on:click={applyAndReload}>应用并刷新</button>
-      <button class="btn ghost" on:click={dismiss} title="稍后再说"><Fa icon={faTimes} /></button>
+      <button class="btn ghost" on:click={dismissResult} title="稍后再说"><Fa icon={faTimes} /></button>
+    {:else if jobForThisBook?.status === 'errored'}
+      <Fa icon={faMagnifyingGlass} class="ico" />
+      <div class="text">
+        <div class="title">OCR 失败</div>
+        <div class="meta">{jobForThisBook.error}</div>
+      </div>
+      <button class="btn primary" on:click={start}>重试</button>
+      <button class="btn ghost" on:click={dismissResult}><Fa icon={faTimes} /></button>
     {:else}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
         <div class="title">检测到扫描版 PDF（无文字层）</div>
-        <div class="meta">运行 OCR 后可被打字机 / AI / 词典使用，首次会下载语言模型</div>
+        <div class="meta">
+          {otherBookRunning
+            ? `「${$ocrJob$?.bookTitle}」正在 OCR — 中止后才能开始这本`
+            : '运行 OCR 后可被打字机 / AI / 词典使用，首次会下载语言模型'}
+        </div>
       </div>
       <label class="lang">
-        <select bind:value={$ocrLang$} disabled={running}>
+        <select bind:value={$ocrLang$} disabled={otherBookRunning}>
           {#each LANGS as l (l.code)}
             <option value={l.code}>{l.label}</option>
           {/each}
         </select>
       </label>
-      <button class="btn primary" on:click={run}>开始</button>
+      <button class="btn primary" on:click={start} disabled={otherBookRunning}>开始</button>
       <button class="btn ghost" on:click={dismiss} title="本次会话不再提示"><Fa icon={faTimes} /></button>
-    {/if}
-    {#if lastError}
-      <div class="err">{lastError}</div>
     {/if}
   </div>
 {/if}

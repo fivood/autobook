@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.5
+
+- PDF OCR 改为后台作业：开了 OCR 之后可以切到别的书 / 书库 / 笔记本 / 设置随便逛，job 在 module 单例里继续跑，不会被路由切换打断
+- 全局右下角浮一个胶囊提示「OCR · 书名 · 12 / 894」，点击直接跳回对应书；OCR 完成时变成「应用」按钮
+- 只能同时跑一个 OCR：在已有 job 期间打开另一本扫描书，「开始」按钮会被禁用并提示「正在 OCR《X》，中止后才能开始这本」
+- 错误状态显示「重试」按钮而不是简单 disappear
+
 ## 1.10.4
 
 - 修 PDF OCR 跑几页后 banner 跳回初始状态：runner 之前按 `.pdf-section` 选择器迭代，大体积 HTML 下 DOMParser 偶尔丢失 section 父节点但保留 img，导致循环提前结束。改为按 `img[data-pdf-page]` 直接迭代，每个 img 用 `closest()` 找回插入容器；完整 894 页都能跑完
