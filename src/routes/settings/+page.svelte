@@ -30,6 +30,8 @@
     fontWeight$,
     furiganaStyle$,
     hideExternalReadHint$,
+    pdfOcrPromptEnabled$,
+    pdfOcrSkippedBookIds$,
     hideFurigana$,
     hideSpoilerImage$,
     importHTMLFixMode$,
@@ -188,6 +190,8 @@
       bind:pageColumns={$pageColumns$}
       bind:persistentStorage={$persistentStorage$}
       bind:hideExternalReadHint={$hideExternalReadHint$}
+      bind:ocrPromptEnabled={$pdfOcrPromptEnabled$}
+      bind:ocrSkippedBooks={$pdfOcrSkippedBookIds$}
       bind:confirmClose={$confirmClose$}
       bind:manualBookmark={$manualBookmark$}
       bind:autoBookmark={$autoBookmark$}

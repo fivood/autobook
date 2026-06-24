@@ -1,9 +1,8 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { goto } from '$app/navigation';
+  import { afterNavigate, goto } from '$app/navigation';
   import Fa from 'svelte-fa';
   import {
-    faArrowLeft,
     faTrash,
     faExternalLinkAlt,
     faPlus,
@@ -15,6 +14,7 @@
     faFolder
   } from '@fortawesome/free-solid-svg-icons';
   import { onMount } from 'svelte';
+  import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import type {
     BooksDbHighlight,
     BooksDbHighlightFolder
@@ -63,13 +63,13 @@
   let syncing = false;
   let syncMessage = '';
 
-  function handleBack() {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      window.history.back();
-    } else {
-      goto(`${pagePath}${mergeEntries.MANAGE.routeId}`);
-    }
-  }
+  let prevPage = `${pagePath}${mergeEntries.MANAGE.routeId}`;
+
+  afterNavigate((navigation) => {
+    const { from } = navigation;
+    if (!from) return;
+    prevPage = `${from.url.pathname}${from.url.search}`;
+  });
 
   $: highlightById = new Map(highlights.map((h) => [h.id, h]));
   $: folderIdSet = new Set(folders.map((f) => f.id));
@@ -462,12 +462,6 @@
 
 <div class="flex min-h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">
   <header class="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
-    <button
-      type="button"
-      class="relative z-20 rounded p-2 hover:bg-black/5"
-      title="返回"
-      on:click={handleBack}
-    ><Fa icon={faArrowLeft} /></button>
     <h1 class="text-xl font-medium">笔记本</h1>
     <span class="text-sm opacity-50">{filtered.length}/{highlights.length}</span>
     <div class="flex-1" />
@@ -517,6 +511,7 @@
         ><Fa icon={faFolder} size="xs" /> 选择 vault</button>
       {/if}
     {/if}
+    <MergedHeaderIcon leavePageLink={prevPage} />
   </header>
 
   {#if syncMessage}

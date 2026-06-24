@@ -36,13 +36,10 @@
     <div class="flex">
       <button
         title={option.id}
-        class="toggle-btn m-1 rounded-md border-2 border-gray-400 p-2 text-black text-lg transition-colors"
+        class="toggle-btn m-1 rounded-md border-2 p-2 text-lg transition-colors"
         class:selected={option.id === selectedOptionId}
+        class:invert-mode={invertColors}
         class:border-4={option.thickBorders && option.id === selectedOptionId}
-        class:text-white={(option.id === selectedOptionId && !invertColors) ||
-          (option.id !== selectedOptionId && invertColors)}
-        class:bg-white={(option.id === selectedOptionId && invertColors) ||
-          (option.id !== selectedOptionId && !invertColors)}
         style={btnStyle(option.id === selectedOptionId, option.style)}
         on:click={() => (selectedOptionId = option.id)}
       >
@@ -76,7 +73,37 @@
 </div>
 
 <style>
+  /* Default mode (invertColors=false):
+     - selected = solid accent (inline style sets bg/color), bold, full opacity
+     - unselected = transparent box with dim text + dim border, no white fill
+       so dark theme doesn't make the "off" option look brighter than "on". */
+  .toggle-btn {
+    background: transparent;
+    color: currentColor;
+    border-color: color-mix(in srgb, currentColor 32%, transparent);
+    opacity: 0.5;
+    font-weight: 400;
+  }
+  .toggle-btn.selected {
+    opacity: 1;
+    font-weight: 600;
+    /* bg-color, border-color, color come from the inline style via btnStyle()
+       which uses --button-selected / --menu-foreground; keep those winning. */
+  }
   .toggle-btn:not(.selected):hover {
-    filter: brightness(0.92);
+    opacity: 0.85;
+    background: color-mix(in srgb, currentColor 7%, transparent);
+  }
+
+  /* Inverted mode: caller wants the "selected" pill to be the bright white one
+     and the unselected ones to share the menu accent. Kept for the statistics
+     "keep which side" picker. */
+  .toggle-btn.invert-mode.selected {
+    background: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+  }
+  .toggle-btn.invert-mode:not(.selected) {
+    opacity: 0.55;
   }
 </style>

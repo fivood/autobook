@@ -10,6 +10,28 @@
 @import 'katex/dist/katex.min.css';
 @import 'highlight.js/styles/github.css';
 
+/* Settings inputs: soft filled pill instead of the underline that competes
+   with our section divider lines. Background-tinted currentColor so the field
+   reads as a UI element, not a horizontal rule. */
+.settings-input {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  color: inherit;
+}
+.settings-input:hover {
+  border-color: color-mix(in srgb, currentColor 32%, transparent);
+}
+.settings-input:focus {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+/* Strip Webkit's spinner-cell separator on number inputs that otherwise reads
+   as another short horizontal stripe inside the field. */
+.settings-input::-webkit-inner-spin-button,
+.settings-input::-webkit-outer-spin-button {
+  opacity: 0.5;
+}
+
 .md-section {
   line-height: 1.7;
   h1, h2, h3, h4, h5, h6 { font-weight: 700; margin: 1.4em 0 0.6em; }

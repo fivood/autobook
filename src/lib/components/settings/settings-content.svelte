@@ -28,6 +28,7 @@
   import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
   import SettingsSync from '$lib/components/settings/settings-sync.svelte';
   import SettingsDataPaths from '$lib/components/settings/settings-data-paths.svelte';
+  import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
   import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
   import { inputClasses } from '$lib/css-classes';
   import { BlurMode } from '$lib/data/blur-mode';
@@ -160,6 +161,10 @@
   export let persistentStorage: boolean;
 
   export let hideExternalReadHint: boolean;
+
+  export let ocrPromptEnabled: boolean;
+
+  export let ocrSkippedBooks: string;
 
   export let confirmClose: boolean;
 
@@ -1003,6 +1008,7 @@
       </SettingsItemGroup>
     </div>
 
+    <SettingsSectionHeader title="字体与排版" />
     <SettingsItemGroup title="字体（组 1）">
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
@@ -1102,6 +1108,7 @@
         }}
       />
     </SettingsItemGroup>
+    <SettingsSectionHeader title="段落与行" />
     <SettingsItemGroup title="段落首行缩进" tooltip="段落首行缩进（rem）">
       <input
         type="number"
@@ -1162,6 +1169,7 @@
         />
       </SettingsItemGroup>
     {/if}
+    <SettingsSectionHeader title="日文振假名" />
     <SettingsItemGroup title="隐藏振假名">
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
     </SettingsItemGroup>
@@ -1174,14 +1182,15 @@
       </SettingsItemGroup>
     {/if}
   {:else if activeSettings === 'Reader'}
+    <SettingsSectionHeader title="阅读视图模式" hint="决定可用的播放方式：滚动 = 打字机自动播放；分页 = TTS 朗读 + 自动翻页" />
     <div class="h-full">
       <SettingsItemGroup title="阅读视图">
         <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
-        <p class="mt-1 text-xs opacity-60">滚动模式：自动播放（打字机效果）；分页模式：TTS 语音朗读 + 自动翻页</p>
       </SettingsItemGroup>
     </div>
 
     {#if isTauri() && viewMode === ViewMode.Paginated}
+      <SettingsSectionHeader title="TTS 朗读" hint="桌面端分页模式专属。包含引擎、起点、快捷键和自定义 HTTP TTS" />
       <SettingsItemGroup
         title="朗读引擎"
         tooltip="推荐：系统 TTS（SAPI）+ Windows 11 自然语音（设置→辅助功能→讲述人→添加自然语音），音质接近云端神经网络且完全离线。Web Speech 是浏览器内建作兜底。Edge 在线音色为实验功能，微软持续升级反爬，大概率连不上，不建议依赖。切换后请重开书生效。"
@@ -1387,6 +1396,7 @@
     {/if}
 
     <!-- 视图模式专属 -->
+    <SettingsSectionHeader title={viewMode === ViewMode.Continuous ? '滚动模式行为' : '分页模式行为'} hint={viewMode === ViewMode.Continuous ? '自定义阅读点、窗口变化时的定位行为' : '翻页触发方式、分栏、滑动阈值'} />
     {#if viewMode === ViewMode.Continuous}
       <SettingsItemGroup
         title="自定义阅读点"
@@ -1460,7 +1470,7 @@
       </SettingsItemGroup>
     {/if}
 
-    <!-- 阅读区尺寸 -->
+    <SettingsSectionHeader title="阅读区尺寸" hint="阅读区边距和最大宽/高度" />
     <SettingsItemGroup title={verticalMode ? '阅读区左右边距' : '阅读区上下边距'}>
       <SettingsDimensionPopover
         slot="header"
@@ -1491,7 +1501,7 @@
       />
     </SettingsItemGroup>
 
-    <!-- 书签 -->
+    <SettingsSectionHeader title="书签" hint="自动书签触发条件与离开行为" />
     <SettingsItemGroup title="自动书签" tooltip={autoBookmarkTooltip}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
     </SettingsItemGroup>
@@ -1516,7 +1526,7 @@
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
     </SettingsItemGroup>
 
-    <!-- 页脚显示 -->
+    <SettingsSectionHeader title="页脚显示" hint="阅读器底部状态栏显示哪些字段" />
     <SettingsItemGroup title="显示字数">
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showCharacterCounter} />
     </SettingsItemGroup>
@@ -1536,7 +1546,7 @@
       />
     </SettingsItemGroup>
 
-    <!-- 图片 / 统计阅读点 -->
+    <SettingsSectionHeader title="图片与阅读点" hint="插图模糊、自定义阅读点暂停统计" />
     {#if $lastBookHasImages$}
       <SettingsItemGroup
         title="图片模糊"
@@ -1562,7 +1572,7 @@
       </SettingsItemGroup>
     {/if}
 
-    <!-- 杂项 -->
+    <SettingsSectionHeader title="其他" hint="屏幕常亮、关闭确认等杂项开关" />
     {#if wakeLockSupported}
       <SettingsItemGroup
         title="屏幕常亮"
@@ -1999,12 +2009,107 @@
     </div>
     <!-- end legacy hidden block -->
   {:else if activeSettings === 'Data'}
-    <SettingsItemGroup title="跨设备同步阅读统计" tooltip="把每天的阅读时长同步到云端，桌面 + 手机 PWA 都能看到合并的数据">
-      <SettingsSync />
+    <SettingsSectionHeader title="存储与备份" hint="书库、设置、统计的物理位置与云端同步" />
+    <div class="lg:col-span-3">
+      <SettingsItemGroup title="跨设备同步阅读统计" tooltip="把每天的阅读时长同步到云端，桌面 + 手机 PWA 都能看到合并的数据">
+        <SettingsSync />
+      </SettingsItemGroup>
+    </div>
+    <div class="lg:col-span-3">
+      <SettingsItemGroup title="本地数据位置" tooltip="查看书库、设置、同步副本各自的物理位置。提供一键打开和彻底清空。">
+        <SettingsDataPaths />
+      </SettingsItemGroup>
+    </div>
+    <SettingsItemGroup title="持久化存储" tooltip={persistentStorageTooltip}>
+      <div class="flex items-center">
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={persistentStorage} />
+        {#if storageQuota}
+          <div class="ml-4">{storageQuota}</div>
+        {/if}
+      </div>
     </SettingsItemGroup>
-    <SettingsItemGroup title="本地数据位置" tooltip="查看书库、设置、同步副本各自的物理位置。提供一键打开和彻底清空。">
-      <SettingsDataPaths />
+    <SettingsItemGroup
+      title="重置 UI 设置"
+      tooltip="清除本地保存的所有界面设置（主题、字体、TTS 引擎、快捷键、自定义主题等），书库和阅读统计保留。从更早版本升级后界面表现异常时用这个，比手动卸载重装快。"
+    >
+      <button
+        class="m-1 rounded-md border-2 border-gray-400 p-2 text-red-600"
+        on:click={resetUiSettings}
+      >
+        重置并刷新
+        <Ripple />
+      </button>
     </SettingsItemGroup>
+
+    <SettingsSectionHeader title="导入与导出" hint="格式修正、自动备份和外部存储行为" />
+    <SettingsItemGroup title="EPUB 导入修正" tooltip={importHTMLFixModeTooltip}>
+      <ButtonToggleGroup
+        options={optionsForImportHTMLFixes}
+        bind:selectedOptionId={importHTMLFixMode}
+      />
+    </SettingsItemGroup>
+    {#if importHTMLFixMode !== ImportHTMLFixMode.OFF}
+      <SettingsItemGroup
+        title="仅限制链接"
+        tooltip="仅对链接标签做自闭合修正"
+      >
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={restrictImportFixToAnchor}
+        />
+      </SettingsItemGroup>
+    {/if}
+    <SettingsItemGroup title="自动导入/导出" tooltip={autoReplicationTypeTooltip}>
+      <ButtonToggleGroup
+        options={optionsForAutoReplicationType}
+        bind:selectedOptionId={autoReplication}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="导入/导出策略" tooltip={replicationSaveBehaviorTooltip}>
+      <ButtonToggleGroup
+        options={optionsForReplicationSaveBehavior}
+        bind:selectedOptionId={replicationSaveBehavior}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="缓存数据" tooltip={cacheStorageDataTooltip}>
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={cacheStorageData} />
+    </SettingsItemGroup>
+
+    <SettingsSectionHeader title="阅读器行为" hint="外部书提示、OCR 提示等阅读界面相关开关" />
+    <SettingsItemGroup
+      title="隐藏来源提示"
+      tooltip="打开外部存储源中的书时隐藏警告提示"
+    >
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideExternalReadHint} />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="显示占位卡片" tooltip={showExternalPlaceholderToolTip}>
+      <ButtonToggleGroup
+        options={optionsForToggle}
+        bind:selectedOptionId={showExternalPlaceholder}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup
+      title="扫描版 PDF 自动提示 OCR"
+      tooltip="关闭后，所有扫描版 PDF 都只显示原图，顶部不再弹 OCR 提示条；想恢复对某本书的提示，点下面的「清空仅看原图记忆」"
+    >
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={ocrPromptEnabled} />
+    </SettingsItemGroup>
+    <SettingsItemGroup
+      title="清空仅看原图记忆"
+      tooltip="撤销在阅读器顶部 OCR 提示条上点过的「仅看原图」选择，让这些书重新弹出 OCR 提示"
+    >
+      <button
+        class="m-1 rounded-md border-2 border-gray-400 p-2"
+        on:click={() => (ocrSkippedBooks = '')}
+        disabled={!ocrSkippedBooks}
+      >
+        清空（当前 {ocrSkippedBooks ? ocrSkippedBooks.split(',').filter(Boolean).length : 0} 本）
+        <Ripple />
+      </button>
+    </SettingsItemGroup>
+
+    <SettingsSectionHeader title="存储源与诊断" hint="外部存储源管理和故障排查导出" />
+    <SettingsStorageSourceList storageSources={$storageSources$} />
     <SettingsItemGroup title="诊断日志" tooltip="导出包含设置与运行日志的诊断文件，反馈问题时附上能加快定位">
       <button
         class="m-1 rounded-md border-2 border-gray-400 p-2"
@@ -2023,72 +2128,8 @@
         <Ripple />
       </button>
     </SettingsItemGroup>
-    <SettingsItemGroup
-      title="重置 UI 设置"
-      tooltip="清除本地保存的所有界面设置（主题、字体、TTS 引擎、快捷键、自定义主题等），书库和阅读统计保留。从更早版本升级后界面表现异常时用这个，比手动卸载重装快。"
-    >
-      <button
-        class="m-1 rounded-md border-2 border-gray-400 p-2 text-red-600"
-        on:click={resetUiSettings}
-      >
-        重置并刷新
-        <Ripple />
-      </button>
-    </SettingsItemGroup>
-    <SettingsItemGroup title="持久化存储" tooltip={persistentStorageTooltip}>
-      <div class="flex items-center">
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={persistentStorage} />
-        {#if storageQuota}
-          <div class="ml-4">{storageQuota}</div>
-        {/if}
-      </div>
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="隐藏来源提示"
-      tooltip="打开外部存储源中的书时隐藏警告提示"
-    >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideExternalReadHint} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="EPUB 导入修正" tooltip={importHTMLFixModeTooltip}>
-      <ButtonToggleGroup
-        options={optionsForImportHTMLFixes}
-        bind:selectedOptionId={importHTMLFixMode}
-      />
-    </SettingsItemGroup>
-    {#if importHTMLFixMode !== ImportHTMLFixMode.OFF}
-      <SettingsItemGroup
-        title="仅限制链接"
-        tooltip="仅对链接标签做自闭合修正"
-      >
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={restrictImportFixToAnchor}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup title="缓存数据" tooltip={cacheStorageDataTooltip}>
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={cacheStorageData} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="自动导入/导出" tooltip={autoReplicationTypeTooltip}>
-      <ButtonToggleGroup
-        options={optionsForAutoReplicationType}
-        bind:selectedOptionId={autoReplication}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="导入/导出策略" tooltip={replicationSaveBehaviorTooltip}>
-      <ButtonToggleGroup
-        options={optionsForReplicationSaveBehavior}
-        bind:selectedOptionId={replicationSaveBehavior}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="显示占位卡片" tooltip={showExternalPlaceholderToolTip}>
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={showExternalPlaceholder}
-      />
-    </SettingsItemGroup>
-    <SettingsStorageSourceList storageSources={$storageSources$} />
   {:else}
+    <SettingsSectionHeader title="统计基础" hint="删除策略、完成判定与起始时刻" />
     <SettingsItemGroup
       title="删除时保留本地数据"
       tooltip={'删除本地书籍副本时是否同时删除本地统计'}
@@ -2147,6 +2188,7 @@
         bind:value={startDayHoursForTracker}
       />
     </SettingsItemGroup>
+    <SettingsSectionHeader title="同步合并策略" hint="跨设备同步时如何合并统计与目标" />
     <SettingsItemGroup
       title="统计合并方式"
       tooltip={'同步时统计按条目合并还是整体覆盖'}
@@ -2165,6 +2207,7 @@
         bind:selectedOptionId={readingGoalsMergeMode}
       />
     </SettingsItemGroup>
+    <SettingsSectionHeader title="追踪开关" hint="启用统计后才会出现下方的细化设置" />
     <SettingsItemGroup
       title="启用统计"
       tooltip="在阅读器左下角显示统计追踪图标，需手动点击开始记录会话"
@@ -2172,6 +2215,7 @@
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={statisticsEnabled} />
     </SettingsItemGroup>
     {#if statisticsEnabled}
+      <SettingsSectionHeader title="追踪行为" hint="自动暂停、完成判定与字符差额处理" />
       <SettingsItemGroup title="统计自动暂停" tooltip={trackerAutoPauseTooltip}>
         <ButtonToggleGroup
           options={optionsForTrackerAutoPause}
@@ -2193,6 +2237,7 @@
           bind:selectedOptionId={addCharactersOnCompletion}
         />
       </SettingsItemGroup>
+      <SettingsSectionHeader title="自动启停阈值" hint="字数 / 空闲时间触发自动启动与暂停" />
       <SettingsItemGroup
         title="自动启动统计 (秒)"
         tooltip={'字数无变化达到此秒数后统计将自动启动（0 = 关闭，建议设大些避免误触发）'}
@@ -2233,6 +2278,7 @@
           }}
         />
       </SettingsItemGroup>
+      <SettingsSectionHeader title="跳过检测" hint="单次采样字数突变（跳读 / 后退）的判定阈值与动作" />
       <SettingsItemGroup
         title="正向跳过阈值"
         tooltip={'两次采样间正向字数增量超过此阈值触发相应动作（0 = 关闭）'}
@@ -2305,10 +2351,13 @@
           />
         </SettingsItemGroup>
       {/if}
-      <SettingsReadingGoals
-        storageSources={$storageSources$}
-        on:spinner={({ detail }) => (showSpinner = detail)}
-      />
+      <SettingsSectionHeader title="阅读目标" hint="按日 / 周设定的字数与时长目标" />
+      <div class="lg:col-span-3">
+        <SettingsReadingGoals
+          storageSources={$storageSources$}
+          on:spinner={({ detail }) => (showSpinner = detail)}
+        />
+      </div>
     {/if}
   {/if}
   {#if showSpinner}

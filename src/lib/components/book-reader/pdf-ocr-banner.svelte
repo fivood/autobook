@@ -11,11 +11,11 @@
     ocrJob$,
     startOcrJob
   } from '$lib/functions/file-loaders/pdf/ocr-job-manager';
+  import { pdfOcrPromptEnabled$, pdfOcrSkippedBookIds$ as ocrSkippedBooks$ } from '$lib/data/store';
 
   export let book: BooksDbBookData;
 
   const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'chi_sim+eng');
-  const ocrSkippedBooks$ = writableStringLocalStorageSubject()('pdfOcrSkippedBookIds', '');
 
   const dispatch = createEventDispatcher<{ dismissed: void }>();
 
@@ -68,7 +68,7 @@
   }
 </script>
 
-{#if !dismissed && !skippedForThisBook}
+{#if !dismissed && !skippedForThisBook && $pdfOcrPromptEnabled$}
   <div class="banner">
     {#if jobForThisBook?.status === 'running'}
       <Fa icon={faMagnifyingGlass} class="ico" />

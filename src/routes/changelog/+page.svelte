@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { afterNavigate } from '$app/navigation';
   import Fa from 'svelte-fa';
   import {
-    faArrowLeft,
     faTriangleExclamation,
     faRotateLeft
   } from '@fortawesome/free-solid-svg-icons';
@@ -10,6 +9,7 @@
   import { isTauri } from '$lib/data/env';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
+  import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import rawChangelog from '../../../CHANGELOG.md?raw';
 
   interface Section {
@@ -87,13 +87,13 @@
     return callouts.some((c) => /重置|reset/i.test(c));
   }
 
-  function handleBack() {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      window.history.back();
-    } else {
-      goto(`${pagePath}${mergeEntries.MANAGE.routeId}`);
-    }
-  }
+  let prevPage = `${pagePath}${mergeEntries.MANAGE.routeId}`;
+
+  afterNavigate((navigation) => {
+    const { from } = navigation;
+    if (!from) return;
+    prevPage = `${from.url.pathname}${from.url.search}`;
+  });
 </script>
 
 <svelte:head>
@@ -102,14 +102,10 @@
 
 <div class="flex h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">
   <header class="flex flex-shrink-0 items-center gap-4 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
-    <button
-      type="button"
-      class="relative z-20 rounded p-2 hover:bg-black/5"
-      title="返回"
-      on:click={handleBack}
-    ><Fa icon={faArrowLeft} /></button>
     <h1 class="text-xl font-medium">更新历史</h1>
     <span class="text-sm opacity-50">共 {sections.length} 个版本</span>
+    <div class="flex-1" />
+    <MergedHeaderIcon leavePageLink={prevPage} />
   </header>
 
   <div class="flex flex-1 overflow-hidden">

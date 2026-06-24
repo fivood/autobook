@@ -347,6 +347,16 @@ export const hideExternalReadHint$ = writableBooleanLocalStorageSubject()(
   false
 );
 
+export const pdfOcrPromptEnabled$ = writableBooleanLocalStorageSubject()(
+  'pdfOcrPromptEnabled',
+  true
+);
+
+export const pdfOcrSkippedBookIds$ = writableStringLocalStorageSubject()(
+  'pdfOcrSkippedBookIds',
+  ''
+);
+
 export const importHTMLFixMode$ = writableStringLocalStorageSubject<ImportHTMLFixMode>()(
   'importHTMLFixMode',
   ImportHTMLFixMode.OFF
