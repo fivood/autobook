@@ -391,7 +391,7 @@
 
     initializeReplicationProgressData();
 
-    const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf)$/i;
+    const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz)$/i;
     const errorTitle = '书籍导入失败';
     const expanded = await expandZipArchives(Array.from(fileList)).catch((err) => {
       logger.warn(`Error expanding zip: ${err.message}`);
@@ -474,7 +474,7 @@
 
         for (const entry of entries) {
           if (entry.directory || !entry.getData) continue;
-          if (!/\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf)$/i.test(entry.filename)) continue;
+          if (!/\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz)$/i.test(entry.filename)) continue;
 
           const name = entry.filename.split('/').pop() || entry.filename;
           // eslint-disable-next-line no-await-in-loop
@@ -947,7 +947,7 @@
       </span>
       <input
         type="file"
-        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,application/zip,.zip"
+        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,.cbz,application/zip,.zip"
         multiple
         hidden
         use:inputFile={onFilesChange}

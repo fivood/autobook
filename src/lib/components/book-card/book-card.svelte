@@ -83,6 +83,7 @@
     AZW: { bg: '#7a3f25', accent: '#e08545' },
     AZW3: { bg: '#7a3f25', accent: '#e08545' },
     PDF: { bg: '#7a2828', accent: '#d05050' },
+    CBZ: { bg: '#1f3d5a', accent: '#4c8cb8' },
     BOOK: { bg: '#3f4a5a', accent: '#7090b0' }
   };
   $: palette = FORMAT_PALETTE[detectedFormat] || FORMAT_PALETTE.BOOK;

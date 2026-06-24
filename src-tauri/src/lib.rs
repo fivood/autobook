@@ -23,7 +23,7 @@ fn request_quit(app: &tauri::AppHandle) {
   app.exit(0);
 }
 
-const BOOK_EXTS: [&str; 7] = ["epub", "txt", "htmlz", "md", "markdown", "mobi", "azw3"];
+const BOOK_EXTS: [&str; 9] = ["epub", "txt", "htmlz", "md", "markdown", "mobi", "azw3", "pdf", "cbz"];
 
 /// File paths handed to the app via file association / command line, waiting
 /// for the frontend to pick them up.
