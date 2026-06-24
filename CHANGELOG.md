@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.10.4
+
+- 修 PDF OCR 跑几页后 banner 跳回初始状态：runner 之前按 `.pdf-section` 选择器迭代，大体积 HTML 下 DOMParser 偶尔丢失 section 父节点但保留 img，导致循环提前结束。改为按 `img[data-pdf-page]` 直接迭代，每个 img 用 `closest()` 找回插入容器；完整 894 页都能跑完
+- OCR 完成后不再自动 reload。新增「完成」状态显示「OCR 完成（共 N 页）」+「应用并刷新」按钮，用户点击才刷新
+- 阅读 banner 加防御日志：blob name 找不到时控制台 warn，便于排错
+
+## 1.10.3
+
+- 修 OCR 横幅永远不出现的 bug：`isScannedPdf` 之前算全文 < 200 字才算扫描，但 image 模式 `<h3>` 里塞着每页页码（"1", "2"...），100 页书光页码就 290 字。改为统计排除 `<h3>` 之后每页平均 < 50 字符才算扫描
+- 修 PDF 误判为 text 模式的 bug：之前 useTextMode 只要半数样本不算 garbage 就走 text 模式，但每页只有页眉/页码/章节标记的扫描书能凑足 20 字过 isGarbageText 阈值。新增 average sample chars ≥ 150 的判定，"几乎啥也抽不出来"的扫描书自动回落到 image 模式 + OCR 横幅
+
 ## 1.10.2
 
 - CBZ 漫画支持：把 ZIP 包里的图片按文件名 natural sort 排好，一页一 section 当书读。ComicInfo.xml 的 Title 会被识别成书名，第一张图自动作封面，1.10.0 的 PDF 页面 dwell 追踪器对 CBZ 同样有效
