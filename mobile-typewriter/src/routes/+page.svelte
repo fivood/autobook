@@ -160,6 +160,8 @@
     return typeof window !== 'undefined';
   }
 
+  let pendingCover: string | undefined;
+
   async function handleFile(ev: Event) {
     const input = ev.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -167,7 +169,8 @@
     busy = true;
     error = '';
     try {
-      const { title: detected, text } = await loadFile(file);
+      const { title: detected, text, coverDataUrl } = await loadFile(file);
+      pendingCover = coverDataUrl;
       await loadBook(detected, text);
     } catch (e: any) {
       error = `读取失败：${e?.message || e}`;
@@ -215,12 +218,18 @@
     if (!bookHash || !book) return;
     clearTimeout(persistTimer);
     persistTimer = setTimeout(() => {
+      const existing = getPosition(bookHash);
+      // Cover from this session beats any older sniff; otherwise keep the
+      // previously saved cover so re-uploading without the original file
+      // doesn't drop the thumbnail.
+      const coverDataUrl = pendingCover || existing?.coverDataUrl;
       savePosition(bookHash, {
         title,
         revealed,
         total,
         updatedAt: Date.now(),
-        preview: book!.flatText.slice(0, 60).replace(/\n/g, ' ')
+        preview: book!.flatText.slice(0, 60).replace(/\n/g, ' '),
+        ...(coverDataUrl ? { coverDataUrl } : {})
       });
       recents = listRecent();
     }, 400);
@@ -320,9 +329,16 @@
           {#each recents as r (r.hash)}
             <li>
               <button class="recent" on:click={() => resumeFromRecent(r)}>
-                <div class="recent-title">{r.title}</div>
-                <div class="recent-meta">
-                  {Math.round((r.revealed / r.total) * 100)}% · {r.preview}…
+                {#if r.coverDataUrl}
+                  <img class="recent-cover" src={r.coverDataUrl} alt="" loading="lazy" />
+                {:else}
+                  <div class="recent-cover placeholder">📖</div>
+                {/if}
+                <div class="recent-text">
+                  <div class="recent-title">{r.title}</div>
+                  <div class="recent-meta">
+                    {Math.round((r.revealed / r.total) * 100)}% · {r.preview}…
+                  </div>
                 </div>
               </button>
               <button class="recent-del" title="删除记录" on:click={() => deleteRecent(r.hash)}>×</button>
@@ -476,11 +492,34 @@
   .recent {
     flex: 1 1 0;
     min-width: 0;
+    display: flex;
+    align-items: stretch;
+    gap: 0.7rem;
     text-align: left;
-    padding: 0.7rem 0.9rem;
+    padding: 0.55rem 0.7rem;
     border: 1px solid var(--fg-dim);
     border-radius: 0.6rem;
     overflow: hidden;
+  }
+  .recent-cover {
+    flex: 0 0 auto;
+    width: 2.6rem;
+    height: 3.6rem;
+    object-fit: cover;
+    border-radius: 0.25rem;
+    background: var(--chip-bg);
+  }
+  .recent-cover.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: var(--chip-text);
+    opacity: 0.7;
+  }
+  .recent-text {
+    flex: 1 1 0;
+    min-width: 0;
   }
   .recent-title {
     font-weight: 600;

@@ -3,17 +3,46 @@
 // of each chapter's HTML. Section headings (h1/h2/h3) become standalone lines
 // so the chapter detector in parse-text.ts picks them up automatically.
 
-import { BlobReader, TextWriter, ZipReader, type Entry } from '@zip.js/zip.js';
+import { BlobReader, BlobWriter, TextWriter, ZipReader, type Entry } from '@zip.js/zip.js';
 
 interface FileEntry {
   filename: string;
   directory: boolean;
   getData(writer: TextWriter): Promise<string>;
+  getDataBlob(writer: BlobWriter): Promise<Blob>;
 }
 
 export interface LoadedEpub {
   title: string;
   text: string;
+  /** Data-URL (base64) form of the cover image so it can survive a JSON
+   * round-trip into localStorage with the recent-read entry. */
+  coverDataUrl?: string;
+}
+
+function mimeFromExt(name: string): string {
+  const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+  switch (ext) {
+    case 'png':
+      return 'image/png';
+    case 'gif':
+      return 'image/gif';
+    case 'webp':
+      return 'image/webp';
+    case 'svg':
+      return 'image/svg+xml';
+    default:
+      return 'image/jpeg';
+  }
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(blob);
+  });
 }
 
 export async function loadEpub(file: File): Promise<LoadedEpub> {
@@ -38,8 +67,21 @@ export async function loadEpub(file: File): Promise<LoadedEpub> {
     if (!opfEntry) throw new Error(`OPF 文件不存在：${opfPath}`);
     const opfXml = await opfEntry.getData(new TextWriter('utf-8'));
 
-    const { title, spineHrefs, tocHref } = parseOpf(opfXml, opfPath);
+    const { title, spineHrefs, tocHref, coverHref } = parseOpf(opfXml, opfPath);
     if (!spineHrefs.length) throw new Error('OPF 的 spine 为空');
+
+    let coverDataUrl: string | undefined;
+    if (coverHref) {
+      const coverEntry = byPath.get(coverHref.toLowerCase()) as unknown as FileEntry | undefined;
+      if (coverEntry && typeof (coverEntry as any).getData === 'function') {
+        try {
+          const blob = await (coverEntry as any).getData(new BlobWriter(mimeFromExt(coverHref)));
+          coverDataUrl = await blobToDataUrl(blob as Blob);
+        } catch {
+          // cover failure shouldn't block the book
+        }
+      }
+    }
 
     // Resolve the publisher-supplied TOC (EPUB3 nav.xhtml or EPUB2 .ncx) to
     // a map of spine-href → chapter title. parse-text.ts recognises those
@@ -78,7 +120,7 @@ export async function loadEpub(file: File): Promise<LoadedEpub> {
     }
 
     const cleanedTitle = title || file.name.replace(/\.[^.]+$/, '');
-    return { title: cleanedTitle, text: chunks.filter(Boolean).join('\n\n') };
+    return { title: cleanedTitle, text: chunks.filter(Boolean).join('\n\n'), coverDataUrl };
   } finally {
     await reader.close();
   }
@@ -100,6 +142,8 @@ interface OpfParsed {
   spineHrefs: string[];
   /** Absolute path to the TOC file (nav.xhtml for EPUB3, .ncx for EPUB2). */
   tocHref?: string;
+  /** Absolute path to the cover image, if discoverable in the OPF. */
+  coverHref?: string;
 }
 
 function parseOpf(opfXml: string, opfPath: string): OpfParsed {
@@ -149,7 +193,25 @@ function parseOpf(opfXml: string, opfPath: string): OpfParsed {
     spineHrefs.push(resolvePath(opfDir + item.href));
   });
 
-  return { title, spineHrefs, tocHref };
+  // Cover discovery: EPUB3 uses properties="cover-image"; EPUB2 uses
+  // <meta name="cover" content="ITEM_ID"> in metadata.
+  let coverHref: string | undefined;
+  for (const m of manifest.values()) {
+    if (m.properties.split(/\s+/).includes('cover-image')) {
+      coverHref = resolvePath(opfDir + m.href);
+      break;
+    }
+  }
+  if (!coverHref) {
+    const coverMeta = doc.querySelector('metadata > meta[name="cover"], metadata meta[name="cover"]');
+    const coverItemId = coverMeta?.getAttribute('content');
+    if (coverItemId) {
+      const coverItem = manifest.get(coverItemId);
+      if (coverItem) coverHref = resolvePath(opfDir + coverItem.href);
+    }
+  }
+
+  return { title, spineHrefs, tocHref, coverHref };
 }
 
 function parseTocLabels(tocXml: string, tocDir: string, labels: Map<string, string>) {

@@ -5,6 +5,7 @@ import { loadMd } from './load-md';
 export interface LoadedFile {
   title: string;
   text: string;
+  coverDataUrl?: string;
 }
 
 async function isZipMagic(file: File): Promise<boolean> {
@@ -29,7 +30,7 @@ export async function loadFile(file: File): Promise<LoadedFile> {
   const isEpubByExt = lower.endsWith('.epub');
   if (isEpubByExt || isEpubByMime || (await isZipMagic(file))) {
     const epub = await loadEpub(file);
-    return { title: epub.title || stem, text: epub.text };
+    return { title: epub.title || stem, text: epub.text, coverDataUrl: epub.coverDataUrl };
   }
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
     return { title: stem, text: await loadMd(file) };
