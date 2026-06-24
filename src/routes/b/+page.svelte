@@ -119,6 +119,8 @@
   } from '$lib/data/store';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
+  import PdfOcrBanner from '$lib/components/book-reader/pdf-ocr-banner.svelte';
+  import { isScannedPdf } from '$lib/functions/file-loaders/pdf/pdf-ocr-runner';
   import HighlightContextMenu from '$lib/components/book-reader/book-highlight/highlight-context-menu.svelte';
   import HighlightMemoDialog from '$lib/components/book-reader/book-highlight/highlight-memo-dialog.svelte';
   import HighlightSidebar from '$lib/components/book-reader/book-highlight/highlight-sidebar.svelte';
@@ -2102,6 +2104,13 @@
   on:click={() => (showHeader = true)}
   on:keyup={dummyFn}
 ></div>
+{#if $rawBookData$ && isScannedPdf($rawBookData$)}
+  <PdfOcrBanner
+    book={$rawBookData$}
+    on:updated={() => window.location.reload()}
+  />
+{/if}
+
 {#if showHeader}
   <div
     class="elevation-4 writing-horizontal-tb fixed inset-x-0 top-0 z-10 w-full"
