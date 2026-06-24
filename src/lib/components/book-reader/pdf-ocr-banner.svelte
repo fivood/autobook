@@ -11,7 +11,7 @@
 
   const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'chi_sim+eng');
 
-  const dispatch = createEventDispatcher<{ updated: BooksDbBookData; dismissed: void }>();
+  const dispatch = createEventDispatcher<{ dismissed: void }>();
 
   const LANGS: Array<{ code: string; label: string }> = [
     { code: 'chi_sim+eng', label: '简中 + 英' },
@@ -24,6 +24,7 @@
 
   let dismissed = false;
   let running = false;
+  let finished = false;
   let progress: OcrProgress | undefined;
   let lastError = '';
   let abortCtrl: AbortController | undefined;
@@ -31,17 +32,16 @@
   async function run() {
     if (running) return;
     running = true;
+    finished = false;
     lastError = '';
     abortCtrl = new AbortController();
     try {
       const updated = await runOcr(book, $ocrLang$, (p) => {
         progress = p;
       }, abortCtrl.signal);
-      // Write back through raw IDB to preserve the id + skip merge logic;
-      // upsertData is for incoming new imports, not in-place mutations.
       const db = await database.db;
       await db.put('data', updated);
-      dispatch('updated', updated);
+      finished = true;
     } catch (err: any) {
       if (err?.name === 'AbortError') {
         lastError = '已中止';
@@ -52,6 +52,10 @@
       running = false;
       abortCtrl = undefined;
     }
+  }
+
+  function applyAndReload() {
+    window.location.reload();
   }
 
   function stop() {
@@ -75,6 +79,14 @@
         {/if}
       </div>
       <button class="btn danger" on:click={stop}><Fa icon={faStop} size="xs" /> 中止</button>
+    {:else if finished}
+      <Fa icon={faMagnifyingGlass} class="ico" />
+      <div class="text">
+        <div class="title">OCR 完成{progress ? `（共 ${progress.total} 页）` : ''}</div>
+        <div class="meta">点「应用」刷新阅读器加载新内容</div>
+      </div>
+      <button class="btn primary" on:click={applyAndReload}>应用并刷新</button>
+      <button class="btn ghost" on:click={dismiss} title="稍后再说"><Fa icon={faTimes} /></button>
     {:else}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
