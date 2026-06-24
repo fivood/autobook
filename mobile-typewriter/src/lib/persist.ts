@@ -9,6 +9,8 @@ export interface SavedPosition {
   total: number;
   updatedAt: number;
   preview: string;
+  /** Optional cover image as data URL. Only EPUBs carry one currently. */
+  coverDataUrl?: string;
 }
 
 export async function hashContent(text: string): Promise<string> {

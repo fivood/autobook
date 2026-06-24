@@ -15,6 +15,7 @@ import loadMd from '$lib/functions/file-loaders/md/load-md';
 import loadMobi, { setForceNativeParser } from '$lib/functions/file-loaders/mobi/load-mobi';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import loadPdf from '$lib/functions/file-loaders/pdf/load-pdf';
+import { sniffFormat, sniffZipKind } from '$lib/functions/file-loaders/utils/sniff-format';
 
 if (typeof window !== 'undefined') {
   (window as any).__forceNativeMobi = (val = true) => {
@@ -78,6 +79,9 @@ export async function importData(
 
           let bookContent: LoadData;
 
+          // Step 1: try by extension (fast path, covers 99% of cases).
+          // Step 2: if the extension didn't match anything, sniff the magic
+          // bytes so renamed/extensionless files still load correctly.
           if (file.name.endsWith('.epub')) {
             bookContent = await loadEpub(file, document, lastBookModified);
           } else if (file.name.endsWith('.txt')) {
@@ -90,8 +94,28 @@ export async function importData(
             bookContent = await loadPdf(file, lastBookModified);
           } else if (/\.cbz$/i.test(file.name)) {
             bookContent = await loadCbz(file, lastBookModified);
-          } else {
+          } else if (/\.htmlz$/i.test(file.name)) {
             bookContent = await loadHtmlz(file, document, lastBookModified);
+          } else {
+            const sniffed = await sniffFormat(file);
+            if (sniffed === 'pdf') {
+              bookContent = await loadPdf(file, lastBookModified);
+            } else if (sniffed === 'mobi') {
+              bookContent = await loadMobi(file, lastBookModified);
+            } else if (sniffed === 'zip') {
+              const kind = await sniffZipKind(file);
+              if (kind === 'cbz') {
+                bookContent = await loadCbz(file, lastBookModified);
+              } else if (kind === 'htmlz') {
+                bookContent = await loadHtmlz(file, document, lastBookModified);
+              } else {
+                // EPUB or fallback to EPUB (most common ZIP-based ebook)
+                bookContent = await loadEpub(file, document, lastBookModified);
+              }
+            } else {
+              // Last resort: try EPUB (it'll error out cleanly if not actually one)
+              bookContent = await loadEpub(file, document, lastBookModified);
+            }
           }
 
           if (fileCountData) {
