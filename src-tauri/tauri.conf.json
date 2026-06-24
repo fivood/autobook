@@ -78,6 +78,13 @@
         "description": "PDF 文档",
         "mimeType": "application/pdf",
         "role": "Viewer"
+      },
+      {
+        "ext": ["cbz"],
+        "name": "CBZ",
+        "description": "漫画归档（ZIP 包图片）",
+        "mimeType": "application/x-cbz",
+        "role": "Viewer"
       }
     ],
     "icon": [
