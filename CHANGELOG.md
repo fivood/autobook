@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.10.2
+
+- CBZ 漫画支持：把 ZIP 包里的图片按文件名 natural sort 排好，一页一 section 当书读。ComicInfo.xml 的 Title 会被识别成书名，第一张图自动作封面，1.10.0 的 PDF 页面 dwell 追踪器对 CBZ 同样有效
+- 桌面 magic-byte 嗅探：扩展名不匹配任何格式时，按文件头识别 PDF / MOBI / ZIP 家族，ZIP 再二次细分（mimetype → EPUB；index.html → HTMLZ；纯图片 → CBZ）。iOS 分享/改过名的文件不再被错误解析
+- 手机端 EPUB 封面：从 OPF 拉 cover image（EPUB3 properties="cover-image" 或 EPUB2 meta cover），「最近读过」卡片左侧显示缩略图，没封面的用 📖 占位
+- 扫描版 PDF 的 OCR（桌面端）：自动识别"几乎没有文字层的 PDF"，阅读页顶部浮蓝色横幅，选语言（简中+英 / 繁中+英 / 纯英 / 日 等）→ 开始 → 实时进度。完成后阅读器、打字机、AI 助手、词典查词、字数统计立刻全部能用在扫描书上
+- 移动端不引入 OCR：Tesseract.js wasm + 中文模型一共 ~30MB，PWA 装包不带这些
+- 桌面端 BOOK_EXTS 把 pdf 和 cbz 也加上，命令行/文件关联直接打开
+
 ## 1.10.1
 
 - PDF 原生目录：读取 PDF 自带的 outline（书签），章节名按层级缩进展示并叠在「第 N 页」标签前。原来翻几百页只有页码，现在能直接跳「序言/第三章 X」
