@@ -20,13 +20,26 @@ export interface OcrProgress {
   text: string;
 }
 
-/** Heuristic: is this book a scanned PDF that hasn't been OCRed yet? */
+/** Heuristic: is this book a scanned PDF that hasn't been OCRed yet?
+ *
+ * Counts real prose, not the per-page label numbers ("1", "2", "3"...) the
+ * loader injects as <h3 class="pdf-page-label">. Without this exclusion a
+ * 100-page image-only book has ~290 plaintext chars just from the labels
+ * and the OCR banner never appears. We also skip the OCR text we
+ * previously inserted so the second pass doesn't think the book is
+ * already done.
+ */
 export function isScannedPdf(book: Pick<BooksDbBookData, 'elementHtml'>): boolean {
   const html = book.elementHtml || '';
-  if (!html.includes('data-pdf-page=')) return false;
-  // Strip all tags and count plaintext chars; mostly-blank means no real text.
-  const text = html.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/gi, ' ');
-  return text.replace(/\s+/g, '').length < 200;
+  const imgCount = (html.match(/data-pdf-page=/g) || []).length;
+  if (imgCount === 0) return false;
+  const realText = html
+    .replace(/<h3[^>]*class="pdf-page-label"[^>]*>[^<]*<\/h3>/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, '');
+  // Fewer than ~50 chars of real prose per page = scan that needs OCR.
+  return realText.length / imgCount < 50;
 }
 
 export async function runOcr(
