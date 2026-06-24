@@ -321,6 +321,43 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
     coverPage.cleanup();
   }
 
+  // Try to surface the publisher-supplied outline (PDF bookmarks) instead of
+  // a flat "Page N" list. We walk getOutline() recursively, resolve each
+  // entry's destination to a page number, and build a Map<pageNum, label>
+  // covering exactly the pages that ARE bookmarked. Pages without a
+  // bookmark fall back to "第 N 页".
+  const outlineLabels = new Map<number, string>();
+  try {
+    const rawOutline: any[] = (await (doc as any).getOutline?.()) || [];
+    if (rawOutline.length) {
+      const visit = async (items: any[], depth: number) => {
+        for (const item of items) {
+          const title = String(item?.title || '').trim();
+          if (title && item?.dest) {
+            try {
+              const dest = Array.isArray(item.dest) ? item.dest : await doc.getDestination(item.dest);
+              if (Array.isArray(dest) && dest[0]) {
+                const pageIndex = await doc.getPageIndex(dest[0]);
+                const pageNum = pageIndex + 1;
+                if (!outlineLabels.has(pageNum)) {
+                  outlineLabels.set(pageNum, depth > 0 ? '  '.repeat(depth) + title : title);
+                }
+              }
+            } catch {
+              // skip un-resolvable destinations
+            }
+          }
+          if (item?.items?.length) {
+            await visit(item.items, depth + 1);
+          }
+        }
+      };
+      await visit(rawOutline, 0);
+    }
+  } catch {
+    // PDF has no outline — fine, we'll use "第 N 页"
+  }
+
   // Main pass
   const sections: Section[] = [];
   const htmlParts: string[] = [];
@@ -367,10 +404,11 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
     htmlParts.push(
       `<div id="${id}" class="pdf-section"><h3 class="pdf-page-label">${pageNum}</h3>${bodyHtml}</div>`
     );
+    const outlineTitle = outlineLabels.get(pageNum);
     sections.push({
       reference: id,
       charactersWeight: sectionChars || 1,
-      label: `第 ${pageNum} 页`,
+      label: outlineTitle ? `${outlineTitle} · 第 ${pageNum} 页` : `第 ${pageNum} 页`,
       startCharacter: totalChars,
       characters: sectionChars
     });
