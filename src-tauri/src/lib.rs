@@ -59,17 +59,31 @@ fn reset_flag_path() -> std::path::PathBuf {
   std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/reset-ui.flag")
 }
 
+/// Path to the marker file that signals "delete EVERYTHING — Local Storage,
+/// IndexedDB, the lot — on next launch". Used by the nuclear data reset.
+fn full_reset_flag_path() -> std::path::PathBuf {
+  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/reset-full.flag")
+}
+
 fn webview_local_storage_dirs() -> Vec<std::path::PathBuf> {
+  webview_subdir_paths("Default/Local Storage")
+}
+
+fn webview_indexeddb_dirs() -> Vec<std::path::PathBuf> {
+  webview_subdir_paths("Default/IndexedDB")
+}
+
+fn webview_subdir_paths(rel: &str) -> Vec<std::path::PathBuf> {
   let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
   let root = std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/EBWebView");
   let mut out = Vec::new();
   if let Ok(entries) = std::fs::read_dir(&root) {
     for entry in entries.flatten() {
       let path = entry.path();
-      // EBWebView layout: <root>/<UserDataFolder>/Default/Local Storage
-      let ls = path.join("Default").join("Local Storage");
-      if ls.exists() {
-        out.push(ls);
+      let target = path.join(rel);
+      if target.exists() {
+        out.push(target);
       }
     }
   }
@@ -97,6 +111,17 @@ fn migrate_books_dir() {
 }
 
 fn run_pending_reset() {
+  let full_flag = full_reset_flag_path();
+  if full_flag.exists() {
+    for dir in webview_local_storage_dirs() {
+      let _ = std::fs::remove_dir_all(&dir);
+    }
+    for dir in webview_indexeddb_dirs() {
+      let _ = std::fs::remove_dir_all(&dir);
+    }
+    let _ = std::fs::remove_file(&full_flag);
+    return;
+  }
   let flag = reset_flag_path();
   if !flag.exists() {
     return;
@@ -132,6 +157,91 @@ fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
   std::fs::write(&flag, b"1").map_err(|e| e.to_string())?;
   QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
   app.restart();
+}
+
+/// Schedule a FULL data wipe on next launch (Local Storage + IndexedDB) and
+/// restart. After this all books, highlights, notebook, statistics, and UI
+/// settings are gone — confirm twice on the frontend before calling.
+#[tauri::command]
+fn schedule_full_reset(app: tauri::AppHandle) -> Result<(), String> {
+  let flag = full_reset_flag_path();
+  if let Some(parent) = flag.parent() {
+    let _ = std::fs::create_dir_all(parent);
+  }
+  std::fs::write(&flag, b"1").map_err(|e| e.to_string())?;
+  QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+  app.restart();
+}
+
+/// Return paths the frontend can show in a Settings → Data panel so the
+/// user knows where their books and settings actually live. Sizes are
+/// computed best-effort; huge directories may report 0 to avoid blocking.
+#[tauri::command]
+fn get_data_paths() -> serde_json::Value {
+  fn dir_size(p: &std::path::Path) -> u64 {
+    let mut total: u64 = 0;
+    if let Ok(entries) = std::fs::read_dir(p) {
+      for entry in entries.flatten().take(20000) {
+        if let Ok(md) = entry.metadata() {
+          if md.is_file() {
+            total = total.saturating_add(md.len());
+          } else if md.is_dir() {
+            total = total.saturating_add(dir_size(&entry.path()));
+          }
+        }
+      }
+    }
+    total
+  }
+
+  let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+  let webview_root =
+    std::path::PathBuf::from(&local_appdata).join("io.github.fukki.ebookreader/EBWebView");
+  let docs_root = std::env::var("USERPROFILE")
+    .map(|h| std::path::PathBuf::from(h).join("Documents").join("AutoBook"))
+    .unwrap_or_default();
+
+  let ls_dirs: Vec<String> = webview_local_storage_dirs()
+    .into_iter()
+    .map(|p| p.to_string_lossy().into_owned())
+    .collect();
+  let idb_dirs: Vec<String> = webview_indexeddb_dirs()
+    .into_iter()
+    .map(|p| p.to_string_lossy().into_owned())
+    .collect();
+
+  let idb_size: u64 = webview_indexeddb_dirs().iter().map(|p| dir_size(p)).sum();
+  let docs_size = if docs_root.exists() { dir_size(&docs_root) } else { 0 };
+
+  serde_json::json!({
+    "webviewRoot": webview_root.to_string_lossy(),
+    "localStorageDirs": ls_dirs,
+    "indexeddbDirs": idb_dirs,
+    "indexeddbBytes": idb_size,
+    "documentsRoot": docs_root.to_string_lossy(),
+    "documentsBytes": docs_size,
+    "documentsExists": docs_root.exists(),
+  })
+}
+
+/// Open a folder in the OS file manager (Explorer on Windows). The path
+/// is created if missing — handy for "open my AutoBook folder" before any
+/// sync has actually written there.
+#[tauri::command]
+fn open_data_folder(path: String) -> Result<(), String> {
+  let p = std::path::PathBuf::from(&path);
+  if !p.exists() {
+    std::fs::create_dir_all(&p).map_err(|e| e.to_string())?;
+  }
+  // Spawn explorer.exe; on non-Windows builds this command is irrelevant.
+  #[cfg(target_os = "windows")]
+  {
+    std::process::Command::new("explorer")
+      .arg(&p)
+      .spawn()
+      .map_err(|e| e.to_string())?;
+  }
+  Ok(())
 }
 
 #[tauri::command]
@@ -224,6 +334,9 @@ pub fn run() {
       sapi_speak,
       custom_tts_synthesize,
       schedule_ui_reset,
+      schedule_full_reset,
+      get_data_paths,
+      open_data_folder,
       mobi_parser::parse_mobi,
       calibre_converter::check_calibre,
       calibre_converter::convert_with_calibre

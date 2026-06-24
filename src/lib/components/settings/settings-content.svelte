@@ -27,6 +27,7 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
   import SettingsSync from '$lib/components/settings/settings-sync.svelte';
+  import SettingsDataPaths from '$lib/components/settings/settings-data-paths.svelte';
   import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
   import { inputClasses } from '$lib/css-classes';
   import { BlurMode } from '$lib/data/blur-mode';
@@ -2000,6 +2001,9 @@
   {:else if activeSettings === 'Data'}
     <SettingsItemGroup title="跨设备同步阅读统计" tooltip="把每天的阅读时长同步到云端，桌面 + 手机 PWA 都能看到合并的数据">
       <SettingsSync />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="本地数据位置" tooltip="查看书库、设置、同步副本各自的物理位置。提供一键打开和彻底清空。">
+      <SettingsDataPaths />
     </SettingsItemGroup>
     <SettingsItemGroup title="诊断日志" tooltip="导出包含设置与运行日志的诊断文件，反馈问题时附上能加快定位">
       <button
