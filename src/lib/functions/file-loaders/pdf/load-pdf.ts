@@ -52,78 +52,139 @@ function escapeHtml(s: string): string {
 }
 
 /** PDF.js gives us a list of text items per page with absolute coords. We
- * group items into lines by y-coordinate (within a small tolerance), then
- * group lines into paragraphs by vertical gap. */
+ * group items into lines by y-coordinate, detect multi-column layouts so
+ * each column reads top-to-bottom independently (academic papers, magazines),
+ * then group lines into paragraphs by vertical gap. */
 function itemsToParagraphs(items: any[]): string[] {
   if (!items.length) return [];
 
-  type Item = { str: string; x: number; y: number; h: number; hasEol: boolean };
+  type Item = { str: string; x: number; w: number; y: number; h: number; hasEol: boolean };
   const enriched: Item[] = items
     .filter((it) => typeof it.str === 'string')
     .map((it) => ({
       str: it.str,
       x: it.transform[4],
+      w: it.width || 0,
       y: it.transform[5],
       h: it.height || 0,
       hasEol: !!it.hasEOL
     }));
   if (!enriched.length) return [];
 
-  // Sort top-down, left-to-right. PDF y origin is bottom — bigger y = higher.
-  enriched.sort((a, b) => {
-    if (Math.abs(a.y - b.y) > 2) return b.y - a.y;
-    return a.x - b.x;
-  });
-
-  type Line = { y: number; text: string };
-  const lines: Line[] = [];
-  let cur: Line | null = null;
-  let lastX = 0;
-  for (const it of enriched) {
-    if (!cur || Math.abs(cur.y - it.y) > 2) {
-      if (cur) lines.push(cur);
-      cur = { y: it.y, text: it.str };
-      lastX = it.x + (it.str.length * (it.h || 5)) * 0.4;
-      continue;
-    }
-    // Same line — decide whether a space is needed between items.
-    const needsSpace =
-      it.x - lastX > (it.h || 5) * 0.3 && !/\s$/.test(cur.text) && !/^\s/.test(it.str);
-    cur.text += (needsSpace ? ' ' : '') + it.str;
-    lastX = it.x + (it.str.length * (it.h || 5)) * 0.4;
-  }
-  if (cur) lines.push(cur);
-
-  // Group lines into paragraphs by vertical gap. Median line height = unit.
-  const heights = enriched.map((it) => it.h).filter((h) => h > 0);
-  heights.sort((a, b) => a - b);
-  const medianH = heights[Math.floor(heights.length / 2)] || 12;
-  const paraGap = medianH * 1.6;
-
-  const paragraphs: string[] = [];
-  let para = '';
-  let lastY = lines[0]?.y ?? 0;
-  for (const line of lines) {
-    if (para && lastY - line.y > paraGap) {
-      paragraphs.push(para);
-      para = line.text;
-    } else if (para) {
-      // Join hyphenated word break, else add space.
-      if (/-$/.test(para) && /^[a-z]/.test(line.text)) {
-        para = para.replace(/-$/, '') + line.text;
-      } else {
-        para += ' ' + line.text;
+  // Detect 2-column layout. Scan candidate boundary positions across the
+  // middle 30%–70% of the text area; pick the boundary that maximises the
+  // count of items lying fully on one side, gated by requiring substantial
+  // mass on BOTH sides so single-column pages don't get falsely split.
+  const xMin = Math.min(...enriched.map((it) => it.x));
+  const xMax = Math.max(...enriched.map((it) => it.x + it.w));
+  const textWidth = xMax - xMin;
+  let columnBoundary = -1;
+  if (textWidth > 0 && enriched.length >= 30) {
+    const totalCount = enriched.length;
+    let bestScore = 0;
+    for (let frac = 0.35; frac <= 0.65; frac += 0.02) {
+      const b = xMin + textWidth * frac;
+      let leftCount = 0;
+      let rightCount = 0;
+      let straddling = 0;
+      for (const it of enriched) {
+        const right = it.x + it.w;
+        if (right <= b) leftCount += 1;
+        else if (it.x >= b) rightCount += 1;
+        else straddling += 1;
       }
-    } else {
-      para = line.text;
+      const minSide = Math.min(leftCount, rightCount);
+      // Need both columns to have meaningful content (>=30% of items each)
+      // and few straddlers (<10% — title bars, full-width figures cross
+      // the gutter and aren't a column signal).
+      if (
+        minSide / totalCount >= 0.3 &&
+        straddling / totalCount <= 0.1 &&
+        minSide > bestScore
+      ) {
+        bestScore = minSide;
+        columnBoundary = b;
+      }
     }
-    lastY = line.y;
   }
-  if (para) paragraphs.push(para);
 
-  return paragraphs
-    .map((p) => p.replace(/\s+/g, ' ').trim())
-    .filter((p) => p.length > 0);
+  const buildColumn = (subset: Item[]): string[] => {
+    if (!subset.length) return [];
+    // Sort top-down, left-to-right. PDF y origin is bottom — bigger y = higher.
+    const sorted = [...subset].sort((a, b) => {
+      if (Math.abs(a.y - b.y) > 2) return b.y - a.y;
+      return a.x - b.x;
+    });
+
+    type Line = { y: number; text: string };
+    const lines: Line[] = [];
+    let cur: Line | null = null;
+    let lastX = 0;
+    for (const it of sorted) {
+      if (!cur || Math.abs(cur.y - it.y) > 2) {
+        if (cur) lines.push(cur);
+        cur = { y: it.y, text: it.str };
+        lastX = it.x + (it.str.length * (it.h || 5)) * 0.4;
+        continue;
+      }
+      const needsSpace =
+        it.x - lastX > (it.h || 5) * 0.3 && !/\s$/.test(cur.text) && !/^\s/.test(it.str);
+      cur.text += (needsSpace ? ' ' : '') + it.str;
+      lastX = it.x + (it.str.length * (it.h || 5)) * 0.4;
+    }
+    if (cur) lines.push(cur);
+
+    const heights = sorted.map((it) => it.h).filter((h) => h > 0);
+    heights.sort((a, b) => a - b);
+    const medianH = heights[Math.floor(heights.length / 2)] || 12;
+    const paraGap = medianH * 1.6;
+
+    const paragraphs: string[] = [];
+    let para = '';
+    let lastY = lines[0]?.y ?? 0;
+    for (const line of lines) {
+      if (para && lastY - line.y > paraGap) {
+        paragraphs.push(para);
+        para = line.text;
+      } else if (para) {
+        if (/-$/.test(para) && /^[a-z]/.test(line.text)) {
+          para = para.replace(/-$/, '') + line.text;
+        } else {
+          para += ' ' + line.text;
+        }
+      } else {
+        para = line.text;
+      }
+      lastY = line.y;
+    }
+    if (para) paragraphs.push(para);
+
+    return paragraphs
+      .map((p) => p.replace(/\s+/g, ' ').trim())
+      .filter((p) => p.length > 0);
+  };
+
+  if (columnBoundary < 0) {
+    return buildColumn(enriched);
+  }
+
+  // 2-column page: read left column top-to-bottom, then right column.
+  // Items that straddle the boundary (titles, full-width banners) snap to
+  // the column they overlap with more.
+  const left: Item[] = [];
+  const right: Item[] = [];
+  for (const it of enriched) {
+    const itRight = it.x + it.w;
+    if (itRight <= columnBoundary) left.push(it);
+    else if (it.x >= columnBoundary) right.push(it);
+    else {
+      const leftOverlap = Math.max(0, columnBoundary - it.x);
+      const rightOverlap = Math.max(0, itRight - columnBoundary);
+      if (leftOverlap >= rightOverlap) left.push(it);
+      else right.push(it);
+    }
+  }
+  return [...buildColumn(left), ...buildColumn(right)];
 }
 
 async function renderPageToBlob(
