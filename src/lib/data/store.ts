@@ -357,6 +357,13 @@ export const pdfOcrSkippedBookIds$ = writableStringLocalStorageSubject()(
   ''
 );
 
+// Library cover card min-width in px. Grid uses repeat(auto-fill, minmax(..., 1fr))
+// so smaller value = denser library (more columns at the same window width).
+export const bookCoverMinWidth$ = writableNumberLocalStorageSubject()(
+  'bookCoverMinWidth',
+  170
+);
+
 export const importHTMLFixMode$ = writableStringLocalStorageSubject<ImportHTMLFixMode>()(
   'importHTMLFixMode',
   ImportHTMLFixMode.OFF

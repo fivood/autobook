@@ -29,6 +29,7 @@
     storageSource$
   } from '$lib/data/storage/storage-view';
   import {
+    bookCoverMinWidth$,
     booklistSortOptions$,
     cacheStorageData$,
     fileCountData$,
@@ -46,6 +47,7 @@
     faCloudArrowUp,
     faSortDown,
     faSortUp,
+    faTableCellsLarge,
     faTimes,
     faTrash
   } from '@fortawesome/free-solid-svg-icons';
@@ -469,6 +471,50 @@
                     </div>
                   </div>
                 {/each}
+              </div>
+            </Popover>
+          </div>
+          <div
+            class="relative transform-gpu"
+            in:scale={inAnimationParams}
+            out:scale={outAnimationParams}
+          >
+            <Popover
+              placement="bottom"
+              fallbackPlacements={['bottom-end', 'bottom-start']}
+              yOffset={0}
+            >
+              <div slot="icon" class={baseIconClasses} title="封面尺寸">
+                <Fa icon={faTableCellsLarge} />
+              </div>
+              <div class="w-56 bg-menu text-menu p-3" slot="content">
+                <div class="text-xs opacity-70 mb-2">封面最小宽度：{$bookCoverMinWidth$}px</div>
+                <input
+                  type="range"
+                  min="120"
+                  max="300"
+                  step="10"
+                  class="w-full"
+                  bind:value={$bookCoverMinWidth$}
+                />
+                <div class="flex justify-between mt-2 gap-1">
+                  <button
+                    type="button"
+                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover:bg-white/10"
+                    on:click={() => ($bookCoverMinWidth$ = 130)}
+                  >密</button>
+                  <button
+                    type="button"
+                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover:bg-white/10"
+                    on:click={() => ($bookCoverMinWidth$ = 170)}
+                  >标准</button>
+                  <button
+                    type="button"
+                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover:bg-white/10"
+                    on:click={() => ($bookCoverMinWidth$ = 220)}
+                  >大</button>
+                </div>
+                <div class="text-xs opacity-50 mt-2">网格会按窗口宽度自动塞下尽可能多的列</div>
               </div>
             </Popover>
           </div>

@@ -29,10 +29,29 @@ export interface OcrProgress {
 }
 
 /** Heuristic: is this book a scanned PDF that hasn't been OCRed yet? */
-export function isScannedPdf(book: Pick<BooksDbBookData, 'elementHtml'>): boolean {
+export function isScannedPdf(book: Pick<BooksDbBookData, 'elementHtml' | 'sections'>): boolean {
   const html = book.elementHtml || '';
   const imgCount = countPageImages(html);
   if (imgCount === 0) return false;
+
+  // Already OCR'd: the runner injects <p class="pdf-ocr-text"> before every
+  // recognized image. Presence of ANY such marker means the user already
+  // ran OCR on this book — don't re-prompt even if recognition was poor
+  // and the per-page text density is still low (text-density heuristic
+  // can't tell "scanned but never OCR'd" from "scanned, OCR ran but model
+  // returned mostly empty results because of bad scan quality").
+  if (/<p\s+class="pdf-ocr-text"/.test(html)) return false;
+
+  // Mixed-mode PDFs: PDF.js extracted text for most pages, only a handful
+  // of pages fell back to image rendering (typical for books with scanned
+  // illustration plates inside an otherwise text PDF). Those embedded
+  // images are NOT what OCR is for — running OCR over 19 plate pages in a
+  // 289-section book would offer no reading value and trigger the
+  // section-count safety guard. Require image pages to dominate the book
+  // before we consider it "scanned".
+  const sectionCount = book.sections?.length || imgCount;
+  if (imgCount / sectionCount < 0.6) return false;
+
   const realText = stripStructuralText(html);
   return realText.length / imgCount < 50;
 }
@@ -101,16 +120,19 @@ export async function runOcr(
     throw new Error('OCR 中止：未找到任何带 data-pdf-page 的图片，可能不是 image 模式 PDF。');
   }
 
-  // Sanity guard against catastrophic truncation. If the runner sees far
-  // fewer pages than the book's section count claims, refuse to write back —
-  // a previous bug (v1.10.3 used DOMParser on the full HTML and silently
-  // dropped sections) damaged some books; this guard makes any recurrence
-  // visible rather than silently overwriting.
+  // Catastrophic-truncation guard: hard floor only. Mixed-mode PDFs can
+  // legitimately have <img data-pdf-page> on a small minority of sections
+  // (illustration plates inside an otherwise text-extracted book) — the
+  // earlier `total < expected * 0.9` rule fired on those legitimate cases
+  // even though there was nothing to recover. The post-write check below
+  // (newPageCount >= total) still catches actual page-loss during
+  // serialization, so this guard only needs to detect "this book is so
+  // gutted there are basically no images left to process."
   const expected = book.sections?.length || total;
-  if (expected > 10 && total < expected * 0.9) {
+  if (expected > 100 && total < 5) {
     throw new Error(
-      `OCR 中止：找到的页数 (${total}) 远少于书的目录页数 (${expected})。` +
-        '可能这本书在更早版本里已经被截断，请删除后重新导入原 PDF。'
+      `OCR 中止：只在 ${expected} 节的书里找到 ${total} 个图片页，` +
+        '与目录差距过大。可能这本书在更早版本里已经被截断，请删除后重新导入原 PDF。'
     );
   }
 

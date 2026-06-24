@@ -22,7 +22,6 @@
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { preFilteredTitlesForStatistics$ } from '$lib/components/statistics/statistics-types';
-  import { pxScreen } from '$lib/css-classes';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath } from '$lib/data/env';
@@ -876,7 +875,7 @@
   <div
     tabindex="0"
     role="button"
-    class="{pxScreen} relative flex-1 overflow-auto"
+    class="px-4 md:px-8 mx-auto w-full relative flex-1 overflow-auto"
     on:dragenter={(ev) => {
       ev.preventDefault();
       if (ev.dataTransfer?.types?.includes('Files')) isDragOver = true;

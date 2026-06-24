@@ -3,6 +3,7 @@
   import BookCard from '$lib/components/book-card/book-card.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import Popover from '$lib/components/popover/popover.svelte';
+  import { bookCoverMinWidth$ } from '$lib/data/store';
   import { dummyFn } from '$lib/functions/utils';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
@@ -10,6 +11,8 @@
   export let bookCards: BookCardProps[] = [];
   export let currentBookId: number | undefined;
   export let selectedBookIds: ReadonlySet<number>;
+
+  $: minWidth = Math.max(110, Math.min(360, Number($bookCoverMinWidth$) || 170));
 
   const dispatch = createEventDispatcher<{
     bookClick: { id: number };
@@ -28,7 +31,7 @@
   }
 </script>
 
-<div class="grid grid-cols-3 justify-between gap-5 pb-4 md:grid-cols-4 lg:grid-cols-5">
+<div class="book-grid gap-5 pb-4" style="--book-card-min: {minWidth}px;">
   {#each bookCards as bookCard (bookCard.id)}
     <div
       role="banner"
@@ -100,3 +103,22 @@
     </div>
   {/each}
 </div>
+
+<style>
+  /* Fluid book grid: each card targets ~170px min width and the grid
+     fits as many columns as the viewport allows. Falls back to bigger
+     cards at narrower widths so a 380px mobile shows ~2 wide, a 1920px
+     desktop shows ~9. Avoids the previous hard cap at 5 columns. */
+  .book-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--book-card-min, 170px), 1fr));
+    justify-content: start;
+  }
+  @media (max-width: 480px) {
+    /* Cap min-width on narrow screens so we never end up with a single
+       absurdly wide column when the user has bumped --book-card-min up. */
+    .book-grid {
+      grid-template-columns: repeat(auto-fill, minmax(min(var(--book-card-min, 170px), 160px), 1fr));
+    }
+  }
+</style>
