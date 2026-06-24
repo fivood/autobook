@@ -1,6 +1,16 @@
 # Changelog
 
-## 1.10.0
+## 1.10.1
+
+- PDF 原生目录：读取 PDF 自带的 outline（书签），章节名按层级缩进展示并叠在「第 N 页」标签前。原来翻几百页只有页码，现在能直接跳「序言/第三章 X」
+- PDF 双栏识别：扫描页面正文宽度 35%–65% 内的候选边界，按"两侧均有 ≥30% 内容 + 跨越者 ≤10%"打分挑分栏线。学术论文/杂志/双栏报告读取顺序终于对了，单栏书不受影响
+- EPUB 真目录（手机端）：读 EPUB3 的 nav.xhtml 或 EPUB2 的 toc.ncx，给每个 spine item 注章节名，渲染器按章节标题居中加粗显示，不再靠正文 h1 启发式
+- Markdown YAML frontmatter 剥除：开头的 `---\n...\n---` 元数据块（Obsidian / Jekyll / Hugo 笔记常见）不再被当成正文读出来
+- 手机端 PWA：visibility 检测 + wall-clock ticker，屏幕锁定/切换 App 时立即停止计阅读时长；rAF dt 上限 1000ms，避免后台返回时一口气浮现一大段
+- 手机端 PWA 品牌统一：图标改用桌面端同款 PNG，名称从「AutoBook 打字机」改为「AutoBook」（manifest / svelte:head / apple-touch-icon-title 全部统一）
+- 手机端「最近读过」卡片样式适配：长中文标题不再溢出，按 line-clamp 两行 + CJK anywhere 断行，删除按钮固定不被挤压
+- EPUB 文件识别用三层信号：扩展名 + MIME + ZIP magic byte，iOS 分享时丢扩展名也能正确走 EPUB 解析器
+- 「关闭书」「返回」按钮的视觉与可访问性微调
 
 > ⚠ 设置 → 数据 顶部新增「跨设备同步阅读统计」面板。如果之前的 UI 自定义导致面板错位，请「重置 UI」后重启。
 
