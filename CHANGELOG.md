@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.12.1
+
+- **修 v1.12.0 Kokoro 默认音色不存在**：v1.12.0 我猜测的 `zf_xiaobei` / `zm_yunjian` 这类中文音色 ID 不在 kokoro-js v1.0 ONNX 包里——v1.0 实际只打包了**英语**音色（美式 + 英式，共 28 个）。试听会报错 `Voice "zf_xiaobei" not found. Should be one of: af_heart, af_alloy...`。
+  - 设置面板的音色下拉换成模型实际支持的 28 个：美式女声 11 个、美式男声 9 个、英式女声 4 个、英式男声 4 个
+  - 默认从 `zf_xiaobei` 改成 `af_heart`（社区推荐音色）
+  - 加保护性兜底：调 `tts.generate` 前先校验 voiceId 是否在 `tts.voices` 列表里，不在则自动回落到第一个可用音色并把校正后的值写回 store。从 1.12.0 升级上来、本地存了无效 voiceId 的也能自动救回
+  - 音色下方加说明：中文 / 日语需要等上游更新或换用「自定义 HTTP TTS」接 Qwen3-TTS / CosyVoice 2 等中文模型
+- **修阅读器 TTS FAB 引擎切换后语音下拉仍是 Web Speech**：之前 FAB 里的语音选择只有 `sapi` / `custom` / Web Speech 三个分支，选了 `kokoro` 会落到默认 Web Speech 分支显示系统语音。加 `kokoro` 分支显示「音色在『设置 → 阅读 → Kokoro-82M』里选」，引擎名标签也加上「Kokoro 离线」
+
 ## 1.12.0
 
 **内置离线 TTS：Kokoro-82M**

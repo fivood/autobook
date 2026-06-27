@@ -364,9 +364,12 @@ export const kokoroAccepted$ = writableBooleanLocalStorageSubject()(
   'kokoroAccepted',
   false
 );
+// kokoro-js v1.0 ONNX bundles English voices only (am_/af_/bm_/bf_). The
+// older zf_ / zm_ Chinese voice IDs my first cut suggested don't exist in
+// this build, so we default to af_heart and gate to the known-good list.
 export const kokoroVoiceId$ = writableStringLocalStorageSubject()(
   'kokoroVoiceId',
-  'zf_xiaobei'
+  'af_heart'
 );
 
 export interface KokoroLoadStatus {

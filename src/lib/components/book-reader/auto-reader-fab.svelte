@@ -217,7 +217,13 @@
         </label>
 
         <label class="flex flex-col gap-1 text-xs">
-          <span>语音 ({$ttsEngine$ === 'sapi' ? '系统 SAPI' : $ttsEngine$ === 'custom' ? '自定义 HTTP' : 'Web Speech'})</span>
+          <span>语音 ({$ttsEngine$ === 'sapi'
+            ? '系统 SAPI'
+            : $ttsEngine$ === 'custom'
+              ? '自定义 HTTP'
+              : $ttsEngine$ === 'kokoro'
+                ? 'Kokoro 离线'
+                : 'Web Speech'})</span>
           {#if $ttsEngine$ === 'sapi'}
             <select
               class="rounded bg-black/20 px-2 py-1 text-xs"
@@ -231,6 +237,8 @@
             </select>
           {:else if $ttsEngine$ === 'custom'}
             <p class="text-xs opacity-80">使用「设置 → 自定义 HTTP TTS」里配的接口</p>
+          {:else if $ttsEngine$ === 'kokoro'}
+            <p class="text-xs opacity-80">音色在「设置 → 阅读 → Kokoro-82M」里选</p>
           {:else}
             <select
               class="rounded bg-black/20 px-2 py-1 text-xs"

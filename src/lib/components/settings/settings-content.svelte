@@ -1378,41 +1378,53 @@
               {/if}
 
               {#if $kokoroAccepted$}
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                   <span class="text-xs opacity-70">音色</span>
                   <select
                     class="settings-input px-2 py-1 text-sm max-w-xs"
                     bind:value={$kokoroVoiceId$}
                   >
-                    <optgroup label="中文 女声">
-                      <option value="zf_xiaobei">zf_xiaobei</option>
-                      <option value="zf_xiaoni">zf_xiaoni</option>
-                      <option value="zf_xiaoxiao">zf_xiaoxiao</option>
-                      <option value="zf_xiaoyi">zf_xiaoyi</option>
-                    </optgroup>
-                    <optgroup label="中文 男声">
-                      <option value="zm_yunjian">zm_yunjian</option>
-                      <option value="zm_yunxi">zm_yunxi</option>
-                      <option value="zm_yunxia">zm_yunxia</option>
-                      <option value="zm_yunyang">zm_yunyang</option>
-                    </optgroup>
-                    <optgroup label="英语 美式">
-                      <option value="af_bella">af_bella</option>
+                    <optgroup label="英语 美式 女声">
                       <option value="af_heart">af_heart</option>
+                      <option value="af_alloy">af_alloy</option>
+                      <option value="af_aoede">af_aoede</option>
+                      <option value="af_bella">af_bella</option>
+                      <option value="af_jessica">af_jessica</option>
+                      <option value="af_kore">af_kore</option>
                       <option value="af_nicole">af_nicole</option>
+                      <option value="af_nova">af_nova</option>
+                      <option value="af_river">af_river</option>
+                      <option value="af_sarah">af_sarah</option>
+                      <option value="af_sky">af_sky</option>
+                    </optgroup>
+                    <optgroup label="英语 美式 男声">
+                      <option value="am_adam">am_adam</option>
+                      <option value="am_echo">am_echo</option>
+                      <option value="am_eric">am_eric</option>
+                      <option value="am_fenrir">am_fenrir</option>
+                      <option value="am_liam">am_liam</option>
                       <option value="am_michael">am_michael</option>
+                      <option value="am_onyx">am_onyx</option>
                       <option value="am_puck">am_puck</option>
+                      <option value="am_santa">am_santa</option>
                     </optgroup>
-                    <optgroup label="英语 英式">
+                    <optgroup label="英语 英式 女声">
                       <option value="bf_emma">bf_emma</option>
-                      <option value="bm_george">bm_george</option>
+                      <option value="bf_isabella">bf_isabella</option>
+                      <option value="bf_alice">bf_alice</option>
+                      <option value="bf_lily">bf_lily</option>
                     </optgroup>
-                    <optgroup label="日语">
-                      <option value="jf_alpha">jf_alpha</option>
-                      <option value="jm_kumo">jm_kumo</option>
+                    <optgroup label="英语 英式 男声">
+                      <option value="bm_george">bm_george</option>
+                      <option value="bm_lewis">bm_lewis</option>
+                      <option value="bm_daniel">bm_daniel</option>
+                      <option value="bm_fable">bm_fable</option>
                     </optgroup>
                   </select>
                 </div>
+                <p class="text-xs opacity-60">
+                  注：kokoro-js v1.0 ONNX 当前只打包了**英语**音色（美式 + 英式），中文 / 日语版本需等上游更新或换用「自定义 HTTP TTS」接 Qwen3-TTS / CosyVoice 2 等中文模型。
+                </p>
                 <p class="text-xs opacity-60">缓存在 WebView2 IndexedDB；要清除模型走「设置 → 数据 → 清除全部本地数据」</p>
               {/if}
             </div>

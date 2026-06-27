@@ -243,7 +243,19 @@ export class AutoReaderKokoro implements AutoReader {
     if (token !== this.currentSpeakToken || !this.enabled$.getValue()) return;
 
     try {
-      const voiceId = kokoroVoiceId$.getValue() || 'zf_xiaobei';
+      // Validate the saved voice id against the model's actual voice list.
+      // Stale ids (e.g. the zf_ Chinese voices my v1.12.0 first cut wrongly
+      // suggested) trip a hard failure inside kokoro.generate; rescue them
+      // here so the user sees a working voice instead of a red error.
+      let voiceId = kokoroVoiceId$.getValue() || 'af_heart';
+      const voices = tts?.voices ? Object.keys(tts.voices) : [];
+      if (voices.length && !voices.includes(voiceId)) {
+        const fallback = voices.find((v) => v.startsWith('af_')) || voices[0];
+        // eslint-disable-next-line no-console
+        console.warn(`[kokoro] voice ${voiceId} not in model; fell back to ${fallback}`);
+        voiceId = fallback;
+        kokoroVoiceId$.next(voiceId);
+      }
       const audioOut = await tts.generate(text, { voice: voiceId });
       if (token !== this.currentSpeakToken || !this.enabled$.getValue()) return;
 
