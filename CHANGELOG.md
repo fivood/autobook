@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.11.1
+
+- **TTS 当前句高亮**：朗读时把正在念的整句话用半透明黄色背景标出来，两种视图模式都生效。底层用 CSS Custom Highlight API（`window.Highlight` + `CSS.highlights.set('tts-sentence', ...)`），无 DOM 改动；不支持的浏览器静默退化。新文件 `tts-highlight.ts`，三个 TTS 引擎（Web Speech / SAPI / 自定义 HTTP）都加了 `getCurrentSentence(): { globalStart, globalEnd, text }`
+- **滚动模式接入 TTS + 用 TTS 控制打字机节奏**：之前 TTS 只在分页模式可用，现在滚动模式也显示 TTS FAB；按 `V` 在两种模式都能切。滚动模式下 TTS 启动时：调 `autoScroller.prepare()` 给字符 wrap 上 `.tw-c` 隐藏 span，关掉打字机自带计时器，让每次 `onBoundary` 的 charIndex 直接喂给 `seekToCharIndex` —— 屏幕字符与语音同步出现。同时智能滚屏：当前句不在视口中 20%–70% 时平滑滚到中间。TTS 停止时 `revealAll()` 把后面字全显出来
+- **修分页 TTS 长段落不翻页**：根因是 SAPI / 自定义 HTTP 引擎只在段首报一次 `onBoundary`（Web Speech 是逐词报）。长段落超过一页时翻页逻辑等不到下次 boundary 触发，朗读位置比显示位置超出 200+ 字。修法：给 SAPI / 自定义的 `<audio>` 挂 `ontimeupdate`，按 `audio.currentTime / audio.duration` 线性插值算出段内 char 偏移，每 2% 进度触发一次 boundary（约 50 次/段）。`ensureCharVisible` 随之跟上
+- 新增公共 `AutoScroller.prepare()` + `seekToCharIndex()` 接口（types.ts），用于 TTS 启动时预先 wrap 字符。`AutoReader.getCurrentSentence()` 加入接口
+
 ## 1.11.0
 
 **PDF 文字层 Phase 1**：有文字层的 PDF 导入后体验对齐 Chrome 内置 PDF 阅读器——视觉是原版页面图，鼠标可以直接选中文字。

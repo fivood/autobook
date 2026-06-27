@@ -33,6 +33,7 @@
     extractText,
     ttsIndexToCalculatorIndex
   } from '$lib/components/book-reader/auto-reader-shared';
+  import { TtsHighlighter } from '$lib/components/book-reader/tts-highlight';
   import { quintInOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
   import { browser } from '$app/environment';
@@ -782,6 +783,7 @@
   let lastTtsSaveTime = 0;
   let ttsExtractedText = '';
   let ttsExtractedTextSection = -1;
+  const ttsHighlighter = new TtsHighlighter();
 
   $: ttsSeekCharCount = Math.max(0, exploredCharCount - sectionStartCharCount);
 
@@ -825,25 +827,42 @@
    * to reach this value before re-preparing + resuming reading. */
   let ttsAwaitingSection = -1;
 
-  $: if (autoReader && autoReader !== ttsWiredReader && isPaginated && browser) {
+  $: if (autoReader && autoReader !== ttsWiredReader && browser) {
     ttsWiredReader = autoReader;
     autoReader.onBoundary = (charIndex) => {
-      // Auto-page-flip: whatever the TTS engine is about to speak should be
-      // on-screen. charIndex is a section-local offset into extractText()'s
-      // raw string (counts whitespace, punctuation, …). The paginated
-      // calculator uses getCharacterCount() which strips those — translate
-      // before handing it over so we don't drift off the section end.
+      // Update the current-sentence visual highlight (CSS Custom Highlight
+      // API, no DOM mutation). Works in both view modes.
+      const sentence = autoReader?.getCurrentSentence?.();
+      if (sentence) {
+        ttsHighlighter.setRange(sentence.globalStart, sentence.globalEnd);
+      }
+
       if (typeof charIndex === 'number') {
-        const el = document.querySelector('.book-content') as HTMLElement | null;
-        let calcLocal = charIndex;
-        if (el) {
-          if (ttsExtractedTextSection !== currentSectionIndex) {
-            ttsExtractedText = extractText(el);
-            ttsExtractedTextSection = currentSectionIndex;
+        if (isPaginated) {
+          // Auto-page-flip: whatever the TTS engine is about to speak should
+          // be on-screen. charIndex is a section-local offset into
+          // extractText()'s raw string (counts whitespace, punctuation, …).
+          // The paginated calculator uses getCharacterCount() which strips
+          // those — translate before handing it over so we don't drift off
+          // the section end.
+          const el = document.querySelector('.book-content') as HTMLElement | null;
+          let calcLocal = charIndex;
+          if (el) {
+            if (ttsExtractedTextSection !== currentSectionIndex) {
+              ttsExtractedText = extractText(el);
+              ttsExtractedTextSection = currentSectionIndex;
+            }
+            calcLocal = ttsIndexToCalculatorIndex(ttsExtractedText, charIndex);
           }
-          calcLocal = ttsIndexToCalculatorIndex(ttsExtractedText, charIndex);
+          pageManager?.ensureCharVisible?.(calcLocal + sectionStartCharCount);
+        } else {
+          // Continuous mode: TTS drives the typewriter reveal so visible
+          // text stays in sync with the voice. Pull characters up to
+          // charIndex out of hidden state and ensure the active sentence is
+          // scrolled into view.
+          autoScroller?.seekToCharIndex?.(charIndex);
+          if (sentence) scrollSentenceIntoView(sentence.globalStart);
         }
-        pageManager?.ensureCharVisible?.(calcLocal + sectionStartCharCount);
       }
       const now = Date.now();
       if (now - lastTtsSaveTime < 2000) return;
@@ -874,9 +893,61 @@
       }, 0);
     };
     autoReader.wasReaderEnabled$.subscribe((enabled) => {
+      if (enabled) {
+        const el = document.querySelector('.book-content') as HTMLElement | null;
+        if (!isPaginated) {
+          // Hide chars so TTS boundaries can reveal them char-by-char in
+          // pace with the voice (matches the typewriter pattern).
+          autoScroller?.prepare?.();
+          autoScroller?.off?.();
+        }
+        ttsHighlighter.prepare(el || undefined);
+      } else {
+        ttsHighlighter.clear();
+        if (!isPaginated) {
+          // TTS stopped: make sure the rest of the book is visible again
+          // (otherwise the user is stuck with whatever was revealed so far).
+          autoScroller?.revealAll?.();
+        }
+      }
       // Pausing saves the precise spot (throttled boundary saves lag ~2s).
       if (!enabled && ttsWiredReader === autoReader) persistTtsPosition();
     });
+  }
+
+  function scrollSentenceIntoView(globalIdx: number) {
+    if (typeof window === 'undefined') return;
+    const root = document.querySelector('.book-content') as HTMLElement | null;
+    if (!root) return;
+    // Walk text nodes and find the one containing globalIdx. Then scroll
+    // its parent into view roughly centered. Throttle via the position
+    // matching .tw-c spans when typewriter is active.
+    const twcSpans = root.querySelectorAll<HTMLElement>('.tw-c');
+    let target: Element | null = null;
+    if (twcSpans.length > 0) {
+      const i = Math.min(globalIdx, twcSpans.length - 1);
+      target = twcSpans[i];
+    } else {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      let total = 0;
+      let node: Node | null = walker.nextNode();
+      while (node) {
+        const text = node.textContent || '';
+        if (total + text.length >= globalIdx) {
+          target = node.parentElement;
+          break;
+        }
+        total += text.length;
+        node = walker.nextNode();
+      }
+    }
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      const vh = window.innerHeight || 0;
+      if (rect.top < vh * 0.2 || rect.bottom > vh * 0.7) {
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
   }
 
   // After the new section finishes rendering (currentSectionIndex catches up),
@@ -2126,7 +2197,7 @@
 {#if !showSpinner && !isPaginated}
   <AutoScrollFab {autoScroller} />
 {/if}
-{#if !showSpinner && isPaginated}
+{#if !showSpinner}
   <AutoReaderFab {autoReader} seekCharCount={ttsSeekCharCount} resumePosition={ttsResumePosition} />
 {/if}
 <div

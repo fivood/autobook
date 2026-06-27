@@ -86,6 +86,12 @@ export class AutoScrollerContinuous implements AutoScroller {
     this.revealedIndex = 0;
   }
 
+  /** Public hook: wrap characters now (idempotent) so TTS can drive
+   * seekToCharIndex without the typewriter's own interval running. */
+  prepare() {
+    this.ensurePrepared();
+  }
+
   private ensurePrepared() {
     if (this.prepared) return;
     if (!this.contentEl) {

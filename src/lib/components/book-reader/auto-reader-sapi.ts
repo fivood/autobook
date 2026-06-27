@@ -114,6 +114,13 @@ export class AutoReaderSapi implements AutoReader {
     this.charOffset = Math.min(Math.max(0, offset), this.paragraphs[this.paraIndex].length);
   }
 
+  getCurrentSentence(): { globalStart: number; globalEnd: number; text: string } | null {
+    if (this.paraIndex >= this.paragraphs.length) return null;
+    const text = this.paragraphs[this.paraIndex];
+    const globalStart = computeGlobalCharIndex(this.paragraphs, this.paraIndex, 0);
+    return { globalStart, globalEnd: globalStart + text.length, text };
+  }
+
   toggle() {
     if (this.enabled$.getValue()) this.off();
     else this.on();
@@ -188,6 +195,24 @@ export class AutoReaderSapi implements AutoReader {
         audio.removeAttribute('src');
         audio.load();
         URL.revokeObjectURL(url);
+      };
+      // Interpolated boundary: SAPI gives us one audio blob per paragraph
+      // with no granular timing events, so for long paragraphs the
+      // page-flip logic would otherwise lag until the next paraStart. We
+      // approximate the cursor by linear interpolation across the audio's
+      // currentTime, throttled to a couple of fires per second.
+      const paraStartGlobalIndex = globalIndex;
+      const paraLength = text.length;
+      let lastReportedFraction = 0;
+      audio.ontimeupdate = () => {
+        if (token !== this.currentSpeakToken) return;
+        if (!audio.duration || !isFinite(audio.duration) || audio.duration <= 0) return;
+        const fraction = Math.min(1, audio.currentTime / audio.duration);
+        if (fraction - lastReportedFraction < 0.02) return; // ~50 reports per paragraph
+        lastReportedFraction = fraction;
+        const localOffset = Math.floor(paraLength * fraction);
+        this.charOffset = localOffset;
+        this.onBoundary?.(paraStartGlobalIndex + localOffset);
       };
       audio.onended = () => {
         cleanup();

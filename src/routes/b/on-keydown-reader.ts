@@ -54,9 +54,9 @@ export function onKeydownReader(
       multiplierOffsetFn(-1);
       return true;
     case BookReaderAvailableKeybind.AUTO_READER_TOGGLE:
-      if (isPaginated) {
-        autoReader?.toggle();
-      }
+      // 1.11.1: TTS is wired in BOTH modes now. In continuous it drives the
+      // typewriter reveal pace so the on-screen text matches the voice.
+      autoReader?.toggle();
       return true;
     case BookReaderAvailableKeybind.NEXT_PAGE:
       pageManager?.nextPage();

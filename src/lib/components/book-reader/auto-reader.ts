@@ -147,6 +147,13 @@ export class AutoReaderContinuous implements AutoReader {
     this.charOffset = Math.min(Math.max(0, offset), this.paragraphs[this.paraIndex].length);
   }
 
+  getCurrentSentence(): { globalStart: number; globalEnd: number; text: string } | null {
+    if (this.paraIndex >= this.paragraphs.length) return null;
+    const text = this.paragraphs[this.paraIndex];
+    const globalStart = computeGlobalCharIndex(this.paragraphs, this.paraIndex, 0);
+    return { globalStart, globalEnd: globalStart + text.length, text };
+  }
+
   seekToExplored(exploredCharCount: number) {
     const pos = seekParagraphsToExplored(this.paragraphs, exploredCharCount);
     this.paraIndex = pos.paraIndex;
