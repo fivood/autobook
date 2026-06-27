@@ -7,6 +7,10 @@
     "moduleResolution": "bundler",
     "strict": true,
     "noImplicitReturns": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    // kokoro-js + @huggingface/transformers ship type definitions that don't
+    // pass strict — skip checking node_modules .d.ts files (our own code is
+    // still strict-checked).
+    "skipLibCheck": true
   }
 }

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.12.0
+
+**内置离线 TTS：Kokoro-82M**
+
+- 朗读引擎下拉新增「Kokoro-82M（内置离线）」选项，跟 Web Speech / SAPI / 自定义 HTTP 并列
+- **opt-in 下载**：选中 Kokoro 后什么都不会发生；面板里点「下载并启用」才触发 ~80MB 模型从 Hugging Face (`onnx-community/Kokoro-82M-v1.0-ONNX`) 拉到本机，存进 WebView2 的 IndexedDB。下载进度实时显示百分比 + MB。下载完成后**完全离线**，飞行模式也能朗读
+- 多音色：中文 8 个（zf 系列 4 女声 / zm 系列 4 男声）、英语美式 5 个、英语英式 2 个、日语 2 个，下拉分组
+- 复用 v1.11.1 的 `ontimeupdate` 段内插值 boundary 机制 —— Kokoro 也是「一段返回一个 audio buffer」，分页翻页和当前句高亮跟着自动同步
+- 试听按钮支持 Kokoro：选好音色直接听一句「这是语音测试。床前明月光，疑是地上霜。」
+- 用 onnxruntime-web 走 wasm 推理，CPU 跑得动；不上传任何阅读内容，模型权重也是首次下完之后全在本地
+- 试听 / 切换音色 / 重新启用都不会再触发下载（除非清空所有本地数据）
+
+**实现细节**：
+- 新文件 [auto-reader-kokoro.ts](src/lib/components/book-reader/auto-reader-kokoro.ts) 实现 `AutoReader` 接口；与 SAPI / 自定义 HTTP 同构（同样的 paragraphs / paraIndex 节奏，同样的 boundary 插值）
+- `kokoro-js` 走 `await import()` 动态加载，冷启动不付出 50MB JS 解析成本，仅在第一次使用时按需加载
+- 新增 store：`kokoroAccepted$`（用户授权下载与否）/ `kokoroVoiceId$`（当前音色）/ `kokoroLoadStatus$`（实时下载进度）
+- 工厂函数返回 `AutoReaderKokoro` 时优先于 Tauri / 浏览器判断，因为 Kokoro 在两种环境都能跑
+
 ## 1.11.1
 
 - **TTS 当前句高亮**：朗读时把正在念的整句话用半透明黄色背景标出来，两种视图模式都生效。底层用 CSS Custom Highlight API（`window.Highlight` + `CSS.highlights.set('tts-sentence', ...)`），无 DOM 改动；不支持的浏览器静默退化。新文件 `tts-highlight.ts`，三个 TTS 引擎（Web Speech / SAPI / 自定义 HTTP）都加了 `getCurrentSentence(): { globalStart, globalEnd, text }`

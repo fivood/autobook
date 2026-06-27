@@ -58,6 +58,9 @@
     ttsCustomPresetStates$,
     ttsAutoAdvanceSection$,
     ttsEngine$,
+    kokoroAccepted$,
+    kokoroLoadStatus$,
+    kokoroVoiceId$,
     ttsSapiVoiceId$,
     ttsShortcut$,
     ttsStartStrategy$,
@@ -485,6 +488,15 @@
   let previewAudio: HTMLAudioElement | undefined;
   const previewText = '这是语音测试。床前明月光，疑是地上霜。';
 
+  async function kokoroEnsureLoad() {
+    try {
+      const { ensureKokoroLoaded } = await import('$lib/components/book-reader/auto-reader-kokoro');
+      await ensureKokoroLoaded();
+    } catch {
+      /* error already surfaced via kokoroLoadStatus$ */
+    }
+  }
+
   async function previewVoice() {
     previewMessage = '';
     if (previewAudio) {
@@ -504,6 +516,47 @@
         previewMessage = 'Web Speech 播放失败';
       };
       window.speechSynthesis.speak(utt);
+      return;
+    }
+
+    if ($ttsEngine$ === 'kokoro') {
+      if (!$kokoroAccepted$) {
+        previewState = 'error';
+        previewMessage = '请先点「下载并启用」拉取 Kokoro 模型';
+        return;
+      }
+      previewState = 'loading';
+      try {
+        const { ensureKokoroLoaded } = await import('$lib/components/book-reader/auto-reader-kokoro');
+        await ensureKokoroLoaded();
+        const mod = await import('kokoro-js');
+        const KokoroTTS = (mod as any).KokoroTTS;
+        const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+          dtype: 'q8',
+          device: 'wasm'
+        });
+        const audioOut = await tts.generate(previewText, { voice: $kokoroVoiceId$ });
+        const blob: Blob =
+          typeof audioOut?.toBlob === 'function'
+            ? audioOut.toBlob()
+            : new Blob([audioOut?.audio?.buffer || audioOut], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        previewAudio = new Audio(url);
+        previewAudio.onended = () => {
+          previewState = 'idle';
+          URL.revokeObjectURL(url);
+        };
+        previewAudio.onerror = () => {
+          previewState = 'error';
+          previewMessage = '音频播放失败';
+          URL.revokeObjectURL(url);
+        };
+        previewState = 'playing';
+        await previewAudio.play();
+      } catch (err: any) {
+        previewState = 'error';
+        previewMessage = `Kokoro 合成失败: ${err?.message || err}`;
+      }
       return;
     }
 
@@ -1203,6 +1256,7 @@
             >
               <option value="web">Web Speech（浏览器）</option>
               <option value="sapi">系统 TTS（SAPI）</option>
+              <option value="kokoro">Kokoro-82M（内置离线）</option>
               <option value="custom">自定义 HTTP TTS</option>
             </select>
             <button
@@ -1286,6 +1340,85 @@
           </button>
         </div>
       </SettingsItemGroup>
+
+      {#if $ttsEngine$ === 'kokoro'}
+        <div class="lg:col-span-3">
+          <SettingsItemGroup
+            title="Kokoro-82M 离线 TTS"
+            tooltip="开源神经网络 TTS，82M 参数，ONNX 模型约 80MB。首次启用会从 Hugging Face 下载到本机缓存（IndexedDB），之后完全离线。中文音色不少（zf_xiaobei / zm_yunjian 等），效果接近商用云端 TTS。"
+          >
+            <div class="space-y-3 text-sm">
+              {#if !$kokoroAccepted$}
+                <div class="rounded-md border border-current/20 p-3 text-xs leading-relaxed">
+                  <p>启用 Kokoro 需要下载约 <strong>80 MB</strong> 模型文件（首次启用，之后离线）。</p>
+                  <p class="mt-1 opacity-70">模型来自 Hugging Face <code>onnx-community/Kokoro-82M-v1.0-ONNX</code>。下载后用 IndexedDB 缓存，不上传任何阅读内容。</p>
+                  <button
+                    class="settings-input mt-2 inline-flex items-center gap-1 px-3 py-1 text-sm"
+                    on:click={() => {
+                      $kokoroAccepted$ = true;
+                      kokoroEnsureLoad();
+                    }}
+                  >下载并启用</button>
+                </div>
+              {:else if $kokoroLoadStatus$.phase === 'loading'}
+                <div class="text-xs">
+                  {$kokoroLoadStatus$.message}
+                  {#if $kokoroLoadStatus$.total}
+                    · {Math.round(($kokoroLoadStatus$.loaded / $kokoroLoadStatus$.total) * 100)}%
+                    ({(($kokoroLoadStatus$.loaded || 0) / 1024 / 1024).toFixed(1)} /
+                    {(($kokoroLoadStatus$.total || 0) / 1024 / 1024).toFixed(1)} MB)
+                  {/if}
+                </div>
+              {:else if $kokoroLoadStatus$.phase === 'errored'}
+                <p class="text-red-500 text-xs">下载失败：{$kokoroLoadStatus$.message}</p>
+                <button
+                  class="settings-input px-3 py-1 text-sm"
+                  on:click={() => kokoroEnsureLoad()}
+                >重试</button>
+              {/if}
+
+              {#if $kokoroAccepted$}
+                <div class="flex items-center gap-2">
+                  <span class="text-xs opacity-70">音色</span>
+                  <select
+                    class="settings-input px-2 py-1 text-sm max-w-xs"
+                    bind:value={$kokoroVoiceId$}
+                  >
+                    <optgroup label="中文 女声">
+                      <option value="zf_xiaobei">zf_xiaobei</option>
+                      <option value="zf_xiaoni">zf_xiaoni</option>
+                      <option value="zf_xiaoxiao">zf_xiaoxiao</option>
+                      <option value="zf_xiaoyi">zf_xiaoyi</option>
+                    </optgroup>
+                    <optgroup label="中文 男声">
+                      <option value="zm_yunjian">zm_yunjian</option>
+                      <option value="zm_yunxi">zm_yunxi</option>
+                      <option value="zm_yunxia">zm_yunxia</option>
+                      <option value="zm_yunyang">zm_yunyang</option>
+                    </optgroup>
+                    <optgroup label="英语 美式">
+                      <option value="af_bella">af_bella</option>
+                      <option value="af_heart">af_heart</option>
+                      <option value="af_nicole">af_nicole</option>
+                      <option value="am_michael">am_michael</option>
+                      <option value="am_puck">am_puck</option>
+                    </optgroup>
+                    <optgroup label="英语 英式">
+                      <option value="bf_emma">bf_emma</option>
+                      <option value="bm_george">bm_george</option>
+                    </optgroup>
+                    <optgroup label="日语">
+                      <option value="jf_alpha">jf_alpha</option>
+                      <option value="jm_kumo">jm_kumo</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <p class="text-xs opacity-60">缓存在 WebView2 IndexedDB；要清除模型走「设置 → 数据 → 清除全部本地数据」</p>
+              {/if}
+            </div>
+          </SettingsItemGroup>
+        </div>
+      {/if}
 
       {#if $ttsEngine$ === 'sapi'}
         <div class="lg:col-span-3">

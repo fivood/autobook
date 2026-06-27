@@ -357,6 +357,31 @@ export const pdfOcrSkippedBookIds$ = writableStringLocalStorageSubject()(
   ''
 );
 
+// Kokoro-82M offline TTS engine. The model is NOT downloaded until the
+// user opts in via the settings UI; the accepted flag persists so they
+// don't have to re-consent on every cold start.
+export const kokoroAccepted$ = writableBooleanLocalStorageSubject()(
+  'kokoroAccepted',
+  false
+);
+export const kokoroVoiceId$ = writableStringLocalStorageSubject()(
+  'kokoroVoiceId',
+  'zf_xiaobei'
+);
+
+export interface KokoroLoadStatus {
+  phase: 'idle' | 'loading' | 'ready' | 'errored';
+  message: string;
+  loaded: number;
+  total: number;
+}
+export const kokoroLoadStatus$ = writableSubject<KokoroLoadStatus>({
+  phase: 'idle',
+  message: '',
+  loaded: 0,
+  total: 0
+});
+
 // Library cover card min-width in px. Grid uses repeat(auto-fill, minmax(..., 1fr))
 // so smaller value = denser library (more columns at the same window width).
 export const bookCoverMinWidth$ = writableNumberLocalStorageSubject()(
