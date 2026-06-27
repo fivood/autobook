@@ -137,10 +137,12 @@
 
       if (libFilter.completion !== 'all') {
         result = result.filter((c) => {
+          // bookmarkToProgress normalizes to 0–1; "done" is anything >= 0.995
+          // to absorb floating-point drift in the final-bookmark calculation.
           const p = c.progress || 0;
           if (libFilter.completion === 'unread') return p === 0;
-          if (libFilter.completion === 'done') return p >= 100;
-          return p > 0 && p < 100;
+          if (libFilter.completion === 'done') return p >= 0.995;
+          return p > 0 && p < 0.995;
         });
       }
 
@@ -156,6 +158,15 @@
 
   let selectedBookIds: ReadonlySet<number> = new Set();
   let selectMode = false;
+  /** Free-text title search. Deliberately NOT persisted — users
+   * expect to see their full library on next open. */
+  let searchQuery = '';
+  $: visibleBookCards = (() => {
+    const cards = $filteredBookCards$ || [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter((c) => c.title.toLowerCase().includes(q));
+  })();
   let cancelToken = new AbortController();
   let cancelSignal = cancelToken.signal;
   let cancelTooltip = '';
@@ -226,12 +237,15 @@
   }
 
   function bookmarkToProgress(b: BooksDbBookmarkData | undefined) {
-    return b?.progress
-      ? {
-          progress: typeof b.progress === 'string' ? +b.progress.slice(0, -1) : b.progress,
-          lastBookmarkModified: b.lastBookmarkModified || 0
-        }
-      : { progress: 0, lastBookmarkModified: 0 };
+    if (!b?.progress) return { progress: 0, lastBookmarkModified: 0 };
+    // Normalize to 0–1. New bookmarks store charsRead / totalChars directly
+    // (already 0–1). Legacy entries stored "45%" strings; strip and divide.
+    const raw =
+      typeof b.progress === 'string' ? +b.progress.slice(0, -1) / 100 : b.progress;
+    return {
+      progress: Math.max(0, Math.min(1, raw || 0)),
+      lastBookmarkModified: b.lastBookmarkModified || 0
+    };
   }
 
   function sortBookCards(
@@ -942,13 +956,36 @@
       {/if}
     </div>
   {/if}
+  <div class="mb-3 flex items-center gap-2">
+    <div class="relative flex-1 max-w-md">
+      <input
+        type="search"
+        placeholder="搜索书名…"
+        class="library-search w-full"
+        bind:value={searchQuery}
+      />
+      {#if searchQuery}
+        <button
+          type="button"
+          class="absolute right-2 top-1/2 -translate-y-1/2 text-xs opacity-50 hover:opacity-100"
+          on:click={() => (searchQuery = '')}
+          title="清空搜索"
+        >✕</button>
+      {/if}
+    </div>
+    {#if visibleBookCards && $filteredBookCards$ && visibleBookCards.length !== $filteredBookCards$.length}
+      <span class="text-xs opacity-60">
+        {visibleBookCards.length} / {$filteredBookCards$.length}
+      </span>
+    {/if}
+  </div>
   {#if !$filteredBookCards$ || $booksAreLoading$}
     加载中...
-  {:else if $filteredBookCards$.length}
+  {:else if visibleBookCards.length}
     <BookCardList
       currentBookId={$currentBookId$}
       {selectedBookIds}
-      bookCards={$filteredBookCards$}
+      bookCards={visibleBookCards}
       on:bookClick={(ev) => onBookClick(ev.detail.id)}
       on:removeBookClick={(ev) => handleRemove([ev.detail.id])}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}

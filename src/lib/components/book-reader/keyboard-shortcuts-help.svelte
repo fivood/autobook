@@ -135,9 +135,12 @@
 {/if}
 
 <style>
+  /* Stacks on top of BookImageZoom on the left rail when both visible;
+     otherwise sits alone at the bottom-left corner. The right side is
+     reserved for play controls. */
   .trigger {
     position: fixed;
-    right: env(safe-area-inset-right, 0.6rem);
+    left: env(safe-area-inset-left, 0.6rem);
     bottom: calc(env(safe-area-inset-bottom, 0.6rem) + 3.2rem);
     z-index: 20;
     width: 2rem;
@@ -149,9 +152,10 @@
     background: var(--menu-background, rgba(0, 0, 0, 0.55));
     color: var(--menu-foreground, #fff);
     border-radius: 999px;
-    opacity: 0.4;
+    opacity: 0.22;
     cursor: pointer;
     font-size: 0.85rem;
+    transition: opacity 0.3s ease;
   }
   .trigger:hover {
     opacity: 1;

@@ -6,6 +6,7 @@
   export let imagePath: string | Blob;
   export let title: string;
   export let progress: number;
+  export let lastBookOpen = 0;
 
   let objectUrl = '';
 
@@ -87,6 +88,11 @@
     BOOK: { bg: '#3f4a5a', accent: '#7090b0' }
   };
   $: palette = FORMAT_PALETTE[detectedFormat] || FORMAT_PALETTE.BOOK;
+
+  // Status badge: at-a-glance "done" or "未读" marker. Anything in progress
+  // is already conveyed by the bottom progress bar — no badge there.
+  $: status =
+    progress >= 0.995 ? 'done' : progress === 0 && lastBookOpen === 0 ? 'unread' : null;
 </script>
 
 <div tabindex="0" role="button" class="aspect-w-2 aspect-h-3 relative overflow-hidden rounded-lg" on:click on:keyup>
@@ -137,18 +143,54 @@
       {/if}
     </div>
 
+    {#if status === 'done'}
+      <span class="status-badge done" title="已读完">✓ 已读</span>
+    {:else if status === 'unread'}
+      <span class="status-badge unread" title="未读过">未读</span>
+    {/if}
+
     <div class="absolute inset-x-0 bottom-0">
       <div
         class="sm:h-21 h-16 bg-menu bg-opacity-85 p-0.5 px-1.5 text-justify text-sm text-menu sm:p-1.5 sm:text-base"
       >
         <span class="line-clamp-3">{cleanTitle}</span>
       </div>
-      <div class="h-2.5 bg-gray-400 bg-opacity-80">
-        <div
-          class="h-full rounded bg-gradient-to-b from-red-600 to-red-900"
-          style:width="{progress * 100}%"
-        />
+      <div class="progress-track">
+        <div class="progress-fill" style:width="{Math.round(progress * 100)}%" />
       </div>
     </div>
   </div>
 </div>
+
+<style>
+  .status-badge {
+    position: absolute;
+    top: 0.4rem;
+    left: 0.4rem;
+    z-index: 2;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+  }
+  .status-badge.done {
+    background: rgba(63, 142, 90, 0.92);
+    color: #fff;
+  }
+  .status-badge.unread {
+    background: rgba(255, 255, 255, 0.92);
+    color: #444;
+  }
+  .progress-track {
+    height: 0.45rem;
+    background: rgba(127, 127, 127, 0.55);
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(180deg, rgba(95, 126, 123, 0.95), rgba(58, 90, 88, 0.95));
+    transition: width 0.25s ease;
+  }
+</style>

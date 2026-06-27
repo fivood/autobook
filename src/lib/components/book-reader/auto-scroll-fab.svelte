@@ -1,22 +1,47 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import Fa from 'svelte-fa';
   import { faPlay, faPause, faForward, faRotateRight, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import type { AutoScroller } from '$lib/components/book-reader/types';
   import { autoScrollStopAtChapter$, multiplier$ } from '$lib/data/store';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
 
   export let autoScroller: AutoScroller | undefined;
 
   let enabled = false;
   let sub: Subscription | undefined;
+  let recentlyMoved = true;
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let hovered = false;
 
   $: {
     sub?.unsubscribe();
     sub = autoScroller?.wasAutoScrollerEnabled$.subscribe((v) => (enabled = v));
   }
 
-  onDestroy(() => sub?.unsubscribe());
+  // Dim the FAB stack 1.2s after the last mouse move while playback is
+  // active — keeps the controls accessible (state still visible) without
+  // covering the typewriter's active line on the right side.
+  $: faded = enabled && !recentlyMoved && !hovered;
+
+  function nudge() {
+    recentlyMoved = true;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => (recentlyMoved = false), 1200);
+  }
+
+  onMount(() => {
+    if (!browser) return;
+    nudge();
+    window.addEventListener('mousemove', nudge);
+  });
+
+  onDestroy(() => {
+    sub?.unsubscribe();
+    if (idleTimer) clearTimeout(idleTimer);
+    if (browser) window.removeEventListener('mousemove', nudge);
+  });
 
   function toggle() {
     autoScroller?.toggle();
@@ -44,7 +69,13 @@
 </script>
 
 {#if autoScroller}
-  <div class="group fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">
+  <div
+    class="group fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2 transition-opacity duration-300"
+    class:opacity-20={faded}
+    on:mouseenter={() => (hovered = true)}
+    on:mouseleave={() => (hovered = false)}
+    role="toolbar"
+  >
     <button
       type="button"
       title={$autoScrollStopAtChapter$

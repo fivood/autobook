@@ -26,6 +26,25 @@
   color: #111;
   background: #fff;
 }
+/* Library search box reuses the same pill look so the manage page sits in
+   the same visual language as settings / stats. */
+.library-search {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  color: inherit;
+  outline: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+  font-size: 0.85rem;
+}
+.library-search:focus {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+.library-search::placeholder {
+  opacity: 0.55;
+}
 .settings-input:hover {
   border-color: color-mix(in srgb, currentColor 32%, transparent);
 }

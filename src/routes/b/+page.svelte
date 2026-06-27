@@ -127,7 +127,16 @@
   import HighlightContextMenu from '$lib/components/book-reader/book-highlight/highlight-context-menu.svelte';
   import HighlightMemoDialog from '$lib/components/book-reader/book-highlight/highlight-memo-dialog.svelte';
   import HighlightSidebar from '$lib/components/book-reader/book-highlight/highlight-sidebar.svelte';
-  import AiReaderDrawer from '$lib/components/ai/ai-reader-drawer.svelte';
+  // Lazy-load the AI drawer module on first open. ~300 lines of Svelte
+  // template + downstream markdown/highlight deps; users who never open
+  // the AI panel never pay the parse cost on cold start.
+  import type AiReaderDrawerComponent from '$lib/components/ai/ai-reader-drawer.svelte';
+  let AiReaderDrawer: typeof AiReaderDrawerComponent | null = null;
+  async function loadAiDrawer() {
+    if (!AiReaderDrawer) {
+      AiReaderDrawer = (await import('$lib/components/ai/ai-reader-drawer.svelte')).default;
+    }
+  }
   import DictPopup from '$lib/components/dict/dict-popup.svelte';
   import { dictFolderPath$ } from '$lib/data/store';
   import { scanDictFolder, loadedDicts$ } from '$lib/data/dict/dict-manager';
@@ -151,13 +160,33 @@
     toggleImageGalleryPictureSpoiler$,
     updateImageGalleryPictureSpoilers$
   } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
-  import BookReaderImageGallery from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery.svelte';
+  import type BookReaderImageGalleryComponent from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery.svelte';
+  let BookReaderImageGallery: typeof BookReaderImageGalleryComponent | null = null;
+  async function loadImageGallery() {
+    if (!BookReaderImageGallery) {
+      BookReaderImageGallery = (
+        await import('$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery.svelte')
+      ).default;
+    }
+  }
   import {
     getDefaultStatistic,
     isTrackerMenuOpen$,
     isTrackerPaused$
   } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
-  import BookReadingTracker from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker.svelte';
+  // 874 lines of template + stats logic — the heaviest single component
+  // gated behind the statistics-enabled toggle. We still want to load it
+  // as soon as a stats-tracked book is opened, but doing it asynchronously
+  // means initial parse / hydration of the page doesn't block on it.
+  import type BookReadingTrackerComponent from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker.svelte';
+  let BookReadingTracker: typeof BookReadingTrackerComponent | null = null;
+  async function loadReadingTracker() {
+    if (!BookReadingTracker) {
+      BookReadingTracker = (
+        await import('$lib/components/book-reader/book-reading-tracker/book-reading-tracker.svelte')
+      ).default;
+    }
+  }
   import {
     getChapterData,
     nextChapter$,
@@ -268,7 +297,13 @@
   let storedExploredCharacter = 0;
   let hasBookmarkData = false;
   let blockDataUpdates = false;
-  let trackerElm: BookReadingTracker;
+  let trackerElm: BookReadingTrackerComponent;
+  // Kick off the lazy tracker load as soon as the reader confirms stats
+  // tracking is enabled. Page hydration finishes first; the tracker arrives
+  // a tick later without blocking initial render.
+  $: if (browser && $statisticsEnabled$ && !BookReadingTracker) {
+    loadReadingTracker();
+  }
   let showTrackerIcon = false;
   let wasTrackerPaused = true;
   let frozenPosition = -1;
@@ -2152,9 +2187,10 @@
         showHeader = false;
         highlightSidebarOpen$.next(true);
       }}
-      on:aiClick={() => {
+      on:aiClick={async () => {
         pauseTracker();
         showHeader = false;
+        await loadAiDrawer();
         aiDrawerOpen = true;
       }}
       on:jumpClick={handleJump}
@@ -2198,8 +2234,9 @@
 
         leaveReader(mergeEntries.STATISTICS.routeId, false);
       }}
-      on:readerImageGalleryClick={() => {
+      on:readerImageGalleryClick={async () => {
         showHeader = false;
+        await loadImageGallery();
         showReaderImageGallery = true;
       }}
       on:settingsClick={() => leaveReader(mergeEntries.SETTINGS.routeId, false)}
@@ -2210,8 +2247,9 @@
 {/if}
 
 {#if $bookData$ && $rawBookData$}
-  {#if $statisticsEnabled$}
-    <BookReadingTracker
+  {#if $statisticsEnabled$ && BookReadingTracker}
+    <svelte:component
+      this={BookReadingTracker}
       fontColor={$themeOption$.fontColor}
       backgroundColor={$backgroundColor$}
       bookTitle={$rawBookData$.title}
@@ -2329,8 +2367,9 @@
   </div>
 {/if}
 
-{#if aiDrawerOpen && $rawBookData$}
-  <AiReaderDrawer
+{#if aiDrawerOpen && $rawBookData$ && AiReaderDrawer}
+  <svelte:component
+    this={AiReaderDrawer}
     bookId={$rawBookData$.id}
     bookTitle={$rawBookData$.title}
     elementHtml={$rawBookData$.elementHtml}
@@ -2389,8 +2428,9 @@
   />
 {/if}
 
-{#if showReaderImageGallery}
-  <BookReaderImageGallery
+{#if showReaderImageGallery && BookReaderImageGallery}
+  <svelte:component
+    this={BookReaderImageGallery}
     fontColor={$themeOption$.fontColor}
     backgroundColor={$backgroundColor$}
     on:close={() => (showReaderImageGallery = false)}

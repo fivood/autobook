@@ -55,9 +55,14 @@
 </div>
 
 <style>
+  /* Left rail: avoid competing with the typewriter / TTS auto-play FAB
+     stack on the right. Small secondary controls (zoom, keyboard help)
+     live on the left so the right side is reserved for the primary play
+     controls and the bottom of the typewriter doesn't get covered when
+     both are visible. */
   .zoom-control {
     position: fixed;
-    right: env(safe-area-inset-right, 0.6rem);
+    left: env(safe-area-inset-left, 0.6rem);
     bottom: calc(env(safe-area-inset-bottom, 0.6rem) + 0.8rem);
     z-index: 20;
     display: flex;
