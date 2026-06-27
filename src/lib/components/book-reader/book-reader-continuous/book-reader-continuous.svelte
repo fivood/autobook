@@ -7,6 +7,7 @@
     type SectionWithProgress
   } from '$lib/components/book-reader/book-toc/book-toc';
   import HtmlRenderer from '$lib/components/html-renderer.svelte';
+  import { pdfPageShell } from '$lib/functions/pdf-page-shell';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { isStoredFont } from '$lib/data/fonts';
   import { FuriganaStyle } from '$lib/data/furigana-style';
@@ -693,6 +694,7 @@
 
 <div
   bind:this={contentEl}
+  use:pdfPageShell
   style:color={fontColor}
   style:font-size="{fontSize}px"
   style:line-height={lineHeight}

@@ -187,6 +187,58 @@ function itemsToParagraphs(items: any[]): string[] {
   return [...buildColumn(left), ...buildColumn(right)];
 }
 
+/**
+ * Build the per-page text-overlay HTML: positioned absolute spans that
+ * sit invisibly on top of the rendered page image so the user can select
+ * text just like in Chrome's PDF viewer.
+ *
+ * Each span carries its left/top in PAGE INTRINSIC pixel coords; the
+ * surrounding `.pdf-page-shell` div is responsible for setting
+ * `--pdf-scale-factor` at runtime (via the action in pdf-page-shell.ts)
+ * which CSS multiplies onto the layer to keep the spans aligned to the
+ * fluid-width image.
+ *
+ * Returns `{ spans, totalChars }` so the caller can count "real text" for
+ * progress / TTS / AI purposes without re-running getTextContent.
+ */
+function buildTextLayer(
+  items: any[],
+  pageHeight: number
+): { spans: string; totalChars: number } {
+  if (!items.length) return { spans: '', totalChars: 0 };
+  const out: string[] = [];
+  let chars = 0;
+  for (const it of items) {
+    const str: string = typeof it.str === 'string' ? it.str : '';
+    if (!str) continue;
+    const t = it.transform;
+    if (!t || t.length < 6) continue;
+    const a = +t[0];
+    const b = +t[1];
+    const e = +t[4];
+    const f = +t[5];
+    const fontSize = Math.hypot(a, b);
+    if (!isFinite(fontSize) || fontSize <= 0) continue;
+    // PDF origin is bottom-left; CSS origin is top-left. Convert and
+    // subtract fontSize so the span's TOP edge aligns with the character
+    // top (PDF.js gives the baseline at (e, f)).
+    const x = e;
+    const y = pageHeight - f - fontSize;
+    // Detect simple text rotation (most pages don't rotate; handle the
+    // common ones — landscape titles, sidebar marginalia — by computing
+    // the rotation matrix's angle from (a, b)). Vertical CJK text is
+    // emitted by some PDFs as rotated spans rather than per-char items.
+    const angle = (Math.atan2(b, a) * 180) / Math.PI;
+    const rotate = Math.abs(angle) > 1 ? ` rotate(${angle.toFixed(2)}deg)` : '';
+    const escaped = escapeHtml(str);
+    out.push(
+      `<span style="left:${x.toFixed(2)}px;top:${y.toFixed(2)}px;font-size:${fontSize.toFixed(2)}px;transform:scaleX(1)${rotate}">${escaped}</span>`
+    );
+    chars += Array.from(str).length;
+  }
+  return { spans: out.join(''), totalChars: chars };
+}
+
 async function renderPageToBlob(
   page: any,
   targetWidth: number,
@@ -443,16 +495,47 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
     let sectionChars: number;
 
     if (useTextMode) {
-      // Text mode: extract text only, no image rendering
-      const textContent = await page.getTextContent();
-      const paragraphs = itemsToParagraphs(textContent.items as any[]);
-      const chars = Array.from(paragraphs.join('')).length;
-      bodyHtml = paragraphs.length
-        ? paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('\n')
-        : '<p>&nbsp;</p>';
-      sectionChars = chars;
+      // Text-overlay mode (1.11 default for books with extractable text):
+      // render page to image AND emit a positioned text layer that sits
+      // invisibly on top so the user can select text the way Chrome's
+      // built-in PDF viewer lets you. The image preserves page layout
+      // (figures, columns, tables); the text layer gives you selection,
+      // copy, dictionary, AI input.
+      const viewport = page.getViewport({ scale: 1 });
+      const pageW = Math.round(viewport.width);
+      const pageH = Math.round(viewport.height);
+      const tc = await page.getTextContent();
+      const { spans, totalChars } = buildTextLayer(tc.items as any[], pageH);
+
+      let imgBlob = await renderPageToBlob(page, IMAGE_RENDER_WIDTH, 'image/jpeg', 0.82);
+      if (!imgBlob) {
+        const freshPage = await doc.getPage(pageNum);
+        imgBlob = await extractPageImage(freshPage);
+        freshPage.cleanup();
+      }
+
+      if (imgBlob) {
+        const blobName = `pdf-page-${pageNum}.jpg`;
+        blobs[blobName] = imgBlob;
+        const dummySrc = buildDummyBookImage(blobName);
+        bodyHtml =
+          `<div class="pdf-page-shell" data-page-w="${pageW}" data-page-h="${pageH}" style="aspect-ratio: ${pageW} / ${pageH};">` +
+          `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img book-page-image" data-pdf-page="${pageNum}" loading="lazy" decoding="async" />` +
+          (spans ? `<div class="pdf-text-layer" data-page-w="${pageW}" data-page-h="${pageH}">${spans}</div>` : '') +
+          `</div>`;
+        sectionChars = totalChars || 1;
+        hasAnyImage = true;
+      } else {
+        // Image render failed — degrade to plain text paragraphs.
+        const paragraphs = itemsToParagraphs(tc.items as any[]);
+        bodyHtml = paragraphs.length
+          ? paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('\n')
+          : '<p>&nbsp;</p>';
+        sectionChars = totalChars;
+      }
     } else {
-      // Image mode: render page to image
+      // Scanned / image-only mode: render page to image, no text layer.
+      // OCR (in pdf-ocr-runner) can later inject <p> blocks before the img.
       let imgBlob = await renderPageToBlob(page, IMAGE_RENDER_WIDTH, 'image/jpeg', 0.82);
       if (!imgBlob) {
         const freshPage = await doc.getPage(pageNum);
@@ -494,7 +577,17 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
   const textStyle =
     '.pdf-section { margin-bottom: 2em; } .pdf-page-label { opacity: 0.4; font-size: 0.8em; margin: 1.5em 0 0.5em; } .pdf-section p { text-indent: 2em; margin: 0.5em 0; }';
   const imageStyle =
-    '.pdf-section { margin-bottom: 1em; text-align: center; } .pdf-page-label { opacity: 0.4; font-size: 0.8em; margin: 1em 0 0.3em; }';
+    '.pdf-section { margin-bottom: 1em; text-align: center; } ' +
+    '.pdf-page-label { opacity: 0.4; font-size: 0.8em; margin: 1em 0 0.3em; } ' +
+    // Text-overlay rendering: a positioned container holds both the page
+    // image and a transparent text layer. The text layer is sized at the
+    // page's intrinsic pixel dimensions and scaled to match the displayed
+    // image width via --pdf-scale-factor (set by pdf-page-shell action).
+    '.pdf-page-shell { position: relative; width: 100%; max-width: 100%; margin: 0 auto; overflow: hidden; } ' +
+    '.pdf-page-shell > img.pdf-page-img { display: block; width: 100%; height: 100%; } ' +
+    '.pdf-text-layer { position: absolute; inset: 0; transform-origin: 0 0; transform: scale(var(--pdf-scale-factor, 1)); pointer-events: none; line-height: 1; font-family: serif; opacity: 1; }' +
+    '.pdf-text-layer > span { position: absolute; color: transparent; white-space: pre; transform-origin: 0 0; pointer-events: auto; cursor: text; user-select: text; }' +
+    '.pdf-text-layer > span::selection { background: rgba(0, 110, 255, 0.32); color: transparent; }';
 
   return {
     title,

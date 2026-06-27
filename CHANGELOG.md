@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.11.0
+
+**PDF 文字层 Phase 1**：有文字层的 PDF 导入后体验对齐 Chrome 内置 PDF 阅读器——视觉是原版页面图，鼠标可以直接选中文字。
+
+- `load-pdf.ts` 重构：原"text 模式只输出 `<p>` 段落、image 模式只输出 `<img>`"变为「文字 PDF 同时输出图像 + 透明定位 span 文字层」。每页生成 `<div class="pdf-page-shell" data-page-w data-page-h>` 含 `<img>` + `<div class="pdf-text-layer">` 中 N 个绝对定位 `<span>`，每个 span 带 `left / top / font-size` 来自 PDF.js 文字项 transform 矩阵
+- 新 `buildTextLayer()` 把 PDF user-space 坐标（左下原点）转 CSS 坐标（左上原点），减 fontSize 让 span 顶边对齐文字顶部；旋转文字按矩阵 atan2 算角度套 `rotate()`
+- 新 Svelte action `pdfPageShell`：在阅读器内容容器挂 ResizeObserver + MutationObserver，给每个 shell 设 `--pdf-scale-factor = actualWidth / intrinsicWidth`，CSS 让 text-layer `transform: scale(var(--pdf-scale-factor))`——图像缩放时文字层永远跟着对齐
+- 文字层 CSS：span 透明字 + `pointer-events: auto` + `cursor: text` + `user-select: text`；`::selection` 蓝色半透明高亮，体感和 Chrome 一致
+- 真实字数统计：之前 image 模式所有页 `characters: 1`（进度条几乎无意义），现在用 PDF.js 文字项实际字数。进度 / TTS / 朗读速度 / AI 抽屉提示词长度全部受益
+- 扫描 PDF 流程未变：image-only 路径（无 shell、无文字层）保持原样，OCR 工作流（v1.10.6+ 的字符串级 `<p class="pdf-ocr-text">` 注入）继续起作用。Phase 2（v1.12）会把 OCR 输出也改成定位 span 文字层，扫描书也能选文字
+- 旧库里的书 `elementHtml` 不动；要享受新体验需重新导入原 PDF。一本 300 页文字 PDF 的 IDB 占用从 ~200 KB 升到 ~10 MB（图 9 MB + spans HTML 1.5 MB）——交换的是真还原版式 + 真可选文字
+
+**修 AZW3 导入错误显示**：
+- 之前原生 KF8 解析在合订本 / 漫画包 / 多卷本上 panic 时，JS 端拿到的 Tauri 错误对象在某些边界条件下序列化为 `{}`，错误提示完全没用。新加 `extractTauriError(e)` 按 `string → .message → .error → .name → JSON.stringify → 兜底中文`优先级提取，再也不会显示 `{}`
+- Calibre 提示文案改清楚：明说原生解析器对合订本 / 多卷本兼容性有限，装 Calibre 是最稳的（AutoBook 检测到 Calibre 会自动调用它先转 EPUB 再导入）
+
 ## 1.10.12
 
 - 打字机模式提前向上滚 + 控件淡出：之前 typewriter 触发滚动的阈值是 viewport bottom 80px 内，结果活动行进入右下角 FAB 控件占用区时还没滚，文字被遮挡。改成 `max(120px, 32% × viewport height)` —— 1080p 屏 ~346px 安全区，活动行永远在视口高度 68% 以上。auto-scroll FAB 在播放时鼠标 1.2 秒不动自动淡到 20% 透明度，键盘帮助图标默认透明度从 0.4 降到 0.22

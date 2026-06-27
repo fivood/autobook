@@ -185,7 +185,30 @@ async function tryCalibConvert(file: File, lastBookModified: number): Promise<Lo
   }
 }
 
-const CALIBRE_HINT = '\n\n提示：安装 Calibre（https://calibre-ebook.com）可获得更好的 MOBI/AZW3 兼容性，导入时会自动调用 Calibre 转换。';
+const CALIBRE_HINT =
+  '\n\n建议：原生 MOBI/AZW3 解析器对复杂 KF8 文件（合订本 / 漫画包 / 多卷本）兼容性有限，' +
+  '安装 Calibre（https://calibre-ebook.com）后重试即可——AutoBook 检测到 Calibre 会自动调用它先转 EPUB 再导入，成功率显著更高。';
+
+function extractTauriError(e: unknown): string {
+  if (typeof e === 'string') return e;
+  if (e && typeof e === 'object') {
+    const obj = e as Record<string, unknown>;
+    if (typeof obj.message === 'string' && obj.message) return obj.message;
+    if (typeof obj.error === 'string' && obj.error) return obj.error;
+    if (typeof obj.name === 'string' && obj.name) return obj.name;
+    try {
+      const dumped = JSON.stringify(e);
+      if (dumped && dumped !== '{}') return dumped;
+    } catch {
+      /* fall through */
+    }
+  }
+  // Tauri sometimes resolves with a raw rejection that serializes to {}; in
+  // that case we can't recover the Rust-side error string. Surface a clear
+  // sentinel so the upstream catch can suggest Calibre rather than printing
+  // an empty object.
+  return '原生 MOBI/AZW3 解析器在此文件上失败（无可用错误信息）';
+}
 
 async function nativeParse(file: File, lastBookModified: number): Promise<LoadData> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -193,8 +216,7 @@ async function nativeParse(file: File, lastBookModified: number): Promise<LoadDa
   try {
     parsed = await invoke<ParsedMobi>('parse_mobi', { bytes: Array.from(bytes) });
   } catch (e) {
-    const msg = typeof e === 'string' ? e : JSON.stringify(e);
-    throw new Error(msg + CALIBRE_HINT);
+    throw new Error(extractTauriError(e) + CALIBRE_HINT);
   }
 
   const blobs: Record<string, Blob> = {};
