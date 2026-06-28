@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.12.2
+
+- **修书库 hover 详情 / 卡片底部进度条始终 0%**：根因是非常老版本的 bookmark 文档可能根本没有 `progress` 字段，只有 `exploredCharCount`。v1.10.12 我把 `bookmarkToProgress` 改成只看 `progress` 后这类老书签直接返回 0。补 fallback：缺 `progress` 时用 `exploredCharCount / book.characters` 兜底算
+- **新预设：Google Cloud TTS**（`texttospeech.googleapis.com/v1/text:synthesize`）每月 100 万字符免费配额，MP3 输出直接走现有引擎。`audioPath: 'audioContent'` 即可。默认音色 cmn-CN-Wavenet-A
+- **新预设：Gemini 2.5 Flash TTS**（`generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent`）——Gemini 返回的是**裸 L16 PCM 24kHz**，浏览器没法直接播。新增 `pcm-to-wav.ts` 工具把响应字节加 WAV header 再喂给 `<audio>`。auto-reader-custom 检测到 endpoint 是 generativelanguage + audioPath 以 `inlineData.data` 结尾时自动套 WAV，其他 TTS 走 MP3 原样
+- 自定义 HTTP TTS 引擎现已覆盖：OpenAI / ElevenLabs / Azure / Volcengine / MiMo / **Google Cloud / Gemini**。"manual" 预设依然是用户接其他任何 HTTP TTS 的入口
+- 关于 Coqui-AI/TTS 仓库的查询：经查 [Coqui AI 公司 2024 年初已倒闭](https://github.com/coqui-ai/TTS/discussions/3221)，仓库未归档但 2024-08 后停滞。XTTS-v2 旗舰还是 **CPML 非商用许可**。建议改用持续维护的 community fork [idiap/coqui-ai-TTS](https://github.com/idiap/coqui-ai-TTS) 或换用 Qwen3-TTS / CosyVoice 2
+
 ## 1.12.1
 
 - **修 v1.12.0 Kokoro 默认音色不存在**：v1.12.0 我猜测的 `zf_xiaobei` / `zm_yunjian` 这类中文音色 ID 不在 kokoro-js v1.0 ONNX 包里——v1.0 实际只打包了**英语**音色（美式 + 英式，共 28 个）。试听会报错 `Voice "zf_xiaobei" not found. Should be one of: af_heart, af_alloy...`。

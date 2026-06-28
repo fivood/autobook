@@ -26,6 +26,7 @@ import {
   selectionToCharIndex,
   splitSentences
 } from './auto-reader-shared';
+import { wrapPcmAsWav } from '$lib/functions/pcm-to-wav';
 
 export class AutoReaderCustom implements AutoReader {
   wasReaderEnabled$ = new BehaviorSubject<boolean>(false);
@@ -213,7 +214,17 @@ export class AutoReaderCustom implements AutoReader {
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes as BlobPart], { type: 'audio/mpeg' });
+      // Detect Gemini 2.5 Flash TTS responses which return headerless L16
+      // PCM at 24kHz mono. The browser can't play raw PCM, so we slap a
+      // standard WAV header in front of it. Other engines stream MP3 / WAV
+      // bytes that browsers play out of the box.
+      const audioPath = ttsCustomAudioPath$.getValue() || '';
+      const isGeminiPcm =
+        endpoint.includes('generativelanguage.googleapis.com') &&
+        /inlineData\.data$/.test(audioPath);
+      const blob = isGeminiPcm
+        ? wrapPcmAsWav(bytes, 24000, 16, 1)
+        : new Blob([bytes as BlobPart], { type: 'audio/mpeg' });
       const url = URL.createObjectURL(blob);
 
       const audio = new Audio(url);

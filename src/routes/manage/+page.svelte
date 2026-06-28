@@ -89,7 +89,7 @@
             .filter((d) => $showExternalPlaceholder$ || !d.isPlaceholder)
             .map((d) => ({
               ...d,
-              ...bookmarkToProgress(bookmarkMap.get(d.id))
+              ...bookmarkToProgress(bookmarkMap.get(d.id), d.characters || 0)
             }))
             .sort((card1: BookCardProps, card2: BookCardProps) =>
               sortBookCards(card1, card2, sortProp, isTitleSort)
@@ -236,14 +236,28 @@
     }, 1800);
   }
 
-  function bookmarkToProgress(b: BooksDbBookmarkData | undefined) {
-    if (!b?.progress) return { progress: 0, lastBookmarkModified: 0 };
-    // Normalize to 0–1. New bookmarks store charsRead / totalChars directly
-    // (already 0–1). Legacy entries stored "45%" strings; strip and divide.
-    const raw =
-      typeof b.progress === 'string' ? +b.progress.slice(0, -1) / 100 : b.progress;
+  function bookmarkToProgress(
+    b: BooksDbBookmarkData | undefined,
+    bookCharCount: number
+  ) {
+    if (!b) return { progress: 0, lastBookmarkModified: 0 };
+    // Normalize to 0–1. Three cases observed in IDB across versions:
+    //   1. New (≥1.5): bookmark.progress is a 0–1 number
+    //   2. Legacy: bookmark.progress is a "45%" string
+    //   3. Very old: no progress field at all — only exploredCharCount.
+    //      Without the fallback below, finished books from old versions
+    //      keep showing 0% on hover / 0%-wide progress bar.
+    let raw: number | undefined;
+    if (b.progress != null) {
+      raw = typeof b.progress === 'string' ? +b.progress.slice(0, -1) / 100 : b.progress;
+    } else if (b.exploredCharCount && bookCharCount > 0) {
+      raw = b.exploredCharCount / bookCharCount;
+    }
+    if (raw == null || Number.isNaN(raw)) {
+      return { progress: 0, lastBookmarkModified: b.lastBookmarkModified || 0 };
+    }
     return {
-      progress: Math.max(0, Math.min(1, raw || 0)),
+      progress: Math.max(0, Math.min(1, raw)),
       lastBookmarkModified: b.lastBookmarkModified || 0
     };
   }

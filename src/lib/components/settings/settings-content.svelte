@@ -353,6 +353,52 @@
         2
       )
     },
+    googleCloud: {
+      label: 'Google Cloud TTS（每月 100 万字符免费）',
+      method: 'POST',
+      endpoint:
+        'https://texttospeech.googleapis.com/v1/text:synthesize?key=YOUR_API_KEY',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
+        {
+          input: { text: '{text}' },
+          voice: { languageCode: 'cmn-CN', name: 'cmn-CN-Wavenet-A' },
+          audioConfig: { audioEncoding: 'MP3', speakingRate: 1.0 }
+        },
+        null,
+        2
+      ),
+      audioPath: 'audioContent'
+    },
+    geminiTts: {
+      label: 'Gemini 2.5 Flash TTS（实验，需 PCM→WAV 转换）',
+      method: 'POST',
+      endpoint:
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=YOUR_API_KEY',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
+        {
+          contents: [{ parts: [{ text: '{text}' }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
+            }
+          }
+        },
+        null,
+        2
+      ),
+      audioPath: 'candidates.0.content.parts.0.inlineData.data'
+    },
     mimo: {
       label: 'MiMo-V2.5-TTS（小米，限时免费）',
       method: 'POST',
