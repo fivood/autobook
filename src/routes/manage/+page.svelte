@@ -54,7 +54,6 @@
   import { getDropEventFiles } from '$lib/functions/file-dom/get-drop-event-files';
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { formatPageTitle } from '$lib/functions/format-page-title';
-  import { keyBy } from '$lib/functions/key-by';
   import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
   import { importBackup, importData, replicateData } from '$lib/functions/replication/replicator';
   import { throwIfAborted } from '$lib/functions/replication/replication-error';
@@ -66,67 +65,98 @@
   import { pluralize } from '$lib/functions/utils';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import pLimit from 'p-limit';
-  import { combineLatest, map, Observable, share, Subject, switchMap, takeUntil } from 'rxjs';
+  import {
+    combineLatest,
+    defer,
+    map,
+    Observable,
+    share,
+    shareReplay,
+    startWith,
+    Subject,
+    switchMap,
+    takeUntil
+  } from 'rxjs';
   import { onDestroy, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
 
   const booksAreLoading$ = database.listLoading$.pipe(map((isLoading) => isLoading));
 
+  // IDB data.id → title map. Tauri FS card.id is stableIdFromTitle(title) (a
+  // hash), but bookmark.dataId is the IDB book.id (autoincrement, e.g. 5).
+  // The two id spaces never overlap, so any merge keyed on dataId/id always
+  // misses. Bridge: bookmark.dataId → IDB data row → title, then match FS
+  // cards by title. Re-fetches whenever books are added or removed.
+  const idbTitleByDataId$ = database.dataListChanged$.pipe(
+    startWith(undefined as unknown),
+    switchMap(() =>
+      defer(async () => {
+        const db = await database.db;
+        const records = await db.getAll('data');
+        const m = new Map<number, string>();
+        for (const r of records) m.set(r.id, r.title);
+        return m;
+      })
+    ),
+    shareReplay({ refCount: true, bufferSize: 1 })
+  );
+
   const bookCards$: Observable<BookCardProps[]> = combineLatest([
     database.dataList$,
     database.bookmarks$,
-    booklistSortOptions$
+    booklistSortOptions$,
+    idbTitleByDataId$
   ]).pipe(
-    map(([dataList, bookmarks]) => {
+    map(([dataList, bookmarks, _sortOpts, titleByDataId]) => {
       const sortProp = $booklistSortOptions$[$storageSource$];
       const isTitleSort = sortProp.property === 'title';
+      const isBrowserSource = $storageSource$ === StorageKey.BROWSER;
+
+      // Build title → bookmark map by joining bookmarks (keyed by IDB id)
+      // through the IDB data store. Works for both BROWSER and Tauri FS:
+      // browser-handler card.title === IDB data.title; tauri-fs-handler card
+      // title is desanitizeFilename(dirName), which round-trips through the
+      // same sanitizeFilename used at write time.
+      const titleToBookmark = new Map<string, BooksDbBookmarkData>();
+      for (const b of bookmarks) {
+        const title = titleByDataId.get(b.dataId);
+        if (title) titleToBookmark.set(title, b);
+      }
 
       if (import.meta.env.DEV) {
         // eslint-disable-next-line no-console
         console.log('[autobook:dbg] bookCards$ rebuild', {
+          storageSource: $storageSource$,
           dataListLen: dataList.length,
           bookmarksLen: bookmarks.length,
-          bookmarks: bookmarks.map((b: any) => ({
-            dataId: b.dataId,
-            progress: b.progress,
-            exploredCharCount: b.exploredCharCount
-          }))
+          titleByDataIdSize: titleByDataId.size,
+          titleToBookmarkSize: titleToBookmark.size
         });
       }
 
-      const bookmarkMap = keyBy(bookmarks, 'dataId');
-      const isBrowserSource = $storageSource$ === StorageKey.BROWSER;
-
-      if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
-        console.log('[autobook:dbg] storageSource$=', $storageSource$, 'dataList ids=', dataList.map((d: any) => ({ id: d.id, title: d.title?.slice(0, 20) })));
-      }
-
-      const built = dataList
-        .filter((d) => !isBrowserSource || $showExternalPlaceholder$ || !d.isPlaceholder)
-        .map((d) => {
-          const bm = bookmarkMap.get(d.id);
-          // No IDB bookmark? Keep whatever the storage handler already
-          // gave us. tauri-fs-handler populates progress / lastBookmarkModified
-          // from the on-disk `progress_*.json` filename, so unconditionally
-          // spreading bookmarkToProgress(undefined, ...) would clobber that
-          // back to 0 for books that haven't been opened on this device.
-          if (import.meta.env.DEV) {
-            // eslint-disable-next-line no-console
-            console.log(`[autobook:dbg] card d.id=${d.id} "${d.title?.slice(0, 20)}" bm=`, bm ? { dataId: bm.dataId, progress: bm.progress } : 'NO_MATCH');
-          }
-          if (!bm) return d;
-          return { ...d, ...bookmarkToProgress(bm, d.characters || 0) };
-        })
-        .sort((card1: BookCardProps, card2: BookCardProps) =>
-          sortBookCards(card1, card2, sortProp, isTitleSort)
-        );
-
-      if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
-        console.log('[autobook:dbg] bookCards$ OUT progress=', built.map((c: any) => ({ id: c.id, progress: c.progress })));
-      }
-      return [...built];
+      return [
+        ...dataList
+          .filter((d) => !isBrowserSource || $showExternalPlaceholder$ || !d.isPlaceholder)
+          .map((d) => {
+            const bm = titleToBookmark.get(d.title);
+            if (import.meta.env.DEV) {
+              // eslint-disable-next-line no-console
+              console.log(
+                `[autobook:dbg] card "${d.title?.slice(0, 24)}" d.id=${d.id} bm=`,
+                bm ? { dataId: bm.dataId, progress: bm.progress } : 'NO_MATCH'
+              );
+            }
+            // No IDB bookmark for this title? Keep handler-provided values
+            // (tauri-fs-handler reads progress / lastBookmarkModified from
+            // on-disk `progress_*.json` filename when the book was synced
+            // but not opened locally).
+            if (!bm) return d;
+            return { ...d, ...bookmarkToProgress(bm, d.characters || 0) };
+          })
+          .sort((card1: BookCardProps, card2: BookCardProps) =>
+            sortBookCards(card1, card2, sortProp, isTitleSort)
+          )
+      ];
     }),
     share()
   );

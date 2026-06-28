@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.16
+
+- **真·真·修 Tauri FS hover 进度 0%**：1.12.2 / 1.12.12 / 1.12.13 / 1.12.14 / 1.12.15 五次都没修中根因。dev 控制台日志暴露了真相——`card d.id=604654529 "D: 死亡余韵" bm= NO_MATCH`：tauri-fs-handler 的 `getBookList` 把 card.id 设为 `stableIdFromTitle(title)`（一个哈希，例如 604654529），而 IDB bookmark.dataId 用的是 reader 第一次打开书时分配的 IDB 自增 id（例如 5）。两套 id 空间永远不重合，任何 keyBy('dataId') / `bookmarkMap.get(d.id)` 的合并都必定 NO_MATCH
+- 修法：用 title 做桥。新增 `idbTitleByDataId$` 观察 IDB `data` 表，把 bookmark.dataId 解析到 title，构 `titleToBookmark` Map，FS card 按 title 匹配。BROWSER 路径也走同一逻辑（browser-handler card.title 就是 IDB data.title，一样匹配）
+- 1.12.14 BROWSER-only 分支的合并、1.12.15 unconditional 合并都在治标——其实是一开始 join key 选错了
+
 ## 1.12.15
 
 - **修 1.12.14 的回归**：上一版给 Tauri FS / Dropbox 分支无脑 spread `bookmarkToProgress(undefined, ...)`，当 IDB 里没匹配的 bookmark（从别的机器同步来的书、刚导入还没读的书）就会把 tauri-fs-handler 从磁盘 `progress_*.json` 文件名解析出来的 progress / lastBookmarkModified 清零
