@@ -294,7 +294,7 @@
 
   const CUSTOM_PRESETS: Record<string, CustomPreset> = {
     siliconflow: {
-      label: '★ 硅基流动 SiliconFlow（国内直连，免费额度）',
+      label: '★ 硅基流动 SiliconFlow（国内直连，按字符付费）',
       method: 'POST',
       endpoint: 'https://api.siliconflow.cn/v1/audio/speech',
       headers: JSON.stringify(
@@ -327,7 +327,7 @@
       ],
       voicePath: 'voice',
       helpUrl: 'https://cloud.siliconflow.cn/account/ak',
-      helpHint: '注册送 14 元额度，OpenAI 兼容接口，国内直连不用梯子'
+      helpHint: 'OpenAI 兼容接口，国内直连不用梯子。按字符计费（CosyVoice2 约 ¥105/100 万字符），部分模型有限免，新用户没有 14 元赠送了（2025 中起取消）'
     },
     aliyunQwen: {
       label: 'Aliyun DashScope Qwen3-TTS-Flash（国内直连，URL 抽取）',

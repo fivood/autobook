@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.7
+
+- 修 SiliconFlow 预设标签和 helpHint 误导：2025 年中起新用户没有 14 元赠送额度了，文案改成「按字符计费」并加上 CosyVoice2 实际单价 `¥105/100 万字符`，注明「部分模型有限免」并明确赠送已取消。诚实标签 > 营销话术，新人不该因为旧文案上当
+
 ## 1.12.6
 
 - 修 Aliyun Qwen3-TTS 预设的「获取 API key ↗」按钮指向：原 dashscope.console.aliyun.com 已迁到百炼 bailian.console.aliyun.com，按钮 URL 改成 `https://bailian.console.aliyun.com/?tab=model#/api-key`。helpHint 文案也提一句"dashscope 已迁到 bailian"避免老用户迷惑。API 端点 `dashscope.aliyuncs.com/api/v1/...` 阿里继续兼容，不变
