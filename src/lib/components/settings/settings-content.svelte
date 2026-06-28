@@ -293,8 +293,38 @@
   }
 
   const CUSTOM_PRESETS: Record<string, CustomPreset> = {
+    mimo: {
+      label: '★ MiMo-V2.5-TTS（小米，国内直连，限时免费）',
+      method: 'POST',
+      endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json', 'api-key': 'YOUR_API_KEY' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
+        {
+          model: 'mimo-v2.5-tts',
+          messages: [
+            { role: 'user', content: '清晰、稳定、平和的朗读语气，适合长时间听书。' },
+            { role: 'assistant', content: '{text}' }
+          ],
+          audio: { format: 'wav', voice: '茉莉' },
+          stream: false
+        },
+        null,
+        2
+      ),
+      audioPath: 'choices.0.message.audio.data',
+      voices: [
+        { value: '茉莉', label: '茉莉（默认）' }
+      ],
+      voicePath: 'audio.voice',
+      helpUrl: 'https://api.xiaomimimo.com',
+      helpHint: '小米 MiMo TTS 限时免费阶段（中文听书白嫖首选）；不绑卡，注册即用'
+    },
     siliconflow: {
-      label: '★ 硅基流动 SiliconFlow（国内直连，按字符付费）',
+      label: '硅基流动 SiliconFlow（国内直连，按字符付费）',
       method: 'POST',
       endpoint: 'https://api.siliconflow.cn/v1/audio/speech',
       headers: JSON.stringify(
@@ -358,36 +388,6 @@
       voicePath: 'input.voice',
       helpUrl: 'https://bailian.console.aliyun.com/?tab=model#/api-key',
       helpHint: '阿里云百炼控制台（dashscope 已迁到 bailian） → 模型广场开通 Qwen-TTS → 右上角拿 API key'
-    },
-    mimo: {
-      label: 'MiMo-V2.5-TTS（小米，限时免费）',
-      method: 'POST',
-      endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
-      headers: JSON.stringify(
-        { 'Content-Type': 'application/json', 'api-key': 'YOUR_API_KEY' },
-        null,
-        2
-      ),
-      body: JSON.stringify(
-        {
-          model: 'mimo-v2.5-tts',
-          messages: [
-            { role: 'user', content: '清晰、稳定、平和的朗读语气，适合长时间听书。' },
-            { role: 'assistant', content: '{text}' }
-          ],
-          audio: { format: 'wav', voice: '茉莉' },
-          stream: false
-        },
-        null,
-        2
-      ),
-      audioPath: 'choices.0.message.audio.data',
-      voices: [
-        { value: '茉莉', label: '茉莉（默认）' }
-      ],
-      voicePath: 'audio.voice',
-      helpUrl: 'https://api.xiaomimimo.com',
-      helpHint: '小米 MiMo TTS，限时免费阶段'
     },
     volcengine: {
       label: '火山引擎 大模型 TTS（按字符付费）',
