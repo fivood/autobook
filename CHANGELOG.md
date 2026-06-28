@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.12.5
+
+- **TTS 预设列表重排 + 标签更新**：按"实用度"重排顺序：国内（SiliconFlow ★ / Aliyun Qwen3 / MiMo / 火山）→ 海外（Google Cloud ★ / Gemini / OpenAI / Azure / ElevenLabs）→ 手动配置兜底。两个"性价比之王"用 ★ 前缀标出
+- Azure Speech 标签改成「中文质量好但配置繁琐」—— 中文音色顶级但 5 步配置（注册 Azure → 创建 Speech 资源 → 拿 key + region → 替换 endpoint）门槛劝退
+- ElevenLabs 标签改成「仅英语推荐」—— 按字符贵 + 中文质量一般，主要听英语才用
+- **每个预设加 helpUrl + helpHint**：选中预设后，旁边出现「获取 API key ↗」按钮，点了用 Tauri shell 在系统默认浏览器打开 console；下方一行小字简述：注册流程、是否绑卡、有无免费额度、是否需梯子等关键信息
+- 示例：选 SiliconFlow → 看到「注册送 14 元额度，OpenAI 兼容接口，国内直连不用梯子」；选 Azure → 看到完整 5 步配置指引；选 OpenAI → 看到「需绑卡按字符计费；中文质量一般，英语优秀」
+
 ## 1.12.4
 
 - **新增 SiliconFlow 硅基流动 TTS 预设**：国内直连无需梯子，**OpenAI 兼容接口**，端点 `https://api.siliconflow.cn/v1/audio/speech`。聚合了 FunAudioLLM/CosyVoice2-0.5B（8 个中文音色 alex/anna/bella/benjamin/charles/claire/david/diana）、GPT-SoVITS、Fish-Speech 1.5 等开源模型，有**免费额度**，是当前国内最稳的 AI TTS 接入方式

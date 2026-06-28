@@ -286,94 +286,111 @@
     voiceFormat?: 'json' | 'xml' | 'url';
     /** Regex matching the part of the endpoint URL to replace when voiceFormat='url'. */
     voiceUrlPattern?: string;
+    /** Direct link to the provider's API key console page. */
+    helpUrl?: string;
+    /** One-line plain-language hint shown under the preset row. */
+    helpHint?: string;
   }
 
   const CUSTOM_PRESETS: Record<string, CustomPreset> = {
-    manual: {
-      label: '手动配置',
+    siliconflow: {
+      label: '★ 硅基流动 SiliconFlow（国内直连，免费额度）',
       method: 'POST',
-      endpoint: '',
-      headers: '{\n  "Content-Type": "application/json"\n}',
-      body: '',
-      audioPath: '',
-      proxyUrl: ''
-    },
-    openai: {
-      label: 'OpenAI TTS',
-      method: 'POST',
-      endpoint: 'https://api.openai.com/v1/audio/speech',
+      endpoint: 'https://api.siliconflow.cn/v1/audio/speech',
       headers: JSON.stringify(
         { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_API_KEY' },
         null,
         2
       ),
-      body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: '{text}' }, null, 2),
+      body: JSON.stringify(
+        {
+          model: 'FunAudioLLM/CosyVoice2-0.5B',
+          input: '{text}',
+          voice: 'FunAudioLLM/CosyVoice2-0.5B:alex',
+          response_format: 'mp3',
+          speed: 1.0
+        },
+        null,
+        2
+      ),
       voices: [
-        { value: 'alloy', label: 'Alloy' },
-        { value: 'echo', label: 'Echo' },
-        { value: 'fable', label: 'Fable' },
-        { value: 'onyx', label: 'Onyx' },
-        { value: 'nova', label: 'Nova' },
-        { value: 'shimmer', label: 'Shimmer' }
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:alex', label: 'CosyVoice2 · alex（男）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:anna', label: 'CosyVoice2 · anna（女）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:bella', label: 'CosyVoice2 · bella（女）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:benjamin', label: 'CosyVoice2 · benjamin（男）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:charles', label: 'CosyVoice2 · charles（男）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:claire', label: 'CosyVoice2 · claire（女）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:david', label: 'CosyVoice2 · david（男）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:diana', label: 'CosyVoice2 · diana（女）多语' },
+        { value: 'RVC-Boss/GPT-SoVITS:default', label: 'GPT-SoVITS · 默认' },
+        { value: 'fishaudio/fish-speech-1.5:default', label: 'Fish-Speech 1.5 · 默认' }
       ],
-      voicePath: 'voice'
+      voicePath: 'voice',
+      helpUrl: 'https://cloud.siliconflow.cn/account/ak',
+      helpHint: '注册送 14 元额度，OpenAI 兼容接口，国内直连不用梯子'
     },
-    elevenlabs: {
-      label: 'ElevenLabs',
+    aliyunQwen: {
+      label: 'Aliyun DashScope Qwen3-TTS-Flash（国内直连，URL 抽取）',
       method: 'POST',
       endpoint:
-        'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM?output_format=mp3_44100_128',
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
       headers: JSON.stringify(
-        { 'Content-Type': 'application/json', 'xi-api-key': 'YOUR_API_KEY' },
+        { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_DASHSCOPE_API_KEY' },
         null,
         2
       ),
       body: JSON.stringify(
         {
-          text: '{text}',
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+          model: 'qwen3-tts-flash',
+          input: { text: '{text}', voice: 'Cherry' },
+          parameters: { language_type: 'Chinese' }
         },
         null,
         2
       ),
+      audioPath: 'url:output.audio.url',
       voices: [
-        { value: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel' },
-        { value: 'AZnzlk1XvdvUeBnXmlld', label: 'Domi' },
-        { value: 'EXAVITQu4vr4xnSDxMaL', label: 'Bella' },
-        { value: 'ErXwobaYiN019PkySvjV', label: 'Antoni' },
-        { value: 'MF3mGyEYCl7XYWbV9V6O', label: 'Elli' },
-        { value: 'TxGEqnHWrfWFTfGW9XjX', label: 'Josh' }
+        { value: 'Cherry', label: 'Cherry（女）' },
+        { value: 'Serena', label: 'Serena（女）' },
+        { value: 'Ethan', label: 'Ethan（男）' },
+        { value: 'Chelsie', label: 'Chelsie（女）' }
       ],
-      voiceFormat: 'url',
-      voiceUrlPattern: '(?<=/text-to-speech/)[^/?]+'
+      voicePath: 'input.voice',
+      helpUrl: 'https://dashscope.console.aliyun.com/apiKey',
+      helpHint: '阿里云百炼控制台 → 开通 Qwen-TTS 服务 → 拿 API key'
     },
-    azure: {
-      label: 'Azure Speech (REST)',
+    mimo: {
+      label: 'MiMo-V2.5-TTS（小米，限时免费）',
       method: 'POST',
-      endpoint: 'https://YOUR_REGION.tts.speech.microsoft.com/cognitiveservices/v1',
+      endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
       headers: JSON.stringify(
+        { 'Content-Type': 'application/json', 'api-key': 'YOUR_API_KEY' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
         {
-          'Content-Type': 'application/ssml+xml',
-          'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
-          'Ocp-Apim-Subscription-Key': 'YOUR_SUBSCRIPTION_KEY'
+          model: 'mimo-v2.5-tts',
+          messages: [
+            { role: 'user', content: '清晰、稳定、平和的朗读语气，适合长时间听书。' },
+            { role: 'assistant', content: '{text}' }
+          ],
+          audio: { format: 'wav', voice: '茉莉' },
+          stream: false
         },
         null,
         2
       ),
-      body: `<speak version='1.0' xml:lang='zh-CN'><voice name='zh-CN-XiaoxiaoNeural'>{text}</voice></speak>`,
+      audioPath: 'choices.0.message.audio.data',
       voices: [
-        { value: 'zh-CN-XiaoxiaoNeural', label: '晓晓（女）' },
-        { value: 'zh-CN-YunyangNeural', label: '云扬（男）' },
-        { value: 'zh-CN-YunxiNeural', label: '云希（男）' },
-        { value: 'zh-CN-XiaoyiNeural', label: '小艺（女）' },
-        { value: 'zh-CN-YunjianNeural', label: '云健（男）' }
+        { value: '茉莉', label: '茉莉（默认）' }
       ],
-      voicePath: 'voice',
-      voiceFormat: 'xml'
+      voicePath: 'audio.voice',
+      helpUrl: 'https://api.xiaomimimo.com',
+      helpHint: '小米 MiMo TTS，限时免费阶段'
     },
     volcengine: {
-      label: '火山引擎 大模型 TTS',
+      label: '火山引擎 大模型 TTS（按字符付费）',
       method: 'POST',
       endpoint: 'https://openspeech.bytedance.com/api/v1/tts',
       headers: JSON.stringify(
@@ -397,10 +414,12 @@
         { value: 'BV702_streaming', label: 'BV702' },
         { value: 'BV703_streaming', label: 'BV703' }
       ],
-      voicePath: 'audio.voice_type'
+      voicePath: 'audio.voice_type',
+      helpUrl: 'https://console.volcengine.com/speech/app',
+      helpHint: '火山引擎控制台 → 语音合成 → 应用列表，appid + token 全在「应用详情」'
     },
     googleCloud: {
-      label: 'Google Cloud TTS（每月 100 万字符免费）',
+      label: '★ Google Cloud TTS（每月 100 万字符免费，性价比之王）',
       method: 'POST',
       endpoint:
         'https://texttospeech.googleapis.com/v1/text:synthesize?key=YOUR_API_KEY',
@@ -433,10 +452,12 @@
         { value: 'cmn-CN-Standard-A', label: 'Standard A（女）' },
         { value: 'cmn-CN-Standard-B', label: 'Standard B（男）' }
       ],
-      voicePath: 'voice.name'
+      voicePath: 'voice.name',
+      helpUrl: 'https://console.cloud.google.com/apis/credentials',
+      helpHint: '启用 Cloud Text-to-Speech API + 创建 API 密钥；国外服务，需梯子'
     },
     geminiTts: {
-      label: 'Gemini 2.5 Flash TTS（Cloud TTS API，MP3 直出）',
+      label: 'Gemini 2.5 Flash TTS（实验）',
       method: 'POST',
       endpoint:
         'https://texttospeech.googleapis.com/v1/text:synthesize?key=YOUR_API_KEY',
@@ -470,98 +491,100 @@
         { value: 'Orus', label: 'Orus（男）' },
         { value: 'Puck', label: 'Puck（男）' }
       ],
-      voicePath: 'voice.name'
+      voicePath: 'voice.name',
+      helpUrl: 'https://aistudio.google.com/apikey',
+      helpHint: '每月前 100 万字符免费；模型还在 Preview 阶段，可能限流'
     },
-    siliconflow: {
-      label: '硅基流动 SiliconFlow（国内直连，免费额度）',
+    openai: {
+      label: 'OpenAI TTS（适合英语）',
       method: 'POST',
-      endpoint: 'https://api.siliconflow.cn/v1/audio/speech',
+      endpoint: 'https://api.openai.com/v1/audio/speech',
       headers: JSON.stringify(
         { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_API_KEY' },
         null,
         2
       ),
-      body: JSON.stringify(
+      body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: '{text}' }, null, 2),
+      voices: [
+        { value: 'alloy', label: 'Alloy' },
+        { value: 'echo', label: 'Echo' },
+        { value: 'fable', label: 'Fable' },
+        { value: 'onyx', label: 'Onyx' },
+        { value: 'nova', label: 'Nova' },
+        { value: 'shimmer', label: 'Shimmer' }
+      ],
+      voicePath: 'voice',
+      helpUrl: 'https://platform.openai.com/api-keys',
+      helpHint: '需绑卡按字符计费；中文质量一般，英语优秀'
+    },
+    azure: {
+      label: 'Azure Speech（中文质量好但配置繁琐）',
+      method: 'POST',
+      endpoint: 'https://YOUR_REGION.tts.speech.microsoft.com/cognitiveservices/v1',
+      headers: JSON.stringify(
         {
-          model: 'FunAudioLLM/CosyVoice2-0.5B',
-          input: '{text}',
-          voice: 'FunAudioLLM/CosyVoice2-0.5B:alex',
-          response_format: 'mp3',
-          speed: 1.0
+          'Content-Type': 'application/ssml+xml',
+          'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+          'Ocp-Apim-Subscription-Key': 'YOUR_SUBSCRIPTION_KEY'
         },
         null,
         2
       ),
+      body: `<speak version='1.0' xml:lang='zh-CN'><voice name='zh-CN-XiaoxiaoNeural'>{text}</voice></speak>`,
       voices: [
-        { value: 'FunAudioLLM/CosyVoice2-0.5B:alex', label: 'CosyVoice2 · alex（男）' },
-        { value: 'FunAudioLLM/CosyVoice2-0.5B:anna', label: 'CosyVoice2 · anna（女）' },
-        { value: 'FunAudioLLM/CosyVoice2-0.5B:bella', label: 'CosyVoice2 · bella（女）' },
-        { value: 'FunAudioLLM/CosyVoice2-0.5B:benjamin', label: 'CosyVoice2 · benjamin（男）' },
-        { value: 'FunAudioLLM/CosyVoice2-0.5B:charles', label: 'CosyVoice2 · charles（男）' },
-        { value: 'FunAudioLLM/CosyVoice2-0.5B:claire', label: 'CosyVoice2 · claire（女）' },
-        { value: 'FunAudioLLM/CosyVoice2-0.5B:david', label: 'CosyVoice2 · david（男）' },
-        { value: 'FunAudioLLM/CosyVoice2-0.5B:diana', label: 'CosyVoice2 · diana（女）多语' },
-        { value: 'RVC-Boss/GPT-SoVITS:default', label: 'GPT-SoVITS · 默认' },
-        { value: 'fishaudio/fish-speech-1.5:default', label: 'Fish-Speech 1.5 · 默认' }
+        { value: 'zh-CN-XiaoxiaoNeural', label: '晓晓（女）' },
+        { value: 'zh-CN-YunyangNeural', label: '云扬（男）' },
+        { value: 'zh-CN-YunxiNeural', label: '云希（男）' },
+        { value: 'zh-CN-XiaoyiNeural', label: '小艺（女）' },
+        { value: 'zh-CN-YunjianNeural', label: '云健（男）' }
       ],
-      voicePath: 'voice'
+      voicePath: 'voice',
+      voiceFormat: 'xml',
+      helpUrl: 'https://portal.azure.com',
+      helpHint: '①注册 Azure（绑卡）→ ②创建 Speech 资源 → ③拿订阅 key + region → ④替换 endpoint 里 YOUR_REGION。每月 50 万字符免费，晓晓/云扬质量顶级'
     },
-    aliyunQwen: {
-      label: 'Aliyun DashScope Qwen3-TTS-Flash（国内直连，需 URL 抽取，实验）',
+    elevenlabs: {
+      label: 'ElevenLabs（仅英语推荐）',
       method: 'POST',
       endpoint:
-        'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+        'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM?output_format=mp3_44100_128',
       headers: JSON.stringify(
-        { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_DASHSCOPE_API_KEY' },
+        { 'Content-Type': 'application/json', 'xi-api-key': 'YOUR_API_KEY' },
         null,
         2
       ),
       body: JSON.stringify(
         {
-          model: 'qwen3-tts-flash',
-          input: { text: '{text}', voice: 'Cherry' },
-          parameters: { language_type: 'Chinese' }
+          text: '{text}',
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 }
         },
         null,
         2
       ),
-      audioPath: 'url:output.audio.url',
       voices: [
-        { value: 'Cherry', label: 'Cherry（女）' },
-        { value: 'Serena', label: 'Serena（女）' },
-        { value: 'Ethan', label: 'Ethan（男）' },
-        { value: 'Chelsie', label: 'Chelsie（女）' }
+        { value: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel' },
+        { value: 'AZnzlk1XvdvUeBnXmlld', label: 'Domi' },
+        { value: 'EXAVITQu4vr4xnSDxMaL', label: 'Bella' },
+        { value: 'ErXwobaYiN019PkySvjV', label: 'Antoni' },
+        { value: 'MF3mGyEYCl7XYWbV9V6O', label: 'Elli' },
+        { value: 'TxGEqnHWrfWFTfGW9XjX', label: 'Josh' }
       ],
-      voicePath: 'input.voice'
+      voiceFormat: 'url',
+      voiceUrlPattern: '(?<=/text-to-speech/)[^/?]+',
+      helpUrl: 'https://elevenlabs.io/app/settings/api-keys',
+      helpHint: '每月免费 1 万字符（试用）；中文一般、英语顶级；按字符贵'
     },
-    mimo: {
-      label: 'MiMo-V2.5-TTS（小米，限时免费）',
+    manual: {
+      label: '手动配置（自由接入）',
       method: 'POST',
-      endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
-      headers: JSON.stringify(
-        { 'Content-Type': 'application/json', 'api-key': 'YOUR_API_KEY' },
-        null,
-        2
-      ),
-      body: JSON.stringify(
-        {
-          model: 'mimo-v2.5-tts',
-          messages: [
-            { role: 'user', content: '清晰、稳定、平和的朗读语气，适合长时间听书。' },
-            { role: 'assistant', content: '{text}' }
-          ],
-          audio: { format: 'wav', voice: '茉莉' },
-          stream: false
-        },
-        null,
-        2
-      ),
-      audioPath: 'choices.0.message.audio.data',
-      voices: [
-        { value: '茉莉', label: '茉莉（默认）' }
-      ],
-      voicePath: 'audio.voice'
-    }
+      endpoint: '',
+      headers: '{\n  "Content-Type": "application/json"\n}',
+      body: '',
+      audioPath: '',
+      proxyUrl: '',
+      helpHint: '没在上面的列表里？自己填 endpoint / headers / body / audioPath。{text} 占位符会替换成当前句子。'
+    },
   };
 
   /** Snapshot the live fields into the map under the given preset id. */
@@ -721,6 +744,19 @@
   function onPresetSelectChange(ev: Event) {
     const target = ev.currentTarget as HTMLSelectElement;
     switchCustomPreset(target.value);
+  }
+
+  /** Open a URL in the user's default browser (Tauri shell), or a new
+   * tab in the web build. Used by the TTS preset "获取 API key" buttons. */
+  async function openExternal(url: string) {
+    try {
+      const { open } = await import('@tauri-apps/plugin-shell');
+      await open(url);
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }
   }
 
   // --- TTS shortcut recorder ---
@@ -2657,27 +2693,40 @@
             不支持 speakingRate / pitch / SSML，需要这些参数请切回 WaveNet / Neural2。代理 URL 仅影响本应用的 TTS
             请求。
           </p>
+          {@const activePreset = CUSTOM_PRESETS[$ttsCustomActivePreset$] ?? CUSTOM_PRESETS.manual}
           <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
             <span class="text-xs opacity-80 pt-2">服务预设</span>
-            <div class="flex items-center gap-2 flex-wrap">
-              <select
-                class="settings-input px-2 py-1 text-sm"
-                value={$ttsCustomActivePreset$}
-                on:change={onPresetSelectChange}
-              >
-                {#each Object.entries(CUSTOM_PRESETS) as [id, preset] (id)}
-                  <option value={id}>{preset.label}</option>
-                {/each}
-              </select>
-              <button
-                class="settings-input px-2 py-1 text-xs"
-                title="把当前预设的字段重置为默认模板（不影响其他预设保存的 key）"
-                on:click={resetActivePresetToDefaults}
-              >恢复模板<Ripple /></button>
-              <button
-                class="settings-input px-2 py-1 text-xs"
-                on:click={() => (revealCustomSecrets = !revealCustomSecrets)}
-              >{revealCustomSecrets ? '隐藏内容' : '显示内容'}<Ripple /></button>
+            <div class="flex flex-col gap-1.5">
+              <div class="flex items-center gap-2 flex-wrap">
+                <select
+                  class="settings-input px-2 py-1 text-sm"
+                  value={$ttsCustomActivePreset$}
+                  on:change={onPresetSelectChange}
+                >
+                  {#each Object.entries(CUSTOM_PRESETS) as [id, preset] (id)}
+                    <option value={id}>{preset.label}</option>
+                  {/each}
+                </select>
+                <button
+                  class="settings-input px-2 py-1 text-xs"
+                  title="把当前预设的字段重置为默认模板（不影响其他预设保存的 key）"
+                  on:click={resetActivePresetToDefaults}
+                >恢复模板<Ripple /></button>
+                <button
+                  class="settings-input px-2 py-1 text-xs"
+                  on:click={() => (revealCustomSecrets = !revealCustomSecrets)}
+                >{revealCustomSecrets ? '隐藏内容' : '显示内容'}<Ripple /></button>
+                {#if activePreset.helpUrl}
+                  <button
+                    type="button"
+                    class="settings-input px-2 py-1 text-xs"
+                    on:click={() => openExternal(activePreset.helpUrl || '')}
+                  >获取 API key ↗</button>
+                {/if}
+              </div>
+              {#if activePreset.helpHint}
+                <p class="text-xs opacity-65 leading-snug">{activePreset.helpHint}</p>
+              {/if}
             </div>
 
             {#if presetVoices.length}
