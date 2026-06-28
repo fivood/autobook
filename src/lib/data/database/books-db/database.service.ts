@@ -329,7 +329,12 @@ export class DatabaseService {
   async putBookmark(bookmarkData: BooksDbBookmarkData) {
     const db = await this.db;
 
-    return db.put('bookmark', bookmarkData);
+    const result = await db.put('bookmark', bookmarkData);
+    // bookmarks$ feeds library hover popovers and the progress bar on
+    // book cards; without this nudge they keep showing the stale
+    // app-start snapshot and never reflect new reading progress.
+    this.bookmarksChanged$.next();
+    return result;
   }
 
   async putAudioBook(audioBook: BooksDbAudioBook) {
@@ -423,6 +428,9 @@ export class DatabaseService {
 
       if (shouldDeleteLastItem) {
         this.lastItemChanged$.next();
+      }
+      if (shouldDeleteBookmark) {
+        this.bookmarksChanged$.next();
       }
     } catch (error: any) {
       try {

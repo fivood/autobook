@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.12
+
+- **真修阅读进度 hover 不更新**：1.12.2 改了 `bookmarkToProgress` 兼容老数据，但症状没消失——根因是更底层的：`database.bookmarks$` 观察 `bookmarksChanged$` 这个 Subject，**只在 replicator 导入/导出时 fire**，正常 `putBookmark` 调用路径根本没触发。所以阅读器里读完保存进度后，`bookmarks$` 还停留在 app 启动时的快照。书库 hover 弹窗 / 卡片进度条永远显示打开 AutoBook 那一刻的进度
+- 在 `putBookmark` 和 transaction-级 `delete bookmark` 路径都补上 `this.bookmarksChanged$.next()`，正常保存进度后回到书库即时反映
+- 之前 1.12.2 的 fallback 改动（用 `exploredCharCount / book.characters` 兜底）依然保留，对老书签依然有效
+
 ## 1.12.11
 
 - **修 v1.12.4 – 1.12.10 CI 全线构建失败**：根因是 `ttsCustomProxyUrl$` 的 store 导出 + 对应 Rust `custom_tts_synthesize` 的 `proxy_url` 参数 + auto-reader-custom.ts 的 import 一直只在我本地工作树里没 git add，自 1.12.4 起所有 tag 推上去 CI 一拉就报 `"ttsCustomProxyUrl$" is not exported by "src/lib/data/store.ts"`。本地构建一直成功（文件存在）让我没察觉。
