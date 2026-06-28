@@ -94,42 +94,22 @@
         });
       }
 
-      if ($storageSource$ === StorageKey.BROWSER) {
-        const bookmarkMap = keyBy(bookmarks, 'dataId');
-
-        return [
-          ...dataList
-            .filter((d) => $showExternalPlaceholder$ || !d.isPlaceholder)
-            .map((d) => {
-              const bm = bookmarkMap.get(d.id);
-              const enriched = bookmarkToProgress(bm, d.characters || 0);
-              if (import.meta.env.DEV) {
-                // eslint-disable-next-line no-console
-                console.log(`[autobook:dbg] card d.id=${d.id} title="${d.title?.slice(0, 30)}"`, {
-                  matchedBookmark: !!bm,
-                  bookmarkDataId: bm?.dataId,
-                  bookmarkProgress: bm?.progress,
-                  bookmarkExploredChars: bm?.exploredCharCount,
-                  bookCharacters: d.characters,
-                  computedProgress: enriched.progress
-                });
-              }
-              return { ...d, ...enriched };
-            })
-            .sort((card1: BookCardProps, card2: BookCardProps) =>
-              sortBookCards(card1, card2, sortProp, isTitleSort)
-            )
-        ];
-      }
-
-      // Non-BROWSER storage sources (Tauri FS, Dropbox, etc.) used to skip
-      // the bookmark merge entirely, so hover popovers and progress bars
-      // stayed at 0% even when bookmark.progress was correctly populated
-      // in IDB. Apply the same enrichment here.
       const bookmarkMap = keyBy(bookmarks, 'dataId');
+      const isBrowserSource = $storageSource$ === StorageKey.BROWSER;
+
       return [
         ...dataList
-          .map((d) => ({ ...d, ...bookmarkToProgress(bookmarkMap.get(d.id), d.characters || 0) }))
+          .filter((d) => !isBrowserSource || $showExternalPlaceholder$ || !d.isPlaceholder)
+          .map((d) => {
+            const bm = bookmarkMap.get(d.id);
+            // No IDB bookmark? Keep whatever the storage handler already
+            // gave us. tauri-fs-handler populates progress / lastBookmarkModified
+            // from the on-disk `progress_*.json` filename, so unconditionally
+            // spreading bookmarkToProgress(undefined, ...) would clobber that
+            // back to 0 for books that haven't been opened on this device.
+            if (!bm) return d;
+            return { ...d, ...bookmarkToProgress(bm, d.characters || 0) };
+          })
           .sort((card1: BookCardProps, card2: BookCardProps) =>
             sortBookCards(card1, card2, sortProp, isTitleSort)
           )
