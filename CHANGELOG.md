@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.12.10
+
+- **修 Web Speech TTS 滚动模式下「中断再开（光标位置）只读一段就停」**：根因两处。一是 `AutoReaderContinuous.speakNext` 没做空文本判断 —— 光标位置策略可能让 `slice(charOffset)` 出空字符串（光标落在段末），Web Speech 收到空 utterance 抛 `invalid-argument` 错误。二是 `utt.onerror` 处理把所有非 canceled/interrupted 错误都视为致命直接 `off()`，整个朗读会话被终止
+- 修法：
+  - speakNext 加空文本短路（跟 SAPI / Custom / Kokoro 一致）：空 / 只含空白时 `paraIndex++` 通过 `queueMicrotask` 递归到下一段
+  - onerror 对 `invalid-argument` / `text-too-long` / `audio-busy` 这类**可恢复错误**改为跳过当前段继续，只有真致命错误（合成失败 / 网络 / 没语音）才停整段
+- 行为变化：现在不管光标策略落在哪儿，TTS 都能稳定向下播
+
 ## 1.12.9
 
 - **修「优先阅读器样式」开启后图片不显示**：原 `&.ttu-apply-important { :global(*) { font-family: inherit !important; } }` 的通配符 `*` 把规则套到了 `<img>` / `<svg>` / `<picture>` / `<source>` 上。Chromium 渲染器在 EPUB 内联样式跟 `!important` 字体规则冲突时偶发图像不渲染。改成排除式选择器 `:not(img):not(svg):not(picture):not(source):not(video):not(canvas)`，只对真正承载文字的元素生效

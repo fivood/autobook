@@ -230,6 +230,19 @@ export class AutoReaderContinuous implements AutoReader {
     }
 
     const text = this.paragraphs[this.paraIndex].slice(this.charOffset);
+    // Skip empty / whitespace-only slices and roll forward. This triggers
+    // when the cursor-start strategy lands the position at the end of a
+    // paragraph — without this guard Web Speech rejects the empty
+    // utterance with `invalid-argument`, which the error handler used to
+    // treat as fatal and stop the whole session ("only one paragraph
+    // reads then nothing"). SAPI / custom / Kokoro engines already do
+    // this skip explicitly.
+    if (!text || !text.trim()) {
+      this.paraIndex += 1;
+      this.charOffset = 0;
+      queueMicrotask(() => this.speakNext());
+      return;
+    }
     const utt = new SpeechSynthesisUtterance(text);
     utt.rate = this._rate;
     utt.lang = this._lang;
@@ -266,6 +279,22 @@ export class AutoReaderContinuous implements AutoReader {
 
     utt.onerror = (ev) => {
       if (ev.error === 'canceled' || ev.error === 'interrupted') {
+        return;
+      }
+      // Recoverable errors: skip this paragraph and try the next one
+      // instead of killing the whole session. invalid-argument is the
+      // common one we hit on empty / whitespace-only chunks after the
+      // user restarts TTS with the cursor near a paragraph boundary.
+      if (
+        ev.error === 'invalid-argument' ||
+        ev.error === 'text-too-long' ||
+        ev.error === 'audio-busy'
+      ) {
+        // eslint-disable-next-line no-console
+        console.warn('[auto-reader] speech recoverable error, skipping paragraph:', ev.error);
+        this.paraIndex += 1;
+        this.charOffset = 0;
+        queueMicrotask(() => this.speakNext());
         return;
       }
       // eslint-disable-next-line no-console
