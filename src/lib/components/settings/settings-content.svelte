@@ -356,8 +356,8 @@
         { value: 'Chelsie', label: 'Chelsie（女）' }
       ],
       voicePath: 'input.voice',
-      helpUrl: 'https://dashscope.console.aliyun.com/apiKey',
-      helpHint: '阿里云百炼控制台 → 开通 Qwen-TTS 服务 → 拿 API key'
+      helpUrl: 'https://bailian.console.aliyun.com/?tab=model#/api-key',
+      helpHint: '阿里云百炼控制台（dashscope 已迁到 bailian） → 模型广场开通 Qwen-TTS → 右上角拿 API key'
     },
     mimo: {
       label: 'MiMo-V2.5-TTS（小米，限时免费）',

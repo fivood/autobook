@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.6
+
+- 修 Aliyun Qwen3-TTS 预设的「获取 API key ↗」按钮指向：原 dashscope.console.aliyun.com 已迁到百炼 bailian.console.aliyun.com，按钮 URL 改成 `https://bailian.console.aliyun.com/?tab=model#/api-key`。helpHint 文案也提一句"dashscope 已迁到 bailian"避免老用户迷惑。API 端点 `dashscope.aliyuncs.com/api/v1/...` 阿里继续兼容，不变
+
 ## 1.12.5
 
 - **TTS 预设列表重排 + 标签更新**：按"实用度"重排顺序：国内（SiliconFlow ★ / Aliyun Qwen3 / MiMo / 火山）→ 海外（Google Cloud ★ / Gemini / OpenAI / Azure / ElevenLabs）→ 手动配置兜底。两个"性价比之王"用 ★ 前缀标出
