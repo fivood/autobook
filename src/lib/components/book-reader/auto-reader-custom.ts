@@ -54,6 +54,7 @@ export class AutoReaderCustom implements AutoReader {
   }
 
   setContentEl(el: HTMLElement | undefined) {
+    if (this.contentEl === el) return;
     this.contentEl = el;
     this.reset();
   }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.13
+
+- **修打字机加速后停止播放且显示全文的 bug**：根因连锁——所有 4 个 TTS 引擎的 `setContentEl(el)` **不做幂等检查**，每次调用都 `reset()` → `off()`；book-reader-continuous 的 `$:{}` 反应块对 `multiplier` 变化也敏感，加速点击会重跑该块、调 `setContentEl(contentEl)` 同一节点；reset() 内部 `off()` 让 autoReader 的 `wasReaderEnabled$` 假阳性 fire false → +page.svelte 订阅器调 `autoScroller.revealAll()` → 全文显示 + revealedIndex 到末端 → 下次 `revealNext` 撞底 `off()` 自杀。所以"加速 = 停 + 显示全文 + 再点也无效（revealedIndex 已经在末端，立刻自杀）"
+- 修法：4 个 AutoReader 引擎（Web Speech / SAPI / Custom / Kokoro）的 `setContentEl` 都加 `if (this.contentEl === el) return` 幂等短路，照 AutoScroller 的写法
+- **修速度徽标「12 字/秒」和 AutoReaderFab 音量按钮重叠**：徽标原来 `absolute -top-2 -right-2` 朝右上角伸出，跟 AutoReaderFab 在 right-20 的图标在视觉上撞了。改成 `-top-5 left-1/2 -translate-x-1/2` 浮在播放按钮**正上方**居中显示，永不重叠
+
 ## 1.12.12
 
 - **真修阅读进度 hover 不更新**：1.12.2 改了 `bookmarkToProgress` 兼容老数据，但症状没消失——根因是更底层的：`database.bookmarks$` 观察 `bookmarksChanged$` 这个 Subject，**只在 replicator 导入/导出时 fire**，正常 `putBookmark` 调用路径根本没触发。所以阅读器里读完保存进度后，`bookmarks$` 还停留在 app 启动时的快照。书库 hover 弹窗 / 卡片进度条永远显示打开 AutoBook 那一刻的进度

@@ -58,6 +58,14 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   setContentEl(el: HTMLElement | undefined) {
+    // Idempotent: re-running with the same element node (which the
+    // continuous reader's $:{} block does on every prop change, including
+    // multiplier ticks from the speed buttons) would otherwise reset()
+    // the engine — which calls off() and emits a spurious
+    // wasReaderEnabled=false. The +page.svelte subscriber then runs
+    // autoScroller.revealAll(), the typewriter hits end-of-content, and
+    // playback dies.
+    if (this.contentEl === el) return;
     this.contentEl = el;
     this.reset();
   }

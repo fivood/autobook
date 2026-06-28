@@ -111,8 +111,11 @@
       <Fa icon={enabled ? faPause : faPlay} size="lg" />
       <span class="sr-only">{enabled ? '暂停' : '开始'}自动阅读</span>
       {#if enabled}
+        <!-- Centered ABOVE the pause button instead of sticking out the
+             right corner, where it used to overlap with the AutoReaderFab
+             at right-20 and become unreadable. -->
         <span
-          class="absolute -top-2 -right-2 min-w-[2rem] rounded-full bg-black/40 px-1 text-[10px] leading-5"
+          class="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/45 px-2 py-0.5 text-[10px] leading-tight pointer-events-none"
           title="速度 (A 加速 / D 减速)"
         >
           {$multiplier$}字/秒
