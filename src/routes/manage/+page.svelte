@@ -123,29 +123,11 @@
         if (title) titleToBookmark.set(title, b);
       }
 
-      if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
-        console.log('[autobook:dbg] bookCards$ rebuild', {
-          storageSource: $storageSource$,
-          dataListLen: dataList.length,
-          bookmarksLen: bookmarks.length,
-          titleByDataIdSize: titleByDataId.size,
-          titleToBookmarkSize: titleToBookmark.size
-        });
-      }
-
       return [
         ...dataList
           .filter((d) => !isBrowserSource || $showExternalPlaceholder$ || !d.isPlaceholder)
           .map((d) => {
             const bm = titleToBookmark.get(d.title);
-            if (import.meta.env.DEV) {
-              // eslint-disable-next-line no-console
-              console.log(
-                `[autobook:dbg] card "${d.title?.slice(0, 24)}" d.id=${d.id} bm=`,
-                bm ? { dataId: bm.dataId, progress: bm.progress } : 'NO_MATCH'
-              );
-            }
             // No IDB bookmark for this title? Keep handler-provided values
             // (tauri-fs-handler reads progress / lastBookmarkModified from
             // on-disk `progress_*.json` filename when the book was synced

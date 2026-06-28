@@ -39,16 +39,6 @@
 
   $: detailCard = detailId != null ? bookCards.find((c) => c.id === detailId) : undefined;
 
-  $: if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
-    console.log('[autobook:dbg] BookCardList received bookCards progress=',
-      bookCards.map((c) => ({ id: c.id, title: c.title.slice(0, 20), progress: c.progress })));
-  }
-  $: if (import.meta.env.DEV && detailCard) {
-    // eslint-disable-next-line no-console
-    console.log('[autobook:dbg] detailCard reactive', { id: detailCard.id, progress: detailCard.progress });
-  }
-
   function onCardEnter(card: BookCardProps, ev: MouseEvent) {
     if (selectedBookIds.size) return;
     hoveringBookId = card.id;

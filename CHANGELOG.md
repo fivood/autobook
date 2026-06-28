@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.12.17
+
+- 撤掉 1.12.14 ~ 1.12.16 引入的 `[autobook:dbg]` console.log（hover 进度问题已确认修好，调试探针完成任务）
+- 保留 putBookmark 的一行 dev log 和 `window.__autobook`（dev-only，prod 自动剥离，留作以后调试入口）
+
 ## 1.12.16
 
 - **真·真·修 Tauri FS hover 进度 0%**：1.12.2 / 1.12.12 / 1.12.13 / 1.12.14 / 1.12.15 五次都没修中根因。dev 控制台日志暴露了真相——`card d.id=604654529 "D: 死亡余韵" bm= NO_MATCH`：tauri-fs-handler 的 `getBookList` 把 card.id 设为 `stableIdFromTitle(title)`（一个哈希，例如 604654529），而 IDB bookmark.dataId 用的是 reader 第一次打开书时分配的 IDB 自增 id（例如 5）。两套 id 空间永远不重合，任何 keyBy('dataId') / `bookmarkMap.get(d.id)` 的合并都必定 NO_MATCH
