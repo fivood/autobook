@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.12.9
+
+- **修「优先阅读器样式」开启后图片不显示**：原 `&.ttu-apply-important { :global(*) { font-family: inherit !important; } }` 的通配符 `*` 把规则套到了 `<img>` / `<svg>` / `<picture>` / `<source>` 上。Chromium 渲染器在 EPUB 内联样式跟 `!important` 字体规则冲突时偶发图像不渲染。改成排除式选择器 `:not(img):not(svg):not(picture):not(source):not(video):not(canvas)`，只对真正承载文字的元素生效
+- 顺手修「图片只占一段的 `<p>` 被全局 text-indent 推移」：很多 EPUB 用 `<p><img/></p>` 包裹插图，开启「优先阅读器样式」后 `:global(p) { text-indent: ... !important }` 会让插图整体右移。新加 `:global(p:has(> img):not(:has(> :not(img))))` 规则把"只含图片的段落"text-indent 强制归零
+
 ## 1.12.8
 
 - TTS 预设顺序再调整：**MiMo 提到第一位**，因为 v1.12.7 验证 SiliconFlow 已经取消新人赠送、MiMo 仍在限时免费阶段。★ 推荐标记从 SiliconFlow 挪到 MiMo —— 「免费 + 国内直连」是新人最该先试的

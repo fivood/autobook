@@ -133,12 +133,29 @@
   &.ttu-apply-important {
     font-family: var(--font-family-serif, 'Noto Sans SC', 'Noto Serif JP', serif) !important;
 
-    :global(*) {
+    // Cover only text-bearing descendants. The previous universal `*` rule
+    // bled into <img> / <svg> / <picture> / <source>, which Chromium can
+    // hit edge cases on when EPUB inline styles contradict the
+    // !important font reset (manifests as images failing to render).
+    :global(*:not(img):not(svg):not(picture):not(source):not(video):not(canvas)) {
       font-family: inherit !important;
     }
 
+    // text-indent on <p> nudges any inline content (including images)
+    // to the right. EPUB illustrations are often wrapped in <p>; force
+    // the indent to 0 on paragraphs that ONLY hold an image so the
+    // image stays centered/aligned with its expected position.
     :global(p) {
       text-indent: var(--book-content-text-intendation, 0rem) !important;
+    }
+    // Image-only paragraphs: cancel text-indent so EPUB illustrations
+    // stay centered with their expected layout instead of being shifted
+    // by the user's per-paragraph indent.
+    :global(p:has(> img):not(:has(> :not(img)))) {
+      text-indent: 0 !important;
+    }
+    :global(p:has(> picture):not(:has(> :not(picture)))) {
+      text-indent: 0 !important;
     }
 
     &.ttu-apply-font-weight {
