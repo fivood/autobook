@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.15
+
+- **修 1.12.14 的回归**：上一版给 Tauri FS / Dropbox 分支无脑 spread `bookmarkToProgress(undefined, ...)`，当 IDB 里没匹配的 bookmark（从别的机器同步来的书、刚导入还没读的书）就会把 tauri-fs-handler 从磁盘 `progress_*.json` 文件名解析出来的 progress / lastBookmarkModified 清零
+- 现在改成：bookmark 不存在就保留 dataList 原值；存在才合并
+- 顺手把 BROWSER 和非 BROWSER 两条分支合一，placeholder 过滤还是只对 BROWSER 用（FS handler 不会产 placeholder）
+
 ## 1.12.14
 
 - **真·修阅读进度 hover 显示 0%（Tauri FS / Dropbox 用户）**：原 `bookCards$` 里只有 `$storageSource$ === BROWSER` 那一支会调 `bookmarkToProgress` 合并书签进度，其他存储源（`ttu-internal-tauri-fs` 桌面用户、Dropbox 等）直接返回 dataList 不带 progress 字段。所以 1.12.2 / 1.12.12 / 1.12.13 三次修都没辙——书签数据完全正确（dev 控制台看到 dataId=5 progress=0.143），就是 manage 页 BROWSER 分支才合并它
