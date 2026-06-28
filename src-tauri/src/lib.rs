@@ -279,6 +279,7 @@ async fn custom_tts_synthesize(
   headers: std::collections::HashMap<String, String>,
   body_template: String,
   audio_path: Option<String>,
+  proxy_url: Option<String>,
   text: String,
 ) -> Result<String, String> {
   let audio = custom_tts::synthesize(
@@ -287,6 +288,7 @@ async fn custom_tts_synthesize(
     &headers,
     &body_template,
     audio_path.as_deref(),
+    proxy_url.as_deref(),
     &text,
   )
   .await?;

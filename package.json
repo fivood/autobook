@@ -1,6 +1,6 @@
 {
   "name": "ebook-reader-desktop",
-  "version": "1.12.10",
+  "version": "1.12.11",
   "type": "module",
   "private": true,
   "scripts": {

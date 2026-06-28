@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.11
+
+- **修 v1.12.4 – 1.12.10 CI 全线构建失败**：根因是 `ttsCustomProxyUrl$` 的 store 导出 + 对应 Rust `custom_tts_synthesize` 的 `proxy_url` 参数 + auto-reader-custom.ts 的 import 一直只在我本地工作树里没 git add，自 1.12.4 起所有 tag 推上去 CI 一拉就报 `"ttsCustomProxyUrl$" is not exported by "src/lib/data/store.ts"`。本地构建一直成功（文件存在）让我没察觉。
+- 这次把三处补齐：store.ts 加 `ttsCustomProxyUrl$` export 和 `TtsCustomPresetState.proxyUrl` 字段；auto-reader-custom.ts 调用 invoke 时把 proxyUrl 透传给 Rust；lib.rs 的 `custom_tts_synthesize` 接受 `proxy_url: Option<String>` 并转给 `custom_tts::synthesize`（Rust 侧已经支持 proxy）
+- 自此自定义 HTTP TTS 现已支持代理（OpenAI / ElevenLabs 在国内可通过 HTTP/SOCKS5 代理走通）
+
 ## 1.12.10
 
 - **修 Web Speech TTS 滚动模式下「中断再开（光标位置）只读一段就停」**：根因两处。一是 `AutoReaderContinuous.speakNext` 没做空文本判断 —— 光标位置策略可能让 `slice(charOffset)` 出空字符串（光标落在段末），Web Speech 收到空 utterance 抛 `invalid-argument` 错误。二是 `utt.onerror` 处理把所有非 canceled/interrupted 错误都视为致命直接 `off()`，整个朗读会话被终止

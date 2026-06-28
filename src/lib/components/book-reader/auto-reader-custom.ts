@@ -17,7 +17,8 @@ import {
   ttsCustomBody$,
   ttsCustomEndpoint$,
   ttsCustomHeaders$,
-  ttsCustomMethod$
+  ttsCustomMethod$,
+  ttsCustomProxyUrl$
 } from '$lib/data/store';
 import {
   computeGlobalCharIndex,
@@ -207,6 +208,7 @@ export class AutoReaderCustom implements AutoReader {
         headers: headersObj,
         bodyTemplate: ttsCustomBody$.getValue() || '',
         audioPath: ttsCustomAudioPath$.getValue() || null,
+        proxyUrl: ttsCustomProxyUrl$.getValue() || null,
         text
       });
       if (token !== this.currentSpeakToken || !this.enabled$.getValue()) return;

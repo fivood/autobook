@@ -150,6 +150,8 @@ export const ttsCustomHeaders$ = writableStringLocalStorageSubject()(
 export const ttsCustomBody$ = writableStringLocalStorageSubject()('ttsCustomBody', '');
 /** Dot-path to base64 audio in a JSON response (e.g. choices.0.message.audio.data). Empty = raw audio bytes. */
 export const ttsCustomAudioPath$ = writableStringLocalStorageSubject()('ttsCustomAudioPath', '');
+/** Optional HTTP/SOCKS5 proxy for the TTS request (e.g. http://127.0.0.1:7890). Empty = no proxy. */
+export const ttsCustomProxyUrl$ = writableStringLocalStorageSubject()('ttsCustomProxyUrl', '');
 
 export interface TtsCustomPresetState {
   endpoint: string;
@@ -157,6 +159,7 @@ export interface TtsCustomPresetState {
   headers: string;
   body: string;
   audioPath: string;
+  proxyUrl: string;
 }
 
 /** Which named preset is currently active. The five ttsCustom* stores above
