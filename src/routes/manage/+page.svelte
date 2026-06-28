@@ -97,23 +97,36 @@
       const bookmarkMap = keyBy(bookmarks, 'dataId');
       const isBrowserSource = $storageSource$ === StorageKey.BROWSER;
 
-      return [
-        ...dataList
-          .filter((d) => !isBrowserSource || $showExternalPlaceholder$ || !d.isPlaceholder)
-          .map((d) => {
-            const bm = bookmarkMap.get(d.id);
-            // No IDB bookmark? Keep whatever the storage handler already
-            // gave us. tauri-fs-handler populates progress / lastBookmarkModified
-            // from the on-disk `progress_*.json` filename, so unconditionally
-            // spreading bookmarkToProgress(undefined, ...) would clobber that
-            // back to 0 for books that haven't been opened on this device.
-            if (!bm) return d;
-            return { ...d, ...bookmarkToProgress(bm, d.characters || 0) };
-          })
-          .sort((card1: BookCardProps, card2: BookCardProps) =>
-            sortBookCards(card1, card2, sortProp, isTitleSort)
-          )
-      ];
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log('[autobook:dbg] storageSource$=', $storageSource$, 'dataList ids=', dataList.map((d: any) => ({ id: d.id, title: d.title?.slice(0, 20) })));
+      }
+
+      const built = dataList
+        .filter((d) => !isBrowserSource || $showExternalPlaceholder$ || !d.isPlaceholder)
+        .map((d) => {
+          const bm = bookmarkMap.get(d.id);
+          // No IDB bookmark? Keep whatever the storage handler already
+          // gave us. tauri-fs-handler populates progress / lastBookmarkModified
+          // from the on-disk `progress_*.json` filename, so unconditionally
+          // spreading bookmarkToProgress(undefined, ...) would clobber that
+          // back to 0 for books that haven't been opened on this device.
+          if (import.meta.env.DEV) {
+            // eslint-disable-next-line no-console
+            console.log(`[autobook:dbg] card d.id=${d.id} "${d.title?.slice(0, 20)}" bm=`, bm ? { dataId: bm.dataId, progress: bm.progress } : 'NO_MATCH');
+          }
+          if (!bm) return d;
+          return { ...d, ...bookmarkToProgress(bm, d.characters || 0) };
+        })
+        .sort((card1: BookCardProps, card2: BookCardProps) =>
+          sortBookCards(card1, card2, sortProp, isTitleSort)
+        );
+
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log('[autobook:dbg] bookCards$ OUT progress=', built.map((c: any) => ({ id: c.id, progress: c.progress })));
+      }
+      return [...built];
     }),
     share()
   );
