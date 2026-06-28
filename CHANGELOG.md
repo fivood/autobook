@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.12.4
+
+- **新增 SiliconFlow 硅基流动 TTS 预设**：国内直连无需梯子，**OpenAI 兼容接口**，端点 `https://api.siliconflow.cn/v1/audio/speech`。聚合了 FunAudioLLM/CosyVoice2-0.5B（8 个中文音色 alex/anna/bella/benjamin/charles/claire/david/diana）、GPT-SoVITS、Fish-Speech 1.5 等开源模型，有**免费额度**，是当前国内最稳的 AI TTS 接入方式
+- **新增 Aliyun DashScope Qwen3-TTS-Flash 预设**：端点 `https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`。Qwen3-TTS-Flash 4 个音色（Cherry / Serena / Ethan / Chelsie）。⚠ DashScope 响应是包了音频 URL 的 JSON 不是裸字节，需配合下面的 URL 抽取能力
+- **新「url:」音频路径抽取**：自定义 HTTP TTS 引擎新增 audioPath 前缀 `url:` 语法 ——`url:output.audio.url` 表示「先在 JSON 响应里按 dot-path 取到一个 URL，再后端二次 fetch 这个 URL 当音频字节用」。覆盖 DashScope Qwen / 火山引擎流式 / 任何「响应里给 URL 不给字节」的服务。改动只在 Rust 端 `custom_tts::synthesize`，前端零侵入
+- 占位符 placeholder 文字更新说明新语法：「留空 = 响应是裸音频字节；JSON 里 base64 字段填 dot-path；JSON 里是音频 URL 填 url:dot-path」
+
 ## 1.12.3
 
 - **设置加新 tab「TTS」**：跟阅读 / 外观 / 数据 / 统计并列，音量图标。原来 TTS 设置藏在「阅读」tab 里且被 `isTauri() && viewMode === Paginated` gate 住，自 1.11.1 起滚动模式也支持 TTS 后这个限制失效，所以把整段 TTS 设置（朗读引擎 / 朗读起点 / 章末自动续读 / 全局快捷键 / Kokoro / SAPI 语音 / 自定义 HTTP TTS）摘出来独立成 tab

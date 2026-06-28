@@ -54,6 +54,7 @@
     ttsCustomEndpoint$,
     ttsCustomHeaders$,
     ttsCustomMethod$,
+    ttsCustomProxyUrl$,
     ttsCustomActivePreset$,
     ttsCustomPresetStates$,
     ttsAutoAdvanceSection$,
@@ -276,6 +277,15 @@
     headers: string;
     body: string;
     audioPath?: string;
+    proxyUrl?: string;
+    /** Optional curated voice list shown as a dropdown. */
+    voices?: { value: string; label: string }[];
+    /** Dot-path to the voice field inside the body JSON, e.g. "voice.name". */
+    voicePath?: string;
+    /** How the voice value is embedded. JSON = replace field; xml = replace SSML name attribute; url = replace endpoint URL segment. */
+    voiceFormat?: 'json' | 'xml' | 'url';
+    /** Regex matching the part of the endpoint URL to replace when voiceFormat='url'. */
+    voiceUrlPattern?: string;
   }
 
   const CUSTOM_PRESETS: Record<string, CustomPreset> = {
@@ -285,7 +295,8 @@
       endpoint: '',
       headers: '{\n  "Content-Type": "application/json"\n}',
       body: '',
-      audioPath: ''
+      audioPath: '',
+      proxyUrl: ''
     },
     openai: {
       label: 'OpenAI TTS',
@@ -296,13 +307,22 @@
         null,
         2
       ),
-      body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: '{text}' }, null, 2)
+      body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: '{text}' }, null, 2),
+      voices: [
+        { value: 'alloy', label: 'Alloy' },
+        { value: 'echo', label: 'Echo' },
+        { value: 'fable', label: 'Fable' },
+        { value: 'onyx', label: 'Onyx' },
+        { value: 'nova', label: 'Nova' },
+        { value: 'shimmer', label: 'Shimmer' }
+      ],
+      voicePath: 'voice'
     },
     elevenlabs: {
       label: 'ElevenLabs',
       method: 'POST',
       endpoint:
-        'https://api.elevenlabs.io/v1/text-to-speech/VOICE_ID?output_format=mp3_44100_128',
+        'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM?output_format=mp3_44100_128',
       headers: JSON.stringify(
         { 'Content-Type': 'application/json', 'xi-api-key': 'YOUR_API_KEY' },
         null,
@@ -316,7 +336,17 @@
         },
         null,
         2
-      )
+      ),
+      voices: [
+        { value: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel' },
+        { value: 'AZnzlk1XvdvUeBnXmlld', label: 'Domi' },
+        { value: 'EXAVITQu4vr4xnSDxMaL', label: 'Bella' },
+        { value: 'ErXwobaYiN019PkySvjV', label: 'Antoni' },
+        { value: 'MF3mGyEYCl7XYWbV9V6O', label: 'Elli' },
+        { value: 'TxGEqnHWrfWFTfGW9XjX', label: 'Josh' }
+      ],
+      voiceFormat: 'url',
+      voiceUrlPattern: '(?<=/text-to-speech/)[^/?]+'
     },
     azure: {
       label: 'Azure Speech (REST)',
@@ -331,7 +361,16 @@
         null,
         2
       ),
-      body: `<speak version='1.0' xml:lang='zh-CN'><voice name='zh-CN-XiaoxiaoNeural'>{text}</voice></speak>`
+      body: `<speak version='1.0' xml:lang='zh-CN'><voice name='zh-CN-XiaoxiaoNeural'>{text}</voice></speak>`,
+      voices: [
+        { value: 'zh-CN-XiaoxiaoNeural', label: '晓晓（女）' },
+        { value: 'zh-CN-YunyangNeural', label: '云扬（男）' },
+        { value: 'zh-CN-YunxiNeural', label: '云希（男）' },
+        { value: 'zh-CN-XiaoyiNeural', label: '小艺（女）' },
+        { value: 'zh-CN-YunjianNeural', label: '云健（男）' }
+      ],
+      voicePath: 'voice',
+      voiceFormat: 'xml'
     },
     volcengine: {
       label: '火山引擎 大模型 TTS',
@@ -351,7 +390,14 @@
         },
         null,
         2
-      )
+      ),
+      voices: [
+        { value: 'BV700_streaming', label: 'BV700（默认）' },
+        { value: 'BV701_streaming', label: 'BV701' },
+        { value: 'BV702_streaming', label: 'BV702' },
+        { value: 'BV703_streaming', label: 'BV703' }
+      ],
+      voicePath: 'audio.voice_type'
     },
     googleCloud: {
       label: 'Google Cloud TTS（每月 100 万字符免费）',
@@ -366,19 +412,34 @@
       body: JSON.stringify(
         {
           input: { text: '{text}' },
-          voice: { languageCode: 'cmn-CN', name: 'cmn-CN-Wavenet-A' },
-          audioConfig: { audioEncoding: 'MP3', speakingRate: 1.0 }
+          voice: { languageCode: 'cmn-CN', name: 'cmn-CN-Chirp3-HD-Kore' },
+          audioConfig: { audioEncoding: 'MP3' }
         },
         null,
         2
       ),
-      audioPath: 'audioContent'
+      audioPath: 'audioContent',
+      voices: [
+        { value: 'cmn-CN-Chirp3-HD-Kore', label: 'Kore（女）' },
+        { value: 'cmn-CN-Chirp3-HD-Aoede', label: 'Aoede（女）' },
+        { value: 'cmn-CN-Chirp3-HD-Callirrhoe', label: 'Callirrhoe（女）' },
+        { value: 'cmn-CN-Chirp3-HD-Charon', label: 'Charon（男）' },
+        { value: 'cmn-CN-Chirp3-HD-Orus', label: 'Orus（男）' },
+        { value: 'cmn-CN-Chirp3-HD-Puck', label: 'Puck（男）' },
+        { value: 'cmn-CN-Wavenet-A', label: 'WaveNet A（女）' },
+        { value: 'cmn-CN-Wavenet-B', label: 'WaveNet B（男）' },
+        { value: 'cmn-CN-Wavenet-C', label: 'WaveNet C（男）' },
+        { value: 'cmn-CN-Wavenet-D', label: 'WaveNet D（女）' },
+        { value: 'cmn-CN-Standard-A', label: 'Standard A（女）' },
+        { value: 'cmn-CN-Standard-B', label: 'Standard B（男）' }
+      ],
+      voicePath: 'voice.name'
     },
     geminiTts: {
-      label: 'Gemini 2.5 Flash TTS（实验，需 PCM→WAV 转换）',
+      label: 'Gemini 2.5 Flash TTS（Cloud TTS API，MP3 直出）',
       method: 'POST',
       endpoint:
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=YOUR_API_KEY',
+        'https://texttospeech.googleapis.com/v1/text:synthesize?key=YOUR_API_KEY',
       headers: JSON.stringify(
         { 'Content-Type': 'application/json' },
         null,
@@ -386,18 +447,92 @@
       ),
       body: JSON.stringify(
         {
-          contents: [{ parts: [{ text: '{text}' }] }],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
-            }
-          }
+          input: {
+            text: '{text}',
+            prompt: '清晰、稳定、平和的朗读语气，适合长时间听书。'
+          },
+          voice: {
+            languageCode: 'cmn-CN',
+            name: 'Kore',
+            modelName: 'gemini-2.5-flash-tts'
+          },
+          audioConfig: { audioEncoding: 'MP3' }
         },
         null,
         2
       ),
-      audioPath: 'candidates.0.content.parts.0.inlineData.data'
+      audioPath: 'audioContent',
+      voices: [
+        { value: 'Kore', label: 'Kore（女）' },
+        { value: 'Aoede', label: 'Aoede（女）' },
+        { value: 'Callirrhoe', label: 'Callirrhoe（女）' },
+        { value: 'Charon', label: 'Charon（男）' },
+        { value: 'Orus', label: 'Orus（男）' },
+        { value: 'Puck', label: 'Puck（男）' }
+      ],
+      voicePath: 'voice.name'
+    },
+    siliconflow: {
+      label: '硅基流动 SiliconFlow（国内直连，免费额度）',
+      method: 'POST',
+      endpoint: 'https://api.siliconflow.cn/v1/audio/speech',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_API_KEY' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
+        {
+          model: 'FunAudioLLM/CosyVoice2-0.5B',
+          input: '{text}',
+          voice: 'FunAudioLLM/CosyVoice2-0.5B:alex',
+          response_format: 'mp3',
+          speed: 1.0
+        },
+        null,
+        2
+      ),
+      voices: [
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:alex', label: 'CosyVoice2 · alex（男）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:anna', label: 'CosyVoice2 · anna（女）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:bella', label: 'CosyVoice2 · bella（女）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:benjamin', label: 'CosyVoice2 · benjamin（男）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:charles', label: 'CosyVoice2 · charles（男）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:claire', label: 'CosyVoice2 · claire（女）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:david', label: 'CosyVoice2 · david（男）' },
+        { value: 'FunAudioLLM/CosyVoice2-0.5B:diana', label: 'CosyVoice2 · diana（女）多语' },
+        { value: 'RVC-Boss/GPT-SoVITS:default', label: 'GPT-SoVITS · 默认' },
+        { value: 'fishaudio/fish-speech-1.5:default', label: 'Fish-Speech 1.5 · 默认' }
+      ],
+      voicePath: 'voice'
+    },
+    aliyunQwen: {
+      label: 'Aliyun DashScope Qwen3-TTS-Flash（国内直连，需 URL 抽取，实验）',
+      method: 'POST',
+      endpoint:
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_DASHSCOPE_API_KEY' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
+        {
+          model: 'qwen3-tts-flash',
+          input: { text: '{text}', voice: 'Cherry' },
+          parameters: { language_type: 'Chinese' }
+        },
+        null,
+        2
+      ),
+      audioPath: 'url:output.audio.url',
+      voices: [
+        { value: 'Cherry', label: 'Cherry（女）' },
+        { value: 'Serena', label: 'Serena（女）' },
+        { value: 'Ethan', label: 'Ethan（男）' },
+        { value: 'Chelsie', label: 'Chelsie（女）' }
+      ],
+      voicePath: 'input.voice'
     },
     mimo: {
       label: 'MiMo-V2.5-TTS（小米，限时免费）',
@@ -421,7 +556,11 @@
         null,
         2
       ),
-      audioPath: 'choices.0.message.audio.data'
+      audioPath: 'choices.0.message.audio.data',
+      voices: [
+        { value: '茉莉', label: '茉莉（默认）' }
+      ],
+      voicePath: 'audio.voice'
     }
   };
 
@@ -433,7 +572,8 @@
       method: $ttsCustomMethod$,
       headers: $ttsCustomHeaders$,
       body: $ttsCustomBody$,
-      audioPath: $ttsCustomAudioPath$
+      audioPath: $ttsCustomAudioPath$,
+      proxyUrl: $ttsCustomProxyUrl$
     };
     ttsCustomPresetStates$.next(map);
   }
@@ -447,6 +587,7 @@
     ttsCustomHeaders$.next(target.headers);
     ttsCustomBody$.next(target.body);
     ttsCustomAudioPath$.next(target.audioPath || '');
+    ttsCustomProxyUrl$.next(target.proxyUrl || '');
   }
 
   /** Save current edits to the outgoing preset's slot, then switch. */
@@ -467,6 +608,84 @@
     ttsCustomHeaders$.next(def.headers);
     ttsCustomBody$.next(def.body);
     ttsCustomAudioPath$.next(def.audioPath || '');
+    ttsCustomProxyUrl$.next(def.proxyUrl || '');
+  }
+
+  function getBodyValue(body: string, path: string): unknown {
+    try {
+      const json = JSON.parse(body);
+      return navigateJson(json, path);
+    } catch {
+      return undefined;
+    }
+  }
+
+  function setBodyValue(body: string, path: string, value: unknown): string {
+    try {
+      const json = JSON.parse(body);
+      const parts = path.split('.');
+      let cur: any = json;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (part === '') continue;
+        if (cur[part] === undefined || cur[part] === null) {
+          cur[part] = {};
+        }
+        cur = cur[part];
+      }
+      const last = parts[parts.length - 1];
+      if (last) cur[last] = value;
+      return JSON.stringify(json, null, 2);
+    } catch {
+      return body;
+    }
+  }
+
+  function setXmlVoice(body: string, voice: string): string {
+    return body.replace(/name=['"][^'"]*['"]/, `name='${voice}'`);
+  }
+
+  function navigateJson(root: any, path: string): unknown {
+    let cur = root;
+    for (const part of path.split('.')) {
+      if (part === '') continue;
+      if (cur == null || typeof cur !== 'object') return undefined;
+      cur = cur[part];
+    }
+    return cur;
+  }
+
+  $: activePresetDef = CUSTOM_PRESETS[$ttsCustomActivePreset$] ?? CUSTOM_PRESETS.manual;
+  $: presetVoices = activePresetDef.voices ?? [];
+  $: currentVoice = (() => {
+    if (!activePresetDef.voices) return '';
+    if (activePresetDef.voiceFormat === 'url') {
+      if (!activePresetDef.voiceUrlPattern) return '';
+      const regex = new RegExp(activePresetDef.voiceUrlPattern);
+      const match = $ttsCustomEndpoint$.match(regex);
+      return match?.[0] ?? '';
+    }
+    if (!activePresetDef.voicePath) return '';
+    if (activePresetDef.voiceFormat === 'xml') {
+      const match = $ttsCustomBody$.match(/name=['"]([^'"]*)['"]/);
+      return match?.[1] ?? '';
+    }
+    return String(getBodyValue($ttsCustomBody$, activePresetDef.voicePath) ?? '');
+  })();
+
+  function onVoiceChange(voice: string) {
+    if (activePresetDef.voiceFormat === 'url') {
+      if (!activePresetDef.voiceUrlPattern) return;
+      const regex = new RegExp(activePresetDef.voiceUrlPattern);
+      ttsCustomEndpoint$.next($ttsCustomEndpoint$.replace(regex, voice));
+      return;
+    }
+    if (!activePresetDef.voicePath) return;
+    if (activePresetDef.voiceFormat === 'xml') {
+      ttsCustomBody$.next(setXmlVoice($ttsCustomBody$, voice));
+    } else {
+      ttsCustomBody$.next(setBodyValue($ttsCustomBody$, activePresetDef.voicePath, voice));
+    }
   }
 
   // Seed the manual slot from legacy single-store values on first load — so
@@ -485,13 +704,14 @@
   // Auto-persist live edits back into the active preset's slot.
   let presetSaveDebounce: ReturnType<typeof setTimeout> | undefined;
   $: if (browser && $ttsCustomActivePreset$) {
-    // touch all five so this $: reruns on any edit
+    // touch all six so this $: reruns on any edit
     const _touch = [
       $ttsCustomEndpoint$,
       $ttsCustomMethod$,
       $ttsCustomHeaders$,
       $ttsCustomBody$,
-      $ttsCustomAudioPath$
+      $ttsCustomAudioPath$,
+      $ttsCustomProxyUrl$
     ];
     void _touch;
     if (presetSaveDebounce) clearTimeout(presetSaveDebounce);
@@ -652,6 +872,7 @@
           headers: headersObj,
           bodyTemplate: $ttsCustomBody$ || '',
           audioPath: $ttsCustomAudioPath$ || null,
+          proxyUrl: $ttsCustomProxyUrl$ || null,
           text: previewText
         });
         const bin = atob(b64);
@@ -1509,6 +1730,11 @@
             title="自定义 HTTP TTS"
             tooltip={'把任意 TTS API 接进来。{text} 会被替换为当前句子并 JSON 转义。响应是音频字节（OpenAI/ElevenLabs/Azure）「音频路径」留空；响应是 JSON 包 base64 音频（MiMo 等）则填出 base64 字段的 dot-path，如 choices.0.message.audio.data。'}
           >
+            <p class="text-xs opacity-70 mb-2">
+              提示：Google Cloud TTS（含 Chirp3-HD）每月前 100 万字符免费；Gemini TTS 按 token 计费、无免费额度。Chirp3-HD
+              不支持 speakingRate / pitch / SSML，需要这些参数请切回 WaveNet / Neural2。代理 URL 仅影响本应用的
+              TTS 请求。
+            </p>
             <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
               <span class="text-xs opacity-80 pt-2">服务预设</span>
               <div class="flex items-center gap-2 flex-wrap">
@@ -1538,6 +1764,20 @@
                 </button>
               </div>
 
+              {#if presetVoices.length}
+                <span class="text-xs opacity-80 pt-2">音色</span>
+                <select
+                  class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+                  value={currentVoice}
+                  on:change={(e) => onVoiceChange(e.currentTarget.value)}
+                >
+                  <option value="">-- 请选择音色 --</option>
+                  {#each presetVoices as voice (voice.value)}
+                    <option value={voice.value}>{voice.label}</option>
+                  {/each}
+                </select>
+              {/if}
+
               <span class="text-xs opacity-80 pt-2">请求方法</span>
               <select
                 class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm w-24"
@@ -1552,6 +1792,7 @@
               <input
                 type="text"
                 class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
+                class:secret-masked={!revealCustomSecrets}
                 placeholder="https://api.openai.com/v1/audio/speech"
                 bind:value={$ttsCustomEndpoint$}
               />
@@ -1576,8 +1817,17 @@
               <input
                 type="text"
                 class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm font-mono"
-                placeholder="留空 = 响应是裸音频字节；否则填 JSON 里 base64 字段的 dot-path"
+                placeholder="留空 = 响应是裸音频字节；JSON 里 base64 字段填 dot-path；JSON 里是音频 URL 填 url:dot-path"
                 bind:value={$ttsCustomAudioPath$}
+              />
+
+              <span class="text-xs opacity-80 pt-2">代理 URL</span>
+              <input
+                type="text"
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm font-mono"
+                class:secret-masked={!revealCustomSecrets}
+                placeholder="留空 = 不走代理；例 http://127.0.0.1:7890 或 socks5://127.0.0.1:7891"
+                bind:value={$ttsCustomProxyUrl$}
               />
             </div>
           </SettingsItemGroup>
@@ -2402,6 +2652,11 @@
           title="自定义 HTTP TTS"
           tooltip={'把任意 TTS API 接进来。{text} 会被替换为当前句子并 JSON 转义。响应是音频字节（OpenAI/ElevenLabs/Azure）「音频路径」留空；响应是 JSON 包 base64 音频（MiMo / Google Cloud / Gemini 等）则填出 base64 字段的 dot-path，如 choices.0.message.audio.data。'}
         >
+          <p class="text-xs opacity-70 mb-2">
+            提示：Google Cloud TTS（含 Chirp3-HD）每月前 100 万字符免费；Gemini TTS 按 token 计费、无免费额度。Chirp3-HD
+            不支持 speakingRate / pitch / SSML，需要这些参数请切回 WaveNet / Neural2。代理 URL 仅影响本应用的 TTS
+            请求。
+          </p>
           <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
             <span class="text-xs opacity-80 pt-2">服务预设</span>
             <div class="flex items-center gap-2 flex-wrap">
@@ -2425,6 +2680,20 @@
               >{revealCustomSecrets ? '隐藏内容' : '显示内容'}<Ripple /></button>
             </div>
 
+            {#if presetVoices.length}
+              <span class="text-xs opacity-80 pt-2">音色</span>
+              <select
+                class="settings-input px-2 py-1 text-sm"
+                value={currentVoice}
+                on:change={(e) => onVoiceChange(e.currentTarget.value)}
+              >
+                <option value="">-- 请选择音色 --</option>
+                {#each presetVoices as voice (voice.value)}
+                  <option value={voice.value}>{voice.label}</option>
+                {/each}
+              </select>
+            {/if}
+
             <span class="text-xs opacity-80 pt-2">请求方法</span>
             <select class="settings-input px-2 py-1 text-sm w-24" bind:value={$ttsCustomMethod$}>
               <option value="POST">POST</option>
@@ -2436,6 +2705,7 @@
             <input
               type="text"
               class="settings-input px-2 py-1 text-sm"
+              class:secret-masked={!revealCustomSecrets}
               placeholder="https://api.openai.com/v1/audio/speech"
               bind:value={$ttsCustomEndpoint$}
             />
@@ -2460,8 +2730,17 @@
             <input
               type="text"
               class="settings-input px-2 py-1 text-sm font-mono"
-              placeholder="留空 = 响应是裸音频字节；否则填 JSON 里 base64 字段的 dot-path"
+              placeholder="留空 = 响应是裸音频字节；JSON 里 base64 字段填 dot-path；JSON 里是音频 URL 填 url:dot-path"
               bind:value={$ttsCustomAudioPath$}
+            />
+
+            <span class="text-xs opacity-80 pt-2">代理 URL</span>
+            <input
+              type="text"
+              class="settings-input px-2 py-1 text-sm font-mono"
+              class:secret-masked={!revealCustomSecrets}
+              placeholder="留空 = 不走代理；例 http://127.0.0.1:7890 或 socks5://127.0.0.1:7891"
+              bind:value={$ttsCustomProxyUrl$}
             />
           </div>
         </SettingsItemGroup>
