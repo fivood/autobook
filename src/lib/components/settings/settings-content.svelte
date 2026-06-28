@@ -1288,7 +1288,7 @@
       </SettingsItemGroup>
     </div>
 
-    {#if isTauri() && viewMode === ViewMode.Paginated}
+    {#if false}<!-- TTS section moved to its own tab in 1.12.3; see {:else if activeSettings === 'TTS'} below -->
       <SettingsSectionHeader title="TTS 朗读" hint="桌面端分页模式专属。包含引擎、起点、快捷键和自定义 HTTP TTS" />
       <SettingsItemGroup
         title="朗读引擎"
@@ -2199,6 +2199,275 @@
     {/if}
     </div>
     <!-- end legacy hidden block -->
+  {:else if activeSettings === 'TTS'}
+    <SettingsSectionHeader title="TTS 朗读" hint="自 1.11 起在滚动 + 分页两种模式下都可用。包含引擎、起点、快捷键和自定义 HTTP TTS" />
+    <SettingsItemGroup
+      title="朗读引擎"
+      tooltip="Web Speech：浏览器内建，作兜底；SAPI：系统 TTS（仅桌面端 Windows）；Kokoro-82M：内置离线神经网络 TTS（v1.0 ONNX 当前只有英语），需首次下载约 80MB；自定义 HTTP TTS 可接 OpenAI / Gemini / Google Cloud / 自部署 Qwen3-TTS / CosyVoice 2 等任意服务。切换后请重开书生效。"
+    >
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <select
+            class="settings-input px-2 py-1 text-sm max-w-[14rem] truncate"
+            bind:value={$ttsEngine$}
+          >
+            <option value="web">Web Speech（浏览器）</option>
+            <option value="sapi">系统 TTS（SAPI）</option>
+            <option value="kokoro">Kokoro-82M（内置离线）</option>
+            <option value="custom">自定义 HTTP TTS</option>
+          </select>
+          <button
+            class="settings-input px-3 py-1 text-sm disabled:opacity-40"
+            disabled={previewState === 'loading' || previewState === 'playing'}
+            on:click={previewVoice}
+          >
+            {previewState === 'loading'
+              ? '加载中…'
+              : previewState === 'playing'
+                ? '播放中…'
+                : '试听'}
+            <Ripple />
+          </button>
+        </div>
+        {#if previewState === 'error'}
+          <p class="text-red-500 text-xs">{previewMessage}</p>
+        {/if}
+      </div>
+    </SettingsItemGroup>
+
+    <SettingsItemGroup
+      title="朗读起点"
+      tooltip="按播放按钮（或 V 快捷键）时从哪里开始读。选区：用当前选中文字或光标位置（无选区时降级到上次保存位置）；上次位置：从上次暂停的字位置续读；章节开头：从当前章节第一段开始。"
+    >
+      <select
+        class="settings-input px-2 py-1 text-sm max-w-[12rem]"
+        bind:value={$ttsStartStrategy$}
+      >
+        <option value="selection">选区 / 光标位置（默认）</option>
+        <option value="resume">上次保存位置</option>
+        <option value="section-start">章节开头</option>
+      </select>
+    </SettingsItemGroup>
+
+    <SettingsItemGroup
+      title="章末自动续读"
+      tooltip="读到本章最后一段时，是否自动翻到下一章继续。关闭则停在章末。"
+    >
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$ttsAutoAdvanceSection$} />
+    </SettingsItemGroup>
+
+    <SettingsItemGroup
+      title="朗读全局快捷键"
+      tooltip="任意窗口前台时按下都能切换朗读。点「录制」然后按下你想要的组合键（如 Ctrl+Alt+P）即可；注册冲突时不报错只是按下无反应。"
+    >
+      <div class="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          class="rounded border-2 px-3 py-1 text-sm min-w-[8rem] text-center font-mono"
+          class:border-red-500={recordingShortcut}
+          class:border-gray-400={!recordingShortcut}
+          on:click={startRecordShortcut}
+          on:keydown={onShortcutKeydown}
+        >
+          {recordingShortcut ? '按下按键…' : $ttsShortcut$ || '(已禁用)'}
+          <Ripple />
+        </button>
+        <button
+          class="settings-input px-3 py-1 text-sm"
+          on:click={() => {
+            recordingShortcut = false;
+            ttsShortcut$.next('ctrl+alt+p');
+          }}
+        >重置<Ripple /></button>
+        <button
+          class="settings-input px-3 py-1 text-sm"
+          on:click={() => {
+            recordingShortcut = false;
+            ttsShortcut$.next('');
+          }}
+        >禁用<Ripple /></button>
+      </div>
+    </SettingsItemGroup>
+
+    {#if $ttsEngine$ === 'kokoro'}
+      <div class="lg:col-span-3">
+        <SettingsItemGroup
+          title="Kokoro-82M 离线 TTS"
+          tooltip="开源神经网络 TTS，82M 参数，ONNX 模型约 80MB。首次启用会从 Hugging Face 下载到本机缓存（IndexedDB），之后完全离线。v1.0 ONNX 当前只打包了英语音色。"
+        >
+          <div class="space-y-3 text-sm">
+            {#if !$kokoroAccepted$}
+              <div class="rounded-md border border-current/20 p-3 text-xs leading-relaxed">
+                <p>启用 Kokoro 需要下载约 <strong>80 MB</strong> 模型文件（首次启用，之后离线）。</p>
+                <p class="mt-1 opacity-70">模型来自 Hugging Face <code>onnx-community/Kokoro-82M-v1.0-ONNX</code>。下载后用 IndexedDB 缓存，不上传任何阅读内容。</p>
+                <button
+                  class="settings-input mt-2 inline-flex items-center gap-1 px-3 py-1 text-sm"
+                  on:click={() => {
+                    $kokoroAccepted$ = true;
+                    kokoroEnsureLoad();
+                  }}
+                >下载并启用</button>
+              </div>
+            {:else if $kokoroLoadStatus$.phase === 'loading'}
+              <div class="text-xs">
+                {$kokoroLoadStatus$.message}
+                {#if $kokoroLoadStatus$.total}
+                  · {Math.round(($kokoroLoadStatus$.loaded / $kokoroLoadStatus$.total) * 100)}%
+                  ({(($kokoroLoadStatus$.loaded || 0) / 1024 / 1024).toFixed(1)} /
+                  {(($kokoroLoadStatus$.total || 0) / 1024 / 1024).toFixed(1)} MB)
+                {/if}
+              </div>
+            {:else if $kokoroLoadStatus$.phase === 'errored'}
+              <p class="text-red-500 text-xs">下载失败：{$kokoroLoadStatus$.message}</p>
+              <button class="settings-input px-3 py-1 text-sm" on:click={() => kokoroEnsureLoad()}>重试</button>
+            {/if}
+
+            {#if $kokoroAccepted$}
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs opacity-70">音色</span>
+                <select class="settings-input px-2 py-1 text-sm max-w-xs" bind:value={$kokoroVoiceId$}>
+                  <optgroup label="英语 美式 女声">
+                    <option value="af_heart">af_heart</option>
+                    <option value="af_alloy">af_alloy</option>
+                    <option value="af_aoede">af_aoede</option>
+                    <option value="af_bella">af_bella</option>
+                    <option value="af_jessica">af_jessica</option>
+                    <option value="af_kore">af_kore</option>
+                    <option value="af_nicole">af_nicole</option>
+                    <option value="af_nova">af_nova</option>
+                    <option value="af_river">af_river</option>
+                    <option value="af_sarah">af_sarah</option>
+                    <option value="af_sky">af_sky</option>
+                  </optgroup>
+                  <optgroup label="英语 美式 男声">
+                    <option value="am_adam">am_adam</option>
+                    <option value="am_echo">am_echo</option>
+                    <option value="am_eric">am_eric</option>
+                    <option value="am_fenrir">am_fenrir</option>
+                    <option value="am_liam">am_liam</option>
+                    <option value="am_michael">am_michael</option>
+                    <option value="am_onyx">am_onyx</option>
+                    <option value="am_puck">am_puck</option>
+                    <option value="am_santa">am_santa</option>
+                  </optgroup>
+                  <optgroup label="英语 英式 女声">
+                    <option value="bf_emma">bf_emma</option>
+                    <option value="bf_isabella">bf_isabella</option>
+                    <option value="bf_alice">bf_alice</option>
+                    <option value="bf_lily">bf_lily</option>
+                  </optgroup>
+                  <optgroup label="英语 英式 男声">
+                    <option value="bm_george">bm_george</option>
+                    <option value="bm_lewis">bm_lewis</option>
+                    <option value="bm_daniel">bm_daniel</option>
+                    <option value="bm_fable">bm_fable</option>
+                  </optgroup>
+                </select>
+              </div>
+              <p class="text-xs opacity-60">
+                注：kokoro-js v1.0 ONNX 当前只打包了**英语**音色，中文 / 日语需等上游更新或换用「自定义 HTTP TTS」接 Qwen3-TTS / CosyVoice 2。
+              </p>
+              <p class="text-xs opacity-60">缓存在 WebView2 IndexedDB；要清除模型走「设置 → 数据 → 清除全部本地数据」</p>
+            {/if}
+          </div>
+        </SettingsItemGroup>
+      </div>
+    {/if}
+
+    {#if $ttsEngine$ === 'sapi'}
+      <div class="lg:col-span-3">
+        <SettingsItemGroup
+          title="系统 TTS 语音"
+          tooltip="注：Windows 11 设置里的「Natural 自然语音」是 Narrator 专属，应用层（包括本 app）调不到。下面是系统暴露给应用的 SAPI 5 老音色，质量基础。"
+        >
+          {#if sapiVoicesError}
+            <p class="text-red-500 text-sm">{sapiVoicesError}</p>
+          {:else if !sapiVoices.length}
+            <p class="text-sm opacity-60">未检测到可用语音</p>
+          {:else}
+            <select class="settings-input px-2 py-1 text-sm max-w-xs" bind:value={$ttsSapiVoiceId$}>
+              <option value="">系统默认</option>
+              {#each sapiVoices as voice (voice.id)}
+                <option value={voice.id}>{voice.name} ({voice.language})</option>
+              {/each}
+            </select>
+          {/if}
+        </SettingsItemGroup>
+      </div>
+    {/if}
+
+    {#if $ttsEngine$ === 'custom'}
+      <div class="lg:col-span-3">
+        <SettingsItemGroup
+          title="自定义 HTTP TTS"
+          tooltip={'把任意 TTS API 接进来。{text} 会被替换为当前句子并 JSON 转义。响应是音频字节（OpenAI/ElevenLabs/Azure）「音频路径」留空；响应是 JSON 包 base64 音频（MiMo / Google Cloud / Gemini 等）则填出 base64 字段的 dot-path，如 choices.0.message.audio.data。'}
+        >
+          <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
+            <span class="text-xs opacity-80 pt-2">服务预设</span>
+            <div class="flex items-center gap-2 flex-wrap">
+              <select
+                class="settings-input px-2 py-1 text-sm"
+                value={$ttsCustomActivePreset$}
+                on:change={onPresetSelectChange}
+              >
+                {#each Object.entries(CUSTOM_PRESETS) as [id, preset] (id)}
+                  <option value={id}>{preset.label}</option>
+                {/each}
+              </select>
+              <button
+                class="settings-input px-2 py-1 text-xs"
+                title="把当前预设的字段重置为默认模板（不影响其他预设保存的 key）"
+                on:click={resetActivePresetToDefaults}
+              >恢复模板<Ripple /></button>
+              <button
+                class="settings-input px-2 py-1 text-xs"
+                on:click={() => (revealCustomSecrets = !revealCustomSecrets)}
+              >{revealCustomSecrets ? '隐藏内容' : '显示内容'}<Ripple /></button>
+            </div>
+
+            <span class="text-xs opacity-80 pt-2">请求方法</span>
+            <select class="settings-input px-2 py-1 text-sm w-24" bind:value={$ttsCustomMethod$}>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="GET">GET</option>
+            </select>
+
+            <span class="text-xs opacity-80 pt-2">端点 URL</span>
+            <input
+              type="text"
+              class="settings-input px-2 py-1 text-sm"
+              placeholder="https://api.openai.com/v1/audio/speech"
+              bind:value={$ttsCustomEndpoint$}
+            />
+
+            <span class="text-xs opacity-80 pt-2">请求头（JSON）</span>
+            <textarea
+              class="settings-input px-2 py-1 text-xs font-mono"
+              class:secret-masked={!revealCustomSecrets}
+              rows="4"
+              bind:value={$ttsCustomHeaders$}
+            ></textarea>
+
+            <span class="text-xs opacity-80 pt-2">请求体模板</span>
+            <textarea
+              class="settings-input px-2 py-1 text-xs font-mono"
+              class:secret-masked={!revealCustomSecrets}
+              rows="8"
+              bind:value={$ttsCustomBody$}
+            ></textarea>
+
+            <span class="text-xs opacity-80 pt-2">音频路径</span>
+            <input
+              type="text"
+              class="settings-input px-2 py-1 text-sm font-mono"
+              placeholder="留空 = 响应是裸音频字节；否则填 JSON 里 base64 字段的 dot-path"
+              bind:value={$ttsCustomAudioPath$}
+            />
+          </div>
+        </SettingsItemGroup>
+      </div>
+    {/if}
+
   {:else if activeSettings === 'Data'}
     <SettingsSectionHeader title="存储与备份" hint="书库、设置、统计的物理位置与云端同步" />
     <div class="lg:col-span-3">

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { faBookOpenReader, faClock, faDatabase, faPalette } from '@fortawesome/free-solid-svg-icons';
+  import { faBookOpenReader, faClock, faDatabase, faPalette, faVolumeHigh } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import Ripple from '$lib/components/ripple.svelte';
@@ -13,6 +13,11 @@
       label: 'Reader',
       displayLabel: '阅读',
       icon: faBookOpenReader
+    },
+    {
+      label: 'TTS',
+      displayLabel: 'TTS',
+      icon: faVolumeHigh
     },
     {
       label: 'Appearance',

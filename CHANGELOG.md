@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.12.3
+
+- **设置加新 tab「TTS」**：跟阅读 / 外观 / 数据 / 统计并列，音量图标。原来 TTS 设置藏在「阅读」tab 里且被 `isTauri() && viewMode === Paginated` gate 住，自 1.11.1 起滚动模式也支持 TTS 后这个限制失效，所以把整段 TTS 设置（朗读引擎 / 朗读起点 / 章末自动续读 / 全局快捷键 / Kokoro / SAPI 语音 / 自定义 HTTP TTS）摘出来独立成 tab
+- 旧位置（阅读 tab 里的 TTS 块）用 `{#if false}` 封存，下一版清除
+- 文案更新：移除「桌面端分页模式专属」字样，改成「自 1.11 起在滚动 + 分页两种模式下都可用」
+- 内联控件统一换成 `.settings-input` pill 样式（之前是老 `border-b-2` 下划线式）
+
 ## 1.12.2
 
 - **修书库 hover 详情 / 卡片底部进度条始终 0%**：根因是非常老版本的 bookmark 文档可能根本没有 `progress` 字段，只有 `exploredCharCount`。v1.10.12 我把 `bookmarkToProgress` 改成只看 `progress` 后这类老书签直接返回 0。补 fallback：缺 `progress` 时用 `exploredCharCount / book.characters` 兜底算
