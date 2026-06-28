@@ -81,26 +81,58 @@
       const sortProp = $booklistSortOptions$[$storageSource$];
       const isTitleSort = sortProp.property === 'title';
 
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log('[autobook:dbg] bookCards$ rebuild', {
+          dataListLen: dataList.length,
+          bookmarksLen: bookmarks.length,
+          bookmarks: bookmarks.map((b: any) => ({
+            dataId: b.dataId,
+            progress: b.progress,
+            exploredCharCount: b.exploredCharCount
+          }))
+        });
+      }
+
       if ($storageSource$ === StorageKey.BROWSER) {
         const bookmarkMap = keyBy(bookmarks, 'dataId');
 
         return [
           ...dataList
             .filter((d) => $showExternalPlaceholder$ || !d.isPlaceholder)
-            .map((d) => ({
-              ...d,
-              ...bookmarkToProgress(bookmarkMap.get(d.id), d.characters || 0)
-            }))
+            .map((d) => {
+              const bm = bookmarkMap.get(d.id);
+              const enriched = bookmarkToProgress(bm, d.characters || 0);
+              if (import.meta.env.DEV) {
+                // eslint-disable-next-line no-console
+                console.log(`[autobook:dbg] card d.id=${d.id} title="${d.title?.slice(0, 30)}"`, {
+                  matchedBookmark: !!bm,
+                  bookmarkDataId: bm?.dataId,
+                  bookmarkProgress: bm?.progress,
+                  bookmarkExploredChars: bm?.exploredCharCount,
+                  bookCharacters: d.characters,
+                  computedProgress: enriched.progress
+                });
+              }
+              return { ...d, ...enriched };
+            })
             .sort((card1: BookCardProps, card2: BookCardProps) =>
               sortBookCards(card1, card2, sortProp, isTitleSort)
             )
         ];
       }
 
+      // Non-BROWSER storage sources (Tauri FS, Dropbox, etc.) used to skip
+      // the bookmark merge entirely, so hover popovers and progress bars
+      // stayed at 0% even when bookmark.progress was correctly populated
+      // in IDB. Apply the same enrichment here.
+      const bookmarkMap = keyBy(bookmarks, 'dataId');
       return [
-        ...dataList.sort((card1: BookCardProps, card2: BookCardProps) =>
-          sortBookCards(card1, card2, sortProp, isTitleSort)
-        )
+        ...dataList
+          .map((d) => ({ ...d, ...bookmarkToProgress(bookmarkMap.get(d.id), d.characters || 0) }))
+          .sort((card1: BookCardProps, card2: BookCardProps) =>
+            sortBookCards(card1, card2, sortProp, isTitleSort)
+          )
       ];
     }),
     share()

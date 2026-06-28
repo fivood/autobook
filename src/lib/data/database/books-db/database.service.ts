@@ -334,6 +334,15 @@ export class DatabaseService {
     // book cards; without this nudge they keep showing the stale
     // app-start snapshot and never reflect new reading progress.
     this.bookmarksChanged$.next();
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('[autobook:dbg] putBookmark', {
+        dataId: bookmarkData.dataId,
+        progress: bookmarkData.progress,
+        exploredCharCount: bookmarkData.exploredCharCount,
+        lastBookmarkModified: bookmarkData.lastBookmarkModified
+      });
+    }
     return result;
   }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.14
+
+- **真·修阅读进度 hover 显示 0%（Tauri FS / Dropbox 用户）**：原 `bookCards$` 里只有 `$storageSource$ === BROWSER` 那一支会调 `bookmarkToProgress` 合并书签进度，其他存储源（`ttu-internal-tauri-fs` 桌面用户、Dropbox 等）直接返回 dataList 不带 progress 字段。所以 1.12.2 / 1.12.12 / 1.12.13 三次修都没辙——书签数据完全正确（dev 控制台看到 dataId=5 progress=0.143），就是 manage 页 BROWSER 分支才合并它
+- 修法：BROWSER 之外的分支也走同样的 `bookmarkMap` 合并。FS 桌面用户终于能看到 hover 进度了
+- 加了 dev-only 调试探针（gated by `import.meta.env.DEV`）：putBookmark 调用打 log；bookCards$ rebuild 打 log；window.__autobook 暴露 database + 关键 store。生产构建自动剥离，零运行时成本
+
 ## 1.12.13
 
 - **修打字机加速后停止播放且显示全文的 bug**：根因连锁——所有 4 个 TTS 引擎的 `setContentEl(el)` **不做幂等检查**，每次调用都 `reset()` → `off()`；book-reader-continuous 的 `$:{}` 反应块对 `multiplier` 变化也敏感，加速点击会重跑该块、调 `setContentEl(contentEl)` 同一节点；reset() 内部 `off()` 让 autoReader 的 `wasReaderEnabled$` 假阳性 fire false → +page.svelte 订阅器调 `autoScroller.revealAll()` → 全文显示 + revealedIndex 到末端 → 下次 `revealNext` 撞底 `off()` 自杀。所以"加速 = 停 + 显示全文 + 再点也无效（revealedIndex 已经在末端，立刻自杀）"

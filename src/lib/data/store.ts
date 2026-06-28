@@ -749,3 +749,20 @@ export const isOnline$ = writableSubject<boolean>(true);
 export const skipKeyDownListener$ = writableSubject<boolean>(false);
 
 export const userFonts$ = writableArrayLocalStorageSubject<UserFont>()('userfonts', []);
+
+// --- Dev-only console handle. Run `npm run dev` and inspect
+// `window.__autobook.database.bookmarks$.subscribe(b => console.log(b))`
+// to watch bookmarks observable updates live. Stripped in prod builds. ---
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  (window as any).__autobook = {
+    database,
+    bookmarksChanged$: undefined as any, // populated below once available
+    stores: {
+      ttsPositions$,
+      bookReaderKeybindMap$,
+      lastItem$: database.lastItem$
+    }
+  };
+  // database isn't a circular ref problem because we just exposed it above.
+  (window as any).__autobook.bookmarksChanged$ = database.bookmarksChanged$;
+}
