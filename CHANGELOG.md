@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.1
+
+- **修 CBR / CBZ / PDF 图片在二次进入时全部破图**：根因在 `format-book-data-html.ts` 的 Observable teardown 立即 `URL.revokeObjectURL` 所有 blob URLs——这在 BookReader 卸载（/b → /settings 之类导航）时跑，但 `formattedBookCache` 还留着 htmlContent（里面嵌着那些被废弃的 URL）。下次回 /b 缓存命中、把废弃 URL 喂给 `<img>` → `complete: true` 但 `naturalWidth: 0`，浏览器画破图标
+- 修法：把 URL 所有权从 Observable 交给缓存。`getHtmlWithImageSource` 不再 teardown 时 revoke；改在缓存 evict（开新书时）一次性 revoke 旧 entry 的 URLs。新书的 URLs 立即生效不会被废，缓存命中时 URLs 还活着
+
 ## 1.14.0
 
 - **OCR 引擎从 Tesseract.js 换 [PaddleOCR.js](https://github.com/PaddlePaddle/PaddleOCR/tree/main/paddleocr-js)（PP-OCRv5）**：1.13.0 内部 bench 对比一张典型中文扫描页，Tesseract 把人物照片识别成乱码、正文里塞 `RERTEEAR HEH RARBRA X` / `CEES PET FULT TT` / `E-ABFTRESN` 这种死亡乱码；Paddle 跳过照片只圈文字行、文本几乎可以直接粘到笔记里。耗时基本同档（25 秒/页 vs Tesseract ~25 秒）。本版把整条 OCR 链路换成 Paddle，删 tesseract.js 依赖

@@ -18,10 +18,11 @@ export default function loadBookData(
   blurMode: BlurMode
 ) {
   return formatBookDataHtml(bookData, document, isPaginated, blurMode).pipe(
-    map((htmlContent) => ({
+    map(({ htmlContent, objectUrls }) => ({
       htmlContent,
       styleSheet: formatStyleSheet(bookData, parentSelector),
-      language: bookData.language
+      language: bookData.language,
+      objectUrls
     }))
   );
 }

@@ -2,10 +2,29 @@
   // Survives /b unmount so navigating to /settings and back doesn't re-format the book.
   // Keyed on (bookId, viewMode, blurMode, lastBookmarkModified). Only the latest entry is kept
   // to avoid leaking object URLs from prior books.
-  const formattedBookCache = new Map<
-    string,
-    { htmlContent: string; styleSheet: string; language?: string }
-  >();
+  //
+  // We also own the lifecycle of the entry's blob object URLs: when an entry
+  // is evicted (via clear() or replaced), revoke its URLs here. Doing the
+  // revocation in `format-book-data-html.ts`'s observable teardown (the
+  // previous design) tore URLs down the moment the BookReader unmounted —
+  // which is also when /b → /settings → /b lands a cache hit pointing at
+  // dead URLs, so every <img> rendered as a broken-image icon
+  // (`naturalWidth: 0`).
+  interface FormattedBookEntry {
+    htmlContent: string;
+    styleSheet: string;
+    language?: string;
+    objectUrls: string[];
+  }
+  const formattedBookCache = new Map<string, FormattedBookEntry>();
+  function evictFormattedBookCache() {
+    for (const entry of formattedBookCache.values()) {
+      for (const url of entry.objectUrls) {
+        URL.revokeObjectURL(url);
+      }
+    }
+    formattedBookCache.clear();
+  }
 </script>
 
 <script lang="ts">
@@ -562,8 +581,11 @@
         tap((data) => {
           // eslint-disable-next-line no-console
           console.log('[bookData$] after loadBookData', !!data?.htmlContent);
-          // Keep only last entry; freeing the prior URLs is risky since other refs may exist.
-          formattedBookCache.clear();
+          // Only keep the latest entry. evictFormattedBookCache revokes
+          // the prior entry's blob URLs as it clears — safe now because
+          // formatBookDataHtml hands URL ownership to this cache instead
+          // of revoking them on observable teardown.
+          evictFormattedBookCache();
           formattedBookCache.set(cacheKey, data);
         })
       );
