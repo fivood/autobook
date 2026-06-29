@@ -234,7 +234,7 @@
   hidden
   multiple
   type="file"
-  accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,.cbz,application/zip,.zip"
+  accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,.cbz,.cbr,.cb7,.cbt,application/zip,.zip"
   use:inputFile={dispatchFilesChange}
   bind:this={fileImportElm}
 />

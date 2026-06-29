@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.12.18
+
+- **CBR / CB7 / CBT 漫画归档支持**：之前只支持 CBZ（ZIP）。新增 [libarchive.js](https://github.com/nika-begiashvili/libarchive.js)（WASM ~1MB，按需 dynamic import）作 RAR / 7z / tar 三种漫画归档的解码器，复用 CBZ 的 `cbz-page-N.*` blob key 形态，OCR / 图片缩放 / 右键菜单全免改。fileAssociations、import 正则、accept 属性、Tauri 端 BOOK_EXTS 同步加上（顺手补了之前漏的 `azw` 单扩展名）
+- **OCR 进度页码不再 "330 / 286 页"**：之前传 `page.pageNum`（PDF 物理页号，可能比 OCR-able 页数高），改为传迭代序号 `i + 1`，286 页扫描就是 1/286 → 286/286
+- **OCR 完成后不再误报"检测到扫描版"**：旧逻辑判 isScannedPdf 时只看有没有 `<p class="pdf-ocr-text">` 文本块，但低质量扫描 OCR 跑完每页都返回空，没人插这个标记 → reload 后又弹。修法两层：1) OCR 完成时强制在 elementHtml 头部塞一个 `<p class="pdf-ocr-text" hidden></p>` 哨兵 2) ocr-job-manager 完成时把 bookId 写进 `pdfOcrSkippedBookIds$` 永久消音。CBR / CBZ 也加进白名单（漫画归档本来就是图片，不是误扫描 PDF）
+- **【最大的坑】OCR 结果不再 reload 后丢失**：根因在 `saveExternalLastRead`（b/+page.svelte:1457）——`storageSource` 不为空时（Tauri FS / Dropbox），它无条件用磁盘上的 bookData 覆盖 IDB 读出来的，导致 OCR 写到 IDB 的新 elementHtml 一 reload 就被磁盘上的旧版盖掉，DOM 里完全看不到识别的文字。修法：用 `lastBookModified` 比较，本地新就保留 IDB 版本，别拿磁盘旧版无脑覆盖
+
 ## 1.12.17
 
 - 撤掉 1.12.14 ~ 1.12.16 引入的 `[autobook:dbg]` console.log（hover 进度问题已确认修好，调试探针完成任务）

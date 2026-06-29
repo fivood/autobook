@@ -1475,14 +1475,28 @@
       }
 
       if (externalBookData) {
-        bookData = {
-          ...externalBookData,
-          ...{
-            id: localBookData.id,
-            lastBookOpen: localBookData.lastBookOpen,
-            storageSource: localBookData.storageSource
-          }
-        };
+        // Prefer the fresher of (IDB local) vs (external disk) by
+        // lastBookModified. Without this guard, any local-only mutation —
+        // most importantly an OCR run that writes to IDB but hasn't been
+        // pushed to FS yet — gets silently clobbered the next time the
+        // book is opened, because the stale disk copy unconditionally
+        // overrides the fresher local one. Symptom: OCR'd PDFs lose their
+        // <p class="pdf-ocr-text"> paragraphs the moment the user reloads.
+        const localTs = localBookData.lastBookModified || 0;
+        const externalTs = externalBookData.lastBookModified || 0;
+        if (externalTs >= localTs) {
+          bookData = {
+            ...externalBookData,
+            ...{
+              id: localBookData.id,
+              lastBookOpen: localBookData.lastBookOpen,
+              storageSource: localBookData.storageSource
+            }
+          };
+        }
+        // else: localBookData is newer — keep what IDB gave us. The user
+        // can replicate up to external storage later via the normal export
+        // flow if they want disk parity.
       } else if (!localBookData.elementHtml) {
         throw new Error(
           `未找到外部书籍数据：${localBookData.storageSource} 中不存在《${localBookData.title}》的书籍文件`

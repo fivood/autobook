@@ -34,6 +34,13 @@ export function isScannedPdf(book: Pick<BooksDbBookData, 'elementHtml' | 'sectio
   const imgCount = countPageImages(html);
   if (imgCount === 0) return false;
 
+  // Comic archives (CBZ / CBR / CB7 / CBT) emit class="cbz-section" on
+  // every page. These are image-by-design books — not "accidentally
+  // scanned PDFs" — so the OCR prompt doesn't apply. Power users who do
+  // want to OCR manga / Western comics can still trigger it per-page via
+  // the page context menu inside the reader.
+  if (/class="cbz-section/.test(html)) return false;
+
   // Already OCR'd: the runner injects <p class="pdf-ocr-text"> before every
   // recognized image. Presence of ANY such marker means the user already
   // ran OCR on this book — don't re-prompt even if recognition was poor
@@ -226,11 +233,16 @@ export async function runOcr(
     if (signal?.aborted) throw new DOMException('OCR aborted', 'AbortError');
 
     const page = pages[i];
+    // progress.page reports iteration index, not page.pageNum: PDFs with
+    // leading text-extracted pages (TOC / copyright / etc.) make pageNum
+    // start partway through, so reporting it would show "330 / 286 页" —
+    // confusing. Iteration index always advances 1..total.
+    const progressPage = i + 1;
     // Append the chunk between the previous insertion point and this img.
     chunks.push(original.slice(cursor, page.start));
 
     if (page.hasOcr) {
-      onProgress({ page: page.pageNum, total, text: '' });
+      onProgress({ page: progressPage, total, text: '' });
       // No insertion needed; just emit the original img tag.
       chunks.push(page.imgTag);
       cursor = page.end;
@@ -248,7 +260,7 @@ export async function runOcr(
     if (!blob) {
       // eslint-disable-next-line no-console
       console.warn(`[ocr] no blob for page ${pageMarker}`);
-      onProgress({ page: page.pageNum, total, text: '' });
+      onProgress({ page: progressPage, total, text: '' });
       chunks.push(page.imgTag);
       cursor = page.end;
       continue;
@@ -277,12 +289,21 @@ export async function runOcr(
     }
 
     cursor = page.end;
-    onProgress({ page: page.pageNum, total, text: recognized });
+    onProgress({ page: progressPage, total, text: recognized });
   }
 
   // Append the tail (everything after the last img).
   chunks.push(original.slice(cursor));
-  const newHtml = chunks.join('');
+  let newHtml = chunks.join('');
+
+  // Always stamp a sentinel so isScannedPdf knows OCR was run, even when
+  // every page yielded empty text (low-quality scan, language model
+  // mismatch, etc.). Without this, completing OCR then reloading would
+  // re-trigger the "detected scanned PDF" banner because no pdf-ocr-text
+  // markers got inserted.
+  if (!/<p\s+class="pdf-ocr-text"/.test(newHtml)) {
+    newHtml = '<p class="pdf-ocr-text" hidden></p>' + newHtml;
+  }
 
   // Final defensive check: the new HTML must still contain every page image
   // we started with. If not, something went wrong and we won't save.

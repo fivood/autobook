@@ -16,10 +16,25 @@
  */
 
 import { writable, type Readable } from 'svelte/store';
-import { database } from '$lib/data/store';
+import { database, pdfOcrSkippedBookIds$ } from '$lib/data/store';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
 import { runOcr, type OcrProgress } from './pdf-ocr-runner';
 import type { OcrLanguage } from './pdf-ocr';
+
+function markBookOcrComplete(bookId: number) {
+  // Belt-and-suspenders alongside the sentinel inserted by runOcr: once a
+  // book finishes OCR (regardless of result quality, or whether the user
+  // pressed "应用并刷新"), add it to the per-book skip list so the
+  // "detected scanned PDF" banner doesn't re-prompt on later opens. Covers
+  // edge cases where every page yielded empty text and the sentinel was
+  // somehow not picked up by isScannedPdf.
+  const raw = pdfOcrSkippedBookIds$.value || '';
+  const ids = new Set(raw.split(',').filter(Boolean).map(Number));
+  if (!ids.has(bookId)) {
+    ids.add(bookId);
+    pdfOcrSkippedBookIds$.next(Array.from(ids).join(','));
+  }
+}
 
 export type OcrJobStatus = 'running' | 'finished' | 'errored';
 
@@ -73,6 +88,7 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
       );
       const db = await database.db;
       await db.put('data', updated);
+      markBookOcrComplete(book.id);
       _store.update((s) => (s ? { ...s, status: 'finished' } : s));
     } catch (err: any) {
       const msg = err?.name === 'AbortError' ? '已中止' : err?.message || String(err);

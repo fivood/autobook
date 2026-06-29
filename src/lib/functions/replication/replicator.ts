@@ -14,6 +14,7 @@ import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadMd from '$lib/functions/file-loaders/md/load-md';
 import loadMobi, { setForceNativeParser } from '$lib/functions/file-loaders/mobi/load-mobi';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
+import loadCbr from '$lib/functions/file-loaders/cbr/load-cbr';
 import loadPdf from '$lib/functions/file-loaders/pdf/load-pdf';
 import { sniffFormat, sniffZipKind } from '$lib/functions/file-loaders/utils/sniff-format';
 
@@ -94,6 +95,8 @@ export async function importData(
             bookContent = await loadPdf(file, lastBookModified);
           } else if (/\.cbz$/i.test(file.name)) {
             bookContent = await loadCbz(file, lastBookModified);
+          } else if (/\.(cbr|cb7|cbt)$/i.test(file.name)) {
+            bookContent = await loadCbr(file, lastBookModified);
           } else if (/\.htmlz$/i.test(file.name)) {
             bookContent = await loadHtmlz(file, document, lastBookModified);
           } else {
