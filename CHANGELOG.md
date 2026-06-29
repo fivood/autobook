@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.13.0
+
+- **扫描 PDF 文字层（透明 OCR）**：OCR 输出从「图上面一段段段落」改造成 Chrome PDF 阅读器那种**透明文本层**。Tesseract 切到 HOCR 输出 + `preserve_interword_spaces: '0'`，每个识别词（中文里就是单字）拿到 `bbox` 像素坐标，生成 `<span style="left:Xpx;top:Ypx;font-size:Hpx">字</span>` 钉在 `<div class="pdf-text-layer">` 里。这个层 `color: transparent` + `user-select: text`，跟图叠在一个 `pdf-page-shell` 里靠 `--pdf-scale-factor` 跟随图片缩放。**结果**：视觉是干净的扫描原图，鼠标拖选时蓝色选区穿透图片选中底下的字，Ctrl+C 复制出来是无多余空格的干净中文（之前老版「编 者 的 话」变成「编者的话」）
+- **OCR 输出形态升级路径**：旧版 `<p class="pdf-ocr-text">…</p>` 在 `isScannedPdf` 仍然认为是「已 OCR」，旧书不会再被 OCR 提示打扰；新跑的 OCR（或对旧书重跑 OCR）会自动用透明层取代旧段落；单页右键重 OCR 也走同一新路径
+- **OCR 结果同步到 Tauri FS 磁盘**：之前只写 IDB，别的设备打开还是看扫描原图。现在 OCR 完成时 fire-and-forget 写一份回 `bookdata_*` 文件，下次别处打开就有
+- **OCR 后 sections 字段重算**：之前每页 `characters: 1`（图占位），OCR 完每页突然有几百字但 sections 不更新，TTS 高亮 / 翻页跳转 / 阅读进度全错位。新增 `recomputeSectionChars` 扫一遍 newHtml，重写每个 section 的 `characters` 和累积 `startCharacter`
+- **PDF 页图被 100vh 截短**：连续 / 分页两个 reader 的 `:global(img)` max-height cap 之前对 `.pdf-page-img` 也生效，shell 用 `aspect-ratio` 算出 1425px 高但图被截到 viewport 高度 1031px，透明文本层 spans 用源坐标渲染就跟可见图错位。改成 `:not(.pdf-page-img)` 豁免，分页模式同样豁免 `.pdf-page-shell` / `.pdf-section` 的 ttu-illustration-container 卡位
+- **pdf-text-layer / pdf-page-shell CSS 提到全局**：之前规则只塞在 `book.styleSheet` 里，v1.11 之前导入的书没这些规则，OCR 完透明层就显成黑色裸字。现搬到 `book-reader/styles.scss`，所有书统一吃，老书不用重新导入
+- **分页模式点击翻页热区跟随用户边距**：之前两侧固定 20px 细条，初次用根本看不出有这功能。改成：横向阅读取 `(viewport - 阅读区最大宽度) / 2`，竖排取 `阅读区左右边距`，最小兜底 5rem（≈80px，一根手指宽）。设了大边距热区自动变宽
+- **边缘悬停浮出翻页按钮**：分页模式鼠标移到两侧热区内，淡灰半透明 chevron 圆按钮 fade in；1.2s 不动自动隐藏。`pointer-events: none` 不抢点击，下面的透明大按钮接管。横向 ← / → ，竖排互换（RTL）
+
 ## 1.12.18
 
 - **CBR / CB7 / CBT 漫画归档支持**：之前只支持 CBZ（ZIP）。新增 [libarchive.js](https://github.com/nika-begiashvili/libarchive.js)（WASM ~1MB，按需 dynamic import）作 RAR / 7z / tar 三种漫画归档的解码器，复用 CBZ 的 `cbz-page-N.*` blob key 形态，OCR / 图片缩放 / 右键菜单全免改。fileAssociations、import 正则、accept 属性、Tauri 端 BOOK_EXTS 同步加上（顺手补了之前漏的 `azw` 单扩展名）

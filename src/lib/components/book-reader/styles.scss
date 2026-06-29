@@ -5,6 +5,50 @@
   font-family: var(--font-family-serif, 'Noto Sans SC', 'Noto Serif JP', serif);
 }
 
+// PDF / OCR page shell + transparent text overlay. These rules are global
+// (rather than embedded in each book's `styleSheet`) so they apply to
+// books imported before v1.11 too — older books don't have the rules
+// inside their per-book stylesheet, but their elementHtml DOES carry
+// pdf-page-shell / pdf-text-layer once OCR runs in v1.13+. Without the
+// global rules, the text layer would render as opaque black text (no
+// `color: transparent`) at source-pixel coordinates (no `scale()`), which
+// is exactly the chaos a user saw on a pre-1.11 import.
+:global(.pdf-page-shell) {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+}
+:global(.pdf-page-shell > img.pdf-page-img) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+:global(.pdf-text-layer) {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  transform: scale(var(--pdf-scale-factor, 1));
+  pointer-events: none;
+  line-height: 1;
+  font-family: serif;
+  opacity: 1;
+}
+:global(.pdf-text-layer > span) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  transform-origin: 0 0;
+  pointer-events: auto;
+  cursor: text;
+  user-select: text;
+}
+:global(.pdf-text-layer > span::selection) {
+  background: rgba(0, 110, 255, 0.32);
+  color: transparent;
+}
+
 /* Markdown-specific styling */
 .book-content .md-section {
   h1, h2, h3, h4, h5, h6 {

@@ -812,8 +812,14 @@
   @import '../styles';
 
   .book-content {
+    // EPUB / inline illustrations get capped at viewport height so a
+    // tall figure doesn't blow the layout. PDF page images and CBZ comic
+    // pages are wrapped in `.pdf-page-shell` whose `aspect-ratio` already
+    // sizes them correctly — capping their height here truncates the
+    // image so the transparent OCR text layer no longer aligns with the
+    // visible scan. Exclude both.
     :global(svg),
-    :global(img) {
+    :global(img:not(.pdf-page-img)) {
       max-height: 100vh;
     }
   }

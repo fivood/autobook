@@ -5,9 +5,11 @@
  *
  * Orchestrates OCR over an entire PDF book that was previously loaded in
  * "image mode" (scan / pure-image PDF). For each page image, runs Tesseract
- * and inserts a <p> containing the recognized text before the <img>. The
- * result is saved back into the `data` store so the reader picks it up on
- * the next load.
+ * and wraps the `<img>` in a `pdf-page-shell` carrying a transparent
+ * `pdf-text-layer` of positioned `<span>`s — same shape as 1.11's text-mode
+ * PDFs. The result is that scanned books behave like Chrome's PDF viewer:
+ * the user sees the original image, but can mouse-select the text under it
+ * for copy / dictionary / AI / highlight workflows.
  *
  * IMPORTANT: We deliberately do NOT use DOMParser on the full elementHtml.
  * That worked fine on small books but on 800+ page PDFs we hit a silent
@@ -16,15 +18,24 @@
  * back to innerHTML would replace the stored book with the truncated
  * version. The structure of an image-mode PDF page is regular enough that
  * a string-level rewrite is both faster and lossless.
+ *
+ * Legacy (pre-1.13) OCR output: `<p class="pdf-ocr-text">…</p>` blocks
+ * inserted before each `<img>`. We still recognize that shape so existing
+ * books keep working, and so we can strip those blocks cleanly when the
+ * user re-OCRs a page.
  */
 
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import { ocrImageBlob, type OcrLanguage } from './pdf-ocr';
+import {
+  getBlobImageDimensions,
+  ocrImageBlobHocr,
+  type OcrLanguage
+} from './pdf-ocr';
 
 export interface OcrProgress {
   page: number;
   total: number;
-  /** Just-recognized text for this page (best-effort preview). */
+  /** Just-recognized text for this page (cleaned of CJK-internal spaces). */
   text: string;
 }
 
@@ -41,13 +52,11 @@ export function isScannedPdf(book: Pick<BooksDbBookData, 'elementHtml' | 'sectio
   // the page context menu inside the reader.
   if (/class="cbz-section/.test(html)) return false;
 
-  // Already OCR'd: the runner injects <p class="pdf-ocr-text"> before every
-  // recognized image. Presence of ANY such marker means the user already
-  // ran OCR on this book — don't re-prompt even if recognition was poor
-  // and the per-page text density is still low (text-density heuristic
-  // can't tell "scanned but never OCR'd" from "scanned, OCR ran but model
-  // returned mostly empty results because of bad scan quality").
-  if (/<p\s+class="pdf-ocr-text"/.test(html)) return false;
+  // Already OCR'd: 1.13+ runs wrap each page in a `pdf-page-shell` with a
+  // transparent `pdf-text-layer`; legacy runs left a `<p class="pdf-ocr-text">`
+  // marker before each img. Either marker means OCR was attempted — don't
+  // re-prompt even if recognition was sparse.
+  if (/<p\s+class="pdf-ocr-text"|class="pdf-text-layer"/.test(html)) return false;
 
   // Mixed-mode PDFs: PDF.js extracted text for most pages, only a handful
   // of pages fell back to image rendering (typical for books with scanned
@@ -79,46 +88,263 @@ function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
+
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+const CJK_CHAR_RE = /[　-〿一-鿿＀-ﾟ぀-ゟ゠-ヿ]/;
 
 interface PageMatch {
   /** Full `<img ... />` tag text. */
   imgTag: string;
-  /** Offset in the source string where the img tag starts. */
+  /** Offset where the img tag starts. */
   start: number;
   /** Offset right after the img tag ends. */
   end: number;
   pageNum: number;
-  /** Whether this img already has OCR text inserted before it. */
+  /** Whether this img is already OCR'd in any flavour. */
   hasOcr: boolean;
+  /** True only when the new (1.13+) shell + text-layer wrapper is already
+   * present. Legacy `<p class="pdf-ocr-text">` blocks set hasOcr but NOT
+   * this — full-book OCR uses that distinction to upgrade legacy pages
+   * automatically (re-run Tesseract, replace `<p>` with the shell). */
+  hasShellOcr: boolean;
+  /**
+   * If non-null, the chunk preceding this page that we should overwrite
+   * starts at this offset (covers a `<div class="pdf-page-shell">` opening
+   * or a run of legacy `<p class="pdf-ocr-text">` blocks). When stripping
+   * for re-OCR, drop everything from `stripFrom` up to `start`.
+   */
+  stripFrom?: number;
+  /**
+   * If non-null, the OCR additions trailing this page (text layer +
+   * closing shell `</div>`) end here. When re-OCR'ing, resume copying
+   * from this offset instead of `end` so the old layer doesn't leak
+   * through. Always >= `end`.
+   */
+  resumeAt?: number;
 }
 
 function findPageImages(html: string): PageMatch[] {
-  // Match an <img> tag carrying data-pdf-page="N". Tags from our loader
-  // include a self-closing slash; allow either form.
   const re = /<img\b[^>]*?\bdata-pdf-page="(\d+)"[^>]*?\/?>/g;
+  const shellOpenRe = /<div\s+class="pdf-page-shell"[^>]*>\s*$/;
+  // Match a contiguous run of legacy <p class="pdf-ocr-text">…</p> blocks
+  // that ends right at the cursor.
+  const legacyParasRe = /(?:<p\s+class="pdf-ocr-text"[^>]*>[\s\S]*?<\/p>\s*)+$/;
+  // Forward: `<div class="pdf-text-layer">…</div></div>` immediately after
+  // the img. Tolerates whitespace between segments.
+  const trailingLayerRe = /^\s*<div\s+class="pdf-text-layer"[^>]*>[\s\S]*?<\/div>\s*<\/div>/;
+
   const result: PageMatch[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const start = m.index;
     const end = re.lastIndex;
     const pageNum = Number(m[1]);
-    // Look backwards a few hundred chars for an existing OCR insertion
-    // (a <p class="pdf-ocr-text">) belonging to the same section.
-    const lookback = html.slice(Math.max(0, start - 800), start);
-    const hasOcr = /<p\s+class="pdf-ocr-text"/.test(lookback);
-    result.push({ imgTag: m[0], start, end, pageNum, hasOcr });
+
+    const lookback = html.slice(Math.max(0, start - 50_000), start);
+    const shellMatch = shellOpenRe.exec(lookback);
+
+    let stripFrom: number | undefined;
+    let resumeAt: number | undefined;
+    let hasOcr = false;
+    let hasShellOcr = false;
+
+    if (shellMatch) {
+      stripFrom = start - shellMatch[0].length;
+      const lookahead = html.slice(end, Math.min(html.length, end + 200_000));
+      const trailingMatch = trailingLayerRe.exec(lookahead);
+      if (trailingMatch) {
+        resumeAt = end + trailingMatch[0].length;
+        hasOcr = true;
+        hasShellOcr = true;
+      }
+    } else {
+      const legacyMatch = legacyParasRe.exec(lookback);
+      if (legacyMatch) {
+        stripFrom = start - legacyMatch[0].length;
+        hasOcr = true;
+      }
+    }
+
+    result.push({ imgTag: m[0], start, end, pageNum, hasOcr, hasShellOcr, stripFrom, resumeAt });
   }
   return result;
 }
 
+interface TextLayerBuild {
+  /** Joined `<span>` markup for the text layer. */
+  spans: string;
+  /** Total recognized character count (for `book.characters` accounting). */
+  charCount: number;
+  /** Plain text, CJK-internal spaces collapsed. Used for the banner preview
+   * and as a copy-friendly form when the layer can't render. */
+  cleanText: string;
+}
+
+/**
+ * Parse Tesseract HOCR and produce positioned `<span>` markup for a
+ * `.pdf-text-layer`. Per-word bbox coords come straight from HOCR's
+ * `bbox X1 Y1 X2 Y2`; we use word height as font-size and word width as
+ * a `min-width` hint so each span occupies its source footprint.
+ *
+ * For chi_sim / chi_tra HOCR each "word" is a single character (Chinese
+ * has no word boundaries), which naturally yields character-level
+ * positioning — copying a selection gives clean text with no inter-char
+ * spaces.
+ */
+function hocrToTextLayer(hocr: string): TextLayerBuild {
+  if (!hocr) return { spans: '', charCount: 0, cleanText: '' };
+  const wordRe =
+    /<span\s+class=['"]ocrx_word['"][^>]*\btitle=['"]([^'"]*)['"][^>]*>([\s\S]*?)<\/span>/g;
+  const out: string[] = [];
+  const textParts: string[] = [];
+  let chars = 0;
+  let m: RegExpExecArray | null;
+  while ((m = wordRe.exec(hocr)) !== null) {
+    const title = m[1];
+    const raw = m[2].replace(/<[^>]+>/g, '');
+    const text = decodeHtmlEntities(raw).trim();
+    if (!text) continue;
+
+    const bboxMatch = /bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/.exec(title);
+    if (!bboxMatch) continue;
+    const x1 = +bboxMatch[1];
+    const y1 = +bboxMatch[2];
+    const x2 = +bboxMatch[3];
+    const y2 = +bboxMatch[4];
+    const w = x2 - x1;
+    const h = y2 - y1;
+    if (w <= 0 || h <= 0) continue;
+
+    out.push(
+      `<span style="left:${x1}px;top:${y1}px;font-size:${h}px;min-width:${w}px">${escapeHtml(text)}</span>`
+    );
+    chars += [...text].length;
+    textParts.push(text);
+  }
+
+  // CJK-aware concat for the plain-text fallback / preview.
+  let cleanText = '';
+  for (let i = 0; i < textParts.length; i++) {
+    const part = textParts[i];
+    if (i === 0) {
+      cleanText = part;
+      continue;
+    }
+    const prevLast = cleanText[cleanText.length - 1];
+    const currFirst = part[0];
+    const cjkBoundary = CJK_CHAR_RE.test(prevLast) && CJK_CHAR_RE.test(currFirst);
+    cleanText += (cjkBoundary ? '' : ' ') + part;
+  }
+
+  return { spans: out.join(''), charCount: chars, cleanText };
+}
+
+function buildPageShell(
+  imgTag: string,
+  pageW: number,
+  pageH: number,
+  spans: string
+): string {
+  // Empty text layer is still emitted (just `<div class="pdf-text-layer"></div>`)
+  // so isScannedPdf and the re-OCR detector both recognize the page as
+  // processed even if Tesseract returned nothing.
+  return (
+    `<div class="pdf-page-shell" data-page-w="${pageW}" data-page-h="${pageH}"` +
+    ` style="aspect-ratio: ${pageW} / ${pageH};">` +
+    imgTag +
+    `<div class="pdf-text-layer" data-page-w="${pageW}" data-page-h="${pageH}">${spans}</div>` +
+    `</div>`
+  );
+}
+
+/**
+ * Walk the new HTML, count text content per pdf/cbz section, and produce
+ * an updated `sections` array with accurate `characters` and cumulative
+ * `startCharacter`. The reader's TTS highlight, scroll-mode bookmark math,
+ * and paginated section-jump logic all use these fields; before OCR each
+ * section is `characters: 1` (image-mode placeholder) and after OCR the
+ * sections suddenly carry hundreds of glyphs, so we have to rewrite the
+ * whole array to keep positions accurate.
+ *
+ * Counts only the OCR span text (and any legacy `<p class="pdf-ocr-text">`
+ * content), NOT the `<h3 class="pdf-page-label">N</h3>` page number —
+ * that's display chrome, the user doesn't scroll through it.
+ */
+function recomputeSectionChars(
+  html: string,
+  sections: BooksDbBookData['sections']
+): { sections: BooksDbBookData['sections']; total: number } {
+  if (!sections || !sections.length) return { sections, total: 0 };
+
+  // Build an offset → next-section map by scanning section opening tags.
+  const sectionOpenRe = /<div\s+id="((?:pdf-page|cbz-page)-\d+)"[^>]*class="[^"]*pdf-section[^"]*"[^>]*>/g;
+  const positions: Array<{ id: string; start: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = sectionOpenRe.exec(html)) !== null) {
+    positions.push({ id: m[1], start: m.index });
+  }
+  const byId = new Map<string, { start: number; end: number }>();
+  for (let i = 0; i < positions.length; i++) {
+    const end = i + 1 < positions.length ? positions[i + 1].start : html.length;
+    byId.set(positions[i].id, { start: positions[i].start, end });
+  }
+
+  let cumulative = 0;
+  const updated = sections.map((sec) => {
+    const ref = sec.reference || '';
+    const pos = byId.get(ref);
+    if (!pos) {
+      // Section in the array but not in the rendered HTML — keep its
+      // existing count, just rebase the offset.
+      const out = { ...sec, startCharacter: cumulative };
+      cumulative += sec.characters || 0;
+      return out;
+    }
+    const chunk = html.slice(pos.start, pos.end);
+    // Drop the page-label `<h3>` content from the count — it's chrome.
+    const stripped = chunk
+      .replace(/<h3[^>]*class="[^"]*pdf-page-label[^"]*"[^>]*>[\s\S]*?<\/h3>/g, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&[a-z]+;/gi, ' ')
+      .replace(/\s+/g, '');
+    const chars = stripped.length || 1;
+    const out = { ...sec, characters: chars, startCharacter: cumulative };
+    cumulative += chars;
+    return out;
+  });
+
+  return { sections: updated, total: cumulative };
+}
+
+function pageBlobFromBook(book: BooksDbBookData, pageNum: number): Blob | undefined {
+  const m = String(pageNum);
+  return (
+    book.blobs[`pdf-page-${m}.jpg`] ||
+    book.blobs[`pdf-page-${m}.png`] ||
+    book.blobs[`cbz-page-${m}.jpg`] ||
+    book.blobs[`cbz-page-${m}.png`] ||
+    book.blobs[`cbz-page-${m}.webp`]
+  );
+}
+
 /**
  * Re-run OCR on a single page and write the result back, replacing any
- * existing <p class="pdf-ocr-text"> blocks that immediately precede this
- * page's <img data-pdf-page>. Used by the in-reader "re-OCR this page"
- * context menu so users can fix low-quality pages individually instead
- * of re-running the entire book.
+ * existing `<p class="pdf-ocr-text">` blocks OR any prior `pdf-page-shell`
+ * wrapper that surrounds this page's `<img data-pdf-page>`. Used by the
+ * in-reader "re-OCR this page" context menu so users can fix low-quality
+ * pages individually instead of re-running the entire book.
  *
  * Returns the updated BooksDbBookData. Caller is responsible for db.put
  * and reload.
@@ -135,42 +361,26 @@ export async function runOcrOnPage(
     throw new Error(`OCR 中止：在书中未找到第 ${pageNum} 页的图片标记。`);
   }
 
-  const pageMarker = String(pageNum);
-  const blob =
-    book.blobs[`pdf-page-${pageMarker}.jpg`] ||
-    book.blobs[`pdf-page-${pageMarker}.png`] ||
-    book.blobs[`cbz-page-${pageMarker}.jpg`] ||
-    book.blobs[`cbz-page-${pageMarker}.png`] ||
-    book.blobs[`cbz-page-${pageMarker}.webp`];
+  const blob = pageBlobFromBook(book, pageNum);
   if (!blob) {
     throw new Error(`OCR 中止：找不到第 ${pageNum} 页的原图数据。`);
   }
 
-  const recognized = await ocrImageBlob(blob, lang);
+  const [dims, ocrResult] = await Promise.all([
+    getBlobImageDimensions(blob),
+    ocrImageBlobHocr(blob, lang)
+  ]);
+  const layer = hocrToTextLayer(ocrResult.hocr);
+  const wrapped = buildPageShell(target.imgTag, dims.width, dims.height, layer.spans);
 
-  // Replace the OCR block immediately preceding the target img. We look
-  // back at most 50KB (handles very long previous OCR insertions safely)
-  // and remove any contiguous run of `<p class="pdf-ocr-text">...</p>`
-  // that ends right before this img.
-  const lookbackStart = Math.max(0, target.start - 50_000);
-  const before = html.slice(lookbackStart, target.start);
-  const oldOcrBlock = /(?:<p\s+class="pdf-ocr-text">[\s\S]*?<\/p>\s*)+$/.exec(before);
-  const trimEnd = oldOcrBlock ? target.start - oldOcrBlock[0].length : target.start;
+  // Strip any prior OCR additions around the img (shell wrapper or legacy
+  // `<p class="pdf-ocr-text">` blocks). Fall back to the unmodified
+  // boundaries if nothing was detected.
+  const trimEnd = target.stripFrom ?? target.start;
+  const resumeFrom = target.resumeAt ?? target.end;
 
-  const paragraphs = recognized
-    .split(/\n{2,}/)
-    .map((p) => p.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
-  const ocrHtml = paragraphs.length
-    ? paragraphs.map((p) => `<p class="pdf-ocr-text">${escapeHtml(p)}</p>`).join('\n')
-    : '';
+  const newHtml = html.slice(0, trimEnd) + wrapped + html.slice(resumeFrom);
 
-  const newHtml =
-    html.slice(0, trimEnd) +
-    ocrHtml +
-    html.slice(target.start);
-
-  // Sanity: every original image marker must still be present.
   const newPageCount = countPageImages(newHtml);
   const originalPageCount = countPageImages(html);
   if (newPageCount !== originalPageCount) {
@@ -179,16 +389,20 @@ export async function runOcrOnPage(
     );
   }
 
-  const newCharacters = newHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, '').length;
+  const { sections: updatedSections, total: newCharacters } = recomputeSectionChars(
+    newHtml,
+    book.sections
+  );
 
   return {
     updated: {
       ...book,
       elementHtml: newHtml,
       characters: newCharacters,
+      sections: updatedSections,
       lastBookModified: Date.now()
     },
-    recognized
+    recognized: layer.cleanText
   };
 }
 
@@ -211,9 +425,9 @@ export async function runOcr(
   // (illustration plates inside an otherwise text-extracted book) — the
   // earlier `total < expected * 0.9` rule fired on those legitimate cases
   // even though there was nothing to recover. The post-write check below
-  // (newPageCount >= total) still catches actual page-loss during
-  // serialization, so this guard only needs to detect "this book is so
-  // gutted there are basically no images left to process."
+  // still catches actual page-loss during serialization, so this guard
+  // only needs to detect "this book is so gutted there are basically no
+  // images left to process."
   const expected = book.sections?.length || total;
   if (expected > 100 && total < 5) {
     throw new Error(
@@ -222,10 +436,6 @@ export async function runOcr(
     );
   }
 
-  // Build the new HTML by walking the page matches in order, inserting
-  // recognized text before each img. Chunks of original HTML between
-  // matches pass through verbatim, so nothing outside the OCR insertions
-  // is touched.
   const chunks: string[] = [];
   let cursor = 0;
 
@@ -233,80 +443,76 @@ export async function runOcr(
     if (signal?.aborted) throw new DOMException('OCR aborted', 'AbortError');
 
     const page = pages[i];
-    // progress.page reports iteration index, not page.pageNum: PDFs with
-    // leading text-extracted pages (TOC / copyright / etc.) make pageNum
-    // start partway through, so reporting it would show "330 / 286 页" —
-    // confusing. Iteration index always advances 1..total.
     const progressPage = i + 1;
-    // Append the chunk between the previous insertion point and this img.
-    chunks.push(original.slice(cursor, page.start));
+    const chunkEnd = page.stripFrom ?? page.start;
+    chunks.push(original.slice(cursor, chunkEnd));
 
-    if (page.hasOcr) {
+    if (page.hasShellOcr) {
+      // Page is already in the new shell + text-layer format — copy the
+      // existing wrapper through verbatim and advance past it.
       onProgress({ page: progressPage, total, text: '' });
-      // No insertion needed; just emit the original img tag.
-      chunks.push(page.imgTag);
-      cursor = page.end;
+      const copyFrom = page.stripFrom ?? page.start;
+      const copyTo = page.resumeAt ?? page.end;
+      chunks.push(original.slice(copyFrom, copyTo));
+      cursor = copyTo;
       continue;
     }
 
-    const pageMarker = String(page.pageNum);
-    const blob =
-      book.blobs[`pdf-page-${pageMarker}.jpg`] ||
-      book.blobs[`pdf-page-${pageMarker}.png`] ||
-      book.blobs[`cbz-page-${pageMarker}.jpg`] ||
-      book.blobs[`cbz-page-${pageMarker}.png`] ||
-      book.blobs[`cbz-page-${pageMarker}.webp`];
+    // Legacy (`<p class="pdf-ocr-text">…</p>`) or never-OCR'd: fall through
+    // to a fresh OCR pass. The legacy <p>s were already excluded from the
+    // chunk above via `stripFrom`, so the rebuild cleanly replaces them
+    // with the new shell+layer shape.
 
+    const blob = pageBlobFromBook(book, page.pageNum);
     if (!blob) {
       // eslint-disable-next-line no-console
-      console.warn(`[ocr] no blob for page ${pageMarker}`);
+      console.warn(`[ocr] no blob for page ${page.pageNum}`);
       onProgress({ page: progressPage, total, text: '' });
       chunks.push(page.imgTag);
       cursor = page.end;
       continue;
     }
 
-    let recognized = '';
+    let dims = { width: 0, height: 0 };
+    let hocr = '';
+    let cleanText = '';
+    let spans = '';
     try {
-      recognized = await ocrImageBlob(blob, lang);
+      dims = await getBlobImageDimensions(blob);
+      const result = await ocrImageBlobHocr(blob, lang);
+      hocr = result.hocr;
+      const layer = hocrToTextLayer(hocr);
+      spans = layer.spans;
+      cleanText = layer.cleanText;
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(`[ocr] page ${page.pageNum} failed`, err);
     }
 
-    if (recognized) {
-      const paragraphs = recognized
-        .split(/\n{2,}/)
-        .map((p) => p.replace(/\s+/g, ' ').trim())
-        .filter(Boolean);
-      const ocrHtml = paragraphs
-        .map((p) => `<p class="pdf-ocr-text">${escapeHtml(p)}</p>`)
-        .join('\n');
-      chunks.push(ocrHtml);
-      chunks.push(page.imgTag);
+    if (dims.width > 0 && dims.height > 0) {
+      // Always emit the shell so the page is marked OCR'd even when
+      // Tesseract returned nothing — text layer just renders empty.
+      chunks.push(buildPageShell(page.imgTag, dims.width, dims.height, spans));
     } else {
+      // Dimension probe failed — leave the image unwrapped so we don't
+      // create a shell with garbage data-page-w/h that breaks scaling.
       chunks.push(page.imgTag);
     }
 
     cursor = page.end;
-    onProgress({ page: progressPage, total, text: recognized });
+    onProgress({ page: progressPage, total, text: cleanText });
   }
 
-  // Append the tail (everything after the last img).
   chunks.push(original.slice(cursor));
   let newHtml = chunks.join('');
 
   // Always stamp a sentinel so isScannedPdf knows OCR was run, even when
-  // every page yielded empty text (low-quality scan, language model
-  // mismatch, etc.). Without this, completing OCR then reloading would
-  // re-trigger the "detected scanned PDF" banner because no pdf-ocr-text
-  // markers got inserted.
-  if (!/<p\s+class="pdf-ocr-text"/.test(newHtml)) {
+  // every page yielded an empty text layer (low-quality scan, language
+  // model mismatch, etc.).
+  if (!/<p\s+class="pdf-ocr-text"|class="pdf-text-layer"/.test(newHtml)) {
     newHtml = '<p class="pdf-ocr-text" hidden></p>' + newHtml;
   }
 
-  // Final defensive check: the new HTML must still contain every page image
-  // we started with. If not, something went wrong and we won't save.
   const newPageCount = countPageImages(newHtml);
   if (newPageCount < total) {
     throw new Error(
@@ -314,12 +520,16 @@ export async function runOcr(
     );
   }
 
-  const newCharacters = newHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, '').length;
+  const { sections: updatedSections, total: newCharacters } = recomputeSectionChars(
+    newHtml,
+    book.sections
+  );
 
   return {
     ...book,
     elementHtml: newHtml,
     characters: newCharacters,
+    sections: updatedSections,
     lastBookModified: Date.now()
   };
 }

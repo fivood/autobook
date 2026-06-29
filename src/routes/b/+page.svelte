@@ -35,11 +35,18 @@
   } from '$lib/components/book-reader/auto-reader-shared';
   import { TtsHighlighter } from '$lib/components/book-reader/tts-highlight';
   import { quintInOut } from 'svelte/easing';
-  import { fly } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { faCloudBolt, faPause, faPlay, faSpinner } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faChevronLeft,
+    faChevronRight,
+    faCloudBolt,
+    faPause,
+    faPlay,
+    faSpinner
+  } from '@fortawesome/free-solid-svg-icons';
   import BookReader from '$lib/components/book-reader/book-reader.svelte';
   import AutoScrollFab from '$lib/components/book-reader/auto-scroll-fab.svelte';
   import AutoReaderFab from '$lib/components/book-reader/auto-reader-fab.svelte';
@@ -975,6 +982,63 @@
   $: tapButtonHeight = `calc(100% - ${showHeader ? 5 : 4}rem)`;
 
   $: tapButtonTop = `${showHeader ? 3 : 2}rem`;
+
+  /** Width of each edge tap zone. We tie it to the user-configured margin
+   * so the zone naturally fills the no-text gap on either side of the
+   * page — bigger margin → bigger hit area, no extra setting to tune.
+   *
+   * Horizontal reading: the side gap is `(viewport - secondDimensionMaxValue) / 2`
+   * when a max content-width cap is set; if not, fall back to a discoverable
+   * minimum (5rem ≈ a thumb's worth).
+   * Vertical reading: `firstDimensionMargin` is literally the left/right
+   * padding around the rotated text, so use it directly.
+   */
+  $: tapEdgeWidthPx = (() => {
+    if (!browser) return 80;
+    const min = convertRemToPixels(window, 5);
+    if ($verticalMode$) {
+      return Math.max(min, $firstDimensionMargin$ ?? 0);
+    }
+    const cap = $secondDimensionMaxValue$ ?? 0;
+    const viewportW = $containerViewportWidth$ ?? window.innerWidth;
+    if (!cap || cap >= viewportW) return min;
+    return Math.max(min, Math.floor((viewportW - cap) / 2));
+  })();
+
+  $: tapEdgeWidth = `${tapEdgeWidthPx}px`;
+
+  // Visual page-turn hint: a circular chevron button that fades in when
+  // the cursor approaches either edge of the viewport. Pure UX
+  // discoverability — the wider invisible tap-edge button under it
+  // already handles the click, the floating chevron just tells the user
+  // "yes, this side flips a page". Auto-hides 1.2s after the cursor
+  // leaves the trigger zone, so the page stays visually clean while
+  // reading.
+  let leftHintVisible = false;
+  let rightHintVisible = false;
+  let edgeHintTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function onWindowPointerMove(ev: PointerEvent) {
+    if (!isPaginated || !$enableTapEdgeToFlip$ || $skipKeyDownListener$) {
+      leftHintVisible = false;
+      rightHintVisible = false;
+      return;
+    }
+    const w = window.innerWidth;
+    // Trigger zone matches the tap-edge button: the hint shows whenever
+    // the cursor is inside the zone that would actually flip the page on
+    // click.
+    const zone = tapEdgeWidthPx;
+    leftHintVisible = ev.clientX < zone;
+    rightHintVisible = ev.clientX > w - zone;
+    clearTimeout(edgeHintTimer);
+    if (leftHintVisible || rightHintVisible) {
+      edgeHintTimer = setTimeout(() => {
+        leftHintVisible = false;
+        rightHintVisible = false;
+      }, 1200);
+    }
+  }
 
   $: footerChapterProgress = getCurrentChapterProgress($sectionData$);
 
@@ -2535,17 +2599,42 @@
 
 {#if $enableTapEdgeToFlip$ && isPaginated && !$skipKeyDownListener$}
   <button
-    class="fixed left-0 z-10 w-5"
+    class="fixed left-0 z-10"
     on:click={$verticalMode$ ? () => pageManager?.nextPage() : () => pageManager?.prevPage()}
     style:height={tapButtonHeight}
     style:top={tapButtonTop}
+    style:width={tapEdgeWidth}
   />
   <button
-    class="fixed right-0 z-10 w-5"
+    class="fixed right-0 z-10"
     on:click={$verticalMode$ ? () => pageManager?.prevPage() : () => pageManager?.nextPage()}
     style:height={tapButtonHeight}
     style:top={tapButtonTop}
+    style:width={tapEdgeWidth}
   />
+  <!-- Visual edge-flip hint. Pointer-events disabled because the clickable
+       target is the big invisible button above; the chevron just signals
+       "this side flips a page". -->
+  {#if leftHintVisible}
+    <div
+      class="edge-flip-hint left"
+      style:top={tapButtonTop}
+      style:left="0.75rem"
+      transition:fade={{ duration: 180 }}
+    >
+      <Fa icon={$verticalMode$ ? faChevronRight : faChevronLeft} />
+    </div>
+  {/if}
+  {#if rightHintVisible}
+    <div
+      class="edge-flip-hint right"
+      style:top={tapButtonTop}
+      style:right="0.75rem"
+      transition:fade={{ duration: 180 }}
+    >
+      <Fa icon={$verticalMode$ ? faChevronLeft : faChevronRight} />
+    </div>
+  {/if}
 {/if}
 
 {#if showSpinner}
@@ -2645,6 +2734,7 @@
 <svelte:window
   on:keydown={onKeydown}
   on:beforeunload={handleUnload}
+  on:pointermove={onWindowPointerMove}
   on:resize={() => {
     if ($statisticsEnabled$ && !$isTrackerPaused$) {
       pauseTracker();
@@ -2657,3 +2747,30 @@
     }
   }}
 />
+
+<style lang="scss">
+  // Visual page-flip hint that fades in when the cursor enters the edge
+  // tap zone. Pure UX: the wider invisible button under it handles the
+  // actual click. `pointer-events: none` keeps it out of selection / drag
+  // paths so reading and highlighting feel untouched.
+  .edge-flip-hint {
+    position: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.32);
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 1.1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    z-index: 11;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    // Vertical center inside the tap-button band (tapButtonTop -> bottom);
+    // translateY moves the chevron off the band's top to its visual middle.
+    transform: translateY(40vh);
+  }
+</style>

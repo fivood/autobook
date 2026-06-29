@@ -812,7 +812,12 @@
     column-fill: auto;
     height: var(--book-content-child-height, 95vh);
 
-    :global(.ttu-illustration-container) {
+    // PDF page wrappers (`.pdf-page-shell` for HOCR'd pages, `.pdf-section`
+    // for legacy / non-OCR'd ones) carry an `aspect-ratio` that already
+    // sizes them correctly. Capping their max-height here truncates the
+    // image so the transparent OCR text layer no longer aligns with the
+    // visible scan.
+    :global(.ttu-illustration-container:not(.pdf-page-shell):not(.pdf-section)) {
       max-width: var(--book-content-image-max-width, 95vh) !important;
       max-height: var(--book-content-child-height, 95vh) !important;
     }
@@ -820,7 +825,7 @@
 
   .book-content {
     :global(svg),
-    :global(img) {
+    :global(img:not(.pdf-page-img)) {
       max-width: var(--book-content-image-max-width, 100vw);
       max-height: var(--book-content-child-height, 100vh);
     }
