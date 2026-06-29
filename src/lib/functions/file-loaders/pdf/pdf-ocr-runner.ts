@@ -4,12 +4,13 @@
  * All rights reserved.
  *
  * Orchestrates OCR over an entire PDF book that was previously loaded in
- * "image mode" (scan / pure-image PDF). For each page image, runs Tesseract
- * and wraps the `<img>` in a `pdf-page-shell` carrying a transparent
- * `pdf-text-layer` of positioned `<span>`s — same shape as 1.11's text-mode
- * PDFs. The result is that scanned books behave like Chrome's PDF viewer:
- * the user sees the original image, but can mouse-select the text under it
- * for copy / dictionary / AI / highlight workflows.
+ * "image mode" (scan / pure-image PDF). For each page image, runs the
+ * PaddleOCR engine and wraps the `<img>` in a `pdf-page-shell` carrying a
+ * transparent `pdf-text-layer` of positioned `<span>`s — same shape as
+ * 1.11's text-mode PDFs. The result is that scanned books behave like
+ * Chrome's PDF viewer: the user sees the original image, but can
+ * mouse-select the text under it for copy / dictionary / AI / highlight
+ * workflows.
  *
  * IMPORTANT: We deliberately do NOT use DOMParser on the full elementHtml.
  * That worked fine on small books but on 800+ page PDFs we hit a silent
@@ -19,18 +20,19 @@
  * version. The structure of an image-mode PDF page is regular enough that
  * a string-level rewrite is both faster and lossless.
  *
- * Legacy (pre-1.13) OCR output: `<p class="pdf-ocr-text">…</p>` blocks
- * inserted before each `<img>`. We still recognize that shape so existing
- * books keep working, and so we can strip those blocks cleanly when the
- * user re-OCRs a page.
+ * Legacy formats we still recognise on read:
+ *   - pre-1.13: `<p class="pdf-ocr-text">…</p>` blocks before each img
+ *     (Tesseract paragraph output)
+ *   - 1.13: `pdf-page-shell` + `pdf-text-layer` with per-WORD (CJK: per-char)
+ *     spans (Tesseract HOCR output)
+ *   - 1.14+: `pdf-page-shell` + `pdf-text-layer` with per-LINE spans
+ *     (PaddleOCR)
+ * All three render the same way thanks to shared CSS; only the bbox
+ * granularity differs. Re-OCR upgrades any shape to the newest.
  */
 
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import {
-  getBlobImageDimensions,
-  ocrImageBlobHocr,
-  type OcrLanguage
-} from './pdf-ocr';
+import { ocrImageBlob, type OcrLanguage, type OcrLineItem } from './pdf-ocr';
 
 export interface OcrProgress {
   page: number;
@@ -91,18 +93,6 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
-
-function decodeHtmlEntities(s: string): string {
-  return s
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-const CJK_CHAR_RE = /[　-〿一-鿿＀-ﾟ぀-ゟ゠-ヿ]/;
 
 interface PageMatch {
   /** Full `<img ... />` tag text. */
@@ -193,60 +183,70 @@ interface TextLayerBuild {
 }
 
 /**
- * Parse Tesseract HOCR and produce positioned `<span>` markup for a
- * `.pdf-text-layer`. Per-word bbox coords come straight from HOCR's
- * `bbox X1 Y1 X2 Y2`; we use word height as font-size and word width as
- * a `min-width` hint so each span occupies its source footprint.
+ * Convert PaddleOCR per-line items into positioned `<span>` markup for
+ * a `.pdf-text-layer`. Each item carries a 4-point polygon in image
+ * pixel coords; we take the axis-aligned bounding rect (good enough
+ * for printed text — skewed scans get a slightly larger box but
+ * selection still lands on the right characters thanks to CSS
+ * white-space + letter-spacing). One `<span>` per line.
  *
- * For chi_sim / chi_tra HOCR each "word" is a single character (Chinese
- * has no word boundaries), which naturally yields character-level
- * positioning — copying a selection gives clean text with no inter-char
- * spaces.
+ * The browser splits selection per-character inside a single span, so
+ * partial-line copy / highlight still works; the visual selection
+ * rectangle is line-tall instead of character-tall, which is a tiny
+ * UX cost for a big accuracy win.
  */
-function hocrToTextLayer(hocr: string): TextLayerBuild {
-  if (!hocr) return { spans: '', charCount: 0, cleanText: '' };
-  const wordRe =
-    /<span\s+class=['"]ocrx_word['"][^>]*\btitle=['"]([^'"]*)['"][^>]*>([\s\S]*?)<\/span>/g;
+function itemsToTextLayer(items: OcrLineItem[]): TextLayerBuild {
+  if (!items.length) return { spans: '', charCount: 0, cleanText: '' };
   const out: string[] = [];
   const textParts: string[] = [];
   let chars = 0;
-  let m: RegExpExecArray | null;
-  while ((m = wordRe.exec(hocr)) !== null) {
-    const title = m[1];
-    const raw = m[2].replace(/<[^>]+>/g, '');
-    const text = decodeHtmlEntities(raw).trim();
-    if (!text) continue;
 
-    const bboxMatch = /bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/.exec(title);
-    if (!bboxMatch) continue;
-    const x1 = +bboxMatch[1];
-    const y1 = +bboxMatch[2];
-    const x2 = +bboxMatch[3];
-    const y2 = +bboxMatch[4];
-    const w = x2 - x1;
-    const h = y2 - y1;
+  for (const it of items) {
+    const text = it.text?.trim();
+    if (!text) continue;
+    if (!it.poly || it.poly.length < 3) continue;
+
+    // Paddle polygons are `[x, y]` tuples, NOT `{ x, y }` objects. Reading
+    // p.x on a tuple returns undefined, the comparison silently fails,
+    // minX stays Infinity, w turns -Infinity, every line gets filtered
+    // by the w<=0 guard → empty layer despite 25 valid items.
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const p of it.poly) {
+      const px = p[0];
+      const py = p[1];
+      if (px < minX) minX = px;
+      if (py < minY) minY = py;
+      if (px > maxX) maxX = px;
+      if (py > maxY) maxY = py;
+    }
+    const w = maxX - minX;
+    const h = maxY - minY;
     if (w <= 0 || h <= 0) continue;
 
+    // For multi-character spans, set width to match the source bbox and
+    // use letter-spacing to fill it. Pure CJK lines have char width
+    // ~= font-size already; this kicks in for mixed CJK+Latin where the
+    // narrower Latin chars would otherwise pack to the left and leave
+    // the selection drifting off the underlying ink.
+    const charCount = [...text].length;
+    const naturalWidth = charCount * h;
+    const extraSpacing = charCount > 1 ? Math.max(0, (w - naturalWidth) / (charCount - 1)) : 0;
+    const letterSpacingAttr = extraSpacing > 0.5 ? `;letter-spacing:${extraSpacing.toFixed(2)}px` : '';
+
     out.push(
-      `<span style="left:${x1}px;top:${y1}px;font-size:${h}px;min-width:${w}px">${escapeHtml(text)}</span>`
+      `<span style="left:${minX}px;top:${minY}px;width:${w}px;font-size:${h}px;white-space:nowrap${letterSpacingAttr}">${escapeHtml(text)}</span>`
     );
-    chars += [...text].length;
+    chars += charCount;
     textParts.push(text);
   }
 
-  // CJK-aware concat for the plain-text fallback / preview.
-  let cleanText = '';
-  for (let i = 0; i < textParts.length; i++) {
-    const part = textParts[i];
-    if (i === 0) {
-      cleanText = part;
-      continue;
-    }
-    const prevLast = cleanText[cleanText.length - 1];
-    const currFirst = part[0];
-    const cjkBoundary = CJK_CHAR_RE.test(prevLast) && CJK_CHAR_RE.test(currFirst);
-    cleanText += (cjkBoundary ? '' : ' ') + part;
-  }
+  // Plain-text fallback / preview: lines joined by \n, no extra
+  // CJK-space squeezing (Paddle doesn't insert per-char spaces, so
+  // unlike Tesseract there's nothing to collapse here).
+  const cleanText = textParts.join('\n');
 
   return { spans: out.join(''), charCount: chars, cleanText };
 }
@@ -366,12 +366,14 @@ export async function runOcrOnPage(
     throw new Error(`OCR 中止：找不到第 ${pageNum} 页的原图数据。`);
   }
 
-  const [dims, ocrResult] = await Promise.all([
-    getBlobImageDimensions(blob),
-    ocrImageBlobHocr(blob, lang)
-  ]);
-  const layer = hocrToTextLayer(ocrResult.hocr);
-  const wrapped = buildPageShell(target.imgTag, dims.width, dims.height, layer.spans);
+  const ocrResult = await ocrImageBlob(blob, lang);
+  const layer = itemsToTextLayer(ocrResult.items);
+  const wrapped = buildPageShell(
+    target.imgTag,
+    ocrResult.imageWidth,
+    ocrResult.imageHeight,
+    layer.spans
+  );
 
   // Strip any prior OCR additions around the img (shell wrapper or legacy
   // `<p class="pdf-ocr-text">` blocks). Fall back to the unmodified
@@ -473,15 +475,15 @@ export async function runOcr(
       continue;
     }
 
-    let dims = { width: 0, height: 0 };
-    let hocr = '';
+    let pageW = 0;
+    let pageH = 0;
     let cleanText = '';
     let spans = '';
     try {
-      dims = await getBlobImageDimensions(blob);
-      const result = await ocrImageBlobHocr(blob, lang);
-      hocr = result.hocr;
-      const layer = hocrToTextLayer(hocr);
+      const result = await ocrImageBlob(blob, lang);
+      pageW = result.imageWidth;
+      pageH = result.imageHeight;
+      const layer = itemsToTextLayer(result.items);
       spans = layer.spans;
       cleanText = layer.cleanText;
     } catch (err) {
@@ -489,10 +491,10 @@ export async function runOcr(
       console.warn(`[ocr] page ${page.pageNum} failed`, err);
     }
 
-    if (dims.width > 0 && dims.height > 0) {
-      // Always emit the shell so the page is marked OCR'd even when
-      // Tesseract returned nothing — text layer just renders empty.
-      chunks.push(buildPageShell(page.imgTag, dims.width, dims.height, spans));
+    if (pageW > 0 && pageH > 0) {
+      // Always emit the shell so the page is marked OCR'd even when the
+      // engine returned nothing — text layer just renders empty.
+      chunks.push(buildPageShell(page.imgTag, pageW, pageH, spans));
     } else {
       // Dimension probe failed — leave the image unwrapped so we don't
       // create a shell with garbage data-page-w/h that breaks scaling.

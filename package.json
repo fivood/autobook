@@ -1,6 +1,6 @@
 {
   "name": "ebook-reader-desktop",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -13,7 +13,7 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "postinstall": "node -e \"const fs=require('fs'),p=require('path');const dst='static/vendor/libarchive';fs.mkdirSync(dst,{recursive:true});for(const f of ['worker-bundle.js','libarchive.wasm'])fs.copyFileSync(p.join('node_modules/libarchive.js/dist',f),p.join(dst,f));\""
+    "postinstall": "node -e \"const fs=require('fs'),p=require('path');const copy=(srcDir,dstDir,files)=>{fs.mkdirSync(dstDir,{recursive:true});for(const f of files)fs.copyFileSync(p.join(srcDir,f),p.join(dstDir,f));};copy('node_modules/libarchive.js/dist','static/vendor/libarchive',['worker-bundle.js','libarchive.wasm']);copy('node_modules/onnxruntime-web/dist','static/vendor/ort',['ort-wasm-simd-threaded.wasm','ort-wasm-simd-threaded.jsep.wasm','ort-wasm-simd-threaded.mjs','ort-wasm-simd-threaded.jsep.mjs']);\""
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "3.0.10",
@@ -43,6 +43,7 @@
     "@fortawesome/fontawesome-svg-core": "7.2.0",
     "@fortawesome/free-regular-svg-icons": "7.2.0",
     "@fortawesome/free-solid-svg-icons": "7.2.0",
+    "@paddleocr/paddleocr-js": "^0.4.2",
     "@popperjs/core": "2.11.8",
     "@tauri-apps/api": "^2.1.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
@@ -67,7 +68,6 @@
     "svelte-fa": "4.0.4",
     "svelte-gestures": "5.0.7",
     "svelte-meta-tags": "3.1.4",
-    "tesseract.js": "^7.0.0",
     "ua-parser-js": "2.0.10"
   }
 }

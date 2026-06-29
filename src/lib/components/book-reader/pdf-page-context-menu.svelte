@@ -11,18 +11,14 @@
 
   export let book: BooksDbBookData;
 
-  const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'chi_sim+eng');
+  const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'ch');
 
   const LANGS: Array<{ code: OcrLanguage; label: string }> = [
-    { code: 'chi_sim+eng', label: '简中 + 英（横排）' },
-    { code: 'chi_tra+eng', label: '繁中 + 英（横排）' },
-    { code: 'chi_sim', label: '简体中文（横排）' },
-    { code: 'chi_tra', label: '繁体中文（横排）' },
-    { code: 'chi_sim_vert', label: '简体中文（竖排）' },
-    { code: 'chi_tra_vert', label: '繁体中文（竖排）' },
-    { code: 'jpn', label: '日本語（横排）' },
-    { code: 'jpn_vert', label: '日本語（縦書き）' },
-    { code: 'eng', label: 'English' }
+    { code: 'ch', label: '中文（简中 + 英文）' },
+    { code: 'chinese_cht', label: '繁体中文' },
+    { code: 'japan', label: '日本語' },
+    { code: 'korean', label: '한국어' },
+    { code: 'en', label: 'English' }
   ];
 
   let visible = false;
@@ -54,6 +50,10 @@
     showLangPicker = false;
   }
 
+  function runReocrWithSavedLang() {
+    return reocr($ocrLang$ as OcrLanguage);
+  }
+
   async function reocr(lang: OcrLanguage) {
     if (busy) return;
     visible = false;
@@ -65,7 +65,7 @@
       await db.put('data', updated);
       message = recognized
         ? `第 ${targetPage} 页识别完成（${recognized.length} 字），即将刷新…`
-        : `第 ${targetPage} 页识别为空（可能模型不匹配），即将刷新…`;
+        : `第 ${targetPage} 页未检测到文字（图片 / 空白页），即将刷新…`;
       setTimeout(() => window.location.reload(), 900);
     } catch (err: any) {
       message = `第 ${targetPage} 页识别失败：${err?.message || err}`;
@@ -100,7 +100,7 @@
   >
     <div class="hint">第 {targetPage} 页</div>
     {#if !showLangPicker}
-      <button class="item" on:click={() => reocr($ocrLang$)}>
+      <button class="item" on:click={runReocrWithSavedLang}>
         <Fa icon={faRotateRight} size="xs" />
         <span>重新识别这页</span>
         <span class="meta">{LANGS.find((l) => l.code === $ocrLang$)?.label || $ocrLang$}</span>

@@ -15,23 +15,22 @@
 
   export let book: BooksDbBookData;
 
-  const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'chi_sim+eng');
+  const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'ch');
 
   const dispatch = createEventDispatcher<{ dismissed: void }>();
 
   $: skippedIds = new Set(($ocrSkippedBooks$ || '').split(',').filter(Boolean).map(Number));
   $: skippedForThisBook = book?.id != null && skippedIds.has(book.id);
 
+  // Paddle's `ch` model handles Simplified Chinese + English + common
+  // punctuation in one go, which covers ~95% of imported scans. Other
+  // codes select the dedicated rec model.
   const LANGS: Array<{ code: string; label: string }> = [
-    { code: 'chi_sim+eng', label: '简中 + 英（横排）' },
-    { code: 'chi_tra+eng', label: '繁中 + 英（横排）' },
-    { code: 'chi_sim', label: '简体中文（横排）' },
-    { code: 'chi_tra', label: '繁体中文（横排）' },
-    { code: 'chi_sim_vert', label: '简体中文（竖排）' },
-    { code: 'chi_tra_vert', label: '繁体中文（竖排）' },
-    { code: 'jpn', label: '日本語（横排）' },
-    { code: 'jpn_vert', label: '日本語（縦書き）' },
-    { code: 'eng', label: 'English' }
+    { code: 'ch', label: '中文（简中 + 英文）' },
+    { code: 'chinese_cht', label: '繁体中文' },
+    { code: 'japan', label: '日本語' },
+    { code: 'korean', label: '한국어' },
+    { code: 'en', label: 'English' }
   ];
 
   let dismissed = false;
@@ -41,7 +40,7 @@
 
   function start() {
     if (isOcrJobRunning()) return;
-    startOcrJob(book, $ocrLang$);
+    startOcrJob(book, $ocrLang$ as any);
   }
 
   function applyAndReload() {

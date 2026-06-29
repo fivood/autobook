@@ -3,99 +3,161 @@
  * Copyright (c) 2026, AutoBook Authors
  * All rights reserved.
  *
- * Tesseract.js wrapper for OCRing scanned-PDF page images. Lazy-loads the
- * tesseract bundle (~7MB) + language data only when the user actually
- * clicks "Run OCR" so non-scan-PDF readers don't pay the cost.
+ * PaddleOCR.js wrapper for OCRing scanned-PDF page images. Lazy-loads the
+ * SDK + ONNX models only on first call, so opening a normal text-mode book
+ * doesn't pay the cost.
  *
- * Languages are stored as Tesseract 4 codes joined by '+' for multi-lang
- * recognition. Common picks:
- *   - 'chi_sim'           pure Simplified Chinese
- *   - 'chi_tra'           Traditional Chinese
- *   - 'eng'               English
- *   - 'jpn'               Japanese
- *   - 'chi_sim+eng'       中英混排（最常见的国产扫描书）
+ * Why Paddle (instead of Tesseract): the v1.13.0 internal benchmark
+ * (`/ocr-bench`) on a typical Chinese scan showed Tesseract producing
+ * obvious garbage on photo-heavy pages (`RERTEEAR HEH RARBRA X`,
+ * `CEES PET FULT TT`) and treating the human portrait as text; Paddle
+ * skipped the photo, detected only real text lines, and the recognized
+ * Chinese was nearly faithful at comparable wall-clock time. v1.14.0
+ * swaps the engine; the text-layer shape stays the same so existing
+ * Tesseract-OCR'd books keep working.
  *
- * Two output modes:
- *   - ocrImageBlob(blob, lang) → string (legacy, plain text)
- *   - ocrImageBlobHocr(blob, lang) → { hocr, text } (new, with per-word
- *     bbox coords for the transparent text overlay)
+ * Models download from Baidu's BCE OS on first use (cached by the
+ * browser's HTTP layer thereafter). ONNX Runtime Web wasm + sidecar mjs
+ * are pre-copied to `static/vendor/ort/` by the postinstall script, so
+ * `wasmPaths` can point at a static URL and Vite doesn't have to figure
+ * out worker bundling on its own.
+ *
+ * Output granularity: one item per detected line (not per word / per
+ * character like Tesseract HOCR). The text layer renders one `<span>`
+ * per line; browsers split the selection per-character inside the span,
+ * so partial-line copy still works — the visual selection rectangle is
+ * just line-sized instead of char-sized. Acceptable trade for the
+ * accuracy gain.
  */
 
-export type OcrLanguage = string;
+import { pagePath } from '$lib/data/env';
 
-export interface OcrHocrResult {
-  /** Tesseract HOCR HTML. Per-word <span class="ocrx_word"> with bbox coords. */
-  hocr: string;
-  /** Plain recognized text. Kept for the banner preview / fallback display. */
+/** Public language codes the UI exposes. Map to Paddle's `lang` parameter
+ * just before instantiation. */
+export type OcrLanguage = 'ch' | 'chinese_cht' | 'japan' | 'en' | 'korean';
+
+/** Single corner of a Paddle polygon. PaddleOCR emits `[x, y]` tuples, NOT
+ * `{ x, y }` objects — easy thing to get wrong. */
+export type OcrPoint = [number, number];
+
+export interface OcrLineItem {
+  /** Recognized text for this line (Paddle joins words with appropriate
+   * spacing; CJK has no inter-character spaces by default). */
+  text: string;
+  /** 4-point polygon in image pixel coords, top-left origin. Usually a
+   * near-axis-aligned quadrilateral for printed text. */
+  poly: OcrPoint[];
+  /** Confidence score 0..1. */
+  score: number;
+}
+
+export interface OcrPageResult {
+  items: OcrLineItem[];
+  /** Source image intrinsic dimensions, returned by the engine. Saves a
+   * separate `getBlobImageDimensions` call when both bbox + dims are
+   * needed (the runner uses dims for the shell's `data-page-w/h`). */
+  imageWidth: number;
+  imageHeight: number;
+  /** Best-effort plain-text concatenation, newline between lines,
+   * primarily for the banner preview and progress callback. */
   text: string;
 }
 
-interface WorkerLike {
-  recognize(
-    image: Blob | ArrayBuffer | Uint8Array | HTMLImageElement | HTMLCanvasElement,
-    options?: unknown,
-    output?: { text?: boolean; hocr?: boolean; tsv?: boolean; box?: boolean }
-  ): Promise<{
-    data: { text: string; hocr?: string };
-  }>;
-  setParameters?(params: Record<string, string>): Promise<unknown>;
-  terminate(): Promise<void>;
+let ocrInstancePromise: Promise<unknown> | undefined;
+let ocrInstanceLang: OcrLanguage | '' = '';
+
+interface PaddleOcrLike {
+  predict(input: unknown): Promise<
+    Array<{
+      image?: { width: number; height: number };
+      items: Array<{ poly: OcrPoint[]; text: string; score: number }>;
+    }>
+  >;
+  dispose?(): Promise<void>;
 }
 
-let workerPromise: Promise<WorkerLike> | undefined;
-let workerLang = '';
-
-async function getWorker(lang: OcrLanguage): Promise<WorkerLike> {
-  if (workerPromise && workerLang === lang) return workerPromise;
-  if (workerPromise) {
-    const prev = workerPromise;
-    workerPromise = undefined;
-    prev.then((w) => w.terminate()).catch(() => {});
+async function getOcrInstance(lang: OcrLanguage): Promise<PaddleOcrLike> {
+  if (ocrInstancePromise && ocrInstanceLang === lang) {
+    return ocrInstancePromise as Promise<PaddleOcrLike>;
   }
-  workerLang = lang;
-  workerPromise = (async () => {
-    const tesseract = await import('tesseract.js');
-    const worker = (await tesseract.createWorker(lang, undefined, {
-      // Default CDN; cached by service worker / browser after first use
-    })) as unknown as WorkerLike;
-    // Suppress Tesseract's "insert a space between every recognized token"
-    // habit. For CJK that produces a space between every character; for
-    // mixed CJK+English we still want spaces between English words, which
-    // Tesseract keeps even with this off (real interword whitespace from
-    // the layout drives those, not the preserve flag).
+  if (ocrInstancePromise) {
+    // Language changed — tear down the old instance and rebuild. Paddle
+    // det/rec model pairs are language-specific.
+    const prev = ocrInstancePromise as Promise<PaddleOcrLike>;
+    ocrInstancePromise = undefined;
+    prev.then((p) => p.dispose?.()).catch(() => {});
+  }
+  ocrInstanceLang = lang;
+  ocrInstancePromise = (async () => {
+    const mod = await import('@paddleocr/paddleocr-js');
+    const created = await mod.PaddleOCR.create({
+      lang,
+      ocrVersion: 'PP-OCRv5',
+      // ORT wasm/mjs are served as static files (see postinstall).
+      //
+      // We pin to single-thread WASM. WebGPU initialized cleanly on the
+      // first attempt (Tauri WebView2 exposes it), but PP-OCRv5 ran
+      // through onnxruntime-web's WebGPU EP returned 0 detection items
+      // on the same image where WASM produced 25 — a known class of ORT
+      // WebGPU issue where unsupported ops silently degrade to zero
+      // output. ~25s/page on WASM beats ~4s/page of garbage on WebGPU.
+      //
+      // Multi-thread WASM would need SharedArrayBuffer + COOP/COEP,
+      // which Tauri's dev URL doesn't serve; revisit when we want to
+      // chase a 4-8x speedup with appropriate header config.
+      ortOptions: {
+        backend: 'wasm',
+        wasmPaths: `${pagePath}/vendor/ort/`,
+        numThreads: 1
+      }
+    });
+    // Log which backend ORT actually picked. Useful when diagnosing
+    // why a particular machine is slow — `backend=wasm` + `webgpu=false`
+    // means the GPU path isn't available so the user is on the slow
+    // (~25s/page) CPU fallback. Tiny perf impact, kept always-on.
     try {
-      await worker.setParameters?.({ preserve_interword_spaces: '0' });
+      const summary = (created as { getInitializationSummary?: () => unknown })
+        .getInitializationSummary?.();
+      if (summary) {
+        // eslint-disable-next-line no-console
+        console.log('[ocr] PaddleOCR init', summary);
+      }
     } catch {
-      // older builds may not expose setParameters; non-fatal
+      // ignore
     }
-    return worker;
+    return created as unknown as PaddleOcrLike;
   })();
-  return workerPromise;
+  return ocrInstancePromise as Promise<PaddleOcrLike>;
 }
 
-/** Plain-text OCR. Kept for the few legacy call sites; new code should use
- * `ocrImageBlobHocr` so we can build the transparent text layer. */
-export async function ocrImageBlob(blob: Blob, lang: OcrLanguage): Promise<string> {
-  const worker = await getWorker(lang);
-  const result = await worker.recognize(blob);
-  return (result?.data?.text || '').trim();
-}
-
-/** HOCR + plain text. HOCR gives us per-word `bbox X1 Y1 X2 Y2` coordinates
- * in image pixel space — fed to the text-layer builder so each word lands
- * exactly under its visual position on the scan. */
-export async function ocrImageBlobHocr(blob: Blob, lang: OcrLanguage): Promise<OcrHocrResult> {
-  const worker = await getWorker(lang);
-  const result = await worker.recognize(blob, undefined, { text: true, hocr: true });
+/**
+ * Run OCR on a single image blob. Returns the per-line items plus the
+ * image's intrinsic dimensions — Paddle measures the image itself, so
+ * the caller doesn't need a separate Image() probe.
+ */
+export async function ocrImageBlob(blob: Blob, lang: OcrLanguage): Promise<OcrPageResult> {
+  const ocr = await getOcrInstance(lang);
+  const results = await ocr.predict(blob);
+  const r = Array.isArray(results) ? results[0] : results;
+  if (!r) {
+    return { items: [], imageWidth: 0, imageHeight: 0, text: '' };
+  }
+  const items: OcrLineItem[] = (r.items || []).map((it) => ({
+    text: it.text,
+    poly: it.poly,
+    score: it.score
+  }));
+  const text = items.map((it) => it.text).join('\n');
   return {
-    hocr: result?.data?.hocr || '',
-    text: (result?.data?.text || '').trim()
+    items,
+    imageWidth: r.image?.width || 0,
+    imageHeight: r.image?.height || 0,
+    text
   };
 }
 
-/** Probe an image blob's intrinsic dimensions by loading it into a
- * detached <img>. Needed to build the text layer's coordinate space
- * (Tesseract bbox coords are in source pixels). */
+/** Image dimension probe — only used by the runner when Paddle declined
+ * to return image metadata (shouldn't happen, but defensive). */
 export async function getBlobImageDimensions(
   blob: Blob
 ): Promise<{ width: number; height: number }> {
@@ -116,13 +178,13 @@ export async function getBlobImageDimensions(
 }
 
 export async function disposeOcrWorker() {
-  if (!workerPromise) return;
+  if (!ocrInstancePromise) return;
   try {
-    const w = await workerPromise;
-    await w.terminate();
+    const instance = await ocrInstancePromise;
+    await (instance as PaddleOcrLike).dispose?.();
   } catch {
     // ignore
   }
-  workerPromise = undefined;
-  workerLang = '';
+  ocrInstancePromise = undefined;
+  ocrInstanceLang = '';
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.0
+
+- **OCR 引擎从 Tesseract.js 换 [PaddleOCR.js](https://github.com/PaddlePaddle/PaddleOCR/tree/main/paddleocr-js)（PP-OCRv5）**：1.13.0 内部 bench 对比一张典型中文扫描页，Tesseract 把人物照片识别成乱码、正文里塞 `RERTEEAR HEH RARBRA X` / `CEES PET FULT TT` / `E-ABFTRESN` 这种死亡乱码；Paddle 跳过照片只圈文字行、文本几乎可以直接粘到笔记里。耗时基本同档（25 秒/页 vs Tesseract ~25 秒）。本版把整条 OCR 链路换成 Paddle，删 tesseract.js 依赖
+- **横幅 / 右键菜单语言选项简化**：从 8 个 Tesseract code（`chi_sim+eng / chi_tra+eng / chi_sim / chi_sim_vert / ...`）收紧到 5 个 Paddle code：`ch / chinese_cht / japan / korean / en`。PP-OCRv5 的 `ch` 默认就吃简中 + 英文混排，覆盖 95% 国产扫描
+- **透明文本层从 per-char span 改 per-line span**：Tesseract HOCR 给的是 per-word（CJK = per-char）bbox，每字一个 span；Paddle 给的是 per-line polygon，每行一个 span。浏览器在 span 内仍按字符切分选区，部分行选取依然行，复制出来是干净中文段落
+- **OCR 结果同步外存的 follow-up 已落实**：1.13.0 留了 `pushOcrResultToExternalStorage`，Tauri FS 跑 OCR 完直接 fire-and-forget 写回磁盘，别的设备打开就有
+- **修分页模式点击翻页热区跟随用户边距**：1.13.0 的浮按钮已经做了，1.14.0 顺手把"点击翻页"的开关默认状态留给用户自己开（首次打开 reader 看不到不是 bug，是设置 → 阅读器里那个 toggle 没勾上）
+- **WebGPU 不开启**：试过 ORT WebGPU EP 跑 PP-OCRv5，模型初始化 OK、推理 4 秒/页（vs WASM 25 秒），但 silently 返回 0 detection items——典型的 onnxruntime-web WebGPU EP 对某些算子不支持却不抛错的 bug。固定 backend WASM 单线程。多线程 WASM 需要 COOP/COEP，留作下版本（理论上 4-8 倍速）
+- **修 `itemsToTextLayer` 把 Paddle 输出全过滤掉的 bug**：Paddle 的 polygon 是 `[x, y]` 元组数组不是 `{ x, y }` 对象，我之前错读 `p.x` / `p.y` → 全 undefined → bbox 算出 -Infinity → 每个 item 都被 `w<=0` 守卫 continue 掉 → 空文本层。改成 `p[0]` / `p[1]` + 加正确的 `OcrPoint` 类型
+
 ## 1.13.0
 
 - **扫描 PDF 文字层（透明 OCR）**：OCR 输出从「图上面一段段段落」改造成 Chrome PDF 阅读器那种**透明文本层**。Tesseract 切到 HOCR 输出 + `preserve_interword_spaces: '0'`，每个识别词（中文里就是单字）拿到 `bbox` 像素坐标，生成 `<span style="left:Xpx;top:Ypx;font-size:Hpx">字</span>` 钉在 `<div class="pdf-text-layer">` 里。这个层 `color: transparent` + `user-select: text`，跟图叠在一个 `pdf-page-shell` 里靠 `--pdf-scale-factor` 跟随图片缩放。**结果**：视觉是干净的扫描原图，鼠标拖选时蓝色选区穿透图片选中底下的字，Ctrl+C 复制出来是无多余空格的干净中文（之前老版「编 者 的 话」变成「编者的话」）
