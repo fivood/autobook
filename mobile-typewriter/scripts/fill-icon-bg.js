@@ -1,101 +1,94 @@
 #!/usr/bin/env node
 /**
- * Take the existing round-on-transparent icons and emit full-bleed
- * square versions so iOS's home-screen squircle mask doesn't show a
- * black wedge in the corners.
+ * Generate PWA icons from the vector source.
  *
- * Strategy: sample the inner-circle background color from a known-safe
- * point, fill a fresh square with that color, then composite the
- * original (alpha-channel intact) on top. Visible result: same logo,
- * same background, just extends out to the four corners.
+ * Source: `static/logo.svg` — a single-path glyph of the "M" book stack,
+ * no background. Rasterizing from SVG lets every size be pixel-sharp
+ * (vs. the older flow that started from a 512px PNG and scaled).
  *
- * Output filenames stay the same so `app.html` doesn't need to change.
- * Maskable variants get the same treatment — they were also
- * circle-on-transparent, which means an aggressive Android adaptive
- * mask could also have eaten edge pixels.
+ * Output:
+ *   - icon-192.png / icon-512.png        — PWA `purpose: any` (Android,
+ *                                           also the iOS apple-touch-icon
+ *                                           fallback list)
+ *   - maskable-icon-192.png / -512.png   — PWA `purpose: maskable`. Logo
+ *                                          shrunk to ~55% of canvas so
+ *                                          Android adaptive icons can
+ *                                          crop the outer ~20% without
+ *                                          eating the glyph
+ *   - apple-touch-icon.png               — 1024×1024 for iOS retina
+ *                                          downscale (iOS picks the
+ *                                          largest source it sees and
+ *                                          downsamples crisply)
+ *   - apple-touch-icon-180.png           — 180×180 native, kept as
+ *                                          a sizes="180x180" entry for
+ *                                          older iOS that won't browse
+ *                                          a larger candidate
+ *   - favicon-32.png                     — also regenerated for visual
+ *                                          consistency
+ *
+ * Background is pure white (`#ffffff`) so every iOS squircle and Android
+ * mask shows a clean tile with no transparent corners or accidental
+ * color bleed.
  */
+
 import sharp from 'sharp';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const staticDir = resolve(here, '..', 'static');
+const svgSource = resolve(staticDir, 'logo.svg');
+const svgBuffer = readFileSync(svgSource);
 
-/** Sample bg color from the top of the circle's interior — just below
- *  the topmost arc. (0.5w, 0.08h) on a 512px source = (256, 41), well
- *  above the book-stack glyph which starts around y=0.2. */
-async function sampleBg(srcPath) {
-  const img = sharp(srcPath);
-  const { width, height } = await img.metadata();
-  const x = Math.round(width * 0.5);
-  const y = Math.round(height * 0.08);
-  const { data, info } = await img
-    .raw()
-    .ensureAlpha()
-    .toBuffer({ resolveWithObject: true });
-  const idx = (y * info.width + x) * 4;
-  return {
-    r: data[idx],
-    g: data[idx + 1],
-    b: data[idx + 2],
-    a: data[idx + 3]
-  };
-}
+const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
+// SVG viewBox: 324.62 × 389.73 → narrower than tall. Fit by height so a
+// square canvas balances visually (logo sits in the vertical center with
+// a tiny side margin).
+const SVG_W = 324.62;
+const SVG_H = 389.73;
+const SVG_RATIO = SVG_W / SVG_H;
 
-async function fillBg(srcPath, dstPath, bg) {
-  const meta = await sharp(srcPath).metadata();
-  const w = meta.width;
-  const h = meta.height;
-  const background = { r: bg.r, g: bg.g, b: bg.b, alpha: 1 };
+async function renderIcon(canvasSize, logoFraction, dst) {
+  // logoFraction sizes the LOGO HEIGHT (the taller dimension). Computed
+  // logoW always stays inside the canvas because the SVG is narrower.
+  const logoH = Math.max(1, Math.round(canvasSize * logoFraction));
+  const logoW = Math.max(1, Math.round(logoH * SVG_RATIO));
+
+  // Rasterize the SVG at the exact target px size — sharp uses
+  // librsvg with high-quality bezier rendering.
+  const logoPng = await sharp(svgBuffer)
+    .resize(logoW, logoH, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+
+  const left = Math.round((canvasSize - logoW) / 2);
+  const top = Math.round((canvasSize - logoH) / 2);
   await sharp({
-    create: {
-      width: w,
-      height: h,
-      channels: 4,
-      background
-    }
+    create: { width: canvasSize, height: canvasSize, channels: 4, background: WHITE }
   })
-    .composite([{ input: srcPath }])
+    .composite([{ input: logoPng, left, top }])
     .png({ compressionLevel: 9 })
-    .toFile(dstPath);
+    .toFile(dst);
+
+  console.log(`wrote ${dst} (${canvasSize}×${canvasSize}, logo ${logoW}×${logoH})`);
 }
 
-const targets = [
-  'icon-192.png',
-  'icon-512.png',
-  'maskable-icon-192.png',
-  'maskable-icon-512.png'
-];
+// Regular icons: logo at 65% of canvas — comfortable breathing room,
+// looks like a proper iOS app icon on the home screen.
+await renderIcon(192, 0.65, resolve(staticDir, 'icon-192.png'));
+await renderIcon(512, 0.65, resolve(staticDir, 'icon-512.png'));
 
-const bg = await sampleBg(resolve(staticDir, 'icon-512.png'));
-console.log(`sampled bg color: rgba(${bg.r}, ${bg.g}, ${bg.b}, ${bg.a})`);
+// Apple touch icons: 1024 for retina downscale, 180 for native fallback.
+await renderIcon(1024, 0.65, resolve(staticDir, 'apple-touch-icon.png'));
+await renderIcon(180, 0.65, resolve(staticDir, 'apple-touch-icon-180.png'));
 
-for (const name of targets) {
-  const src = resolve(staticDir, name);
-  const dst = src; // overwrite in place
-  await fillBg(src, dst, bg);
-  console.log(`wrote ${name}`);
-}
+// Maskable: Android adaptive icon mask cuts the outer ~20%. Shrinking
+// the logo to ~55% keeps it fully inside the safe zone no matter the
+// device's mask shape (circle / squircle / squircle-tall).
+await renderIcon(192, 0.55, resolve(staticDir, 'maskable-icon-192.png'));
+await renderIcon(512, 0.55, resolve(staticDir, 'maskable-icon-512.png'));
 
-// Also emit a dedicated Apple-touch-icon at iOS's canonical 180×180. Some
-// older iOS versions look here first; pointing at icon-192 sort of works
-// but produces a tiny letterbox at the squircle edges.
-const appleSrc = resolve(staticDir, 'icon-512.png');
-const appleDst = resolve(staticDir, 'apple-touch-icon.png');
-await sharp({
-  create: {
-    width: 180,
-    height: 180,
-    channels: 4,
-    background: { r: bg.r, g: bg.g, b: bg.b, alpha: 1 }
-  }
-})
-  .composite([
-    {
-      input: await sharp(appleSrc).resize(180, 180).png().toBuffer()
-    }
-  ])
-  .png({ compressionLevel: 9 })
-  .toFile(appleDst);
-console.log('wrote apple-touch-icon.png (180×180)');
+// Browser tab favicon. Smaller logo proportion since at 32px detail
+// matters less than silhouette legibility.
+await renderIcon(32, 0.75, resolve(staticDir, 'favicon-32.png'));
