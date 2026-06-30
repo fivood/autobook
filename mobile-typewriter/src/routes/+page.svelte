@@ -34,6 +34,7 @@
   const STOP_KEY = 'tw-stop-at-chapter';
   const RESUME_KEY = 'tw-auto-resume';
   const IMMERSIVE_KEY = 'tw-immersive';
+  const READMODE_KEY = 'tw-read-mode';
 
   let book: ParsedBook | undefined;
   /** PDF books take a parallel state slot — they don't share the
@@ -70,6 +71,11 @@
   let chromeFlashUntil = 0;
   let chromeFlashTimer: ReturnType<typeof setTimeout> | undefined;
   $: chromeVisible = !immersive || Date.now() < chromeFlashUntil;
+  /** 'typewriter' = char-by-char reveal driven by the engine (current
+   * default); 'scroll' = render the whole book and let the user swipe
+   * through it like a normal ebook. Stored separately from playing
+   * state so flipping modes doesn't lose place. */
+  let readMode: 'typewriter' | 'scroll' = 'typewriter';
 
   $: currentChapterTitle = book ? book.chapters[chapterIdx]?.title || '' : '';
   $: progressPct = total > 0 ? Math.round((revealed / total) * 100) : 0;
@@ -135,6 +141,8 @@
     autoResumeOnVisible = savedResume === null ? true : savedResume === '1';
     const savedImmersive = localStorage.getItem(IMMERSIVE_KEY);
     immersive = savedImmersive === '1';
+    const savedMode = localStorage.getItem(READMODE_KEY);
+    readMode = savedMode === 'scroll' ? 'scroll' : 'typewriter';
     recents = listRecent();
     getDeviceId();
     startSyncLoop();
@@ -212,6 +220,7 @@
     localStorage.setItem(STOP_KEY, stopAtChapter ? '1' : '0');
     localStorage.setItem(RESUME_KEY, autoResumeOnVisible ? '1' : '0');
     localStorage.setItem(IMMERSIVE_KEY, immersive ? '1' : '0');
+    localStorage.setItem(READMODE_KEY, readMode);
   }
 
   // Drive the wake lock from the readingActive flag. Same logic for both
@@ -482,6 +491,86 @@
     engine?.toggle();
   }
 
+  function toggleReadMode() {
+    if (!book) {
+      readMode = readMode === 'typewriter' ? 'scroll' : 'typewriter';
+      return;
+    }
+    if (readMode === 'typewriter') {
+      // Going to scroll. Stop the typewriter, freeze position, scroll
+      // the rendered viewport so the current `revealed` is near the top.
+      engine?.stop();
+      readMode = 'scroll';
+      requestAnimationFrame(() => requestScrollToRevealed());
+    } else {
+      // Going back to typewriter. Use the scroll-derived `revealed` as
+      // the engine's new starting point so the cursor lands where the
+      // eye left off.
+      readMode = 'typewriter';
+      engine?.seek(revealed);
+      requestAnimationFrame(() => requestScrollToCursor());
+    }
+  }
+
+  /** Scroll the text viewport so the segment containing `revealed`
+   * sits near the top — used when flipping into scroll mode so the
+   * user doesn't lose place. */
+  function requestScrollToRevealed() {
+    if (!viewport || !book) return;
+    // Find the first segment whose endChar > revealed (i.e. the one
+    // currently being read), then look up its rendered element by data
+    // attribute and bring it into view.
+    const idx = book.segments.findIndex((seg) => seg.endChar > revealed);
+    if (idx < 0) return;
+    const startChar = book.segments[idx].startChar;
+    const target = viewport.querySelector(`[data-seg-start="${startChar}"]`);
+    if (!target) return;
+    const r = (target as HTMLElement).getBoundingClientRect();
+    const vp = viewport.getBoundingClientRect();
+    const top = r.top - vp.top + viewport.scrollTop;
+    viewport.scrollTo({ top: Math.max(0, top - 16), behavior: 'instant' as ScrollBehavior });
+  }
+
+  /** Recompute `revealed` from current scroll position in scroll mode.
+   * Finds the segment whose rendered top crossed the viewport top and
+   * estimates how many chars into it the reader has likely got. */
+  let scrollModeRaf = 0;
+  function onScrollModeScroll() {
+    if (readMode !== 'scroll' || !book || scrollModeRaf) return;
+    scrollModeRaf = requestAnimationFrame(() => {
+      scrollModeRaf = 0;
+      if (!viewport || !book) return;
+      const vpTop = viewport.scrollTop;
+      const wraps = viewport.querySelectorAll<HTMLElement>('[data-seg-start]');
+      let bestSeg: HTMLElement | undefined;
+      for (const w of wraps) {
+        if (w.offsetTop > vpTop + 12) break;
+        bestSeg = w;
+      }
+      if (!bestSeg) return;
+      const startChar = +(bestSeg.dataset.segStart || 0);
+      // Approximate how far into this segment the reader is. The
+      // segment's rendered height maps linearly to its char length;
+      // we sample how much of the segment is above the viewport top.
+      const segHeight = bestSeg.getBoundingClientRect().height || 1;
+      const segOffsetIntoView = Math.max(0, vpTop - bestSeg.offsetTop);
+      const seg = book.segments.find((s) => s.startChar === startChar);
+      const segChars = seg ? seg.text.length : 0;
+      const into = Math.floor((segOffsetIntoView / segHeight) * segChars);
+      const nextRevealed = Math.min(total, startChar + into);
+      if (nextRevealed !== revealed) {
+        revealed = nextRevealed;
+        if (book && book.chapters.length) {
+          chapterIdx = book.chapters.reduce(
+            (acc, ch, i) => (ch.startChar <= revealed ? i : acc),
+            0
+          );
+        }
+        persistDebounced();
+      }
+    });
+  }
+
   // Tap-anywhere-on-reading-area toggle. Greasy / one-handed friendly —
   // small play button bottom-center is too far to thumb-reach. We detect
   // a "tap" as a pointerdown→up within 8px movement and 300ms; anything
@@ -744,6 +833,25 @@
           </div>
         {/each}
       </div>
+    {:else if readMode === 'scroll' && book}
+      <!-- Scroll mode: render the whole book at normal opacity, let the
+           user swipe through it. revealed position tracked by which
+           segment sits at the viewport top. -->
+      <div
+        class="viewport scroll-viewport"
+        bind:this={viewport}
+        on:scroll={onScrollModeScroll}
+      >
+        <div class="page">
+          {#each book.segments as seg (seg.startChar)}
+            {#if seg.type === 'h2'}
+              <h2 class="ch-title" data-seg-start={seg.startChar}>{seg.text}</h2>
+            {:else}
+              <p class="ch-para" data-seg-start={seg.startChar}>{seg.text}</p>
+            {/if}
+          {/each}
+        </div>
+      </div>
     {:else}
       <div
         class="viewport"
@@ -800,6 +908,22 @@
           <span title="切回 App 时回到原位置">续读</span>
         </label>
       </div>
+    {:else if book && readMode === 'scroll'}
+      <!-- Scroll mode: no play / speed / 章止 — those only mean
+           anything for the typewriter engine. Keep the mode toggle
+           and 续读 so the user can flip back or carry over. -->
+      <div class="controls">
+        <button
+          class="chip mode-chip"
+          on:click={toggleReadMode}
+          title="切换到打字机模式"
+        >打字机</button>
+        <span class="speed">滑屏阅读</span>
+        <label class="row stop-at-chapter">
+          <input type="checkbox" bind:checked={autoResumeOnVisible} />
+          <span title="切回 App 时回到原位置">续读</span>
+        </label>
+      </div>
     {:else if book}
       <div class="controls">
         <div class="row">
@@ -814,6 +938,11 @@
             <svg viewBox="0 0 24 24" width="32" height="32"><path d="M7 5v14l12-7L7 5z"/></svg>
           {/if}
         </button>
+        <button
+          class="chip mode-chip"
+          on:click={toggleReadMode}
+          title="切换到手动滑屏阅读"
+        >滑屏</button>
         <label class="row stop-at-chapter">
           <input type="checkbox" bind:checked={autoResumeOnVisible} />
           <span title="切回 App 时若之前在播则继续">续读</span>
@@ -1106,6 +1235,22 @@
     .viewport { font-size: 1.6rem; padding: 2.5rem 3rem 60vh; }
     .page { max-width: 46em; }
   }
+  /* Scroll mode: full opacity text, bottom padding tighter than
+     typewriter (no 60vh chase room). User-select on so they can copy
+     a quote. */
+  .scroll-viewport {
+    padding: 1.4rem 1.2rem 2rem;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  .mode-chip {
+    width: auto;
+    padding: 0 0.7rem;
+    height: 2rem;
+    font-size: 0.78rem;
+    border-radius: 999px;
+  }
+
   /* PDF reader: each page wrapped in a shell that holds the rendered
      JPEG plus the transparent text-layer overlay. aspect-ratio keeps
      the shell sized correctly before the img loads (no jumpy reflow
