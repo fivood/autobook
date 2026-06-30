@@ -127,14 +127,36 @@ function thumbnailFromCanvas(canvas: HTMLCanvasElement, targetWidth = 240): stri
  * dispatch by extension without each loader needing custom adapters. */
 export async function loadPdf(file: File, onProgress?: (loaded: number, total: number) => void): Promise<ParsedPdf> {
   // Dynamic import keeps the worker + cmaps out of the cold-start bundle.
-  const pdfjs = await import('pdfjs-dist');
-  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.mjs?url')).default;
-  // The worker URL is computed by Vite at build time — point pdfjs at it.
+  // Without the cMaps + standardFontData + wasm bundles, PDFs whose body
+  // text relies on Adobe-GB1 / CNS1 / Japan1 / KR1 character collections
+  // (essentially any Chinese / Japanese / Korean PDF beyond ASCII front
+  // matter) render every glyph as an empty box — i.e. the page comes
+  // out fully white. Bundling these as `?url` assets lets Vite hash
+  // them into the build and serve them next to the worker.
+  const [pdfjs, workerModule, cmapAsset, fontAsset, wasmAsset] = await Promise.all([
+    import('pdfjs-dist'),
+    import('pdfjs-dist/build/pdf.worker.mjs?url'),
+    import('pdfjs-dist/cmaps/Adobe-GB1-UCS2.bcmap?url'),
+    import('pdfjs-dist/standard_fonts/FoxitFixed.pfb?url'),
+    import('pdfjs-dist/wasm/jbig2.wasm?url')
+  ]);
   (pdfjs as { GlobalWorkerOptions: { workerSrc: string } }).GlobalWorkerOptions.workerSrc =
-    workerUrl;
+    workerModule.default;
+  // Each asset URL points at one specific file inside its directory; the
+  // pdf.js API wants the DIRECTORY URL so it can look up siblings by
+  // glyph collection on demand. Strip the trailing filename.
+  const cMapUrl = cmapAsset.default.replace(/\/[^/]+$/, '/');
+  const standardFontDataUrl = fontAsset.default.replace(/\/[^/]+$/, '/');
+  const wasmUrl = wasmAsset.default.replace(/\/[^/]+$/, '/');
 
   const buf = await file.arrayBuffer();
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+  const doc = await pdfjs.getDocument({
+    data: new Uint8Array(buf),
+    cMapUrl,
+    cMapPacked: true,
+    standardFontDataUrl,
+    wasmUrl
+  }).promise;
 
   const pages: PdfPage[] = [];
   let totalChars = 0;
