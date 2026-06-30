@@ -237,6 +237,14 @@
     const input = ev.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    await ingestFile(file);
+    input.value = '';
+  }
+
+  /** Shared loader used by the file picker AND the drag-drop dropzone.
+   * Sets busy / progress / error and dispatches to PDF or text loader
+   * based on the discriminator returned by loadFile. */
+  async function ingestFile(file: File) {
     busy = true;
     error = '';
     pdfLoadProgress = '';
@@ -255,8 +263,40 @@
     } finally {
       busy = false;
       pdfLoadProgress = '';
-      input.value = '';
     }
+  }
+
+  // Drag-and-drop on the landing page. Desktop browsers / iPad with a
+  // file picker can drop a book onto the window; mobile fingers fall
+  // back to the existing tap-to-pick button.
+  let dragOver = false;
+  function onDragEnter(ev: DragEvent) {
+    if (!ev.dataTransfer) return;
+    if (![...ev.dataTransfer.types].includes('Files')) return;
+    ev.preventDefault();
+    dragOver = true;
+  }
+  function onDragOver(ev: DragEvent) {
+    if (!ev.dataTransfer) return;
+    if (![...ev.dataTransfer.types].includes('Files')) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'copy';
+  }
+  function onDragLeave(ev: DragEvent) {
+    // Only clear when the cursor truly leaves the drop target — leave
+    // events also fire when crossing into a child element. Check that
+    // the new relatedTarget isn't inside the landing area.
+    const next = ev.relatedTarget as Node | null;
+    if (next && (ev.currentTarget as HTMLElement).contains(next)) return;
+    dragOver = false;
+  }
+  async function onDrop(ev: DragEvent) {
+    dragOver = false;
+    ev.preventDefault();
+    const file = ev.dataTransfer?.files?.[0];
+    if (!file) return;
+    if (busy) return;
+    await ingestFile(file);
   }
 
   async function openPdf(parsed: ParsedPdf) {
@@ -543,9 +583,22 @@
 </svelte:head>
 
 {#if bookKind === 'none'}
-  <main class="landing">
+  <main
+    class="landing"
+    class:drag-over={dragOver}
+    on:dragenter={onDragEnter}
+    on:dragover={onDragOver}
+    on:dragleave={onDragLeave}
+    on:drop={onDrop}
+    role="region"
+    aria-label="文件拖放区"
+  >
+    {#if dragOver}
+      <div class="drop-hint">松开导入</div>
+    {/if}
     <h1>AutoBook</h1>
     <p class="lead">逐字浮现 + 扫描 PDF 滑屏。支持 .txt / .epub / .md / .pdf。</p>
+    <p class="lead-sub">桌面端可以直接把文件拖进这里。</p>
 
     <label class="upload">
       <input
@@ -769,6 +822,39 @@
     margin: 0 auto;
     padding: 12vh 1.5rem 4rem;
     text-align: center;
+    position: relative;
+    min-height: 70vh;
+  }
+  .landing.drag-over {
+    outline: 2px dashed var(--accent);
+    outline-offset: -16px;
+    border-radius: 12px;
+  }
+  /* Big "drop to import" hint that takes over the landing area while
+     the user is mid-drag. Pointer-events:none lets the actual drop
+     event reach the landing container, not this overlay. */
+  .drop-hint {
+    position: absolute;
+    inset: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--bg) 85%, var(--accent));
+    color: var(--accent-text);
+    border-radius: 12px;
+    font-size: 1.25rem;
+    font-weight: 600;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .lead-sub {
+    margin: -1rem 0 1.5rem;
+    color: var(--fg-dim);
+    font-size: 0.85rem;
+  }
+  @media (hover: none) and (pointer: coarse) {
+    /* Mobile / touch — hide the "拖文件进来" hint, just shows the picker. */
+    .lead-sub { display: none; }
   }
   .landing h1 {
     margin: 0 0 0.5rem;
