@@ -126,28 +126,33 @@ function thumbnailFromCanvas(canvas: HTMLCanvasElement, targetWidth = 240): stri
 /** Loader signature mirrors the others in `lib/` so `loadFile` can
  * dispatch by extension without each loader needing custom adapters. */
 export async function loadPdf(file: File, onProgress?: (loaded: number, total: number) => void): Promise<ParsedPdf> {
-  // Dynamic import keeps the worker + cmaps out of the cold-start bundle.
-  // Without the cMaps + standardFontData + wasm bundles, PDFs whose body
-  // text relies on Adobe-GB1 / CNS1 / Japan1 / KR1 character collections
-  // (essentially any Chinese / Japanese / Korean PDF beyond ASCII front
-  // matter) render every glyph as an empty box — i.e. the page comes
-  // out fully white. Bundling these as `?url` assets lets Vite hash
-  // them into the build and serve them next to the worker.
-  const [pdfjs, workerModule, cmapAsset, fontAsset, wasmAsset] = await Promise.all([
+  // Dynamic import keeps the worker out of the cold-start bundle.
+  //
+  // pdfjs's cmaps + standard_fonts + wasm directories are NOT bundled
+  // by Vite — there are 198 small files across them, and the worker
+  // resolves siblings by directory URL at runtime (e.g. when a Chinese
+  // PDF needs a specific Adobe-GB1 cmap not seen at build time). If we
+  // Vite-bundle a single representative `?url` import, every other
+  // lookup misses the build output and Cloudflare returns
+  // `index.html` with text/html — which the browser's strict
+  // module-script rule rejects ("Failed to load module script:
+  // Expected a JavaScript-or-Wasm module script but the server
+  // responded with a MIME type of text/html"), and the affected pages
+  // render blank.
+  //
+  // We instead copy the three directories to `static/vendor/pdfjs/`
+  // via the postinstall script and point pdfjs at the static URLs.
+  // They become plain assets the SW caches after first hit.
+  const [pdfjs, workerModule] = await Promise.all([
     import('pdfjs-dist'),
-    import('pdfjs-dist/build/pdf.worker.mjs?url'),
-    import('pdfjs-dist/cmaps/Adobe-GB1-UCS2.bcmap?url'),
-    import('pdfjs-dist/standard_fonts/FoxitFixed.pfb?url'),
-    import('pdfjs-dist/wasm/jbig2.wasm?url')
+    import('pdfjs-dist/build/pdf.worker.mjs?url')
   ]);
   (pdfjs as { GlobalWorkerOptions: { workerSrc: string } }).GlobalWorkerOptions.workerSrc =
     workerModule.default;
-  // Each asset URL points at one specific file inside its directory; the
-  // pdf.js API wants the DIRECTORY URL so it can look up siblings by
-  // glyph collection on demand. Strip the trailing filename.
-  const cMapUrl = cmapAsset.default.replace(/\/[^/]+$/, '/');
-  const standardFontDataUrl = fontAsset.default.replace(/\/[^/]+$/, '/');
-  const wasmUrl = wasmAsset.default.replace(/\/[^/]+$/, '/');
+  const base = typeof location !== 'undefined' ? location.origin : '';
+  const cMapUrl = `${base}/vendor/pdfjs/cmaps/`;
+  const standardFontDataUrl = `${base}/vendor/pdfjs/standard_fonts/`;
+  const wasmUrl = `${base}/vendor/pdfjs/wasm/`;
 
   const buf = await file.arrayBuffer();
   const doc = await pdfjs.getDocument({
