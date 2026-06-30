@@ -28,6 +28,7 @@
     savePosition,
     type SavedPosition
   } from '$lib/persist';
+  import { deleteStoredBook, getStoredBook, storeBook } from '$lib/book-store';
 
   const SPEED_KEY = 'tw-speed';
   const STOP_KEY = 'tw-stop-at-chapter';
@@ -241,9 +242,11 @@
     input.value = '';
   }
 
-  /** Shared loader used by the file picker AND the drag-drop dropzone.
-   * Sets busy / progress / error and dispatches to PDF or text loader
-   * based on the discriminator returned by loadFile. */
+  /** Shared loader used by the file picker AND the drag-drop dropzone
+   * AND the resume-from-recent path (which feeds back a File built
+   * from a cached IDB blob). Sets busy / progress / error and
+   * dispatches to PDF or text loader based on the discriminator
+   * returned by loadFile. */
   async function ingestFile(file: File) {
     busy = true;
     error = '';
@@ -257,6 +260,15 @@
       } else {
         pendingCover = loaded.coverDataUrl;
         await loadBook(loaded.title, loaded.text);
+      }
+      // Cache the original Blob so "最近阅读" can reopen without
+      // re-prompting for the file. Fire-and-forget; storage quota
+      // errors don't break the open flow.
+      if (bookHash) {
+        storeBook(bookHash, title, file, file.name).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.warn('[book-store] save failed', err);
+        });
       }
     } catch (e: any) {
       error = `读取失败：${e?.message || e}`;
@@ -523,6 +535,23 @@
   }
 
   async function resumeFromRecent(item: SavedPosition & { hash: string }) {
+    // Cache hit: re-ingest from the stored Blob — instant resume, no
+    // file picker.
+    try {
+      const stored = await getStoredBook(item.hash);
+      if (stored) {
+        const file = new File([stored.blob], stored.fileName, {
+          type: stored.blob.type
+        });
+        await ingestFile(file);
+        return;
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[book-store] read failed, falling back to picker', err);
+    }
+    // Cache miss (legacy recents from before book-store landed, or
+    // IDB unavailable): fall back to asking for the file.
     busy = true;
     try {
       const input = document.createElement('input');
@@ -565,6 +594,9 @@
 
   function deleteRecent(hash: string) {
     removePosition(hash);
+    deleteStoredBook(hash).catch(() => {
+      // best-effort cleanup; if IDB fails we just orphan a blob
+    });
     recents = listRecent();
   }
 
