@@ -37,13 +37,13 @@ npm run build    # 产物在 build/
 
 1. Cloudflare 控制台 → Pages → Create project → Connect to Git
 2. 仓库选这个项目，Build settings：
-   - Production branch: `main`
+   - Production branch: `release/1.6.0`
    - Build command: `npm install && npm run build`
    - Build output directory: `build`
    - Root directory: `mobile-typewriter`
 3. Custom domain → `book.fivood.com`
 
-每次推 main 自动构建部署。
+每次推 `release/1.6.0` 自动构建部署。桌面端 AutoBook 也用这条分支发版（GitHub Releases + Tauri updater），两边共用一条流水线。`main` 留作 PR-merge 历史归档不动。
 
 ## 支持的格式
 
