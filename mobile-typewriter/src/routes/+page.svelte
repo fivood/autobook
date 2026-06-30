@@ -917,7 +917,18 @@
           class="chip mode-chip"
           on:click={toggleReadMode}
           title="切换到打字机模式"
-        >打字机</button>
+          aria-label="切换到打字机模式"
+        >
+          <!-- Typewriter glyph: top "paper sheet" + keyboard body with
+               three dots representing keys / chars typed -->
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+            <rect x="7" y="3" width="10" height="5" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <rect x="3" y="9" width="18" height="10" rx="1.6"/>
+            <circle cx="8" cy="14" r="1.1" fill="var(--chip-bg)"/>
+            <circle cx="12" cy="14" r="1.1" fill="var(--chip-bg)"/>
+            <circle cx="16" cy="14" r="1.1" fill="var(--chip-bg)"/>
+          </svg>
+        </button>
         <span class="speed">滑屏阅读</span>
         <label class="row stop-at-chapter">
           <input type="checkbox" bind:checked={autoResumeOnVisible} />
@@ -942,7 +953,14 @@
           class="chip mode-chip"
           on:click={toggleReadMode}
           title="切换到手动滑屏阅读"
-        >滑屏</button>
+          aria-label="切换到手动滑屏阅读"
+        >
+          <!-- Scroll glyph: vertical double-headed arrow (up + down) +
+               three short content lines suggesting "scroll through" -->
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+            <path d="M12 2 L8 7 H11 V17 H8 L12 22 L16 17 H13 V7 H16 Z"/>
+          </svg>
+        </button>
         <label class="row stop-at-chapter">
           <input type="checkbox" bind:checked={autoResumeOnVisible} />
           <span title="切回 App 时若之前在播则继续">续读</span>
@@ -1243,12 +1261,14 @@
     user-select: text;
     -webkit-user-select: text;
   }
+  /* Mode chips: round like the speed +/- chips so they fit the same
+     visual rhythm. SVG icons inside are sized 20×20, color inherits
+     from chip-text. */
   .mode-chip {
-    width: auto;
-    padding: 0 0.7rem;
-    height: 2rem;
-    font-size: 0.78rem;
-    border-radius: 999px;
+    padding: 0;
+  }
+  .mode-chip svg {
+    display: block;
   }
 
   /* PDF reader: each page wrapped in a shell that holds the rendered
