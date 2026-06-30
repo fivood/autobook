@@ -6,3 +6,9 @@ build/
 !.env.example
 .DS_Store
 *.log
+
+# pdfjs sidecar assets (cmaps / standard_fonts / wasm) are populated by
+# scripts/copy-pdfjs-assets.js on `npm install` via the postinstall
+# hook. Tracking ~200 small upstream files would churn the repo on
+# every pdfjs version bump; let the script handle it deterministically.
+static/vendor/pdfjs/
