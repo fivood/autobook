@@ -13,6 +13,12 @@
   import SyncSettings from '$lib/sync-settings.svelte';
   import { createTypewriter, type TypewriterEngine } from '$lib/typewriter';
   import {
+    acquireWakeLock,
+    ensureVisibilityReacquire,
+    releaseWakeLock,
+    wakeLockSupported
+  } from '$lib/wake-lock';
+  import {
     getPosition,
     hashContent,
     listRecent,
@@ -23,6 +29,8 @@
 
   const SPEED_KEY = 'tw-speed';
   const STOP_KEY = 'tw-stop-at-chapter';
+  const RESUME_KEY = 'tw-auto-resume';
+  const IMMERSIVE_KEY = 'tw-immersive';
 
   let book: ParsedBook | undefined;
   let title = '';
@@ -43,6 +51,15 @@
   let remoteCache: RemoteState | undefined;
   let tickTimer: ReturnType<typeof setInterval> | undefined;
   let todaySeconds = 0;
+  // "吃饭看书" tweaks: keep screen on while playing, resume on foreground,
+  // tap viewport to pause / resume, hide chrome in immersive mode.
+  let autoResumeOnVisible = true;
+  let wasPlayingBeforeHide = false;
+  let immersive = false;
+  // Immersive mode briefly shows chrome on tap, then auto-hides again.
+  let chromeFlashUntil = 0;
+  let chromeFlashTimer: ReturnType<typeof setTimeout> | undefined;
+  $: chromeVisible = !immersive || Date.now() < chromeFlashUntil;
 
   $: currentChapterTitle = book ? book.chapters[chapterIdx]?.title || '' : '';
   $: progressPct = total > 0 ? Math.round((revealed / total) * 100) : 0;
@@ -83,17 +100,37 @@
     visible = document.visibilityState === 'visible';
     // Reset the wall-clock anchor so resuming after a long background gap
     // doesn't dump the gap into reading time.
-    if (visible) lastTickMs = Date.now();
+    if (visible) {
+      lastTickMs = Date.now();
+      // Re-acquire screen wake lock — the browser auto-releases on hide,
+      // and the user came back to a paused-looking screen otherwise.
+      if (playing && wakeLockSupported()) acquireWakeLock().catch(() => {});
+      // Auto-resume if we were playing when the page got hidden (user
+      // checked their phone for a message and came back to the book).
+      if (autoResumeOnVisible && wasPlayingBeforeHide && !playing) {
+        engine?.start();
+      }
+      wasPlayingBeforeHide = false;
+    } else {
+      wasPlayingBeforeHide = playing;
+    }
   }
 
   onMount(async () => {
     speed = Number(localStorage.getItem(SPEED_KEY)) || 8;
     stopAtChapter = localStorage.getItem(STOP_KEY) === '1';
+    // Default both UX prefs ON — they're the whole point of the v1.14.2
+    // mobile pass; user can flip in settings if disliked.
+    const savedResume = localStorage.getItem(RESUME_KEY);
+    autoResumeOnVisible = savedResume === null ? true : savedResume === '1';
+    const savedImmersive = localStorage.getItem(IMMERSIVE_KEY);
+    immersive = savedImmersive === '1';
     recents = listRecent();
     getDeviceId();
     startSyncLoop();
     visible = document.visibilityState === 'visible';
     document.addEventListener('visibilitychange', onVisibilityChange);
+    ensureVisibilityReacquire();
     try {
       const pulled = await pullNow();
       if (pulled) remoteCache = pulled;
@@ -105,9 +142,11 @@
   onDestroy(() => {
     engine?.destroy();
     if (tickTimer) clearInterval(tickTimer);
+    if (chromeFlashTimer) clearTimeout(chromeFlashTimer);
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     }
+    releaseWakeLock().catch(() => {});
   });
 
   // Wall-clock-aware tick: count actual elapsed seconds since last tick, but
@@ -154,6 +193,18 @@
   $: if (browser()) {
     localStorage.setItem(SPEED_KEY, String(speed));
     localStorage.setItem(STOP_KEY, stopAtChapter ? '1' : '0');
+    localStorage.setItem(RESUME_KEY, autoResumeOnVisible ? '1' : '0');
+    localStorage.setItem(IMMERSIVE_KEY, immersive ? '1' : '0');
+  }
+
+  // Drive the wake lock from the playing state. acquire is a no-op on
+  // unsupported browsers and just degrades to "screen dims like today".
+  $: if (browser()) {
+    if (playing) {
+      acquireWakeLock().catch(() => {});
+    } else {
+      releaseWakeLock().catch(() => {});
+    }
   }
 
   function browser() {
@@ -253,6 +304,50 @@
     engine?.toggle();
   }
 
+  // Tap-anywhere-on-reading-area toggle. Greasy / one-handed friendly —
+  // small play button bottom-center is too far to thumb-reach. We detect
+  // a "tap" as a pointerdown→up within 8px movement and 300ms; anything
+  // longer or further is treated as a scroll gesture and lets the
+  // browser handle it.
+  let tapDownX = 0;
+  let tapDownY = 0;
+  let tapDownT = 0;
+  let tapDownScrollTop = 0;
+  function onViewportPointerDown(ev: PointerEvent) {
+    tapDownX = ev.clientX;
+    tapDownY = ev.clientY;
+    tapDownT = ev.timeStamp;
+    tapDownScrollTop = viewport?.scrollTop ?? 0;
+  }
+  function onViewportPointerUp(ev: PointerEvent) {
+    const dx = Math.abs(ev.clientX - tapDownX);
+    const dy = Math.abs(ev.clientY - tapDownY);
+    const dt = ev.timeStamp - tapDownT;
+    const scrollMoved = Math.abs((viewport?.scrollTop ?? 0) - tapDownScrollTop) > 4;
+    if (dx > 10 || dy > 10 || dt > 350 || scrollMoved) return;
+    // In immersive mode the first tap reveals chrome instead of toggling
+    // play. Lets the user find the speed / close buttons without
+    // turning immersive off.
+    if (immersive && !chromeVisible) {
+      flashChrome();
+      return;
+    }
+    togglePlay();
+  }
+
+  function flashChrome() {
+    chromeFlashUntil = Date.now() + 2400;
+    clearTimeout(chromeFlashTimer);
+    chromeFlashTimer = setTimeout(() => {
+      chromeFlashUntil = 0;
+    }, 2500);
+  }
+
+  function toggleImmersive() {
+    immersive = !immersive;
+    if (!immersive) chromeFlashUntil = 0;
+  }
+
   function bumpSpeed(delta: number) {
     speed = Math.max(1, Math.min(60, speed + delta));
   }
@@ -262,7 +357,7 @@
     try {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.txt,.epub,.md,.markdown,text/plain,application/epub+zip';
+      input.accept = '.txt,.epub,.md,.markdown';
       input.onchange = async () => {
         const file = input.files?.[0];
         if (!file) return;
@@ -311,7 +406,7 @@
     <label class="upload">
       <input
         type="file"
-        accept=".txt,.epub,.md,.markdown,text/plain,application/epub+zip"
+        accept=".txt,.epub,.md,.markdown"
         on:change={handleFile}
         disabled={busy}
       />
@@ -355,7 +450,7 @@
     </footer>
   </main>
 {:else}
-  <div class="reader">
+  <div class="reader" class:immersive class:chrome-hidden={!chromeVisible}>
     <header class="topbar">
       <button class="ghost" on:click={() => { engine?.destroy(); engine = undefined; book = undefined; }}
         >‹ 关闭</button>
@@ -365,10 +460,21 @@
           <div class="chapter-title">{currentChapterTitle}</div>
         {/if}
       </div>
+      <button
+        class="ghost immersive-toggle"
+        on:click={toggleImmersive}
+        title={immersive ? '退出沉浸' : '沉浸模式'}
+        aria-label={immersive ? '退出沉浸' : '沉浸模式'}
+      >{immersive ? '◳' : '◰'}</button>
       <span class="progress-tag" title="今日累计 (含其它设备)">{progressPct}% · {formatDuration(todaySeconds)}</span>
     </header>
 
-    <div class="viewport" bind:this={viewport}>
+    <div
+      class="viewport"
+      bind:this={viewport}
+      on:pointerdown={onViewportPointerDown}
+      on:pointerup={onViewportPointerUp}
+    >
       <div class="page">
         {#each visibleSegments as seg (seg.startChar)}
           {#if seg.type === 'h2'}
@@ -392,6 +498,11 @@
       </div>
     </div>
 
+    <!-- Always-visible reading progress strip. 2px high, no chrome. -->
+    <div class="progress-strip" aria-hidden="true">
+      <div class="progress-fill" style:width="{progressPct}%" />
+    </div>
+
     <div class="controls">
       <div class="row">
         <button class="chip" on:click={() => bumpSpeed(-1)}>−</button>
@@ -405,6 +516,10 @@
           <svg viewBox="0 0 24 24" width="32" height="32"><path d="M7 5v14l12-7L7 5z"/></svg>
         {/if}
       </button>
+      <label class="row stop-at-chapter">
+        <input type="checkbox" bind:checked={autoResumeOnVisible} />
+        <span title="切回 App 时若之前在播则继续">续读</span>
+      </label>
       <label class="row stop-at-chapter">
         <input type="checkbox" bind:checked={stopAtChapter} />
         <span>章止</span>
@@ -568,6 +683,30 @@
     height: 100dvh;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+    position: relative;
+  }
+  /* Immersive: top / bottom bars collapse to zero height + zero opacity
+     so the viewport gets the full screen. A short fade keeps tap-to-flash
+     from feeling jarring. */
+  .reader.chrome-hidden .topbar,
+  .reader.chrome-hidden .controls,
+  .reader.chrome-hidden .toc,
+  .reader.chrome-hidden .sync-fab {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(var(--chrome-shift, 0));
+    transition: opacity 200ms ease, transform 200ms ease;
+  }
+  .reader.chrome-hidden .topbar { --chrome-shift: -100%; }
+  .reader.chrome-hidden .controls { --chrome-shift: 100%; }
+  .reader .topbar,
+  .reader .controls {
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+  .immersive-toggle {
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0.3rem 0.5rem;
   }
   .topbar {
     display: flex;
@@ -619,6 +758,39 @@
     line-height: 2;
     font-size: 1.15rem;
     -webkit-overflow-scrolling: touch;
+    /* Tap-to-toggle picks up clicks but text selection is unlikely in the
+       reveal area (only revealed text is selectable normal; pending text
+       has opacity 0.12 and won't normally be selected mid-reveal). */
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* iPad / large screen: bump base font + tighten line-height so a
+     dinner-table iPad doesn't feel like reading a margin. */
+  @media (min-width: 720px) {
+    .viewport { font-size: 1.45rem; line-height: 1.95; padding: 2rem 2.5rem 60vh; }
+    .page { max-width: 42em; }
+  }
+  @media (min-width: 1024px) {
+    .viewport { font-size: 1.6rem; padding: 2.5rem 3rem 60vh; }
+    .page { max-width: 46em; }
+  }
+  /* 2px-tall progress strip pinned above the controls bar. Always
+     visible even in immersive mode so you can side-eye remaining
+     progress while eating. */
+  .progress-strip {
+    height: 2px;
+    background: rgba(127, 127, 127, 0.15);
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 200ms linear;
+  }
+  .reader.chrome-hidden .progress-strip {
+    /* In immersive, keep the strip but make it subtle. */
+    opacity: 0.65;
   }
   .page {
     max-width: 36em;
