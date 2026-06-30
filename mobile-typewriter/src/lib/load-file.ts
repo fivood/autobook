@@ -1,12 +1,16 @@
 import { extractTxt } from './extract-txt';
 import { loadEpub } from './load-epub';
 import { loadMd } from './load-md';
+import { loadPdf, type ParsedPdf } from './load-pdf';
 
-export interface LoadedFile {
-  title: string;
-  text: string;
-  coverDataUrl?: string;
-}
+/** Reflowable text books (txt / epub / md) take the typewriter path:
+ * concatenated plain text + chapter starts. PDFs take the page-scroll
+ * path: per-page rendered images + optional positioned text layer. The
+ * discriminator lets the caller switch reader UI without sniffing
+ * filename twice. */
+export type LoadedFile =
+  | { kind: 'text'; title: string; text: string; coverDataUrl?: string }
+  | { kind: 'pdf'; pdf: ParsedPdf };
 
 async function isZipMagic(file: File): Promise<boolean> {
   // EPUB is a ZIP. iOS share-sheet often strips or renames the extension
@@ -21,19 +25,46 @@ async function isZipMagic(file: File): Promise<boolean> {
   }
 }
 
-export async function loadFile(file: File): Promise<LoadedFile> {
+async function isPdfMagic(file: File): Promise<boolean> {
+  // PDF starts with %PDF (0x25 0x50 0x44 0x46). Same iOS share-sheet
+  // reasoning as ZIP — extension can be missing.
+  try {
+    const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    return head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46;
+  } catch {
+    return false;
+  }
+}
+
+export async function loadFile(
+  file: File,
+  onPdfProgress?: (loaded: number, total: number) => void
+): Promise<LoadedFile> {
   const name = file.name;
   const lower = name.toLowerCase();
   const stem = name.replace(/\.[^.]+$/, '');
+
+  const isPdfByMime = /^application\/pdf/i.test(file.type);
+  const isPdfByExt = lower.endsWith('.pdf');
+  if (isPdfByExt || isPdfByMime || (await isPdfMagic(file))) {
+    const pdf = await loadPdf(file, onPdfProgress);
+    if (!pdf.title) pdf.title = stem;
+    return { kind: 'pdf', pdf };
+  }
 
   const isEpubByMime = /epub\+zip/i.test(file.type);
   const isEpubByExt = lower.endsWith('.epub');
   if (isEpubByExt || isEpubByMime || (await isZipMagic(file))) {
     const epub = await loadEpub(file);
-    return { title: epub.title || stem, text: epub.text, coverDataUrl: epub.coverDataUrl };
+    return {
+      kind: 'text',
+      title: epub.title || stem,
+      text: epub.text,
+      coverDataUrl: epub.coverDataUrl
+    };
   }
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
-    return { title: stem, text: await loadMd(file) };
+    return { kind: 'text', title: stem, text: await loadMd(file) };
   }
-  return { title: stem, text: await extractTxt(file) };
+  return { kind: 'text', title: stem, text: await extractTxt(file) };
 }

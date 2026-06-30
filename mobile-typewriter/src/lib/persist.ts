@@ -5,12 +5,25 @@ const PREFIX = 'tw-book:';
 
 export interface SavedPosition {
   title: string;
+  /** For typewriter books: revealed character count. For PDFs: current
+   * scroll-page index (0-based). The single field doubles up to keep
+   * the recents-list percentage math (`revealed / total`) working for
+   * both kinds without a branch. */
   revealed: number;
+  /** For typewriter: total chars. For PDF: page count. */
   total: number;
   updatedAt: number;
   preview: string;
-  /** Optional cover image as data URL. Only EPUBs carry one currently. */
+  /** Optional cover image as data URL. EPUB + PDF carry one (PDF uses
+   * page 1 rendered to a 240px-wide thumbnail). */
   coverDataUrl?: string;
+  /** Discriminator. Absence = 'text' (legacy entries from before the
+   * PDF reader landed). */
+  kind?: 'text' | 'pdf';
+  /** Explicit page number for PDFs, kept alongside `revealed` for
+   * clarity in storage tooling / sync inspection. For text books this
+   * is undefined. */
+  page?: number;
 }
 
 export async function hashContent(text: string): Promise<string> {

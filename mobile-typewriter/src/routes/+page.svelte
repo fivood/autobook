@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import { loadFile } from '$lib/load-file';
+  import type { ParsedPdf } from '$lib/load-pdf';
   import { parseText, type ParsedBook } from '$lib/parse-text';
+  import { pdfPageShell } from '$lib/pdf-page-shell';
   import {
     addReadingSeconds,
     getDeviceId,
@@ -33,6 +35,13 @@
   const IMMERSIVE_KEY = 'tw-immersive';
 
   let book: ParsedBook | undefined;
+  /** PDF books take a parallel state slot — they don't share the
+   * typewriter engine. `bookKind` is the discriminator the template
+   * branches on. */
+  let pdfBook: ParsedPdf | undefined;
+  let pdfPageUrls: string[] = [];
+  let pdfCurrentPage = 0;
+  $: bookKind = pdfBook ? 'pdf' : book ? 'text' : 'none';
   let title = '';
   let bookHash = '';
   let engine: TypewriterEngine | undefined;
@@ -154,8 +163,15 @@
   // delta on the next firing. Only counts while the page is visible AND the
   // typewriter is actively revealing — paused or backgrounded reading doesn't
   // contribute, and a sleeping screen doesn't either.
+  // Reading time accumulates while:
+  //   - typewriter book is actively revealing (`playing`), or
+  //   - any PDF book is open in the foreground (no playing state — the
+  //     act of scrolling is what counts; we sample the page periodically).
+  // The visible + title guards still apply so a backgrounded tab doesn't
+  // contribute and a no-book landing page doesn't either.
+  $: readingActive = title !== '' && visible && (playing || bookKind === 'pdf');
   $: if (typeof window !== 'undefined') {
-    if (playing && title && visible) {
+    if (readingActive) {
       if (!tickTimer) {
         lastTickMs = Date.now();
         tickTimer = setInterval(() => {
@@ -197,10 +213,12 @@
     localStorage.setItem(IMMERSIVE_KEY, immersive ? '1' : '0');
   }
 
-  // Drive the wake lock from the playing state. acquire is a no-op on
-  // unsupported browsers and just degrades to "screen dims like today".
+  // Drive the wake lock from the readingActive flag. Same logic for both
+  // typewriter (playing) and PDF (just-being-in-reader). Acquire is a
+  // no-op on browsers without the API; degrades to "screen dims like
+  // today".
   $: if (browser()) {
-    if (playing) {
+    if (readingActive) {
       acquireWakeLock().catch(() => {});
     } else {
       releaseWakeLock().catch(() => {});
@@ -213,26 +231,74 @@
 
   let pendingCover: string | undefined;
 
+  let pdfLoadProgress = '';
+
   async function handleFile(ev: Event) {
     const input = ev.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
     busy = true;
     error = '';
+    pdfLoadProgress = '';
     try {
-      const { title: detected, text, coverDataUrl } = await loadFile(file);
-      pendingCover = coverDataUrl;
-      await loadBook(detected, text);
+      const loaded = await loadFile(file, (loadedPages, totalPages) => {
+        pdfLoadProgress = `渲染第 ${loadedPages} / ${totalPages} 页…`;
+      });
+      if (loaded.kind === 'pdf') {
+        await openPdf(loaded.pdf);
+      } else {
+        pendingCover = loaded.coverDataUrl;
+        await loadBook(loaded.title, loaded.text);
+      }
     } catch (e: any) {
       error = `读取失败：${e?.message || e}`;
     } finally {
       busy = false;
+      pdfLoadProgress = '';
       input.value = '';
     }
   }
 
-  async function loadBook(name: string, text: string) {
+  async function openPdf(parsed: ParsedPdf) {
+    closeAnyBook();
+    pdfBook = parsed;
+    title = parsed.title;
+    pdfPageUrls = parsed.pages.map((p) => URL.createObjectURL(p.imageBlob));
+    total = parsed.pages.length;
+    bookHash = await hashContent(`pdf:${title}:${total}:${parsed.totalChars}`);
+    const saved = getPosition(bookHash);
+    pdfCurrentPage =
+      saved?.page != null && saved.page < total
+        ? saved.page
+        : saved?.revealed && saved.revealed < total
+        ? saved.revealed
+        : 0;
+    revealed = pdfCurrentPage;
+    recents = listRecent();
+    await tick();
+    requestScrollToPdfPage(pdfCurrentPage);
+  }
+
+  /** Tear down typewriter / PDF state cleanly. Always run before
+   * switching to a different book so blob URLs from the prior PDF get
+   * revoked and the engine stops ticking. */
+  function closeAnyBook() {
     engine?.destroy();
+    engine = undefined;
+    book = undefined;
+    if (pdfPageUrls.length) {
+      for (const u of pdfPageUrls) URL.revokeObjectURL(u);
+      pdfPageUrls = [];
+    }
+    pdfBook = undefined;
+    pdfCurrentPage = 0;
+    revealed = 0;
+    total = 0;
+    playing = false;
+  }
+
+  async function loadBook(name: string, text: string) {
+    closeAnyBook();
     const parsed = parseText(text);
     if (!parsed.totalChars) {
       error = '这个文件好像没有可读内容';
@@ -266,22 +332,39 @@
 
   let persistTimer: ReturnType<typeof setTimeout> | undefined;
   function persistDebounced() {
-    if (!bookHash || !book) return;
+    if (!bookHash) return;
     clearTimeout(persistTimer);
     persistTimer = setTimeout(() => {
       const existing = getPosition(bookHash);
       // Cover from this session beats any older sniff; otherwise keep the
       // previously saved cover so re-uploading without the original file
       // doesn't drop the thumbnail.
-      const coverDataUrl = pendingCover || existing?.coverDataUrl;
-      savePosition(bookHash, {
-        title,
-        revealed,
-        total,
-        updatedAt: Date.now(),
-        preview: book!.flatText.slice(0, 60).replace(/\n/g, ' '),
-        ...(coverDataUrl ? { coverDataUrl } : {})
-      });
+      const coverDataUrl =
+        (pdfBook?.coverDataUrl as string | undefined) ||
+        pendingCover ||
+        existing?.coverDataUrl;
+      if (pdfBook) {
+        savePosition(bookHash, {
+          title,
+          revealed: pdfCurrentPage,
+          total: pdfBook.pages.length,
+          updatedAt: Date.now(),
+          preview: `共 ${pdfBook.pages.length} 页`,
+          kind: 'pdf',
+          page: pdfCurrentPage,
+          ...(coverDataUrl ? { coverDataUrl } : {})
+        });
+      } else if (book) {
+        savePosition(bookHash, {
+          title,
+          revealed,
+          total,
+          updatedAt: Date.now(),
+          preview: book.flatText.slice(0, 60).replace(/\n/g, ' '),
+          kind: 'text',
+          ...(coverDataUrl ? { coverDataUrl } : {})
+        });
+      }
       recents = listRecent();
     }, 400);
   }
@@ -297,6 +380,49 @@
       const targetTop = cursorRect.top - vpRect.top + viewport.scrollTop;
       const desired = targetTop - viewport.clientHeight * 0.55;
       viewport.scrollTo({ top: Math.max(0, desired), behavior: 'smooth' });
+    });
+  }
+
+  /** Scroll the PDF viewport so the requested page sits at the top of
+   * the visible area. Used both on initial resume and when jumping via
+   * the page indicator. */
+  function requestScrollToPdfPage(idx: number) {
+    requestAnimationFrame(() => {
+      if (!viewport) return;
+      const target = viewport.querySelector(`[data-pdf-page-index="${idx}"]`);
+      if (!target) return;
+      const r = (target as HTMLElement).getBoundingClientRect();
+      const vp = viewport.getBoundingClientRect();
+      const top = r.top - vp.top + viewport.scrollTop;
+      viewport.scrollTo({ top: Math.max(0, top - 8), behavior: 'instant' as ScrollBehavior });
+    });
+  }
+
+  /** Update `pdfCurrentPage` based on which page wrapper sits closest
+   * to the top of the viewport. Throttled via rAF so a continuous
+   * scroll doesn't fire 60 times per second. */
+  let pdfScrollRaf = 0;
+  function onPdfScroll() {
+    if (!pdfBook || pdfScrollRaf) return;
+    pdfScrollRaf = requestAnimationFrame(() => {
+      pdfScrollRaf = 0;
+      if (!viewport || !pdfBook) return;
+      const wraps = viewport.querySelectorAll<HTMLElement>('[data-pdf-page-index]');
+      const vpTop = viewport.scrollTop;
+      let best = 0;
+      let bestDist = Infinity;
+      for (const w of wraps) {
+        const dist = Math.abs(w.offsetTop - vpTop);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = +(w.dataset.pdfPageIndex || 0);
+        }
+      }
+      if (best !== pdfCurrentPage) {
+        pdfCurrentPage = best;
+        revealed = best;
+        persistDebounced();
+      }
     });
   }
 
@@ -332,6 +458,10 @@
       flashChrome();
       return;
     }
+    // PDF mode has no play/pause concept — tap is a no-op when chrome
+    // is already visible. Selection still works because the text layer
+    // spans capture pointer events before bubbling here.
+    if (pdfBook) return;
     togglePlay();
   }
 
@@ -357,18 +487,32 @@
     try {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.txt,.epub,.md,.markdown';
+      input.accept =
+        item.kind === 'pdf' ? '.pdf' : '.txt,.epub,.md,.markdown,.pdf';
       input.onchange = async () => {
         const file = input.files?.[0];
         if (!file) return;
         try {
-          const { text } = await loadFile(file);
-          const h = await hashContent(parseText(text).flatText);
-          if (h !== item.hash) {
-            error = '这不是同一本书：哈希不对。换个文件再试。';
-            return;
+          const loaded = await loadFile(file, (p, t) => {
+            pdfLoadProgress = `渲染第 ${p} / ${t} 页…`;
+          });
+          if (loaded.kind === 'pdf') {
+            const h = await hashContent(
+              `pdf:${loaded.pdf.title}:${loaded.pdf.pages.length}:${loaded.pdf.totalChars}`
+            );
+            if (h !== item.hash) {
+              error = '这不是同一本书：哈希不对。换个文件再试。';
+              return;
+            }
+            await openPdf(loaded.pdf);
+          } else {
+            const h = await hashContent(parseText(loaded.text).flatText);
+            if (h !== item.hash) {
+              error = '这不是同一本书：哈希不对。换个文件再试。';
+              return;
+            }
+            await loadBook(item.title, loaded.text);
           }
-          await loadBook(item.title, text);
         } catch (e: any) {
           error = `读取失败：${e?.message || e}`;
         }
@@ -395,22 +539,22 @@
 </script>
 
 <svelte:head>
-  <title>{book ? `${title} · AutoBook` : 'AutoBook'}</title>
+  <title>{bookKind !== 'none' ? `${title} · AutoBook` : 'AutoBook'}</title>
 </svelte:head>
 
-{#if !book}
+{#if bookKind === 'none'}
   <main class="landing">
     <h1>AutoBook</h1>
-    <p class="lead">逐字浮现的阅读节奏。支持 .txt / .epub / .md。</p>
+    <p class="lead">逐字浮现 + 扫描 PDF 滑屏。支持 .txt / .epub / .md / .pdf。</p>
 
     <label class="upload">
       <input
         type="file"
-        accept=".txt,.epub,.md,.markdown"
+        accept=".txt,.epub,.md,.markdown,.pdf"
         on:change={handleFile}
         disabled={busy}
       />
-      <span>{busy ? '读取中…' : '选择文件'}</span>
+      <span>{busy ? (pdfLoadProgress || '读取中…') : '选择文件'}</span>
     </label>
 
     {#if error}
@@ -432,7 +576,11 @@
                 <div class="recent-text">
                   <div class="recent-title">{r.title}</div>
                   <div class="recent-meta">
-                    {Math.round((r.revealed / r.total) * 100)}% · {r.preview}…
+                    {#if r.kind === 'pdf'}
+                      第 {(r.page ?? r.revealed) + 1} / {r.total} 页 · PDF
+                    {:else}
+                      {Math.round((r.revealed / r.total) * 100)}% · {r.preview}…
+                    {/if}
                   </div>
                 </div>
               </button>
@@ -452,11 +600,10 @@
 {:else}
   <div class="reader" class:immersive class:chrome-hidden={!chromeVisible}>
     <header class="topbar">
-      <button class="ghost" on:click={() => { engine?.destroy(); engine = undefined; book = undefined; }}
-        >‹ 关闭</button>
+      <button class="ghost" on:click={closeAnyBook}>‹ 关闭</button>
       <div class="header-title">
         <div class="book-title">{title}</div>
-        {#if currentChapterTitle}
+        {#if bookKind === 'text' && currentChapterTitle}
           <div class="chapter-title">{currentChapterTitle}</div>
         {/if}
       </div>
@@ -466,80 +613,147 @@
         title={immersive ? '退出沉浸' : '沉浸模式'}
         aria-label={immersive ? '退出沉浸' : '沉浸模式'}
       >{immersive ? '◳' : '◰'}</button>
-      <span class="progress-tag" title="今日累计 (含其它设备)">{progressPct}% · {formatDuration(todaySeconds)}</span>
+      <span class="progress-tag" title="今日累计 (含其它设备)">
+        {#if bookKind === 'pdf'}
+          {pdfCurrentPage + 1}/{total} 页 · {formatDuration(todaySeconds)}
+        {:else}
+          {progressPct}% · {formatDuration(todaySeconds)}
+        {/if}
+      </span>
     </header>
 
-    <div
-      class="viewport"
-      bind:this={viewport}
-      on:pointerdown={onViewportPointerDown}
-      on:pointerup={onViewportPointerUp}
-    >
-      <div class="page">
-        {#each visibleSegments as seg (seg.startChar)}
-          {#if seg.type === 'h2'}
-            <h2 class="ch-title">
-              <span class="revealed">{seg.revealed}</span>{#if seg.hasCursor}<span
-                  class="cursor"
-                  bind:this={cursorEl}
-                  class:cursor-on={playing}
-                />{/if}{#if seg.pending}<span class="pending">{seg.pending}</span>{/if}
-            </h2>
-          {:else}
-            <p class="ch-para">
-              <span class="revealed">{seg.revealed}</span>{#if seg.hasCursor}<span
-                  class="cursor"
-                  bind:this={cursorEl}
-                  class:cursor-on={playing}
-                />{/if}{#if seg.pending}<span class="pending">{seg.pending}</span>{/if}
-            </p>
-          {/if}
+    {#if bookKind === 'pdf' && pdfBook}
+      <div
+        class="viewport pdf-viewport"
+        bind:this={viewport}
+        on:scroll={onPdfScroll}
+        use:pdfPageShell
+      >
+        {#each pdfBook.pages as page, i (i)}
+          <div
+            class="pdf-page-wrap"
+            data-pdf-page-index={i}
+          >
+            <div
+              class="pdf-page-shell"
+              style:aspect-ratio="{page.width} / {page.height}"
+              data-page-w={page.width}
+              data-page-h={page.height}
+            >
+              <img
+                src={pdfPageUrls[i]}
+                alt="第 {i + 1} 页"
+                loading="lazy"
+                decoding="async"
+                class="pdf-page-img"
+              />
+              {#if page.textHtml}
+                <div
+                  class="pdf-text-layer"
+                  data-page-w={page.width}
+                  data-page-h={page.height}
+                >{@html page.textHtml}</div>
+              {/if}
+            </div>
+            <div class="pdf-page-label">{i + 1} / {total}</div>
+          </div>
         {/each}
       </div>
-    </div>
+    {:else}
+      <div
+        class="viewport"
+        bind:this={viewport}
+        on:pointerdown={onViewportPointerDown}
+        on:pointerup={onViewportPointerUp}
+      >
+        <div class="page">
+          {#each visibleSegments as seg (seg.startChar)}
+            {#if seg.type === 'h2'}
+              <h2 class="ch-title">
+                <span class="revealed">{seg.revealed}</span>{#if seg.hasCursor}<span
+                    class="cursor"
+                    bind:this={cursorEl}
+                    class:cursor-on={playing}
+                  />{/if}{#if seg.pending}<span class="pending">{seg.pending}</span>{/if}
+              </h2>
+            {:else}
+              <p class="ch-para">
+                <span class="revealed">{seg.revealed}</span>{#if seg.hasCursor}<span
+                    class="cursor"
+                    bind:this={cursorEl}
+                    class:cursor-on={playing}
+                  />{/if}{#if seg.pending}<span class="pending">{seg.pending}</span>{/if}
+              </p>
+            {/if}
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- Always-visible reading progress strip. 2px high, no chrome. -->
     <div class="progress-strip" aria-hidden="true">
       <div class="progress-fill" style:width="{progressPct}%" />
     </div>
 
-    <div class="controls">
-      <div class="row">
-        <button class="chip" on:click={() => bumpSpeed(-1)}>−</button>
-        <span class="speed">{speed} 字/秒</span>
-        <button class="chip" on:click={() => bumpSpeed(1)}>+</button>
+    {#if bookKind === 'pdf' && pdfBook}
+      <div class="controls pdf-controls">
+        <button
+          class="chip"
+          on:click={() => requestScrollToPdfPage(Math.max(0, pdfCurrentPage - 1))}
+          disabled={pdfCurrentPage <= 0}
+          aria-label="上一页"
+        >‹</button>
+        <span class="speed">第 {pdfCurrentPage + 1} / {total} 页</span>
+        <button
+          class="chip"
+          on:click={() => requestScrollToPdfPage(Math.min(total - 1, pdfCurrentPage + 1))}
+          disabled={pdfCurrentPage >= total - 1}
+          aria-label="下一页"
+        >›</button>
+        <label class="row stop-at-chapter">
+          <input type="checkbox" bind:checked={autoResumeOnVisible} />
+          <span title="切回 App 时回到原位置">续读</span>
+        </label>
       </div>
-      <button class="play" on:click={togglePlay} aria-label={playing ? '暂停' : '播放'}>
-        {#if playing}
-          <svg viewBox="0 0 24 24" width="32" height="32"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-        {:else}
-          <svg viewBox="0 0 24 24" width="32" height="32"><path d="M7 5v14l12-7L7 5z"/></svg>
-        {/if}
-      </button>
-      <label class="row stop-at-chapter">
-        <input type="checkbox" bind:checked={autoResumeOnVisible} />
-        <span title="切回 App 时若之前在播则继续">续读</span>
-      </label>
-      <label class="row stop-at-chapter">
-        <input type="checkbox" bind:checked={stopAtChapter} />
-        <span>章止</span>
-      </label>
-    </div>
+    {:else if book}
+      <div class="controls">
+        <div class="row">
+          <button class="chip" on:click={() => bumpSpeed(-1)}>−</button>
+          <span class="speed">{speed} 字/秒</span>
+          <button class="chip" on:click={() => bumpSpeed(1)}>+</button>
+        </div>
+        <button class="play" on:click={togglePlay} aria-label={playing ? '暂停' : '播放'}>
+          {#if playing}
+            <svg viewBox="0 0 24 24" width="32" height="32"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          {:else}
+            <svg viewBox="0 0 24 24" width="32" height="32"><path d="M7 5v14l12-7L7 5z"/></svg>
+          {/if}
+        </button>
+        <label class="row stop-at-chapter">
+          <input type="checkbox" bind:checked={autoResumeOnVisible} />
+          <span title="切回 App 时若之前在播则继续">续读</span>
+        </label>
+        <label class="row stop-at-chapter">
+          <input type="checkbox" bind:checked={stopAtChapter} />
+          <span>章止</span>
+        </label>
+      </div>
 
-    {#if book.chapters.length > 1}
-      <details class="toc">
-        <summary>目录 · {book.chapters.length} 章</summary>
-        <ul>
-          {#each book.chapters as ch, i (i)}
-            <li>
-              <button class:active={i === chapterIdx} on:click={() => jumpToChapter(i)}>
-                {ch.title || `（无标题段 ${i + 1}）`}
-              </button>
-            </li>
-          {/each}
-        </ul>
-        <button class="restart" on:click={restart}>从头开始</button>
-      </details>
+      {#if book.chapters.length > 1}
+        <details class="toc">
+          <summary>目录 · {book.chapters.length} 章</summary>
+          <ul>
+            {#each book.chapters as ch, i (i)}
+              <li>
+                <button class:active={i === chapterIdx} on:click={() => jumpToChapter(i)}>
+                  {ch.title || `（无标题段 ${i + 1}）`}
+                </button>
+              </li>
+            {/each}
+          </ul>
+          <button class="restart" on:click={restart}>从头开始</button>
+        </details>
+      {/if}
     {/if}
     <button class="sync-fab" title="同步设置" on:click={() => (syncOpen = true)}>⇅</button>
   </div>
@@ -774,6 +988,76 @@
     .viewport { font-size: 1.6rem; padding: 2.5rem 3rem 60vh; }
     .page { max-width: 46em; }
   }
+  /* PDF reader: each page wrapped in a shell that holds the rendered
+     JPEG plus the transparent text-layer overlay. aspect-ratio keeps
+     the shell sized correctly before the img loads (no jumpy reflow
+     on lazy decode). */
+  .pdf-viewport {
+    padding: 0.6rem 0.5rem 60vh;
+    line-height: 1; /* avoid extra space around image lines */
+  }
+  .pdf-page-wrap {
+    max-width: 900px;
+    margin: 0 auto 0.6rem;
+  }
+  .pdf-page-shell {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  }
+  .pdf-page-shell > img.pdf-page-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  /* Text layer: scaled via CSS variable so the per-span px coords stay
+     aligned with the visible image at any container width. The page
+     wrapper sets --pdf-scale-factor when the image loads (see action
+     below). */
+  .pdf-text-layer {
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+    transform: scale(var(--pdf-scale-factor, 1));
+    pointer-events: none;
+    line-height: 1;
+    font-family: serif;
+  }
+  .pdf-text-layer > :global(span) {
+    position: absolute;
+    color: transparent;
+    white-space: pre;
+    transform-origin: 0 0;
+    pointer-events: auto;
+    cursor: text;
+    user-select: text;
+  }
+  .pdf-text-layer > :global(span::selection) {
+    background: rgba(0, 110, 255, 0.32);
+    color: transparent;
+  }
+  .pdf-page-label {
+    text-align: center;
+    font-size: 0.72rem;
+    opacity: 0.5;
+    margin: 0.25rem 0 0.6rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .pdf-controls {
+    justify-content: space-between;
+  }
+  .pdf-controls .chip {
+    width: 2.4rem;
+    height: 2.4rem;
+    font-size: 1.2rem;
+  }
+  .pdf-controls .chip:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
   /* 2px-tall progress strip pinned above the controls bar. Always
      visible even in immersive mode so you can side-eye remaining
      progress while eating. */
