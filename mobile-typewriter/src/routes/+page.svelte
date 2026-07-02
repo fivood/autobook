@@ -112,6 +112,24 @@
   let visible = true;
   let lastTickMs = 0;
 
+  // Manual-reading activity window. PDF and scroll-mode text books have no
+  // `playing` state — the reader is "active" as long as the user keeps
+  // touching / scrolling. Each interaction restarts a 3-minute window;
+  // when it lapses we treat the book as idle: wake lock releases (screen
+  // can dim, battery survives a forgotten open PDF) and reading seconds
+  // stop accumulating (an abandoned tab no longer inflates stats).
+  // 3 minutes ≈ the slowest realistic dwell on one PDF page or scroll
+  // viewport before the next gesture.
+  const INTERACTION_IDLE_MS = 3 * 60 * 1000;
+  let recentlyInteracted = true;
+  let interactionIdleTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function noteInteraction() {
+    recentlyInteracted = true;
+    if (interactionIdleTimer) clearTimeout(interactionIdleTimer);
+    interactionIdleTimer = setTimeout(() => (recentlyInteracted = false), INTERACTION_IDLE_MS);
+  }
+
   function onVisibilityChange() {
     visible = document.visibilityState === 'visible';
     // Reset the wall-clock anchor so resuming after a long background gap
@@ -149,6 +167,13 @@
     visible = document.visibilityState === 'visible';
     document.addEventListener('visibilitychange', onVisibilityChange);
     ensureVisibilityReacquire();
+    // scroll doesn't bubble, so listen in capture phase to hear the inner
+    // reader containers; passive keeps momentum scrolling smooth.
+    window.addEventListener('pointerdown', noteInteraction, { passive: true });
+    window.addEventListener('wheel', noteInteraction, { passive: true });
+    window.addEventListener('keydown', noteInteraction);
+    window.addEventListener('scroll', noteInteraction, { passive: true, capture: true });
+    noteInteraction();
     try {
       const pulled = await pullNow();
       if (pulled) remoteCache = pulled;
@@ -164,6 +189,13 @@
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pointerdown', noteInteraction);
+      window.removeEventListener('wheel', noteInteraction);
+      window.removeEventListener('keydown', noteInteraction);
+      window.removeEventListener('scroll', noteInteraction, { capture: true } as EventListenerOptions);
+    }
+    if (interactionIdleTimer) clearTimeout(interactionIdleTimer);
     releaseWakeLock().catch(() => {});
   });
 
@@ -174,11 +206,15 @@
   // contribute, and a sleeping screen doesn't either.
   // Reading time accumulates while:
   //   - typewriter book is actively revealing (`playing`), or
-  //   - any PDF book is open in the foreground (no playing state — the
-  //     act of scrolling is what counts; we sample the page periodically).
+  //   - a manually-paged book (PDF, or text in scroll mode) is open in the
+  //     foreground AND the user has interacted within the idle window —
+  //     otherwise a PDF left open overnight would hold the wake lock and
+  //     rack up fake reading hours, while a scroll-mode text book (the
+  //     hands-on reading case) previously got neither wake lock nor stats.
   // The visible + title guards still apply so a backgrounded tab doesn't
   // contribute and a no-book landing page doesn't either.
-  $: readingActive = title !== '' && visible && (playing || bookKind === 'pdf');
+  $: manualReading = bookKind === 'pdf' || (bookKind === 'text' && readMode === 'scroll');
+  $: readingActive = title !== '' && visible && (playing || (manualReading && recentlyInteracted));
   $: if (typeof window !== 'undefined') {
     if (readingActive) {
       if (!tickTimer) {
@@ -223,10 +259,10 @@
     localStorage.setItem(READMODE_KEY, readMode);
   }
 
-  // Drive the wake lock from the readingActive flag. Same logic for both
-  // typewriter (playing) and PDF (just-being-in-reader). Acquire is a
-  // no-op on browsers without the API; degrades to "screen dims like
-  // today".
+  // Drive the wake lock from the readingActive flag — typewriter while
+  // playing, manual reading (PDF / scroll mode) while recently interacted.
+  // Acquire is a no-op on browsers without the API; degrades to "screen
+  // dims like today".
   $: if (browser()) {
     if (readingActive) {
       acquireWakeLock().catch(() => {});
@@ -275,7 +311,6 @@
       // errors don't break the open flow.
       if (bookHash) {
         storeBook(bookHash, title, file, file.name).catch((err) => {
-          // eslint-disable-next-line no-console
           console.warn('[book-store] save failed', err);
         });
       }
@@ -636,7 +671,6 @@
         return;
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[book-store] read failed, falling back to picker', err);
     }
     // Cache miss (legacy recents from before book-store landed, or
