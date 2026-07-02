@@ -163,7 +163,17 @@
 </script>
 
 {#if autoReader}
-  <div bind:this={settingsRoot} class="group fixed bottom-6 right-20 z-30 flex flex-col items-end gap-2">
+  <!-- right-44 (176px) instead of the old right-20 (80px): AutoScrollFab's
+       speed row is ~112px wide anchored at right-6, so its left edge
+       sits around right=136. Putting AutoReaderFab at right-20 meant
+       the user's cursor crossed the TTS group-hover zone (right 80-116)
+       on its way from the reading area down to the − speed button at
+       right ~120 — group-hover then promoted the otherwise-hidden
+       settings gear to pointer-events-auto, and the click landed on
+       the gear instead of −. right-44 leaves a ~40px gap between the
+       expanded speaker (right 176-224) and the speed row right edge
+       (right 136), well outside any incidental hover path. -->
+  <div bind:this={settingsRoot} class="group fixed bottom-6 right-44 z-30 flex flex-col items-end gap-2">
     <button
       type="button"
       title={enabled ? '暂停朗读 (V)' : '开始朗读 (V)'}
@@ -192,7 +202,6 @@
       class:opacity-0={!enabled && !showSettings}
       class:pointer-events-none={!enabled && !showSettings}
       class:group-hover:opacity-100={!enabled && !showSettings}
-      class:group-hover:pointer-events-auto={!enabled && !showSettings}
       style="background-color: rgba(195, 193, 175, 0.9); color: #405a5c;"
     >
       <Fa icon={faGears} />
