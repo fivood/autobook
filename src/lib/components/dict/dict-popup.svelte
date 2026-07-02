@@ -28,7 +28,6 @@
             ? `已载入 ${res.loaded.length} 个词典${res.errors.length ? `，${res.errors.length} 出错` : ''}`
             : '';
         if (res.errors.length) {
-          // eslint-disable-next-line no-console
           console.warn('[dict] errors', res.errors);
         }
       } catch (err: any) {
@@ -77,7 +76,6 @@
       const res = await scanDictFolder(picked);
       message = `已载入 ${res.loaded.length} 个词典${res.errors.length ? `，${res.errors.length} 个出错` : ''}`;
       if (res.errors.length) {
-        // eslint-disable-next-line no-console
         console.warn('[dict] errors', res.errors);
       }
     } catch (err: any) {

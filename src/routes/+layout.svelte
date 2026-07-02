@@ -149,13 +149,11 @@
       // Apply current shortcut, then keep it in sync with user changes.
       const applyShortcut = (accel: string) =>
         invoke('set_tts_shortcut', { accelerator: accel }).catch((err) =>
-          // eslint-disable-next-line no-console
           console.warn('[tts-shortcut] register failed:', err)
         );
       applyShortcut(ttsShortcut$.getValue());
       ttsShortcut$.subscribe(applyShortcut);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[launch-files] init failed:', err);
     }
 
@@ -168,7 +166,6 @@
       }
     } catch (err) {
       // silent — no banner on check failure
-      // eslint-disable-next-line no-console
       console.warn('[updater] check failed:', err);
     }
   });

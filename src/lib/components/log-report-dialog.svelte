@@ -208,7 +208,6 @@
         return;
       }
     } catch (err: any) {
-      // eslint-disable-next-line no-console
       console.warn('[log-report] tauri save failed, falling back:', err);
     }
     // Browser fallback: blob download trick (data: URIs are rejected by WebView2).

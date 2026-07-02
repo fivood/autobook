@@ -85,7 +85,6 @@ function buildTextLayer(
 // across minor versions. The two methods we touch (`getViewport`,
 // `render`) are stable in shape, so we type them loosely with `any` and
 // stay out of the way of the upstream type churn.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function pageToJpeg(
   page: any,
   targetWidth: number

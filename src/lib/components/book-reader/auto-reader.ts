@@ -298,14 +298,12 @@ export class AutoReaderContinuous implements AutoReader {
         ev.error === 'text-too-long' ||
         ev.error === 'audio-busy'
       ) {
-        // eslint-disable-next-line no-console
         console.warn('[auto-reader] speech recoverable error, skipping paragraph:', ev.error);
         this.paraIndex += 1;
         this.charOffset = 0;
         queueMicrotask(() => this.speakNext());
         return;
       }
-      // eslint-disable-next-line no-console
       console.warn('[auto-reader] speech error:', ev.error);
       this.off();
     };

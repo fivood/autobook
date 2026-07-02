@@ -112,7 +112,6 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
         await this.setTitleData(directories);
         this.dataListFetched = true;
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[TauriFsStorageHandler] getBookList failed:', err);
         this.dataListFetched = true;
       }

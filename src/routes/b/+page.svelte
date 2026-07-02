@@ -288,11 +288,6 @@
   } from '$lib/functions/range-util';
 
   let showSpinner = true;
-
-  $: if (browser) {
-    // eslint-disable-next-line no-console
-    console.log('[showSpinner] reactive value:', showSpinner);
-  }
   let showHeader = false;
   let headerEnterTimer: ReturnType<typeof setTimeout> | undefined;
   let isBookmarkScreen = false;
@@ -381,8 +376,6 @@
         let bookData: BooksDbBookData | undefined;
 
         try {
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] start', id);
           localStorageHandler = getStorageHandler(
           window,
           StorageKey.BROWSER,
@@ -395,11 +388,7 @@
         );
 
         localStorageHandler.startContext({ id, title: '' });
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before getBook');
         bookData = await localStorageHandler.getBook();
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] after getBook', bookData?.title, bookData?.storageSource, !!bookData?.elementHtml);
 
         if (!bookData) {
           return bookData;
@@ -414,52 +403,28 @@
         localStorageHandler.startContext(currentContext);
 
         if (bookData.storageSource) {
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] before getStorageHandlerByName', bookData.storageSource);
           externalStorageHandler = await getStorageHandlerByName(bookData.storageSource, true);
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] after getStorageHandlerByName');
         } else if ($autoReplication$ !== AutoReplicationType.Off) {
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] before getStorageHandlerByName syncTarget', $syncTarget$);
           externalStorageHandler = await getStorageHandlerByName($syncTarget$);
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] after getStorageHandlerByName syncTarget');
         }
 
         bookData.lastBookOpen = new Date().getTime();
 
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before updateLastRead (browser)');
         await localStorageHandler.updateLastRead(bookData);
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] after updateLastRead (browser)');
 
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before syncDownData');
         await syncDownData(externalStorageHandler, currentContext);
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] after syncDownData');
 
         if (!$statisticsEnabled$) {
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] before setFirstBookRead');
           const wasNew = (
             await database.setFirstBookRead(currentContext.title, $startDayHoursForTracker$)
           )[1];
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] after setFirstBookRead', wasNew);
 
           if (wasNew) {
             scheduleReplication(StorageDataType.STATISTICS);
           }
         }
 
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before saveExternalLastRead');
         bookData = await saveExternalLastRead(externalStorageHandler, bookData);
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] after saveExternalLastRead', !!bookData?.elementHtml);
 
         if (bookData.language) {
           document.documentElement.lang = bookData.language;
@@ -480,13 +445,9 @@
         ]);
         return undefined;
       } finally {
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] finally running, showSpinner -> false');
         syncedResolver();
 
         showSpinner = false;
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] showSpinner after assignment:', showSpinner);
       }
 
       if (externalStorageHandler) {
@@ -502,8 +463,6 @@
         );
       }
 
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before return', !!bookData?.elementHtml);
         return bookData;
       })();
 
@@ -553,8 +512,6 @@
 
   const bookData$ = rawBookData$.pipe(
     switchMap((rawBookData) => {
-      // eslint-disable-next-line no-console
-      console.log('[bookData$] received rawBookData', !!rawBookData?.elementHtml);
       if (!rawBookData) return EMPTY;
 
       sectionList$.next(rawBookData.sections || []);
@@ -564,13 +521,9 @@
       const cacheKey = `${rawBookData.id}|${isPaginated ? 'p' : 'c'}|${$hideSpoilerImageMode$}|${rawBookData.lastBookModified || 0}`;
       const cached = formattedBookCache.get(cacheKey);
       if (cached) {
-        // eslint-disable-next-line no-console
-        console.log('[bookData$] returning cached');
         return of(cached);
       }
 
-      // eslint-disable-next-line no-console
-      console.log('[bookData$] before loadBookData');
       return loadBookData(
         rawBookData,
         '.book-content',
@@ -579,8 +532,6 @@
         $hideSpoilerImageMode$
       ).pipe(
         tap((data) => {
-          // eslint-disable-next-line no-console
-          console.log('[bookData$] after loadBookData', !!data?.htmlContent);
           // Only keep the latest entry. evictFormattedBookCache revokes
           // the prior entry's blob URLs as it clears — safe now because
           // formatBookDataHtml hands URL ownership to this cache instead
@@ -1174,7 +1125,6 @@
         (upSyncEnabled && dataToReplicateQueue.length))
     ) {
       event.preventDefault();
-      // eslint-disable-next-line no-param-reassign
       return (event.returnValue = '确定要退出吗？');
     }
 
@@ -1548,7 +1498,6 @@
       return localBookData;
     }
 
-    // eslint-disable-next-line prefer-const
     let { id, ...bookData } = localBookData;
 
     if (localBookData.storageSource) {
@@ -2176,7 +2125,6 @@
     } = getReferencePoints(window, contentEl, $verticalMode$, firstDimensionMargin);
 
     merge(fromEvent(document, 'pointerup'), fromEvent(document, 'pointermove'))
-      // eslint-disable-next-line rxjs/no-ignored-takewhile-value
       .pipe(takeWhile(() => isSelectingCustomReadingPoint))
       .subscribe((event: Event) => {
         if (!(event instanceof PointerEvent)) {

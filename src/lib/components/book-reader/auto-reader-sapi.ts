@@ -234,7 +234,6 @@ export class AutoReaderSapi implements AutoReader {
     } catch (err: any) {
       if (token !== this.currentSpeakToken) return;
       const message = typeof err === 'string' ? err : err?.message ?? String(err);
-      // eslint-disable-next-line no-console
       console.warn('[sapi] synth failed:', message);
       this.onError?.(message);
       this.off();

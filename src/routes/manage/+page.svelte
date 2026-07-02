@@ -562,7 +562,6 @@
           if (!/\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz|cbr|cb7|cbt)$/i.test(entry.filename)) continue;
 
           const name = entry.filename.split('/').pop() || entry.filename;
-          // eslint-disable-next-line no-await-in-loop
           const blob = await entry.getData(new BlobWriter());
           out.push(new File([blob], name, { lastModified: file.lastModified }));
         }

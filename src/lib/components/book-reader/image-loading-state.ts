@@ -40,7 +40,6 @@ function imageLoadComplete(imgEl: HTMLImageElement) {
     fromEvent(imgEl, 'error'),
     timer(IMAGE_LOAD_TIMEOUT_MS).pipe(
       map(() => {
-        // eslint-disable-next-line no-console
         console.warn('[imageLoadingState] image load timeout:', imgEl.src);
         return 1;
       })

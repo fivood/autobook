@@ -40,12 +40,10 @@ export function createTypewriter(opts: { total: number; speed: number }): Typewr
   let revealAccumulator = 0;
   let currentRevealed = 0;
   let currentTotal = opts.total;
-  let currentChapter = 0;
 
   state.subscribe((s) => {
     currentRevealed = s.revealed;
     currentTotal = s.total;
-    currentChapter = s.chapterIdx;
   });
 
   const chapterOf = (pos: number): number => {

@@ -41,7 +41,6 @@ export async function acquireWakeLock(): Promise<boolean> {
   if (!isSupported()) return false;
   if (sentinel && !sentinel.released) return true;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     sentinel = (await (navigator as any).wakeLock.request('screen')) as Sentinel;
     sentinel.addEventListener('release', () => {
       // Browser released — usually because the page went hidden. We DON'T
@@ -50,7 +49,6 @@ export async function acquireWakeLock(): Promise<boolean> {
     });
     return true;
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[wake-lock] acquire failed', err);
     return false;
   }

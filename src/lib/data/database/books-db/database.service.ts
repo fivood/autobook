@@ -991,7 +991,6 @@ export class DatabaseService {
       const hadDataMap = new Map<string, boolean>();
 
       if (startDateString) {
-        // eslint-disable-next-line prefer-const
         let { referenceDate, dateString } = advanceDateDays(getDate(startDateString), 0);
 
         while (dateString <= endDateString) {

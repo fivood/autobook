@@ -25,7 +25,6 @@ declare global {
 // but this project pins Svelte 4 — provide a shim so the generated $types
 // files type-check.
 declare module 'svelte' {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type Snippet<T extends unknown[] = any[]> = (...args: T) => unknown;
 }
 

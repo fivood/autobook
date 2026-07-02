@@ -17,7 +17,6 @@ import path from 'path-browserify';
 
 export const prependValue = 'ttu-';
 
-// eslint-disable-next-line no-control-regex
 const controlCharactersRegex = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/gim;
 const htmlHexEntitiesRegex = /&#x([0-9A-Fa-f]+);/gim;
 const htmlDecEntitiesRegex = /&#(\d+);/gim;

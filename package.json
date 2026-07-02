@@ -13,7 +13,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "postinstall": "node -e \"const fs=require('fs'),p=require('path');const copy=(srcDir,dstDir,files)=>{fs.mkdirSync(dstDir,{recursive:true});for(const f of files)fs.copyFileSync(p.join(srcDir,f),p.join(dstDir,f));};copy('node_modules/libarchive.js/dist','static/vendor/libarchive',['worker-bundle.js','libarchive.wasm']);copy('node_modules/onnxruntime-web/dist','static/vendor/ort',['ort-wasm-simd-threaded.wasm','ort-wasm-simd-threaded.jsep.wasm','ort-wasm-simd-threaded.mjs','ort-wasm-simd-threaded.jsep.mjs']);\""
+    "postinstall": "node -e \"const fs=require('fs'),p=require('path');const copy=(srcDir,dstDir,files)=>{fs.mkdirSync(dstDir,{recursive:true});for(const f of files)fs.copyFileSync(p.join(srcDir,f),p.join(dstDir,f));};copy('node_modules/libarchive.js/dist','static/vendor/libarchive',['worker-bundle.js','libarchive.wasm']);copy('node_modules/onnxruntime-web/dist','static/vendor/ort',['ort-wasm-simd-threaded.wasm','ort-wasm-simd-threaded.jsep.wasm','ort-wasm-simd-threaded.mjs','ort-wasm-simd-threaded.jsep.mjs']);\"",
+    "lint": "eslint src"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "3.0.10",
@@ -29,6 +30,9 @@
     "@types/webappsec-credential-management": "0.6.9",
     "@types/wicg-file-system-access": "2023.10.7",
     "autoprefixer": "10.5.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-svelte": "^2.46.1",
+    "globals": "^17.7.0",
     "postcss": "8.5.15",
     "sass": "1.100.0",
     "svelte": "4.2.20",
@@ -37,6 +41,7 @@
     "tailwindcss": "3.4.19",
     "tslib": "2.8.1",
     "typescript": "6.0.3",
+    "typescript-eslint": "^8.62.1",
     "vite": "5.4.21"
   },
   "dependencies": {

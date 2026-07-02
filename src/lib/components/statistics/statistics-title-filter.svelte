@@ -99,7 +99,6 @@
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function setTitlesToFilter(_: any) {
     const entries = [...statisticsTitleFilters.entries()];
 
@@ -108,7 +107,6 @@
     applyTitleFilters();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function applyTitleFilters(..._: any) {
     tick().then(() => {
       filteredTitles = titlesToFilter.filter(

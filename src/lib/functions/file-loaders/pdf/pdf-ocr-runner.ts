@@ -467,7 +467,6 @@ export async function runOcr(
 
     const blob = pageBlobFromBook(book, page.pageNum);
     if (!blob) {
-      // eslint-disable-next-line no-console
       console.warn(`[ocr] no blob for page ${page.pageNum}`);
       onProgress({ page: progressPage, total, text: '' });
       chunks.push(page.imgTag);
@@ -487,7 +486,6 @@ export async function runOcr(
       spans = layer.spans;
       cleanText = layer.cleanText;
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn(`[ocr] page ${page.pageNum} failed`, err);
     }
 

@@ -124,7 +124,6 @@ export function createBooksDb(name = 'books') {
 
           // Fall through to v6 → v7 upgrade.
         }
-        // eslint-disable-next-line no-fallthrough
         case 6: {
           if (!oldDb.objectStoreNames.contains('folder')) {
             const folderStore = oldDb.createObjectStore('folder', {
@@ -144,7 +143,6 @@ export function createBooksDb(name = 'books') {
 
           // Fall through to v7 → v8 upgrade.
         }
-        // eslint-disable-next-line no-fallthrough
         case 7: {
           if (!oldDb.objectStoreNames.contains('highlight')) {
             const highlightStore = oldDb.createObjectStore('highlight', {
@@ -156,7 +154,6 @@ export function createBooksDb(name = 'books') {
           }
           // Fall through to v8 → v9 upgrade.
         }
-        // eslint-disable-next-line no-fallthrough
         case 8: {
           if (!oldDb.objectStoreNames.contains('highlightFolder')) {
             const highlightFolderStore = oldDb.createObjectStore('highlightFolder', {

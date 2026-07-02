@@ -74,7 +74,6 @@ async function pushOcrResultToExternalStorage(updated: BooksDbBookData): Promise
     // eslint-disable-next-line no-console
     console.log('[ocr] synced OCR result to Tauri FS');
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[ocr] failed to sync OCR result to external storage', err);
   }
 }

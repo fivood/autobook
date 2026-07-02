@@ -954,7 +954,6 @@
         await invoke('schedule_ui_reset');
         return;
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[reset] schedule failed, falling back to in-page clear:', err);
       }
     }

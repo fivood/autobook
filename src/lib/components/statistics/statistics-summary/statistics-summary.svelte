@@ -85,7 +85,6 @@
 
   $: statisticsSummaryPageLabel = `PAGE ${currentStatisticsSummaryPage} / ${statisticsSummaryMaxPages}`;
 
-  // eslint-disable-next-line prefer-spread
   $: statisticsSummaryPages = Array.apply(null, Array(statisticsSummaryMaxPages)).map(
     (_, index) => index + 1
   );

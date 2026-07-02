@@ -252,7 +252,6 @@ export class AutoReaderKokoro implements AutoReader {
       const voices = tts?.voices ? Object.keys(tts.voices) : [];
       if (voices.length && !voices.includes(voiceId)) {
         const fallback = voices.find((v) => v.startsWith('af_')) || voices[0];
-        // eslint-disable-next-line no-console
         console.warn(`[kokoro] voice ${voiceId} not in model; fell back to ${fallback}`);
         voiceId = fallback;
         kokoroVoiceId$.next(voiceId);
@@ -312,7 +311,6 @@ export class AutoReaderKokoro implements AutoReader {
     } catch (err: any) {
       if (token !== this.currentSpeakToken) return;
       const message = typeof err === 'string' ? err : err?.message ?? String(err);
-      // eslint-disable-next-line no-console
       console.warn('[kokoro] synth failed:', message);
       this.onError?.(message);
       this.off();
