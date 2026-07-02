@@ -1,6 +1,11 @@
 # AutoBook 项目规范
 
-AutoBook 是一个双端电子书阅读器：桌面 Tauri 应用（本目录）+ 手机/iPad PWA（`mobile-typewriter/`，部署在 book.fivood.com）。生产分支是 `release/1.6.0`——桌面发版和 Cloudflare Pages 都从这个分支走，不是 main。
+AutoBook 是一个双端电子书阅读器：桌面 Tauri 应用（本目录）+ 手机/iPad PWA（`mobile-typewriter/`，部署在 book.fivood.com）。
+
+**分支分工（2026-07 起，main 已废弃不用）**：
+- `desktop` — 桌面客户端开发。发版打 `vX.Y.Z` tag（tag 触发 CI，不认分支）
+- `release/1.6.0` — PWA / web 端。push 即触发 Cloudflare Pages 生产部署（生产分支绑定就是它，别改名）
+- 改动涉及两端共享内容（少见，PWA 是独立 npm 包）时，记得在两个分支间 cherry-pick 同步
 
 ## 目录结构
 
@@ -53,7 +58,10 @@ ESLint 走「少而准」路线，只开确实咬过这个仓库的规则，**�
 
 ## 发版流程
 
-1. 版本号同时改 `package.json` 和 `src-tauri/tauri.conf.json`
-2. `CHANGELOG.md` 顶部加条目：中文、写根因和修法，不只写现象（延续现有风格）
-3. `npm run tauri:build` — 需要 updater 签名密钥（位置见私人记录，不在仓库）
-4. 提交推送 `release/1.6.0`；PWA 改动推同分支即触发 Cloudflare Pages 部署
+桌面（在 `desktop` 分支上）：
+1. 版本号改三处：`package.json`、`src-tauri/tauri.conf.json`（version + 窗口 title）、`src-tauri/Cargo.toml`
+2. `CHANGELOG.md` 顶部加 `## X.Y.Z` 条目：中文、写根因和修法，不只写现象（CI 用它做 release body）
+3. 提交后 `git tag -a vX.Y.Z` 并推送分支 + tag —— CI 全托管（构建、签名、建 release、latest.json），**不要本地 build 或手动 gh release**
+4. 验证：`gh run watch` 或 `curl https://updates.fivood.com/latest.json`
+
+PWA：推 `release/1.6.0` 即部署，无版本仪式。
