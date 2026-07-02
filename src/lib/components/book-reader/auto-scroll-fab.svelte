@@ -2,15 +2,23 @@
   import { browser } from '$app/environment';
   import Fa from 'svelte-fa';
   import { faPlay, faPause, faForward, faRotateRight, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
-  import type { AutoScroller } from '$lib/components/book-reader/types';
+  import type { AutoScroller, AutoReader } from '$lib/components/book-reader/types';
   import { autoScrollStopAtChapter$, multiplier$ } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
 
   export let autoScroller: AutoScroller | undefined;
+  /** TTS reader, if mounted alongside. Its rate pill overlays this
+   * component's speed pill (same slot under the play button), so while
+   * TTS is active the speed pill must fully yield — no visibility, no
+   * hover preview. TTS enabling also turns the scroller off, so the
+   * pill carries no information in that state anyway. */
+  export let autoReader: AutoReader | undefined = undefined;
 
   let enabled = false;
+  let ttsActive = false;
   let sub: Subscription | undefined;
+  let ttsSub: Subscription | undefined;
   let recentlyMoved = true;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let hovered = false;
@@ -18,6 +26,11 @@
   $: {
     sub?.unsubscribe();
     sub = autoScroller?.wasAutoScrollerEnabled$.subscribe((v) => (enabled = v));
+  }
+
+  $: {
+    ttsSub?.unsubscribe();
+    ttsSub = autoReader?.wasReaderEnabled$.subscribe((v) => (ttsActive = v));
   }
 
   // Dim the FAB stack 1.2s after the last mouse move while playback is
@@ -39,6 +52,7 @@
 
   onDestroy(() => {
     sub?.unsubscribe();
+    ttsSub?.unsubscribe();
     if (idleTimer) clearTimeout(idleTimer);
     if (browser) window.removeEventListener('mousemove', nudge);
   });
@@ -110,25 +124,14 @@
     >
       <Fa icon={enabled ? faPause : faPlay} size="lg" />
       <span class="sr-only">{enabled ? '暂停' : '开始'}自动阅读</span>
-      {#if enabled}
-        <!-- Centered ABOVE the pause button instead of sticking out the
-             right corner, where it used to overlap with the AutoReaderFab
-             at right-20 and become unreadable. -->
-        <span
-          class="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/45 px-2 py-0.5 text-[10px] leading-tight pointer-events-none"
-          title="速度 (A 加速 / D 减速)"
-        >
-          {$multiplier$}字/秒
-        </span>
-      {/if}
     </button>
 
     <div
       class="flex items-center gap-1 rounded-full px-2 py-1 shadow backdrop-blur transition-all duration-150"
-      class:opacity-0={!enabled}
-      class:pointer-events-none={!enabled}
-      class:group-hover:opacity-100={!enabled}
-      class:group-hover:pointer-events-auto={!enabled}
+      class:opacity-0={!enabled || ttsActive}
+      class:pointer-events-none={!enabled || ttsActive}
+      class:group-hover:opacity-100={!enabled && !ttsActive}
+      class:group-hover:pointer-events-auto={!enabled && !ttsActive}
       style="background-color: rgba(195, 193, 175, 0.9); color: #405a5c;"
     >
       <button

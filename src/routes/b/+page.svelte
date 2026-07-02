@@ -2243,7 +2243,7 @@
 {$collectReaderImageGallerySpoilerToggles$ ?? ''}
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
 {#if !showSpinner && !isPaginated}
-  <AutoScrollFab {autoScroller} />
+  <AutoScrollFab {autoScroller} {autoReader} />
 {/if}
 {#if !showSpinner}
   <AutoReaderFab {autoReader} seekCharCount={ttsSeekCharCount} resumePosition={ttsResumePosition} />

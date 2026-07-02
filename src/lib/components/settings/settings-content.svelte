@@ -62,6 +62,7 @@
     kokoroAccepted$,
     kokoroLoadStatus$,
     kokoroVoiceId$,
+    readerVoiceUri$,
     ttsSapiVoiceId$,
     ttsShortcut$,
     ttsStartStrategy$,
@@ -269,6 +270,26 @@
   }
 
   $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
+
+  // Web Speech voice list. Lived in the reader FAB's gear panel until
+  // the panel was replaced by a bare −/+ rate pill; settings is the
+  // only picker now. getVoices() can be empty until the engine warms
+  // up, hence the voiceschanged re-read.
+  let webVoices: SpeechSynthesisVoice[] = [];
+
+  function loadWebVoices() {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const all = window.speechSynthesis.getVoices();
+    const zh = all.filter((v) => v.lang.startsWith('zh'));
+    const ja = all.filter((v) => v.lang.startsWith('ja'));
+    const rest = all.filter((v) => !v.lang.startsWith('zh') && !v.lang.startsWith('ja'));
+    webVoices = [...zh, ...ja, ...rest];
+    if (!all.length) {
+      window.speechSynthesis.addEventListener('voiceschanged', loadWebVoices, { once: true });
+    }
+  }
+
+  $: if ($ttsEngine$ === 'web') loadWebVoices();
 
   interface CustomPreset {
     label: string;
@@ -1759,6 +1780,29 @@
         </div>
       {/if}
 
+      {#if $ttsEngine$ === 'web'}
+        <div class="lg:col-span-3">
+          <SettingsItemGroup
+            title="Web Speech 语音"
+            tooltip="WebView2 (Edge) 暴露的浏览器语音。中文 / 日语音色排在最前。"
+          >
+            {#if !webVoices.length}
+              <p class="text-sm opacity-60">未检测到可用语音</p>
+            {:else}
+              <select
+                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
+                bind:value={$readerVoiceUri$}
+              >
+                <option value="">系统默认（按书籍语言自动选择）</option>
+                {#each webVoices as voice (voice.voiceURI)}
+                  <option value={voice.voiceURI}>{voice.name} ({voice.lang})</option>
+                {/each}
+              </select>
+            {/if}
+          </SettingsItemGroup>
+        </div>
+      {/if}
+
       {#if $ttsEngine$ === 'custom'}
         <div class="lg:col-span-3">
           <SettingsItemGroup
@@ -2674,6 +2718,26 @@
               <option value="">系统默认</option>
               {#each sapiVoices as voice (voice.id)}
                 <option value={voice.id}>{voice.name} ({voice.language})</option>
+              {/each}
+            </select>
+          {/if}
+        </SettingsItemGroup>
+      </div>
+    {/if}
+
+    {#if $ttsEngine$ === 'web'}
+      <div class="lg:col-span-3">
+        <SettingsItemGroup
+          title="Web Speech 语音"
+          tooltip="WebView2 (Edge) 暴露的浏览器语音。中文 / 日语音色排在最前。"
+        >
+          {#if !webVoices.length}
+            <p class="text-sm opacity-60">未检测到可用语音</p>
+          {:else}
+            <select class="settings-input px-2 py-1 text-sm max-w-xs" bind:value={$readerVoiceUri$}>
+              <option value="">系统默认（按书籍语言自动选择）</option>
+              {#each webVoices as voice (voice.voiceURI)}
+                <option value={voice.voiceURI}>{voice.name} ({voice.lang})</option>
               {/each}
             </select>
           {/if}
