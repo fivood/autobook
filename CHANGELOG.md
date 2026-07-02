@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.14.2
+
+- **修点「−」减速误触 TTS 齿轮**：TTS 未启用时设置齿轮靠 group-hover 变成可点，鼠标斜划过 TTS 悬浮区去按打字机减速键时，点击落在刚被 hover 激活的隐形齿轮上。现在隐藏控件一律只做视觉预览、不接收点击
+- **TTS 悬浮按钮重做**：齿轮 + 弹出面板换成与打字机同款的 −/+ 语速药丸（0.1× 步进、0.5–2×）。喇叭和播放键同行同高，两个调速药丸叠加共用播放键下方同一槽位——TTS 播放时显示语速、打字机播放时显示字/秒，互不干扰
+- **Web Speech 语音选择迁到设置 → 阅读**：原先只在齿轮面板里有；中文 / 日语音色排前。设置改完回阅读器即时生效
+- **删掉播放键头顶的「字/秒」黑徽章**：速度药丸常显后信息重复，还和连播按钮相撞
+- 清理 25 条遗留调试日志；工程侧落地 ESLint 与项目规范文档（CLAUDE.md）
+
 ## 1.14.1
 
 - **修 CBR / CBZ / PDF 图片在二次进入时全部破图**：根因在 `format-book-data-html.ts` 的 Observable teardown 立即 `URL.revokeObjectURL` 所有 blob URLs——这在 BookReader 卸载（/b → /settings 之类导航）时跑，但 `formattedBookCache` 还留着 htmlContent（里面嵌着那些被废弃的 URL）。下次回 /b 缓存命中、把废弃 URL 喂给 `<img>` → `complete: true` 但 `naturalWidth: 0`，浏览器画破图标
