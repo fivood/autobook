@@ -16,6 +16,7 @@
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
 import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
+import { pagePath } from '$lib/data/env';
 
 type PdfjsBundle = {
   pdfjs: typeof import('pdfjs-dist');
@@ -27,17 +28,23 @@ let pdfjsPromise: Promise<PdfjsBundle> | null = null;
 function loadPdfjs(): Promise<PdfjsBundle> {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
-      const [pdfjs, workerModule, cmapModule, fontModule, wasmModule] = await Promise.all([
+      const [pdfjs, workerModule] = await Promise.all([
         import('pdfjs-dist'),
-        import('pdfjs-dist/build/pdf.worker.mjs?url'),
-        import('pdfjs-dist/cmaps/Adobe-GB1-UCS2.bcmap?url'),
-        import('pdfjs-dist/standard_fonts/FoxitFixed.pfb?url'),
-        import('pdfjs-dist/wasm/jbig2.wasm?url')
+        import('pdfjs-dist/build/pdf.worker.mjs?url')
       ]);
       pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
-      const cmapUrl = cmapModule.default.replace(/\/[^/]+$/, '/');
-      const standardFontDataUrl = fontModule.default.replace(/\/[^/]+$/, '/');
-      const wasmUrl = wasmModule.default.replace(/\/[^/]+$/, '/');
+      // Directory URLs must point at static/vendor copies, NOT at
+      // Vite `?url` imports of one representative file: the worker
+      // fetches siblings by ORIGINAL filename (jbig2.wasm, *.bcmap,
+      // *.pfb), which works in dev but 404s in production where the
+      // imported file is hashed and the siblings aren't emitted at
+      // all. Symptom when broken: JBIG2-encoded scans (common for B/W
+      // book scans) render blank in release builds only. Files are
+      // copied by scripts/copy-vendor-assets.js on install.
+      const base = pagePath || location.origin;
+      const cmapUrl = `${base}/vendor/pdfjs/cmaps/`;
+      const standardFontDataUrl = `${base}/vendor/pdfjs/standard_fonts/`;
+      const wasmUrl = `${base}/vendor/pdfjs/wasm/`;
       return { pdfjs, cmapUrl, standardFontDataUrl, wasmUrl };
     })();
   }
@@ -258,29 +265,33 @@ async function renderPageToBlob(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport: scaled }).promise;
 
-    // Detect blank canvas: sample several spots across the page. If ALL are
-    // pure white the render likely failed silently.
-    const spots = [
-      [0.5, 0.3], [0.5, 0.5], [0.5, 0.7],
-      [0.3, 0.5], [0.7, 0.5],
-      [0.25, 0.25], [0.75, 0.75]
-    ];
+    // Detect blank canvas (silent render failure, e.g. an image decoder
+    // that bailed). Downscale the whole page into a tiny canvas and scan
+    // every pixel of THAT: averaging drags ink anywhere on the page into
+    // the tiny pixels, so coverage is 100%. The previous approach — 7
+    // fixed 20×20 spots (0.19% coverage) — misdeclared sparse pages
+    // blank: a chapter-opening page of an airy CJK layout can have all
+    // 7 spots land in whitespace (bit a Perec novella with 238×433pt
+    // pages: 72 of 128 rendered pages were thrown away).
+    const probe = document.createElement('canvas');
+    probe.width = 24;
+    probe.height = 32;
+    const probeCtx = probe.getContext('2d');
     let hasContent = false;
-    for (const [fx, fy] of spots) {
-      const sx = Math.floor(canvas.width * fx);
-      const sy = Math.floor(canvas.height * fy);
-      const sw = Math.min(20, canvas.width - sx);
-      const sh = Math.min(20, canvas.height - sy);
-      if (sw <= 0 || sh <= 0) continue;
-      const sample = ctx.getImageData(sx, sy, sw, sh);
-      for (let i = 0; i < sample.data.length; i += 4) {
-        if (sample.data[i] < 250 || sample.data[i + 1] < 250 || sample.data[i + 2] < 250) {
+    if (probeCtx) {
+      probeCtx.fillStyle = '#ffffff';
+      probeCtx.fillRect(0, 0, probe.width, probe.height);
+      probeCtx.drawImage(canvas, 0, 0, probe.width, probe.height);
+      const px = probeCtx.getImageData(0, 0, probe.width, probe.height);
+      for (let i = 0; i < px.data.length; i += 4) {
+        if (px.data[i] < 250 || px.data[i + 1] < 250 || px.data[i + 2] < 250) {
           hasContent = true;
           break;
         }
       }
-      if (hasContent) break;
     }
+    probe.width = 0;
+    probe.height = 0;
     if (!hasContent) return undefined;
 
     const blob = await new Promise<Blob | undefined>((resolve) => {

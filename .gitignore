@@ -22,3 +22,8 @@ build-*.log
 latest.json
 release-notes-*.md
 test-dicts/
+
+# pdfjs sidecar assets (cmaps / standard_fonts / wasm), populated by
+# scripts/copy-vendor-assets.js on npm install. ~200 upstream files —
+# tracking them would churn the repo on every pdfjs bump.
+static/vendor/pdfjs/
