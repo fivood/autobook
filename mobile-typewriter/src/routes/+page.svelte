@@ -634,10 +634,11 @@
       flashChrome();
       return;
     }
-    // PDF mode has no play/pause concept — tap is a no-op when chrome
-    // is already visible. Selection still works because the text layer
-    // spans capture pointer events before bubbling here.
-    if (pdfBook) return;
+    // Manual-reading surfaces (PDF, scroll mode) have no play/pause
+    // concept — tap is only for the immersive chrome-flash above.
+    // Selection still works because the text layer spans capture
+    // pointer events before bubbling here.
+    if (pdfBook || readMode === 'scroll') return;
     togglePlay();
   }
 
@@ -835,6 +836,8 @@
         class="viewport pdf-viewport"
         bind:this={viewport}
         on:scroll={onPdfScroll}
+        on:pointerdown={onViewportPointerDown}
+        on:pointerup={onViewportPointerUp}
         use:pdfPageShell
       >
         {#each pdfBook.pages as page, i (i)}
@@ -875,6 +878,8 @@
         class="viewport scroll-viewport"
         bind:this={viewport}
         on:scroll={onScrollModeScroll}
+        on:pointerdown={onViewportPointerDown}
+        on:pointerup={onViewportPointerUp}
       >
         <div class="page">
           {#each book.segments as seg (seg.startChar)}
