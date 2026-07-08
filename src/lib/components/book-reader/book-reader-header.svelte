@@ -69,8 +69,10 @@
   let menuItems: {
     routeId: string;
     label: string;
+    labelKey?: string;
     icon: IconDefinition;
     title: string;
+    titleKey?: string;
   }[] = [];
 
   $: isOldUrl = browser && isOnOldUrl(window);

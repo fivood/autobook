@@ -1,0 +1,98 @@
+// Origin locale — everything English/Japanese fall back to this.
+// Keys are namespaced by feature area, not by file, so a string moved
+// to a different component doesn't need renaming. Order alphabetically
+// inside each namespace.
+export default {
+  // Language picker (in the top nav)
+  'locale.label': '界面语言',
+  'locale.zh': '中文',
+  'locale.en': 'English',
+  'locale.ja': '日本語',
+
+  // Library / book-manager top bar
+  'manager.selectMode.enter': '进入多选',
+  'manager.selectMode.exit': '退出多选',
+  'manager.selectMode.aria': '多选模式',
+  'manager.selectAll': '全选',
+  'manager.backToBook': '回到当前书',
+  'manager.storageSource': '选择存储源',
+  'manager.storage.browser': '浏览器',
+  'manager.storage.tauriFs': '本地文件',
+  'manager.sort.order': '排序方式',
+  'manager.sort.addedTime': '添加顺序',
+  'manager.sort.title': '书名',
+  'manager.sort.characters': '字数',
+  'manager.sort.lastModified': '最近更新',
+  'manager.sort.lastOpen': '最近阅读',
+  'manager.sort.progress': '阅读进度',
+  'manager.sort.lastBookmark': '最近标记',
+  'manager.filter': '筛选',
+  'manager.filter.format': '格式',
+  'manager.filter.completion': '完成状态',
+  'manager.filter.clearAll': '清除全部筛选',
+  'manager.completion.all': '全部',
+  'manager.completion.unread': '未读',
+  'manager.completion.reading': '在读',
+  'manager.completion.done': '已读',
+  'manager.cover.size': '封面尺寸',
+  'manager.cover.minWidth': '封面最小宽度：{n}px',
+  'manager.cover.autoLayout': '网格会按窗口宽度自动塞下尽可能多的列',
+  'manager.cover.dense': '密',
+  'manager.cover.standard': '标准',
+  'manager.cover.large': '大',
+  'manager.exportMenu': '导出菜单',
+  'manager.viewStatistics': '查看阅读统计',
+  'manager.deleteStatistics': '删除所选书籍的阅读统计',
+  'manager.deleteBooks': '删除所选书籍',
+  'manager.cancelOperation': '取消操作',
+
+  // Update dialogs (invoked from the top-bar update-check button)
+  // Merge-icon entries shared across manager / reader headers
+  'menu.manage.label': '书库',
+  'menu.manage.title': '返回书库',
+  'menu.settings.label': '设置',
+  'menu.settings.title': '阅读器设置',
+  'menu.statistics.label': '统计',
+  'menu.statistics.title': '阅读统计',
+  'menu.notebook.label': '笔记本',
+  'menu.notebook.title': '高亮笔记本（跨书）',
+  'menu.jump.label': '跳转',
+  'menu.jump.title': '跳转到进度（百分比）',
+  'menu.imageGallery.label': '图片',
+  'menu.imageGallery.title': '打开图片库',
+  'menu.domainHint.label': '域名提示',
+  'menu.domainHint.title': '正在使用旧域名',
+  'menu.bugReport.label': '问题反馈',
+  'menu.bugReport.title': '报告问题',
+  'menu.folderImport.label': '导入文件夹',
+  'menu.folderImport.title': '从文件夹导入',
+  'menu.fileImport.label': '导入文件',
+  'menu.fileImport.title': '导入书籍文件',
+  'menu.backupImport.label': '导入备份',
+  'menu.backupImport.title': '从备份导入',
+  'menu.checkUpdate.label': '检查更新',
+  'menu.checkUpdate.title': '检查桌面端更新',
+  'menu.changelog.label': '更新历史',
+  'menu.changelog.title': '查看版本更新记录',
+
+  // Library search
+  'library.search.placeholder': '搜索书名…',
+  'library.search.clear': '清空搜索',
+
+  // Library sidebar (folders)
+  'folders.section': '书库',
+  'folders.groupHeader': '分类',
+  'folders.allBooks': '全部书籍',
+  'folders.uncategorized': '未分类',
+  'folders.new': '新建文件夹',
+  'folders.rename': '重命名',
+  'folders.delete': '删除',
+  'folders.empty': '还没有分类，点 + 新建',
+  'folders.dialog.new': '新建分类',
+  'folders.dialog.delete': '删除文件夹',
+  'folders.dialog.deleteConfirm': '删除"{name}"？只移除分类，里面的书不会被删。',
+
+  'update.checkFailed': '检查更新失败',
+  'update.upToDate.title': '已是最新',
+  'update.upToDate.body': '当前已是最新版本。'
+};

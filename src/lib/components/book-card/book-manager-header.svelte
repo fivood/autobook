@@ -37,15 +37,21 @@
     libraryFilter$
   } from '$lib/data/store';
   import { BOOK_FORMAT_LABELS, type BookFormat } from '$lib/functions/book-format';
+  import { t, tImmediate } from '$lib/i18n';
+  import LocalePicker from '$lib/components/locale-picker/locale-picker.svelte';
 
   const BOOK_FORMAT_KEYS = Object.keys(BOOK_FORMAT_LABELS) as BookFormat[];
 
-  type CompletionOpt = { id: 'all' | 'unread' | 'reading' | 'done'; label: string };
-  const COMPLETION_OPTIONS: CompletionOpt[] = [
-    { id: 'all', label: '全部' },
-    { id: 'unread', label: '未读' },
-    { id: 'reading', label: '在读' },
-    { id: 'done', label: '已读' }
+  // Static options carry the i18n KEY instead of a translated label so the
+  // arrays don't need to be rebuilt on locale switch; the template calls
+  // $t(opt.labelKey) at render time. Same reason storageSourceMenuItems
+  // and sortMenuItems below switched from `label` to `labelKey`.
+  type CompletionId = 'all' | 'unread' | 'reading' | 'done';
+  const COMPLETION_OPTIONS: { id: CompletionId; labelKey: string }[] = [
+    { id: 'all', labelKey: 'manager.completion.all' },
+    { id: 'unread', labelKey: 'manager.completion.unread' },
+    { id: 'reading', labelKey: 'manager.completion.reading' },
+    { id: 'done', labelKey: 'manager.completion.done' }
   ];
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import { inputFile } from '$lib/functions/file-dom/input-file';
@@ -105,9 +111,11 @@
   };
 
   const importMenuItems = [mergeEntries.FILE_IMPORT];
-  const storageSourceMenuItems = [
-    { label: '浏览器', key: StorageKey.BROWSER, requiresConnectivity: false }
-  ];
+  const storageSourceMenuItems: {
+    labelKey: string;
+    key: StorageKey;
+    requiresConnectivity: boolean;
+  }[] = [{ labelKey: 'manager.storage.browser', key: StorageKey.BROWSER, requiresConnectivity: false }];
 
   let fileImportElm: HTMLElement;
   let folderImportElm: HTMLElement;
@@ -132,7 +140,7 @@
       ...(isStorageSourceAvailable(StorageKey.TAURI_FS, '', window)
         ? [
             {
-              label: '本地文件',
+              labelKey: 'manager.storage.tauriFs',
               key: StorageKey.TAURI_FS,
               requiresConnectivity: false
             }
@@ -142,13 +150,15 @@
   }
 
   $: sortMenuItems = [
-    ...($storageSource$ === StorageKey.BROWSER ? [{ property: 'id', label: '添加顺序' }] : []),
-    { property: 'title', label: '书名' },
-    { property: 'characters', label: '字数' },
-    { property: 'lastBookModified', label: '最近更新' },
-    { property: 'lastBookOpen', label: '最近阅读' },
-    { property: 'progress', label: '阅读进度' },
-    { property: 'lastBookmarkModified', label: '最近标记' }
+    ...($storageSource$ === StorageKey.BROWSER
+      ? [{ property: 'id', labelKey: 'manager.sort.addedTime' }]
+      : []),
+    { property: 'title', labelKey: 'manager.sort.title' },
+    { property: 'characters', labelKey: 'manager.sort.characters' },
+    { property: 'lastBookModified', labelKey: 'manager.sort.lastModified' },
+    { property: 'lastBookOpen', labelKey: 'manager.sort.lastOpen' },
+    { property: 'progress', labelKey: 'manager.sort.progress' },
+    { property: 'lastBookmarkModified', labelKey: 'manager.sort.lastBookmark' }
   ];
 
   async function manualCheckUpdate() {
@@ -159,7 +169,7 @@
       dialogManager.dialogs$.next([
         {
           component: MessageDialog,
-          props: { title: '检查更新失败', message: err?.message ?? String(err) }
+          props: { title: tImmediate('update.checkFailed'), message: err?.message ?? String(err) }
         }
       ]);
       return;
@@ -170,7 +180,10 @@
       dialogManager.dialogs$.next([
         {
           component: MessageDialog,
-          props: { title: '已是最新', message: '当前已是最新版本。' }
+          props: {
+            title: tImmediate('update.upToDate.title'),
+            message: tImmediate('update.upToDate.body')
+          }
         }
       ]);
     }
@@ -265,7 +278,7 @@
     <div class="flex h-full justify-between {pxScreen}">
       {#if selectedCount === 0}
         <div
-          title={selectMode ? '退出多选' : '进入多选'}
+          title={selectMode ? $t('manager.selectMode.exit') : $t('manager.selectMode.enter')}
           class="transform-gpu {nTranslateXHeaderMat}"
           in:scale={inAnimationParams}
           out:scale={outAnimationParams}
@@ -273,7 +286,7 @@
           <svg
             tabindex="0"
             role="button"
-            aria-label="多选模式"
+            aria-label={$t('manager.selectMode.aria')}
             viewBox="0 0 24 24"
             xmlns="http://www.w3.org/2000/svg"
             class:opacity-100={selectMode}
@@ -282,7 +295,7 @@
             on:click={() => (selectMode = hasBooks && !selectMode)}
             on:keyup={dummyFn}
           >
-            <title>多选模式</title>
+            <title>{$t('manager.selectMode.aria')}</title>
             <path
               class="fill-current"
               d="M20,4v12H8V4H20 M20,2H8C6.9,2,6,2.9,6,4v12c0,1.1,0.9,2,2,2h12c1.1,0,2-0.9,2-2V4C22,2.9,21.1,2,20,2L20,2z M12.47,14 L9,10.5l1.4-1.41l2.07,2.08L17.6,6L19,7.41L12.47,14z M4,6H2v14c0,1.1,0.9,2,2,2h14v-2H4V6z"
@@ -296,7 +309,7 @@
           <div
             tabindex="0"
             role="button"
-            title="退出多选"
+            title={$t('manager.selectMode.exit')}
             class="flex h-full items-center text-2xl xl:text-xl {pHeaderFa} cursor-pointer"
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
@@ -316,7 +329,7 @@
       <div class="absolute left-1/2 h-full -translate-x-1/2 transform-gpu">
         {#if !selectMode}
           {#if hasBookOpened}
-            <div title="回到当前书">
+            <div title={$t('manager.backToBook')}>
               <svg
                 tabindex="0"
                 role="button"
@@ -336,7 +349,7 @@
             </div>
           {/if}
         {:else}
-          <div title="全选">
+          <div title={$t('manager.selectAll')}>
             <svg
               tabindex="0"
               role="button"
@@ -371,7 +384,7 @@
             />
           </div>
           <div
-            title="选择存储源"
+            title={$t('manager.storageSource')}
             class="relative transform-gpu"
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
@@ -418,7 +431,7 @@
                     }}
                     on:keyup={dummyFn}
                   >
-                    {sourceMenuItem.label}
+                    {$t(sourceMenuItem.labelKey)}
                   </div>
                 {/each}
               </div>
@@ -435,7 +448,7 @@
               yOffset={0}
               bind:this={sortOptionsElm}
             >
-              <div slot="icon" class={baseIconClasses} title="排序方式">
+              <div slot="icon" class={baseIconClasses} title={$t('manager.sort.order')}>
                 {#if $booklistSortOptions$[$storageSource$].direction === SortDirection.ASC}
                   <Fa icon={faArrowDownShortWide} />
                 {:else}
@@ -469,7 +482,7 @@
                       <Fa icon={faSortUp} class="px-4" />
                     </div>
                     <div class="py-2">
-                      {sortMenuItem.label}
+                      {$t(sortMenuItem.labelKey)}
                     </div>
                     <div
                       tabindex="0"
@@ -499,14 +512,14 @@
               fallbackPlacements={['bottom-end', 'bottom-start']}
               yOffset={0}
             >
-              <div slot="icon" class={baseIconClasses} title="筛选">
+              <div slot="icon" class={baseIconClasses} title={$t('manager.filter')}>
                 <Fa icon={faFilter} />
                 {#if $libraryFilter$.formats.length || $libraryFilter$.completion !== 'all'}
                   <span class="filter-badge"></span>
                 {/if}
               </div>
               <div class="w-64 bg-menu text-menu p-3" slot="content">
-                <div class="text-xs opacity-70 mb-1">格式</div>
+                <div class="text-xs opacity-70 mb-1">{$t('manager.filter.format')}</div>
                 <div class="flex flex-wrap gap-1.5 mb-3">
                   {#each BOOK_FORMAT_KEYS as fmt (fmt)}
                     {@const isActive = $libraryFilter$.formats.includes(fmt)}
@@ -523,7 +536,7 @@
                     >{BOOK_FORMAT_LABELS[fmt]}</button>
                   {/each}
                 </div>
-                <div class="text-xs opacity-70 mb-1">完成状态</div>
+                <div class="text-xs opacity-70 mb-1">{$t('manager.filter.completion')}</div>
                 <div class="flex gap-1.5 mb-2">
                   {#each COMPLETION_OPTIONS as opt (opt.id)}
                     <button
@@ -531,7 +544,7 @@
                       class="chip flex-1"
                       class:chip-on={$libraryFilter$.completion === opt.id}
                       on:click={() => ($libraryFilter$ = { ...$libraryFilter$, completion: opt.id })}
-                    >{opt.label}</button>
+                    >{$t(opt.labelKey)}</button>
                   {/each}
                 </div>
                 {#if $libraryFilter$.formats.length || $libraryFilter$.completion !== 'all'}
@@ -539,7 +552,7 @@
                     type="button"
                     class="mt-2 text-xs underline opacity-70 hover:opacity-100"
                     on:click={() => ($libraryFilter$ = { formats: [], completion: 'all' })}
-                  >清除全部筛选</button>
+                  >{$t('manager.filter.clearAll')}</button>
                 {/if}
               </div>
             </Popover>
@@ -554,11 +567,13 @@
               fallbackPlacements={['bottom-end', 'bottom-start']}
               yOffset={0}
             >
-              <div slot="icon" class={baseIconClasses} title="封面尺寸">
+              <div slot="icon" class={baseIconClasses} title={$t('manager.cover.size')}>
                 <Fa icon={faTableCellsLarge} />
               </div>
               <div class="w-56 bg-menu text-menu p-3" slot="content">
-                <div class="text-xs opacity-70 mb-2">封面最小宽度：{$bookCoverMinWidth$}px</div>
+                <div class="text-xs opacity-70 mb-2">
+                  {$t('manager.cover.minWidth', { n: $bookCoverMinWidth$ })}
+                </div>
                 <input
                   type="range"
                   min="120"
@@ -572,21 +587,28 @@
                     type="button"
                     class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover:bg-white/10"
                     on:click={() => ($bookCoverMinWidth$ = 130)}
-                  >密</button>
+                  >{$t('manager.cover.dense')}</button>
                   <button
                     type="button"
                     class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover:bg-white/10"
                     on:click={() => ($bookCoverMinWidth$ = 170)}
-                  >标准</button>
+                  >{$t('manager.cover.standard')}</button>
                   <button
                     type="button"
                     class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover:bg-white/10"
                     on:click={() => ($bookCoverMinWidth$ = 220)}
-                  >大</button>
+                  >{$t('manager.cover.large')}</button>
                 </div>
-                <div class="text-xs opacity-50 mt-2">网格会按窗口宽度自动塞下尽可能多的列</div>
+                <div class="text-xs opacity-50 mt-2">{$t('manager.cover.autoLayout')}</div>
               </div>
             </Popover>
+          </div>
+          <div
+            class="relative transform-gpu"
+            in:scale={inAnimationParams}
+            out:scale={outAnimationParams}
+          >
+            <LocalePicker />
           </div>
           <div
             class="relative transform-gpu"
@@ -627,7 +649,7 @@
           <div
             tabindex="0"
             role="button"
-            title="导出菜单"
+            title={$t('manager.exportMenu')}
             class="transform-gpu {baseIconClasses}"
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
@@ -640,7 +662,7 @@
             <div
               tabindex="0"
               role="button"
-              title="查看阅读统计"
+              title={$t('manager.viewStatistics')}
               class="transform-gpu {baseIconClasses}"
               in:scale={inAnimationParams}
               out:scale={outAnimationParams}
@@ -652,7 +674,7 @@
             <div
               tabindex="0"
               role="button"
-              title="删除所选书籍的阅读统计"
+              title={$t('manager.deleteStatistics')}
               class="transform-gpu {baseIconClasses}"
               in:scale={inAnimationParams}
               out:scale={outAnimationParams}
@@ -665,7 +687,7 @@
           <div
             tabindex="0"
             role="button"
-            title="删除所选书籍"
+            title={$t('manager.deleteBooks')}
             class="transform-gpu {baseIconClasses}"
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
@@ -679,7 +701,7 @@
     </div>
   {:else}
     <div
-      title="取消操作"
+      title={$t('manager.cancelOperation')}
       class="mx-auto flex h-full transform-gpu items-center justify-center px-4 md:px-8 lg:max-w-4xl xl:max-w-none 2xl:max-w-6xl"
       in:scale={inAnimationParams}
       out:scale={outAnimationParams}

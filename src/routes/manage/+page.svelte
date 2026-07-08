@@ -48,6 +48,7 @@
     showExternalPlaceholder$,
     statisticsMergeMode$
   } from '$lib/data/store';
+  import { t } from '$lib/i18n';
   import { detectBookFormat } from '$lib/functions/book-format';
   import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
   import { cloneMutateSet } from '$lib/functions/clone-mutate-set';
@@ -1010,7 +1011,7 @@
     <div class="relative flex-1 max-w-md">
       <input
         type="search"
-        placeholder="搜索书名…"
+        placeholder={$t('library.search.placeholder')}
         class="library-search w-full"
         bind:value={searchQuery}
       />
@@ -1019,7 +1020,7 @@
           type="button"
           class="absolute right-2 top-1/2 -translate-y-1/2 text-xs opacity-50 hover:opacity-100"
           on:click={() => (searchQuery = '')}
-          title="清空搜索"
+          title={$t('library.search.clear')}
         >✕</button>
       {/if}
     </div>
