@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { HighlightColor } from '$lib/data/database/books-db/versions/books-db';
+  import { t } from '$lib/i18n';
 
   export let x = 0;
   export let y = 0;
@@ -17,11 +18,11 @@
     close: void;
   }>();
 
-  const colors: { id: HighlightColor; bg: string; label: string }[] = [
-    { id: 'yellow', bg: 'rgba(255,235,59,0.6)', label: '黄' },
-    { id: 'blue', bg: 'rgba(100,181,246,0.5)', label: '蓝' },
-    { id: 'green', bg: 'rgba(129,199,132,0.5)', label: '绿' },
-    { id: 'pink', bg: 'rgba(244,143,177,0.5)', label: '粉' }
+  const colors: { id: HighlightColor; bg: string; labelKey: string }[] = [
+    { id: 'yellow', bg: 'rgba(255,235,59,0.6)', labelKey: 'highlight.color.yellow' },
+    { id: 'blue', bg: 'rgba(100,181,246,0.5)', labelKey: 'highlight.color.blue' },
+    { id: 'green', bg: 'rgba(129,199,132,0.5)', labelKey: 'highlight.color.green' },
+    { id: 'pink', bg: 'rgba(244,143,177,0.5)', labelKey: 'highlight.color.pink' }
   ];
 
   function handleColor(c: HighlightColor) {
@@ -50,7 +51,7 @@
           type="button"
           class="h-7 w-7 rounded-full border-2 border-transparent hover:border-white/60 transition-colors"
           style="background:{c.bg}"
-          title="高亮 ({c.label})"
+          title={$t('highlight.color.tooltip', { label: $t(c.labelKey) })}
           on:click={() => handleColor(c.id)}
         />
       {/each}
@@ -58,22 +59,22 @@
       <button
         type="button"
         class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
-        title="添加备注"
+        title={$t('highlight.addMemo')}
         on:click={() => dispatch('memo')}
-      >备注</button>
+      >{$t('highlight.memo.short')}</button>
       <button
         type="button"
         class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
-        title="查词典"
+        title={$t('highlight.dict.tooltip')}
         on:click={() => dispatch('lookup')}
-      >查词</button>
+      >{$t('highlight.dict.short')}</button>
     {:else}
       {#each colors as c (c.id)}
         <button
           type="button"
           class="h-7 w-7 rounded-full border-2 border-transparent hover:border-white/60 transition-colors"
           style="background:{c.bg}"
-          title="改色 ({c.label})"
+          title={$t('highlight.recolor.tooltip', { label: $t(c.labelKey) })}
           on:click={() => handleColor(c.id)}
         />
       {/each}
@@ -82,12 +83,12 @@
         type="button"
         class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
         on:click={() => dispatch('editMemo')}
-      >{hasMemo ? '编辑备注' : '添加备注'}</button>
+      >{hasMemo ? $t('highlight.editMemo') : $t('highlight.addMemo')}</button>
       <button
         type="button"
         class="rounded px-2 py-0.5 text-xs text-red-300 hover:bg-white/15 transition-colors"
         on:click={() => dispatch('delete')}
-      >删除</button>
+      >{$t('highlight.delete')}</button>
     {/if}
   </div>
 {/if}

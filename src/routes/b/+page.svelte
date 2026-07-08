@@ -286,7 +286,7 @@
     getReferencePoints,
     pulseElement
   } from '$lib/functions/range-util';
-  import { t } from '$lib/i18n';
+  import { t, tImmediate } from '$lib/i18n';
 
   let showSpinner = true;
   let showHeader = false;
@@ -1170,7 +1170,7 @@
         {
           component: NumberDialog,
           props: {
-            dialogHeader: `跳转到进度（当前 ${currentPct}%）`,
+            dialogHeader: tImmediate('dialog.jumpToProgress.header', { pct: currentPct }),
             minValue: 0,
             maxValue: 100,
             resolver
@@ -1227,10 +1227,10 @@
         {
           component: ConfirmDialog,
           props: {
-            dialogHeader: '完成本书',
-            dialogMessage: `您想要完成本书吗${
-              diffToComplete ? ` and capture ${diffToComplete} characters read` : ''
-            }?`,
+            dialogHeader: tImmediate('dialog.completeBook.header'),
+            dialogMessage: diffToComplete
+              ? tImmediate('dialog.completeBook.bodyWithChars', { chars: diffToComplete })
+              : tImmediate('dialog.completeBook.body'),
             resolver
           }
         }
@@ -2022,8 +2022,8 @@
             {
               component: ConfirmDialog,
               props: {
-                dialogHeader: '确认退出',
-                dialogMessage: '当前位置未添加书签。继续离开吗？',
+                dialogHeader: tImmediate('dialog.confirmExit.header'),
+                dialogMessage: tImmediate('dialog.confirmExit.body'),
                 resolver
               },
 

@@ -168,6 +168,56 @@ export default {
   'shortcuts.action.toggleTracking': '统计开关',
   'shortcuts.action.toggleTrackingFreeze': '统计暂停 / 继续',
 
+  // Reader dialogs
+  'dialog.jumpToProgress.header': '跳转到进度（当前 {pct}%）',
+  'dialog.completeBook.header': '完成本书',
+  'dialog.completeBook.body': '您想要完成本书吗？',
+  'dialog.completeBook.bodyWithChars': '您想要完成本书吗？（并计入 {chars} 字）',
+  'dialog.confirmExit.header': '确认退出',
+  'dialog.confirmExit.body': '当前位置未添加书签。继续离开吗？',
+
+  // Highlight context menu
+  'highlight.color.yellow': '黄',
+  'highlight.color.blue': '蓝',
+  'highlight.color.green': '绿',
+  'highlight.color.pink': '粉',
+  'highlight.color.tooltip': '高亮 ({label})',
+  'highlight.recolor.tooltip': '改色 ({label})',
+  'highlight.addMemo': '添加备注',
+  'highlight.editMemo': '编辑备注',
+  'highlight.memo.short': '备注',
+  'highlight.dict.tooltip': '查词典',
+  'highlight.dict.short': '查词',
+  'highlight.delete': '删除',
+
+  // PDF page context menu (re-OCR)
+  'pdfCtx.pageLabel': '第 {n} 页',
+  'pdfCtx.reOcrThisPage': '重新识别这页',
+  'pdfCtx.otherLanguage': '用其它语言识别…',
+  'pdfCtx.reOcrProgress': '重新识别第 {n} 页…',
+  'pdfCtx.reOcrDone': '第 {n} 页识别完成（{chars} 字），即将刷新…',
+  'pdfCtx.reOcrEmpty': '第 {n} 页未检测到文字（图片 / 空白页），即将刷新…',
+  'pdfCtx.reOcrFailed': '第 {n} 页识别失败：{err}',
+
+  // Dictionary popup
+  'dict.loadingFirst': '首次载入词典中…',
+  'dict.loaded': '已载入 {n} 个词典',
+  'dict.loadedWithErrors': '已载入 {n} 个词典，{e} 出错',
+  'dict.loadFailed': '加载失败：{err}',
+  'dict.notFound': '「{word}」未在已载入的 {n} 个词典中找到',
+  'dict.notConfigured': '未配置词典',
+  'dict.desktopOnly': '词典加载只在桌面端可用',
+  'dict.pickFolder': '选择词典文件夹（含 StarDict 子目录或 .dict.json 文件）',
+  'dict.scanning': '扫描中…',
+  'dict.scanDone': '已载入 {n} 个词典',
+  'dict.scanDoneWithErrors': '已载入 {n} 个词典，{e} 个出错',
+  'dict.scanFailed': '扫描失败：{err}',
+  'dict.count': '{n} 词典',
+  'dict.pickFolderTooltip': '选择词典文件夹',
+  'dict.emptyLine1': '还没有载入词典。',
+  'dict.emptyLine2': '点上方📂选择一个文件夹。支持 StarDict（.ifo + .idx + .dict[.dz]）以及 *.dict.json。',
+  'dict.emptyLine3': '可在 kaifa.baidu / SourceForge / GitHub 上找到 ECDICT / CC-CEDICT / JMdict 等 StarDict 包。',
+
   'update.checkFailed': '检查更新失败',
   'update.upToDate.title': '已是最新',
   'update.upToDate.body': '当前已是最新版本。'

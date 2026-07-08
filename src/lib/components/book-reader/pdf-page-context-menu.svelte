@@ -8,6 +8,7 @@
   import { runOcrOnPage } from '$lib/functions/file-loaders/pdf/pdf-ocr-runner';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import type { OcrLanguage } from '$lib/functions/file-loaders/pdf/pdf-ocr';
+  import { t, tImmediate } from '$lib/i18n';
 
   export let book: BooksDbBookData;
 
@@ -58,17 +59,17 @@
     if (busy) return;
     visible = false;
     busy = true;
-    message = `重新识别第 ${targetPage} 页…`;
+    message = tImmediate('pdfCtx.reOcrProgress', { n: targetPage });
     try {
       const { updated, recognized } = await runOcrOnPage(book, targetPage, lang);
       const db = await database.db;
       await db.put('data', updated);
       message = recognized
-        ? `第 ${targetPage} 页识别完成（${recognized.length} 字），即将刷新…`
-        : `第 ${targetPage} 页未检测到文字（图片 / 空白页），即将刷新…`;
+        ? tImmediate('pdfCtx.reOcrDone', { n: targetPage, chars: recognized.length })
+        : tImmediate('pdfCtx.reOcrEmpty', { n: targetPage });
       setTimeout(() => window.location.reload(), 900);
     } catch (err: any) {
-      message = `第 ${targetPage} 页识别失败：${err?.message || err}`;
+      message = tImmediate('pdfCtx.reOcrFailed', { n: targetPage, err: err?.message || err });
       busy = false;
       setTimeout(() => (message = ''), 4000);
     }
@@ -98,16 +99,16 @@
     role="menu"
     tabindex="-1"
   >
-    <div class="hint">第 {targetPage} 页</div>
+    <div class="hint">{$t('pdfCtx.pageLabel', { n: targetPage })}</div>
     {#if !showLangPicker}
       <button class="item" on:click={runReocrWithSavedLang}>
         <Fa icon={faRotateRight} size="xs" />
-        <span>重新识别这页</span>
+        <span>{$t('pdfCtx.reOcrThisPage')}</span>
         <span class="meta">{LANGS.find((l) => l.code === $ocrLang$)?.label || $ocrLang$}</span>
       </button>
       <button class="item" on:click={() => (showLangPicker = true)}>
         <Fa icon={faMagnifyingGlass} size="xs" />
-        <span>用其它语言识别…</span>
+        <span>{$t('pdfCtx.otherLanguage')}</span>
       </button>
     {:else}
       {#each LANGS as l (l.code)}
