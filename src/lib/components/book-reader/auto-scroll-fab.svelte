@@ -6,6 +6,7 @@
   import { autoScrollStopAtChapter$, multiplier$ } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
+  import { t } from '$lib/i18n';
 
   export let autoScroller: AutoScroller | undefined;
   /** TTS reader, if mounted alongside. Its rate pill overlays this
@@ -93,8 +94,8 @@
     <button
       type="button"
       title={$autoScrollStopAtChapter$
-        ? '播完本章自动停止（点击切换为：跨章继续）'
-        : '跨章连续播放（点击切换为：播完本章停止）'}
+        ? $t('typewriter.chapterStop.tooltipOn')
+        : $t('typewriter.chapterStop.tooltipOff')}
       on:click={toggleStopAtChapter}
       class="flex h-9 items-center gap-1 rounded-full px-3 text-xs shadow backdrop-blur transition-all duration-150"
       class:opacity-0={!enabled}
@@ -104,11 +105,11 @@
       style="background-color: rgba(195, 193, 175, 0.9); color: #405a5c;"
     >
       <Fa icon={$autoScrollStopAtChapter$ ? faRotateRight : faForward} />
-      <span>{$autoScrollStopAtChapter$ ? '章止' : '连播'}</span>
+      <span>{$autoScrollStopAtChapter$ ? $t('typewriter.chapterStop.on') : $t('typewriter.chapterStop.off')}</span>
     </button>
     <button
       type="button"
-      title={enabled ? '暂停打字机 (Space)' : '开始打字机阅读 (Space) · A 加速 / D 减速'}
+      title={enabled ? $t('typewriter.pause') : $t('typewriter.play')}
       on:click={toggle}
       class="relative flex items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-150"
       class:h-12={enabled}
@@ -123,7 +124,7 @@
       style="background-color: rgba(95, 126, 123, 0.92); color: #f0efe6;"
     >
       <Fa icon={enabled ? faPause : faPlay} size="lg" />
-      <span class="sr-only">{enabled ? '暂停' : '开始'}自动阅读</span>
+      <span class="sr-only">{enabled ? $t('typewriter.pauseAria') : $t('typewriter.playAria')}</span>
     </button>
 
     <div
@@ -136,16 +137,16 @@
     >
       <button
         type="button"
-        title="减速 (D)"
+        title={$t('typewriter.slower')}
         on:click={decreaseSpeed}
         class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
       >
         <Fa icon={faMinus} size="xs" />
       </button>
-      <span class="min-w-[2.5rem] text-center text-[10px]">{$multiplier$} 字/秒</span>
+      <span class="min-w-[2.5rem] text-center text-[10px]">{$t('typewriter.speedUnit', { n: $multiplier$ })}</span>
       <button
         type="button"
-        title="加速 (A)"
+        title={$t('typewriter.faster')}
         on:click={increaseSpeed}
         class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
       >

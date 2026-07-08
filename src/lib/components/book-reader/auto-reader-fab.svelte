@@ -11,6 +11,7 @@
   } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
+  import { t } from '$lib/i18n';
 
   export let autoReader: AutoReader | undefined;
   /** Section-relative char count to seek to when no resume position applies. */
@@ -152,7 +153,7 @@
   <div class="group pointer-events-none fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">
     <button
       type="button"
-      title={enabled ? '暂停朗读 (V)' : '开始朗读 (V)'}
+      title={enabled ? $t('tts.pause') : $t('tts.play')}
       on:click={toggle}
       class="pointer-events-auto relative mr-14 flex items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-150"
       class:h-12={enabled}
@@ -167,7 +168,7 @@
       style="background-color: rgba(95, 126, 123, 0.92); color: #f0efe6;"
     >
       <Fa icon={enabled ? faVolumeHigh : faVolumeXmark} size="lg" />
-      <span class="sr-only">{enabled ? '暂停' : '开始'}朗读</span>
+      <span class="sr-only">{enabled ? $t('tts.pauseAria') : $t('tts.playAria')}</span>
     </button>
 
     <div
@@ -179,7 +180,7 @@
     >
       <button
         type="button"
-        title="语速 −0.1"
+        title={$t('tts.rateSlower')}
         on:click={() => setRate($readerRate$ - 0.1)}
         class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
       >
@@ -188,7 +189,7 @@
       <span class="min-w-[2rem] text-center text-[10px]">{$readerRate$}×</span>
       <button
         type="button"
-        title="语速 +0.1"
+        title={$t('tts.rateFaster')}
         on:click={() => setRate($readerRate$ + 0.1)}
         class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
       >

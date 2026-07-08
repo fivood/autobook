@@ -92,6 +92,41 @@ export default {
   'folders.dialog.delete': '删除文件夹',
   'folders.dialog.deleteConfirm': '删除"{name}"？只移除分类，里面的书不会被删。',
 
+  // Reader header (top bar while reading a book)
+  'reader.toc': '打开目录',
+  'reader.highlights': '高亮笔记',
+  'reader.ai': 'AI 助手（剧透安全）',
+  'reader.bookmark': '添加书签',
+  'reader.bookmarkReturn': '返回书签位置',
+  'reader.autoScrollSpeed': '当前自动滚动速度',
+  'reader.finishBook': '完成本书',
+  'reader.customReadingPointMenu': '打开自定义阅读点操作',
+  'reader.customReadingPoint.show': '显示阅读点',
+  'reader.customReadingPoint.set': '设置阅读点',
+  'reader.customReadingPoint.reset': '重置阅读点',
+  'reader.fullscreen': '切换全屏',
+
+  // Auto-scroll (typewriter) FAB
+  'typewriter.play': '开始打字机阅读 (Space) · A 加速 / D 减速',
+  'typewriter.pause': '暂停打字机 (Space)',
+  'typewriter.playAria': '开始自动阅读',
+  'typewriter.pauseAria': '暂停自动阅读',
+  'typewriter.slower': '减速 (D)',
+  'typewriter.faster': '加速 (A)',
+  'typewriter.speedUnit': '{n} 字/秒',
+  'typewriter.chapterStop.on': '章止',
+  'typewriter.chapterStop.off': '连播',
+  'typewriter.chapterStop.tooltipOn': '播完本章自动停止（点击切换为：跨章继续）',
+  'typewriter.chapterStop.tooltipOff': '跨章连续播放（点击切换为：播完本章停止）',
+
+  // TTS FAB
+  'tts.play': '开始朗读 (V)',
+  'tts.pause': '暂停朗读 (V)',
+  'tts.playAria': '开始朗读',
+  'tts.pauseAria': '暂停朗读',
+  'tts.rateSlower': '语速 −0.1',
+  'tts.rateFaster': '语速 +0.1',
+
   'update.checkFailed': '检查更新失败',
   'update.upToDate.title': '已是最新',
   'update.upToDate.body': '当前已是最新版本。'
