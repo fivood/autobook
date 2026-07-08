@@ -5,21 +5,24 @@
   import { faTimes, faKeyboard } from '@fortawesome/free-solid-svg-icons';
   import { bookReaderKeybindMap$, ttsShortcut$ } from '$lib/data/store';
   import { BookReaderAvailableKeybind } from '$lib/data/book-reader-keybind';
+  import { t, locale$ } from '$lib/i18n';
 
-  const ACTION_LABELS: Record<BookReaderAvailableKeybind, string> = {
-    [BookReaderAvailableKeybind.AUTO_SCROLL_TOGGLE]: '播放 / 暂停（滚动模式自动播放）',
-    [BookReaderAvailableKeybind.AUTO_SCROLL_INCREASE]: '加快自动滚动速度',
-    [BookReaderAvailableKeybind.AUTO_SCROLL_DECREASE]: '降低自动滚动速度',
-    [BookReaderAvailableKeybind.AUTO_READER_TOGGLE]: '播放 / 暂停（分页模式 TTS 朗读）',
-    [BookReaderAvailableKeybind.BOOKMARK]: '设置书签',
-    [BookReaderAvailableKeybind.JUMP_TO_BOOKMARK]: '跳到书签',
-    [BookReaderAvailableKeybind.NEXT_CHAPTER]: '下一章',
-    [BookReaderAvailableKeybind.NEXT_PAGE]: '下一页',
-    [BookReaderAvailableKeybind.PREV_CHAPTER]: '上一章',
-    [BookReaderAvailableKeybind.PREV_PAGE]: '上一页',
-    [BookReaderAvailableKeybind.SET_READING_POINT]: '设置自定义阅读点',
-    [BookReaderAvailableKeybind.TOGGLE_TRACKING]: '统计开关',
-    [BookReaderAvailableKeybind.TOGGLE_TRACKING_FREEZE]: '统计暂停 / 继续'
+  // Maps each keybind to its i18n key. The concrete label is resolved
+  // reactively via $t inside the row builder so a locale switch redraws.
+  const ACTION_LABEL_KEYS: Record<BookReaderAvailableKeybind, string> = {
+    [BookReaderAvailableKeybind.AUTO_SCROLL_TOGGLE]: 'shortcuts.action.autoScrollToggle',
+    [BookReaderAvailableKeybind.AUTO_SCROLL_INCREASE]: 'shortcuts.action.autoScrollIncrease',
+    [BookReaderAvailableKeybind.AUTO_SCROLL_DECREASE]: 'shortcuts.action.autoScrollDecrease',
+    [BookReaderAvailableKeybind.AUTO_READER_TOGGLE]: 'shortcuts.action.autoReaderToggle',
+    [BookReaderAvailableKeybind.BOOKMARK]: 'shortcuts.action.bookmark',
+    [BookReaderAvailableKeybind.JUMP_TO_BOOKMARK]: 'shortcuts.action.jumpToBookmark',
+    [BookReaderAvailableKeybind.NEXT_CHAPTER]: 'shortcuts.action.nextChapter',
+    [BookReaderAvailableKeybind.NEXT_PAGE]: 'shortcuts.action.nextPage',
+    [BookReaderAvailableKeybind.PREV_CHAPTER]: 'shortcuts.action.prevChapter',
+    [BookReaderAvailableKeybind.PREV_PAGE]: 'shortcuts.action.prevPage',
+    [BookReaderAvailableKeybind.SET_READING_POINT]: 'shortcuts.action.setReadingPoint',
+    [BookReaderAvailableKeybind.TOGGLE_TRACKING]: 'shortcuts.action.toggleTracking',
+    [BookReaderAvailableKeybind.TOGGLE_TRACKING_FREEZE]: 'shortcuts.action.toggleTrackingFreeze'
   };
 
   // Pretty-print a key code returned by KeyboardEvent.code or .key.
@@ -37,7 +40,11 @@
 
   // Group binds by action so the same action's multiple key codes (case
   // variants like KeyB + b) collapse into a single row.
+  // Depend on $locale$ so a locale switch re-runs the sort with the new
+  // labels; without this the initial ordering (built when the component
+  // first rendered) would stay pinned to the original locale.
   $: rows = (() => {
+    void $locale$;
     const byAction = new Map<BookReaderAvailableKeybind, Set<string>>();
     for (const [code, action] of Object.entries($bookReaderKeybindMap$)) {
       const keys = byAction.get(action) || new Set<string>();
@@ -47,10 +54,10 @@
     return Array.from(byAction.entries())
       .map(([action, keys]) => ({
         action,
-        label: ACTION_LABELS[action] || action,
+        label: $t(ACTION_LABEL_KEYS[action] || action),
         keys: Array.from(keys).filter((k, i, arr) => arr.indexOf(k) === i)
       }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'zh'));
+      .sort((a, b) => a.label.localeCompare(b.label, $locale$));
   })();
 
   function open() {
@@ -86,8 +93,8 @@
 
 <button
   class="trigger"
-  title="显示键盘快捷键（?）"
-  aria-label="键盘快捷键"
+  title={$t('shortcuts.trigger')}
+  aria-label={$t('shortcuts.triggerAria')}
   on:click={open}
 >
   <Fa icon={faKeyboard} />
@@ -95,10 +102,10 @@
 
 {#if visible}
   <div class="overlay" on:click={close} on:keyup={() => {}} role="presentation"></div>
-  <div class="panel" role="dialog" aria-label="键盘快捷键">
+  <div class="panel" role="dialog" aria-label={$t('shortcuts.triggerAria')}>
     <div class="head">
-      <h2><Fa icon={faKeyboard} class="mr-2" /> 键盘快捷键</h2>
-      <button class="close" on:click={close} title="关闭（Esc）"><Fa icon={faTimes} /></button>
+      <h2><Fa icon={faKeyboard} class="mr-2" /> {$t('shortcuts.title')}</h2>
+      <button class="close" on:click={close} title={$t('shortcuts.close')}><Fa icon={faTimes} /></button>
     </div>
     <div class="body">
       <table>
@@ -115,7 +122,7 @@
           {/each}
           {#if $ttsShortcut$}
             <tr>
-              <td class="action">TTS 朗读全局开关</td>
+              <td class="action">{$t('shortcuts.tts.action')}</td>
               <td class="keys">
                 {#each $ttsShortcut$.split('+') as k (k)}
                   <kbd>{k.toUpperCase()}</kbd>
@@ -124,12 +131,12 @@
             </tr>
           {/if}
           <tr>
-            <td class="action">本面板开 / 关</td>
+            <td class="action">{$t('shortcuts.panel.action')}</td>
             <td class="keys"><kbd>?</kbd></td>
           </tr>
         </tbody>
       </table>
-      <p class="hint">按 <kbd>Esc</kbd> 关闭。绑定可在「设置 → 阅读」里调整。</p>
+      <p class="hint">{$t('shortcuts.hintPrefix')}<kbd>Esc</kbd>{$t('shortcuts.hintSuffix')}</p>
     </div>
   </div>
 {/if}

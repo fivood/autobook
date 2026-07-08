@@ -2,6 +2,7 @@
   import { faImage } from '@fortawesome/free-regular-svg-icons';
   import { onDestroy } from 'svelte';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
 
   export let imagePath: string | Blob;
   export let title: string;
@@ -144,9 +145,9 @@
     </div>
 
     {#if status === 'done'}
-      <span class="status-badge done" title="已读完">✓ 已读</span>
+      <span class="status-badge done" title={$t('bookCard.doneTooltip')}>✓ {$t('bookCard.done')}</span>
     {:else if status === 'unread'}
-      <span class="status-badge unread" title="未读过">未读</span>
+      <span class="status-badge unread" title={$t('bookCard.unreadTooltip')}>{$t('bookCard.unread')}</span>
     {/if}
 
     <div class="absolute inset-x-0 bottom-0">

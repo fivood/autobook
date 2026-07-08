@@ -286,6 +286,7 @@
     getReferencePoints,
     pulseElement
   } from '$lib/functions/range-util';
+  import { t } from '$lib/i18n';
 
   let showSpinner = true;
   let showHeader = false;
@@ -2252,7 +2253,7 @@
   class="fixed inset-x-0 top-0 z-10 h-12 w-full"
   role="button"
   tabindex="-1"
-  aria-label="显示阅读器菜单"
+  aria-label={$t('readerFooter.menuAria')}
   on:mouseenter={() => {
     clearTimeout(headerEnterTimer);
     headerEnterTimer = setTimeout(() => (showHeader = true), 200);
@@ -2626,7 +2627,7 @@
     {#if showTrackerIcon}
       <div
         role="button"
-        title="单击打开统计菜单，双击切换统计"
+        title={$t('readerFooter.statsMenu')}
         class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
         class:text-red-500={$isTrackerPaused$}
         class:animate-pulse={frozenPosition > -1}
@@ -2671,7 +2672,7 @@
     <div
       tabindex="0"
       role="button"
-      title="点击复制进度"
+      title={$t('readerFooter.copyProgress')}
       class="writing-horizontal-tb fixed bottom-2 right-2 z-10 text-xs leading-none select-none whitespace-pre"
       class:invisible={!$showCharacterCounter$ &&
         !$showPercentage$ &&

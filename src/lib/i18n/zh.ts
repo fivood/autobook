@@ -127,6 +127,47 @@ export default {
   'tts.rateSlower': '语速 −0.1',
   'tts.rateFaster': '语速 +0.1',
 
+  // Book card status badge
+  'bookCard.done': '已读',
+  'bookCard.doneTooltip': '已读完',
+  'bookCard.unread': '未读',
+  'bookCard.unreadTooltip': '未读过',
+
+  // Reader footer / progress strip
+  'readerFooter.copyProgress': '点击复制进度',
+  'readerFooter.statsMenu': '单击打开统计菜单，双击切换统计',
+  'readerFooter.menuAria': '显示阅读器菜单',
+
+  // TOC panel
+  'toc.close': '关闭目录',
+  'toc.jumpTo': '跳转到 {label}',
+  'toc.prevChapter': '上一章',
+  'toc.nextChapter': '下一章',
+  'toc.chapterProgress': '章节进度: {chars} ({pct}%)',
+
+  // Keyboard shortcuts help panel
+  'shortcuts.trigger': '显示键盘快捷键（?）',
+  'shortcuts.triggerAria': '键盘快捷键',
+  'shortcuts.title': '键盘快捷键',
+  'shortcuts.close': '关闭（Esc）',
+  'shortcuts.tts.action': 'TTS 朗读全局开关',
+  'shortcuts.panel.action': '本面板开 / 关',
+  'shortcuts.hintPrefix': '按 ',
+  'shortcuts.hintSuffix': ' 关闭。绑定可在「设置 → 阅读」里调整。',
+  'shortcuts.action.autoScrollToggle': '播放 / 暂停（滚动模式自动播放）',
+  'shortcuts.action.autoScrollIncrease': '加快自动滚动速度',
+  'shortcuts.action.autoScrollDecrease': '降低自动滚动速度',
+  'shortcuts.action.autoReaderToggle': '播放 / 暂停（分页模式 TTS 朗读）',
+  'shortcuts.action.bookmark': '设置书签',
+  'shortcuts.action.jumpToBookmark': '跳到书签',
+  'shortcuts.action.nextChapter': '下一章',
+  'shortcuts.action.nextPage': '下一页',
+  'shortcuts.action.prevChapter': '上一章',
+  'shortcuts.action.prevPage': '上一页',
+  'shortcuts.action.setReadingPoint': '设置自定义阅读点',
+  'shortcuts.action.toggleTracking': '统计开关',
+  'shortcuts.action.toggleTrackingFreeze': '统计暂停 / 继续',
+
   'update.checkFailed': '检查更新失败',
   'update.upToDate.title': '已是最新',
   'update.upToDate.body': '当前已是最新版本。'
