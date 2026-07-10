@@ -1386,7 +1386,7 @@
     </div>
 
     <SettingsSectionHeader title={$t('settings.section.fontsTypography')} />
-    <SettingsItemGroup title="字体（组 1）">
+    <SettingsItemGroup title={$t('settings.item.fontGroup1')}>
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
           availableFonts={[
@@ -1422,7 +1422,7 @@
         bind:value={fontFamilyGroupOne}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="字体（组 2）">
+    <SettingsItemGroup title={$t('settings.item.fontGroup2')}>
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
           availableFonts={[LocalFont.NOTOSANSSC, LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF]}
@@ -1452,10 +1452,10 @@
         bind:value={fontFamilyGroupTwo}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="字号">
+    <SettingsItemGroup title={$t('settings.item.fontSize')}>
       <input type="number" class={inputClasses} step="1" min="1" bind:value={fontSize} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="行高">
+    <SettingsItemGroup title={$t('settings.item.lineHeight')}>
       <input
         type="number"
         class={inputClasses}
@@ -1469,7 +1469,7 @@
         }}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="字重" tooltip={'设置字重，留空使用默认'}>
+    <SettingsItemGroup title={$t('settings.item.fontWeight')} tooltip={$t('settings.tip.fontWeight')}>
       <input
         type="number"
         placeholder="默认"
@@ -1486,7 +1486,7 @@
       />
     </SettingsItemGroup>
     <SettingsSectionHeader title={$t('settings.section.paragraphs')} />
-    <SettingsItemGroup title="段落首行缩进" tooltip="段落首行缩进（rem）">
+    <SettingsItemGroup title={$t('settings.item.paraIndent')} tooltip={$t('settings.tip.paraIndent')}>
       <input
         type="number"
         class={inputClasses}
@@ -1499,14 +1499,14 @@
         }}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="段落间距模式" tooltip={'切到手动模式可指定段落间距值'}>
+    <SettingsItemGroup title={$t('settings.item.paraSpacingMode')} tooltip={$t('settings.tip.paraSpacingMode')}>
       <ButtonToggleGroup
         options={optionsForTextMarginMode}
         bind:selectedOptionId={textMarginMode}
       />
     </SettingsItemGroup>
     {#if textMarginMode === 'manual'}
-      <SettingsItemGroup title="段落间距" tooltip="段落间距（rem）">
+      <SettingsItemGroup title={$t('settings.item.paraSpacing')} tooltip={$t('settings.tip.paraSpacing')}>
         <input
           type="number"
           class={inputClasses}
@@ -1520,26 +1520,26 @@
         />
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title="两端对齐" tooltip={'开启后两端对齐段落文字'}>
+    <SettingsItemGroup title={$t('settings.item.justify')} tooltip={$t('settings.tip.justify')}>
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={enableTextJustification}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="美化换行" tooltip={'在支持的浏览器中启用 pretty 换行样式'}>
+    <SettingsItemGroup title={$t('settings.item.prettyWrap')} tooltip={$t('settings.tip.prettyWrap')}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTextWrapPretty} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="排版方向">
+    <SettingsItemGroup title={$t('settings.item.writingDirection')}>
       <ButtonToggleGroup options={optionsForWritingMode} bind:selectedOptionId={writingMode} />
     </SettingsItemGroup>
     {#if verticalMode}
-      <SettingsItemGroup title="启用字距调整" tooltip={'在字体与浏览器支持时，竖排间距视觉更平衡'}>
+      <SettingsItemGroup title={$t('settings.item.enableKerning')} tooltip={$t('settings.tip.enableKerning')}>
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontKerning} />
       </SettingsItemGroup>
-      <SettingsItemGroup title="启用 VPAL" tooltip={'在字体与浏览器支持时，竖排文字间距更自然'}>
+      <SettingsItemGroup title={$t('settings.item.enableVpal')} tooltip={$t('settings.tip.enableVpal')}>
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontVPAL} />
       </SettingsItemGroup>
-      <SettingsItemGroup title="文字方向" tooltip={verticalTextOrientationTooltip}>
+      <SettingsItemGroup title={$t('settings.item.textOrientation')} tooltip={verticalTextOrientationTooltip}>
         <ButtonToggleGroup
           options={optionsForVerticalTextOrientation}
           bind:selectedOptionId={verticalTextOrientation}
@@ -1547,11 +1547,11 @@
       </SettingsItemGroup>
     {/if}
     <SettingsSectionHeader title={$t('settings.section.furigana')} />
-    <SettingsItemGroup title="隐藏振假名">
+    <SettingsItemGroup title={$t('settings.item.hideFurigana')}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
     </SettingsItemGroup>
     {#if hideFurigana}
-      <SettingsItemGroup title="振假名样式" tooltip={furiganaStyleTooltip}>
+      <SettingsItemGroup title={$t('settings.item.furiganaStyle')} tooltip={furiganaStyleTooltip}>
         <ButtonToggleGroup
           options={optionsForFuriganaStyle}
           bind:selectedOptionId={furiganaStyle}
@@ -1561,7 +1561,7 @@
   {:else if activeSettings === 'Reader'}
     <SettingsSectionHeader title={$t('settings.section.viewMode')} hint={$t('settings.section.viewModeHint')} />
     <div class="h-full">
-      <SettingsItemGroup title="阅读视图">
+      <SettingsItemGroup title={$t('settings.item.readerView')}>
         <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
       </SettingsItemGroup>
     </div>
@@ -1944,14 +1944,14 @@
           {/if}
         </div>
       </SettingsItemGroup>
-      <SettingsItemGroup title="窗口变化时自动定位">
+      <SettingsItemGroup title={$t('settings.item.autoRepositionOnResize')}>
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={autoPositionOnResize}
         />
       </SettingsItemGroup>
     {:else}
-      <SettingsItemGroup title="避免分页打断" tooltip={avoidPageBreakTooltip}>
+      <SettingsItemGroup title={$t('settings.item.avoidPaginationBreak')} tooltip={avoidPageBreakTooltip}>
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={avoidPageBreak} />
       </SettingsItemGroup>
       <SettingsItemGroup
@@ -1963,15 +1963,15 @@
           bind:selectedOptionId={selectionToBookmarkEnabled}
         />
       </SettingsItemGroup>
-      <SettingsItemGroup title="点击翻页" tooltip="在两侧保留小边缘区域，点击可翻页">
+      <SettingsItemGroup title={$t('settings.item.tapToTurnPage')} tooltip={$t('settings.tip.tapToTurnPage')}>
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTapEdgeToFlip} />
       </SettingsItemGroup>
       {#if !verticalMode}
-        <SettingsItemGroup title="分栏数" tooltip="渲染的文本栏数">
+        <SettingsItemGroup title={$t('settings.item.columnCount')} tooltip={$t('settings.tip.columnCount')}>
           <input type="number" class={inputClasses} step="1" min="0" bind:value={pageColumns} />
         </SettingsItemGroup>
       {/if}
-      <SettingsItemGroup title="滑动阈值" tooltip={'触发翻页所需的滑动距离'}>
+      <SettingsItemGroup title={$t('settings.item.swipeThreshold')} tooltip={$t('settings.tip.swipeThreshold')}>
         <input
           type="number"
           step="1"
@@ -1983,7 +1983,7 @@
           }}
         />
       </SettingsItemGroup>
-      <SettingsItemGroup title="禁用滚轮翻页">
+      <SettingsItemGroup title={$t('settings.item.disableWheelPageTurn')}>
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={disableWheelNavigation}
@@ -2023,11 +2023,11 @@
     </SettingsItemGroup>
 
     <SettingsSectionHeader title={$t('settings.section.bookmarks')} hint={$t('settings.section.bookmarksHint')} />
-    <SettingsItemGroup title="自动书签" tooltip={autoBookmarkTooltip}>
+    <SettingsItemGroup title={$t('settings.item.autoBookmark')} tooltip={autoBookmarkTooltip}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
     </SettingsItemGroup>
     {#if autoBookmark}
-      <SettingsItemGroup title="自动书签延时" tooltip={'触发自动书签的秒数'}>
+      <SettingsItemGroup title={$t('settings.item.autoBookmarkDelay')} tooltip={$t('settings.tip.autoBookmarkDelay')}>
         <input
           type="number"
           step="1"
@@ -2048,19 +2048,19 @@
     </SettingsItemGroup>
 
     <SettingsSectionHeader title={$t('settings.section.footerDisplay')} hint={$t('settings.section.footerDisplayHint')} />
-    <SettingsItemGroup title="显示字数">
+    <SettingsItemGroup title={$t('settings.item.showCharacters')}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showCharacterCounter} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="显示百分比">
+    <SettingsItemGroup title={$t('settings.item.showPercent')}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showPercentage} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="页脚显示章节字数">
+    <SettingsItemGroup title={$t('settings.item.footerChapterChars')}>
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={showFooterChapterCharacterCounter}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="页脚显示章节百分比">
+    <SettingsItemGroup title={$t('settings.item.footerChapterPercent')}>
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={showFooterChapterPercentage}
@@ -2076,7 +2076,7 @@
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
       </SettingsItemGroup>
       {#if blurImage}
-        <SettingsItemGroup title="模糊范围" tooltip="模糊范围：全部 / 仅封面外（保留封面，封底+正文图片都模糊）/ 不模糊">
+        <SettingsItemGroup title={$t('settings.item.blurScope')} tooltip="模糊范围：全部 / 仅封面外（保留封面，封底+正文图片都模糊）/ 不模糊">
           <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
         </SettingsItemGroup>
       {/if}
@@ -2117,7 +2117,7 @@
 
     <!-- 旧 Reader 残留（不再使用） -->
     <div class="hidden">
-    <SettingsItemGroup title="字体（组 1）">
+    <SettingsItemGroup title={$t('settings.item.fontGroup1')}>
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
           availableFonts={[
@@ -2153,7 +2153,7 @@
         bind:value={fontFamilyGroupOne}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="字体（组 2）">
+    <SettingsItemGroup title={$t('settings.item.fontGroup2')}>
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
           availableFonts={[LocalFont.NOTOSANSSC, LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF]}
@@ -2184,8 +2184,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="字重"
-      tooltip={'设置字重，留空使用默认'}
+      title={$t('settings.item.fontWeight')}
+      tooltip={$t('settings.tip.fontWeight')}
     >
       <input
         type="number"
@@ -2208,10 +2208,10 @@
         }}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="字号">
+    <SettingsItemGroup title={$t('settings.item.fontSize')}>
       <input type="number" class={inputClasses} step="1" min="1" bind:value={fontSize} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="行高">
+    <SettingsItemGroup title={$t('settings.item.lineHeight')}>
       <input
         type="number"
         class={inputClasses}
@@ -2226,8 +2226,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="段落首行缩进"
-      tooltip="段落首行缩进（rem）"
+      title={$t('settings.item.paraIndent')}
+      tooltip={$t('settings.tip.paraIndent')}
     >
       <input
         type="number"
@@ -2245,7 +2245,7 @@
       />
     </SettingsItemGroup>
     {#if textMarginMode === 'manual'}
-      <SettingsItemGroup title="段落间距" tooltip="段落间距（rem）">
+      <SettingsItemGroup title={$t('settings.item.paraSpacing')} tooltip={$t('settings.tip.paraSpacing')}>
         <input
           type="number"
           class={inputClasses}
@@ -2294,8 +2294,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="滑动阈值"
-      tooltip={'触发翻页所需的滑动距离'}
+      title={$t('settings.item.swipeThreshold')}
+      tooltip={$t('settings.tip.swipeThreshold')}
     >
       <input
         type="number"
@@ -2311,7 +2311,7 @@
       />
     </SettingsItemGroup>
     {#if autoBookmark}
-      <SettingsItemGroup title="自动书签延时" tooltip={'触发自动书签的秒数'}>
+      <SettingsItemGroup title={$t('settings.item.autoBookmarkDelay')} tooltip={$t('settings.tip.autoBookmarkDelay')}>
         <input
           type="number"
           step="1"
@@ -2326,23 +2326,23 @@
         />
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title="排版方向">
+    <SettingsItemGroup title={$t('settings.item.writingDirection')}>
       <ButtonToggleGroup options={optionsForWritingMode} bind:selectedOptionId={writingMode} />
     </SettingsItemGroup>
     {#if verticalMode}
       <SettingsItemGroup
-        title="启用字距调整"
-        tooltip={'在字体与浏览器支持时，竖排间距视觉更平衡'}
+        title={$t('settings.item.enableKerning')}
+        tooltip={$t('settings.tip.enableKerning')}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontKerning} />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="启用 VPAL"
-        tooltip={'在字体与浏览器支持时，竖排文字间距更自然'}
+        title={$t('settings.item.enableVpal')}
+        tooltip={$t('settings.tip.enableVpal')}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontVPAL} />
       </SettingsItemGroup>
-      <SettingsItemGroup title="文字方向" tooltip={verticalTextOrientationTooltip}>
+      <SettingsItemGroup title={$t('settings.item.textOrientation')} tooltip={verticalTextOrientationTooltip}>
         <ButtonToggleGroup
           options={optionsForVerticalTextOrientation}
           bind:selectedOptionId={verticalTextOrientation}
@@ -2359,8 +2359,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="两端对齐"
-      tooltip={'开启后两端对齐段落文字'}
+      title={$t('settings.item.justify')}
+      tooltip={$t('settings.tip.justify')}
     >
       <ButtonToggleGroup
         options={optionsForToggle}
@@ -2368,14 +2368,14 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="美化换行"
-      tooltip={'在支持的浏览器中启用 pretty 换行样式'}
+      title={$t('settings.item.prettyWrap')}
+      tooltip={$t('settings.tip.prettyWrap')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTextWrapPretty} />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="段落间距模式"
-      tooltip={'切到手动模式可指定段落间距值'}
+      title={$t('settings.item.paraSpacingMode')}
+      tooltip={$t('settings.tip.paraSpacingMode')}
     >
       <ButtonToggleGroup
         options={optionsForTextMarginMode}
@@ -2393,25 +2393,25 @@
         />
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title="显示字数">
+    <SettingsItemGroup title={$t('settings.item.showCharacters')}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showCharacterCounter} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="显示百分比">
+    <SettingsItemGroup title={$t('settings.item.showPercent')}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showPercentage} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="页脚显示章节字数">
+    <SettingsItemGroup title={$t('settings.item.footerChapterChars')}>
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={showFooterChapterCharacterCounter}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="页脚显示章节百分比">
+    <SettingsItemGroup title={$t('settings.item.footerChapterPercent')}>
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={showFooterChapterPercentage}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="禁用滚轮翻页">
+    <SettingsItemGroup title={$t('settings.item.disableWheelPageTurn')}>
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={disableWheelNavigation}
@@ -2429,7 +2429,7 @@
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="自动书签" tooltip={autoBookmarkTooltip}>
+    <SettingsItemGroup title={$t('settings.item.autoBookmark')} tooltip={autoBookmarkTooltip}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
     </SettingsItemGroup>
     {#if $lastBookHasImages$}
@@ -2441,18 +2441,18 @@
       </SettingsItemGroup>
       {#if blurImage}
         <SettingsItemGroup
-          title="模糊范围"
+          title={$t('settings.item.blurScope')}
           tooltip="模糊范围：全部 / 仅封面外（保留封面，封底+正文图片都模糊）/ 不模糊"
         >
           <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
         </SettingsItemGroup>
       {/if}
     {/if}
-    <SettingsItemGroup title="隐藏振假名">
+    <SettingsItemGroup title={$t('settings.item.hideFurigana')}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
     </SettingsItemGroup>
     {#if hideFurigana}
-      <SettingsItemGroup title="振假名样式" tooltip={furiganaStyleTooltip}>
+      <SettingsItemGroup title={$t('settings.item.furiganaStyle')} tooltip={furiganaStyleTooltip}>
         <ButtonToggleGroup
           options={optionsForFuriganaStyle}
           bind:selectedOptionId={furiganaStyle}
@@ -2496,14 +2496,14 @@
           {/if}
         </div>
       </SettingsItemGroup>
-      <SettingsItemGroup title="窗口变化时自动定位">
+      <SettingsItemGroup title={$t('settings.item.autoRepositionOnResize')}>
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={autoPositionOnResize}
         />
       </SettingsItemGroup>
     {:else}
-      <SettingsItemGroup title="避免分页打断" tooltip={avoidPageBreakTooltip}>
+      <SettingsItemGroup title={$t('settings.item.avoidPaginationBreak')} tooltip={avoidPageBreakTooltip}>
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={avoidPageBreak} />
       </SettingsItemGroup>
       <SettingsItemGroup
@@ -2516,13 +2516,13 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="点击翻页"
-        tooltip="在两侧保留小边缘区域，点击可翻页"
+        title={$t('settings.item.tapToTurnPage')}
+        tooltip={$t('settings.tip.tapToTurnPage')}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTapEdgeToFlip} />
       </SettingsItemGroup>
       {#if !verticalMode}
-        <SettingsItemGroup title="分栏数" tooltip="渲染的文本栏数">
+        <SettingsItemGroup title={$t('settings.item.columnCount')} tooltip={$t('settings.tip.columnCount')}>
           <input type="number" class={inputClasses} step="1" min="0" bind:value={pageColumns} />
         </SettingsItemGroup>
       {/if}
@@ -2863,16 +2863,16 @@
   {:else if activeSettings === 'Data'}
     <SettingsSectionHeader title={$t('settings.section.storageBackup')} hint={$t('settings.section.storageBackupHint')} />
     <div class="lg:col-span-3">
-      <SettingsItemGroup title="跨设备同步阅读统计" tooltip="把每天的阅读时长同步到云端，桌面 + 手机 PWA 都能看到合并的数据">
+      <SettingsItemGroup title={$t('settings.item.syncStats')} tooltip="把每天的阅读时长同步到云端，桌面 + 手机 PWA 都能看到合并的数据">
         <SettingsSync />
       </SettingsItemGroup>
     </div>
     <div class="lg:col-span-3">
-      <SettingsItemGroup title="本地数据位置" tooltip="查看书库、设置、同步副本各自的物理位置。提供一键打开和彻底清空。">
+      <SettingsItemGroup title={$t('settings.item.localDataPaths')} tooltip={$t('settings.tip.localDataPaths')}>
         <SettingsDataPaths />
       </SettingsItemGroup>
     </div>
-    <SettingsItemGroup title="持久化存储" tooltip={persistentStorageTooltip}>
+    <SettingsItemGroup title={$t('settings.item.persistentStorage')} tooltip={persistentStorageTooltip}>
       <div class="flex items-center">
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={persistentStorage} />
         {#if storageQuota}
@@ -2911,19 +2911,19 @@
         />
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title="自动导入/导出" tooltip={autoReplicationTypeTooltip}>
+    <SettingsItemGroup title={$t('settings.item.autoImportExport')} tooltip={autoReplicationTypeTooltip}>
       <ButtonToggleGroup
         options={optionsForAutoReplicationType}
         bind:selectedOptionId={autoReplication}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="导入/导出策略" tooltip={replicationSaveBehaviorTooltip}>
+    <SettingsItemGroup title={$t('settings.item.importExportStrategy')} tooltip={replicationSaveBehaviorTooltip}>
       <ButtonToggleGroup
         options={optionsForReplicationSaveBehavior}
         bind:selectedOptionId={replicationSaveBehavior}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="缓存数据" tooltip={cacheStorageDataTooltip}>
+    <SettingsItemGroup title={$t('settings.item.cacheData')} tooltip={cacheStorageDataTooltip}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={cacheStorageData} />
     </SettingsItemGroup>
 
@@ -2934,7 +2934,7 @@
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideExternalReadHint} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="显示占位卡片" tooltip={showExternalPlaceholderToolTip}>
+    <SettingsItemGroup title={$t('settings.item.showPlaceholderCards')} tooltip={showExternalPlaceholderToolTip}>
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={showExternalPlaceholder}
@@ -2962,7 +2962,7 @@
 
     <SettingsSectionHeader title={$t('settings.section.storageSourcesDiag')} hint={$t('settings.section.storageSourcesDiagHint')} />
     <SettingsStorageSourceList storageSources={$storageSources$} />
-    <SettingsItemGroup title="诊断日志" tooltip="导出包含设置与运行日志的诊断文件，反馈问题时附上能加快定位">
+    <SettingsItemGroup title={$t('settings.item.diagnosticLog')} tooltip={$t('settings.tip.diagnosticLog')}>
       <button
         class="m-1 rounded-md border-2 border-gray-400 p-2"
         on:click={() =>
@@ -3068,13 +3068,13 @@
     </SettingsItemGroup>
     {#if statisticsEnabled}
       <SettingsSectionHeader title="追踪行为" hint="自动暂停、完成判定与字符差额处理" />
-      <SettingsItemGroup title="统计自动暂停" tooltip={trackerAutoPauseTooltip}>
+      <SettingsItemGroup title={$t('settings.item.statsAutoPause')} tooltip={trackerAutoPauseTooltip}>
         <ButtonToggleGroup
           options={optionsForTrackerAutoPause}
           bind:selectedOptionId={trackerAutoPause}
         />
       </SettingsItemGroup>
-      <SettingsItemGroup title="完成时打开统计">
+      <SettingsItemGroup title={$t('settings.item.statsOnComplete')}>
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={openTrackerOnCompletion}
