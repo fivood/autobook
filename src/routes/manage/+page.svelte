@@ -914,7 +914,7 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('书库管理')}</title>
+  <title>{formatPageTitle($t('pageTitle.manage'))}</title>
 </svelte:head>
 
 {$replicator$ ?? ''}

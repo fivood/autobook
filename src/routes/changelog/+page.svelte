@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n';
   import { afterNavigate } from '$app/navigation';
   import Fa from 'svelte-fa';
   import {
@@ -96,7 +97,7 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('更新历史')}</title>
+  <title>{formatPageTitle($t('pageTitle.changelog'))}</title>
 </svelte:head>
 
 <div class="flex h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">

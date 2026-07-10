@@ -28,6 +28,7 @@
   import NotebookLinkPicker from '$lib/components/notebook/notebook-link-picker.svelte';
   import NotebookReviewModal from '$lib/components/notebook/notebook-review-modal.svelte';
   import { isTauri } from '$lib/data/env';
+  import { t, tImmediate } from '$lib/i18n';
   import { obsidianVaultPath$ } from '$lib/data/store';
   import { buildSyncPlan } from '$lib/functions/notebook/obsidian-sync';
 
@@ -211,7 +212,7 @@
   }
 
   async function removeOne(h: BooksDbHighlight) {
-    if (!confirm(`删除此条目？\n\n${(h.text || h.memo).slice(0, 60)}`)) return;
+    if (!confirm(tImmediate('notebook.deleteConfirm', { preview: (h.text || h.memo).slice(0, 60) }))) return;
     await database.deleteHighlight(h.id);
     highlights = highlights.filter((x) => x.id !== h.id);
   }
@@ -332,16 +333,16 @@
       .map(({ h }) => h);
     reviewQueue = pool;
     reviewOpen = pool.length > 0;
-    if (!pool.length) alert('暂无可回顾的内容');
+    if (!pool.length) alert(tImmediate('notebook.reviewEmpty'));
   }
 
   async function pickVaultFolder() {
     if (!isTauri()) {
-      alert('文件夹选择只在桌面端可用');
+      alert(tImmediate('notebook.desktopFolderOnly'));
       return;
     }
     const { open } = await import('@tauri-apps/plugin-dialog');
-    const picked = await open({ directory: true, multiple: false, title: '选择 Obsidian vault 目录' });
+    const picked = await open({ directory: true, multiple: false, title: tImmediate('notebook.pickVaultTitle') });
     if (typeof picked === 'string') {
       obsidianVaultPath$.next(picked);
     }
@@ -349,12 +350,12 @@
 
   async function syncToVault() {
     if (!isTauri()) {
-      alert('vault 同步只在桌面端可用');
+      alert(tImmediate('notebook.vaultDesktopOnly'));
       return;
     }
     const vault = $obsidianVaultPath$;
     if (!vault) {
-      alert('请先选择 Obsidian vault 目录');
+      alert(tImmediate('notebook.pickVaultFirst'));
       return;
     }
     syncing = true;
@@ -379,9 +380,9 @@
         }
         await writeTextFile(fullPath, f.content);
       }
-      syncMessage = `已同步 ${plan.files.length} 条到 ${plan.rootDirName}/`;
+      syncMessage = tImmediate('notebook.syncDone', { n: plan.files.length, dir: plan.rootDirName });
     } catch (err: any) {
-      syncMessage = `同步失败：${err?.message || err}`;
+      syncMessage = tImmediate('notebook.syncFailed', { err: err?.message || err });
     } finally {
       syncing = false;
     }
@@ -457,37 +458,37 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('笔记本')}</title>
+  <title>{formatPageTitle($t('notebook.title'))}</title>
 </svelte:head>
 
 <div class="flex min-h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">
   <header class="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
-    <h1 class="text-xl font-medium">笔记本</h1>
+    <h1 class="text-xl font-medium">{$t('notebook.title')}</h1>
     <span class="text-sm opacity-50">{filtered.length}/{highlights.length}</span>
     <div class="flex-1" />
     <input
       type="search"
-      placeholder="搜索原文、备注、书名、标签"
+      placeholder={$t('notebook.search')}
       class="w-64 rounded border border-current/20 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-current/40"
       bind:value={query}
     />
     <button
       type="button"
       class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
-      title="今日回顾：随机选 10 条久未回看的内容"
+      title={$t('notebook.review.tooltip')}
       on:click={openReview}
-    ><Fa icon={faShuffle} size="xs" /> 回顾</button>
+    ><Fa icon={faShuffle} size="xs" /> {$t('notebook.review.button')}</button>
     <button
       type="button"
       class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
       on:click={openCreateNote}
-    ><Fa icon={faPlus} size="xs" /> 新建笔记</button>
+    ><Fa icon={faPlus} size="xs" /> {$t('notebook.new')}</button>
     <button
       type="button"
       class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
       on:click={exportMarkdown}
       disabled={!filtered.length}
-    ><Fa icon={faDownload} size="xs" /> 导出 .md</button>
+    ><Fa icon={faDownload} size="xs" /> {$t('notebook.exportMd')}</button>
     {#if isTauri()}
       {#if $obsidianVaultPath$}
         <button
@@ -496,19 +497,19 @@
           on:click={syncToVault}
           disabled={syncing || !highlights.length}
           title="vault: {$obsidianVaultPath$}"
-        ><Fa icon={faDownload} size="xs" /> {syncing ? '同步中…' : '同步到 vault'}</button>
+        ><Fa icon={faDownload} size="xs" /> {syncing ? $t('notebook.syncing') : $t('notebook.syncToVault')}</button>
         <button
           type="button"
           class="text-xs opacity-50 hover:opacity-100"
           title="vault: {$obsidianVaultPath$}"
           on:click={pickVaultFolder}
-        >更换</button>
+        >{$t('notebook.changeVault')}</button>
       {:else}
         <button
           type="button"
           class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
           on:click={pickVaultFolder}
-        ><Fa icon={faFolder} size="xs" /> 选择 vault</button>
+        ><Fa icon={faFolder} size="xs" /> {$t('notebook.pickVault')}</button>
       {/if}
     {/if}
     <MergedHeaderIcon leavePageLink={prevPage} />
@@ -520,7 +521,7 @@
 
   {#if allTags.length}
     <div class="flex flex-wrap items-center gap-2 border-b border-current/10 px-4 py-2 text-xs">
-      <span class="opacity-50">标签：</span>
+      <span class="opacity-50">{$t('notebook.tagsLabel')}</span>
       {#each allTags as tag (tag)}
         <button
           type="button"
@@ -537,7 +538,7 @@
           type="button"
           class="ml-2 opacity-50 hover:opacity-100"
           on:click={() => (selectedTags = new Set())}
-        >清除</button>
+        >{$t('notebook.clear')}</button>
       {/if}
     </div>
   {/if}
@@ -555,21 +556,21 @@
 
     <main class="mx-auto w-full max-w-4xl flex-1 px-4 py-6">
       {#if !loaded}
-        <p class="py-12 text-center opacity-50">加载中…</p>
+        <p class="py-12 text-center opacity-50">{$t('notebook.loading')}</p>
       {:else if !highlights.length}
-        <p class="py-12 text-center opacity-50">还没有内容。打开书右键添加高亮，或点上方「新建笔记」记录碎片心得</p>
+        <p class="py-12 text-center opacity-50">{$t('notebook.emptyState')}</p>
       {:else if !groups.length}
-        <p class="py-12 text-center opacity-50">没有匹配的结果</p>
+        <p class="py-12 text-center opacity-50">{$t('notebook.noMatch')}</p>
       {:else}
         {#each groups as group (group.title)}
           {@const isStandalone = group.title === STANDALONE_TITLE}
           {@const bookExists = !isStandalone && titleToId.has(group.title)}
           <section class="mb-8">
             <div class="mb-3 flex items-baseline gap-3 border-b border-current/10 pb-2">
-              <h2 class="text-lg font-medium">{isStandalone ? '独立笔记' : group.title}</h2>
-              <span class="text-xs opacity-50">{group.items.length} 条</span>
+              <h2 class="text-lg font-medium">{isStandalone ? $t('notebook.standalone') : group.title}</h2>
+              <span class="text-xs opacity-50">{$t('notebook.itemCount', { n: group.items.length })}</span>
               {#if !isStandalone && !bookExists}
-                <span class="rounded bg-current/10 px-2 py-0.5 text-xs opacity-70">书已删除</span>
+                <span class="rounded bg-current/10 px-2 py-0.5 text-xs opacity-70">{$t('notebook.deletedBook')}</span>
               {/if}
             </div>
             <ul class="space-y-2">
@@ -602,18 +603,18 @@
                       {/if}
                       {#if getLinked(h).length}
                         <div class="mt-2 space-y-1 rounded border border-current/10 bg-current/5 p-2">
-                          <p class="text-xs opacity-50">关联 {getLinked(h).length} 条</p>
+                          <p class="text-xs opacity-50">{$t('notebook.linkedCount', { n: getLinked(h).length })}</p>
                           {#each getLinked(h) as lnk (lnk.id)}
                             <div class="flex items-start gap-2 text-xs">
                               <Fa icon={faLink} size="xs" class="mt-1 opacity-50" />
                               <p class="line-clamp-1 flex-1 break-all opacity-80">
                                 {(lnk.kind === 'note' ? lnk.memo : lnk.text).slice(0, 80)}
-                                <span class="opacity-50">— {lnk.bookTitle || '独立笔记'}</span>
+                                <span class="opacity-50">— {lnk.bookTitle || $t('notebook.standalone')}</span>
                               </p>
                               <button
                                 type="button"
                                 class="opacity-50 hover:text-red-500 hover:opacity-100"
-                                title="解除链接"
+                                title={$t('notebook.unlink')}
                                 on:click={() => unlinkOne(h, lnk.id)}
                               ><Fa icon={faUnlink} size="xs" /></button>
                             </div>
@@ -627,18 +628,18 @@
                             type="button"
                             class="flex items-center gap-1 hover:opacity-100"
                             on:click={() => openHighlight(h)}
-                          ><Fa icon={faExternalLinkAlt} size="xs" /> 跳转</button>
+                          ><Fa icon={faExternalLinkAlt} size="xs" /> {$t('notebook.jump')}</button>
                         {/if}
                         <button
                           type="button"
                           class="flex items-center gap-1 hover:opacity-100"
                           on:click={() => openEdit(h)}
-                        ><Fa icon={faPen} size="xs" /> 编辑</button>
+                        ><Fa icon={faPen} size="xs" /> {$t('notebook.edit')}</button>
                         <button
                           type="button"
                           class="flex items-center gap-1 hover:opacity-100"
                           on:click={() => (linkPickerSource = h)}
-                        ><Fa icon={faLink} size="xs" /> 链接</button>
+                        ><Fa icon={faLink} size="xs" /> {$t('notebook.link')}</button>
                         <label class="flex items-center gap-1">
                           <Fa icon={faFolder} size="xs" />
                           <select
@@ -647,7 +648,7 @@
                             value={h.folderId ?? ''}
                             on:change={(ev) => handleFolderChange(h, ev)}
                           >
-                            <option value="" style="color:#000;">未归档</option>
+                            <option value="" style="color:#000;">{$t('notebook.uncategorized')}</option>
                             {#each folders as f (f.id)}
                               <option value={f.id} style="color:#000;">{f.name}</option>
                             {/each}
@@ -657,7 +658,7 @@
                           type="button"
                           class="flex items-center gap-1 hover:text-red-500 hover:opacity-100"
                           on:click={() => removeOne(h)}
-                        ><Fa icon={faTrash} size="xs" /> 删除</button>
+                        ><Fa icon={faTrash} size="xs" /> {$t('notebook.delete')}</button>
                       </div>
                     </div>
                   </div>

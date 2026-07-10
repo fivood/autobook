@@ -16,6 +16,7 @@
   } from '$lib/data/store';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
 
   export let statisticsSummaryKey: StatisticsSummaryKey;
   export let options: StatisticsDataSource[];
@@ -84,7 +85,7 @@
     </button>
   {/if}
   <button
-    title="点击按此属性选择/排序"
+    title={$t('stats.summary.sortByProp')}
     class="ml-4"
     class:opacity-20={!optionKeys.has($lastStatisticsSummarySortProperty$)}
     class:cursor-not-allowed={hasRowInEdit}

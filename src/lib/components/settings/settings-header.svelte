@@ -4,36 +4,20 @@
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { baseHeaderClasses, pxScreen } from '$lib/css-classes';
+  import { t } from '$lib/i18n';
 
   export let leavePageLink: string;
   export let activeSettings: string;
 
+  // `label` is the internal dispatch identifier used across
+  // settings-content.svelte and the parent page; only `labelKey` is
+  // resolved through $t at render time.
   const settingItems = [
-    {
-      label: 'Reader',
-      displayLabel: '阅读',
-      icon: faBookOpenReader
-    },
-    {
-      label: 'TTS',
-      displayLabel: 'TTS',
-      icon: faVolumeHigh
-    },
-    {
-      label: 'Appearance',
-      displayLabel: '外观',
-      icon: faPalette
-    },
-    {
-      label: 'Data',
-      displayLabel: '数据',
-      icon: faDatabase
-    },
-    {
-      label: 'Statistics',
-      displayLabel: '统计',
-      icon: faClock
-    }
+    { label: 'Reader', labelKey: 'settings.tab.reader', icon: faBookOpenReader },
+    { label: 'TTS', labelKey: 'settings.tab.tts', icon: faVolumeHigh },
+    { label: 'Appearance', labelKey: 'settings.tab.appearance', icon: faPalette },
+    { label: 'Data', labelKey: 'settings.tab.data', icon: faDatabase },
+    { label: 'Statistics', labelKey: 'settings.tab.statistics', icon: faClock }
   ];
 </script>
 
@@ -48,7 +32,7 @@
           aria-pressed={activeSettings === settingItem.label}
         >
           <Fa icon={settingItem.icon} />
-          <span class="whitespace-nowrap">{settingItem.displayLabel}</span>
+          <span class="whitespace-nowrap">{$t(settingItem.labelKey)}</span>
           <Ripple />
         </button>
       {/each}

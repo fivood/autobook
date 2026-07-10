@@ -76,6 +76,7 @@
   } from '$lib/data/theme-option';
   import type { VerticalTextOrientation } from '$lib/data/vertical-text-orientation';
   import { ViewMode } from '$lib/data/view-mode';
+  import { t } from '$lib/i18n';
   import type { WritingMode } from '$lib/data/writing-mode';
   import { secondsToMinutes } from '$lib/functions/statistic-util';
   import { dummyFn } from '$lib/functions/utils';
@@ -1319,7 +1320,7 @@
 <div class="grid grid-cols-1 items-center sm:grid-cols-2 sm:gap-6 lg:md:gap-8 lg:grid-cols-3">
   {#if activeSettings === 'Appearance'}
     <div class="lg:col-span-3">
-      <SettingsItemGroup title="主题">
+      <SettingsItemGroup title={$t('settings.section.theme')}>
         <ButtonToggleGroup
           options={optionsForTheme}
           bind:selectedOptionId={selectedTheme}
@@ -1384,7 +1385,7 @@
       </SettingsItemGroup>
     </div>
 
-    <SettingsSectionHeader title="字体与排版" />
+    <SettingsSectionHeader title={$t('settings.section.fontsTypography')} />
     <SettingsItemGroup title="字体（组 1）">
       <div slot="header" class="flex items-center">
         <SettingsFontSelector
@@ -1484,7 +1485,7 @@
         }}
       />
     </SettingsItemGroup>
-    <SettingsSectionHeader title="段落与行" />
+    <SettingsSectionHeader title={$t('settings.section.paragraphs')} />
     <SettingsItemGroup title="段落首行缩进" tooltip="段落首行缩进（rem）">
       <input
         type="number"
@@ -1545,7 +1546,7 @@
         />
       </SettingsItemGroup>
     {/if}
-    <SettingsSectionHeader title="日文振假名" />
+    <SettingsSectionHeader title={$t('settings.section.furigana')} />
     <SettingsItemGroup title="隐藏振假名">
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
     </SettingsItemGroup>
@@ -1558,7 +1559,7 @@
       </SettingsItemGroup>
     {/if}
   {:else if activeSettings === 'Reader'}
-    <SettingsSectionHeader title="阅读视图模式" hint="决定可用的播放方式：滚动 = 打字机自动播放；分页 = TTS 朗读 + 自动翻页" />
+    <SettingsSectionHeader title={$t('settings.section.viewMode')} hint={$t('settings.section.viewModeHint')} />
     <div class="h-full">
       <SettingsItemGroup title="阅读视图">
         <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
@@ -1916,7 +1917,7 @@
     {/if}
 
     <!-- 视图模式专属 -->
-    <SettingsSectionHeader title={viewMode === ViewMode.Continuous ? '滚动模式行为' : '分页模式行为'} hint={viewMode === ViewMode.Continuous ? '自定义阅读点、窗口变化时的定位行为' : '翻页触发方式、分栏、滑动阈值'} />
+    <SettingsSectionHeader title={$t(viewMode === ViewMode.Continuous ? 'settings.section.readerBehavior.continuous' : 'settings.section.readerBehavior.paginated')} hint={$t(viewMode === ViewMode.Continuous ? 'settings.section.readerBehavior.continuousHint' : 'settings.section.readerBehavior.paginatedHint')} />
     {#if viewMode === ViewMode.Continuous}
       <SettingsItemGroup
         title="自定义阅读点"
@@ -1990,7 +1991,7 @@
       </SettingsItemGroup>
     {/if}
 
-    <SettingsSectionHeader title="阅读区尺寸" hint="阅读区边距和最大宽/高度" />
+    <SettingsSectionHeader title={$t('settings.section.readerArea')} hint={$t('settings.section.readerAreaHint')} />
     <SettingsItemGroup title={verticalMode ? '阅读区左右边距' : '阅读区上下边距'}>
       <SettingsDimensionPopover
         slot="header"
@@ -2021,7 +2022,7 @@
       />
     </SettingsItemGroup>
 
-    <SettingsSectionHeader title="书签" hint="自动书签触发条件与离开行为" />
+    <SettingsSectionHeader title={$t('settings.section.bookmarks')} hint={$t('settings.section.bookmarksHint')} />
     <SettingsItemGroup title="自动书签" tooltip={autoBookmarkTooltip}>
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
     </SettingsItemGroup>
@@ -2046,7 +2047,7 @@
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
     </SettingsItemGroup>
 
-    <SettingsSectionHeader title="页脚显示" hint="阅读器底部状态栏显示哪些字段" />
+    <SettingsSectionHeader title={$t('settings.section.footerDisplay')} hint={$t('settings.section.footerDisplayHint')} />
     <SettingsItemGroup title="显示字数">
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showCharacterCounter} />
     </SettingsItemGroup>
@@ -2066,7 +2067,7 @@
       />
     </SettingsItemGroup>
 
-    <SettingsSectionHeader title="图片与阅读点" hint="插图模糊、自定义阅读点暂停统计" />
+    <SettingsSectionHeader title={$t('settings.section.imagesReadingPoint')} hint={$t('settings.section.imagesReadingPointHint')} />
     {#if $lastBookHasImages$}
       <SettingsItemGroup
         title="图片模糊"
@@ -2092,7 +2093,7 @@
       </SettingsItemGroup>
     {/if}
 
-    <SettingsSectionHeader title="其他" hint="屏幕常亮、关闭确认等杂项开关" />
+    <SettingsSectionHeader title={$t('settings.section.miscReader')} hint={$t('settings.section.miscReaderHint')} />
     {#if wakeLockSupported}
       <SettingsItemGroup
         title="屏幕常亮"
@@ -2529,7 +2530,7 @@
     </div>
     <!-- end legacy hidden block -->
   {:else if activeSettings === 'TTS'}
-    <SettingsSectionHeader title="TTS 朗读" hint="自 1.11 起在滚动 + 分页两种模式下都可用。包含引擎、起点、快捷键和自定义 HTTP TTS" />
+    <SettingsSectionHeader title={$t('settings.section.tts')} hint={$t('settings.section.ttsHint')} />
     <SettingsItemGroup
       title="朗读引擎"
       tooltip="Web Speech：浏览器内建，作兜底；SAPI：系统 TTS（仅桌面端 Windows）；Kokoro-82M：内置离线神经网络 TTS（v1.0 ONNX 当前只有英语），需首次下载约 80MB；自定义 HTTP TTS 可接 OpenAI / Gemini / Google Cloud / 自部署 Qwen3-TTS / CosyVoice 2 等任意服务。切换后请重开书生效。"
@@ -2860,7 +2861,7 @@
     {/if}
 
   {:else if activeSettings === 'Data'}
-    <SettingsSectionHeader title="存储与备份" hint="书库、设置、统计的物理位置与云端同步" />
+    <SettingsSectionHeader title={$t('settings.section.storageBackup')} hint={$t('settings.section.storageBackupHint')} />
     <div class="lg:col-span-3">
       <SettingsItemGroup title="跨设备同步阅读统计" tooltip="把每天的阅读时长同步到云端，桌面 + 手机 PWA 都能看到合并的数据">
         <SettingsSync />
@@ -2892,7 +2893,7 @@
       </button>
     </SettingsItemGroup>
 
-    <SettingsSectionHeader title="导入与导出" hint="格式修正、自动备份和外部存储行为" />
+    <SettingsSectionHeader title={$t('settings.section.importExport')} hint={$t('settings.section.importExportHint')} />
     <SettingsItemGroup title="EPUB 导入修正" tooltip={importHTMLFixModeTooltip}>
       <ButtonToggleGroup
         options={optionsForImportHTMLFixes}
@@ -2926,7 +2927,7 @@
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={cacheStorageData} />
     </SettingsItemGroup>
 
-    <SettingsSectionHeader title="阅读器行为" hint="外部书提示、OCR 提示等阅读界面相关开关" />
+    <SettingsSectionHeader title={$t('settings.section.readerBehaviorData')} hint={$t('settings.section.readerBehaviorDataHint')} />
     <SettingsItemGroup
       title="隐藏来源提示"
       tooltip="打开外部存储源中的书时隐藏警告提示"
@@ -2959,7 +2960,7 @@
       </button>
     </SettingsItemGroup>
 
-    <SettingsSectionHeader title="存储源与诊断" hint="外部存储源管理和故障排查导出" />
+    <SettingsSectionHeader title={$t('settings.section.storageSourcesDiag')} hint={$t('settings.section.storageSourcesDiagHint')} />
     <SettingsStorageSourceList storageSources={$storageSources$} />
     <SettingsItemGroup title="诊断日志" tooltip="导出包含设置与运行日志的诊断文件，反馈问题时附上能加快定位">
       <button
@@ -2980,7 +2981,7 @@
       </button>
     </SettingsItemGroup>
   {:else}
-    <SettingsSectionHeader title="统计基础" hint="删除策略、完成判定与起始时刻" />
+    <SettingsSectionHeader title={$t('settings.section.statsBasics')} hint={$t('settings.section.statsBasicsHint')} />
     <SettingsItemGroup
       title="删除时保留本地数据"
       tooltip={'删除本地书籍副本时是否同时删除本地统计'}
@@ -3039,7 +3040,7 @@
         bind:value={startDayHoursForTracker}
       />
     </SettingsItemGroup>
-    <SettingsSectionHeader title="同步合并策略" hint="跨设备同步时如何合并统计与目标" />
+    <SettingsSectionHeader title={$t('settings.section.statsSync')} hint={$t('settings.section.statsSyncHint')} />
     <SettingsItemGroup
       title="统计合并方式"
       tooltip={'同步时统计按条目合并还是整体覆盖'}
@@ -3058,7 +3059,7 @@
         bind:selectedOptionId={readingGoalsMergeMode}
       />
     </SettingsItemGroup>
-    <SettingsSectionHeader title="追踪开关" hint="启用统计后才会出现下方的细化设置" />
+    <SettingsSectionHeader title={$t('settings.section.statsTracking')} hint={$t('settings.section.statsTrackingHint')} />
     <SettingsItemGroup
       title="启用统计"
       tooltip="在阅读器左下角显示统计追踪图标，需手动点击开始记录会话"

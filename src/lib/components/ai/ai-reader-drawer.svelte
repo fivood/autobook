@@ -12,6 +12,7 @@
     retrieveSpoilerSafe,
     type BookTextIndex
   } from '$lib/data/ai/book-text-index';
+  import { t, tImmediate } from '$lib/i18n';
 
   export let bookId: number;
   export let bookTitle: string;
@@ -78,7 +79,7 @@
       collected.push(c);
     }
     collected.sort((a, b) => a.startChar - b.startChar);
-    if (!collected.length) return '（已读片段为空）';
+    if (!collected.length) return tImmediate('ai.emptyContext');
     const blocks = collected.map((c) => `--- chunk #${c.id} ---\n${c.text}`);
     return blocks.join('\n\n');
   }
@@ -128,7 +129,7 @@
       } else {
         messages = messages.map((m, i) =>
           i === messages.length - 1
-            ? { role: 'assistant', content: `[请求失败] ${err?.message || err}`, error: true }
+            ? { role: 'assistant', content: tImmediate('ai.requestFailed', { err: err?.message || err }), error: true }
             : m
         );
       }
@@ -176,23 +177,23 @@
   use:clickOutside={() => dispatch('close')}
 >
   <div class="flex items-center gap-2 border-b border-current/10 px-4 py-3">
-    <h2 class="text-lg font-medium">AI 助手</h2>
+    <h2 class="text-lg font-medium">{$t('ai.title')}</h2>
     <span class="text-xs opacity-50"
-      >剧透安全 · 已读 {bookCharCount > 0
-        ? Math.round((exploredCharCount / bookCharCount) * 100)
-        : 0}%</span
+      >{$t('ai.subtitle', {
+        pct: bookCharCount > 0 ? Math.round((exploredCharCount / bookCharCount) * 100) : 0
+      })}</span
     >
     <div class="flex-1" />
     <button
       type="button"
       class="rounded p-1.5 opacity-60 hover:bg-black/5 hover:opacity-100"
-      title="设置"
+      title={$t('ai.settings')}
       on:click={() => (showSettings = !showSettings)}
     ><Fa icon={faCog} size="xs" /></button>
     <button
       type="button"
       class="rounded p-1.5 opacity-60 hover:bg-black/5 hover:opacity-100"
-      title="清空对话"
+      title={$t('ai.clearChat')}
       disabled={streaming}
       on:click={clearChat}
     ><Fa icon={faTrash} size="xs" /></button>
@@ -213,7 +214,7 @@
           on:change={onProviderChange}
         >
           <option value="anthropic" style="color:#000;">Anthropic</option>
-          <option value="openai" style="color:#000;">OpenAI 兼容（含 OpenRouter / Ollama）</option>
+          <option value="openai" style="color:#000;">{$t('ai.providerOpenaiLabel')}</option>
         </select>
       </label>
       <label class="mb-2 flex flex-col gap-1">
@@ -227,7 +228,7 @@
         />
       </label>
       <label class="mb-2 flex flex-col gap-1">
-        <span>Base URL（OpenAI 兼容时填，留空用官方）</span>
+        <span>{$t('ai.baseUrlLabel')}</span>
         <input
           type="text"
           class="rounded border border-current/20 bg-transparent px-2 py-1"
@@ -246,15 +247,15 @@
           placeholder={provider === 'anthropic' ? 'claude-sonnet-4-6' : 'gpt-4o / qwen2.5'}
         />
       </label>
-      <p class="text-xs opacity-50">仅本地保存。Anthropic 在浏览器中直连用了 dangerous-direct-browser-access 头。</p>
+      <p class="text-xs opacity-50">{$t('ai.privacyNote')}</p>
     </div>
   {/if}
 
   <div bind:this={logEl} class="flex-1 overflow-y-auto px-4 py-3">
     {#if !messages.length}
       <div class="py-8 text-center text-sm opacity-50">
-        <p>问我关于已读内容的任何问题。</p>
-        <p class="mt-2 text-xs">「这个人是谁？」「之前提过 X 吗？」「这条线索什么意思？」</p>
+        <p>{$t('ai.emptyHint1')}</p>
+        <p class="mt-2 text-xs">{$t('ai.emptyHint2')}</p>
       </div>
     {/if}
     {#each messages as m, i (i)}
@@ -277,7 +278,7 @@
         bind:value={input}
         rows="2"
         class="flex-1 resize-none rounded border border-current/20 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-current/40"
-        placeholder="问点什么…  Ctrl+Enter 发送"
+        placeholder={$t('ai.inputPlaceholder')}
         on:keydown={handleKey}
         disabled={streaming}
       />
@@ -287,7 +288,7 @@
           class="flex h-9 items-center gap-1 rounded px-3 text-sm"
           style="background:rgba(180,80,80,0.85);color:#f0efe6;"
           on:click={stop}
-        ><Fa icon={faStop} size="xs" /> 停止</button>
+        ><Fa icon={faStop} size="xs" /> {$t('ai.stop')}</button>
       {:else}
         <button
           type="button"
@@ -295,7 +296,7 @@
           style="background:rgba(95,126,123,0.9);color:#f0efe6;"
           on:click={send}
           disabled={!input.trim()}
-        ><Fa icon={faPaperPlane} size="xs" /> 发送</button>
+        ><Fa icon={faPaperPlane} size="xs" /> {$t('ai.send')}</button>
       {/if}
     </div>
   </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n';
   import { onMount } from 'svelte';
   import { tap } from 'rxjs';
   import { afterNavigate } from '$app/navigation';
@@ -139,7 +140,7 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('设置')}</title>
+  <title>{formatPageTitle($t('pageTitle.settings'))}</title>
 </svelte:head>
 
 <div class="elevation-4 fixed inset-x-0 top-0 z-40">
