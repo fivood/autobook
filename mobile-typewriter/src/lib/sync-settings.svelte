@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
+  import { t, tImmediate, locale$, LOCALES } from '$lib/i18n';
   import { faTimes, faCheck, faCopy } from '@fortawesome/free-solid-svg-icons';
   import {
     generateToken,
@@ -34,7 +35,7 @@
   });
 
   function formatTime(ts: number): string {
-    if (!ts) return '从未';
+    if (!ts) return tImmediate('sync.never');
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   }
@@ -42,12 +43,12 @@
   function applyToken() {
     const next = tokenInput.trim().toLowerCase();
     if (next && !isValidToken(next)) {
-      message = 'token 必须是 32 字符 hex';
+      message = tImmediate('sync.tokenInvalid');
       return;
     }
     setSyncToken(next);
     tokenInput = next;
-    message = next ? '已保存' : 'token 已清除';
+    message = next ? tImmediate('sync.saved') : tImmediate('sync.tokenCleared');
     if (enabled && next) startSyncLoop();
   }
 
@@ -55,7 +56,7 @@
     const t = generateToken();
     tokenInput = t;
     setSyncToken(t);
-    message = '已生成。把它粘到桌面端「设置 → 数据 → 同步」即可对接';
+    message = tImmediate('sync.generated');
     if (enabled) startSyncLoop();
   }
 
@@ -66,7 +67,7 @@
       copied = true;
       setTimeout(() => (copied = false), 1500);
     } catch (err: any) {
-      message = `复制失败：${err?.message || err}`;
+      message = tImmediate('sync.copyFail', { err: err?.message || err });
     }
   }
 
@@ -74,18 +75,18 @@
     enabled = !enabled;
     setSyncEnabled(enabled);
     if (enabled) startSyncLoop();
-    message = enabled ? '同步已启用' : '同步已关闭';
+    message = enabled ? tImmediate('sync.enabled') : tImmediate('sync.disabled');
   }
 
   async function manualPush() {
     busy = true;
-    message = '推送中…';
+    message = tImmediate('sync.pushing');
     try {
       const res = await pushNow();
       lastAt = getLastSyncAt();
-      message = res ? `已推送 ${res.pushed} 条` : '未启用同步';
+      message = res ? tImmediate('sync.pushed', { n: res.pushed }) : tImmediate('sync.notEnabled');
     } catch (err: any) {
-      message = `推送失败：${err?.message || err}`;
+      message = tImmediate('sync.pushFail', { err: err?.message || err });
     } finally {
       busy = false;
     }
@@ -93,15 +94,15 @@
 
   async function manualPull() {
     busy = true;
-    message = '拉取中…';
+    message = tImmediate('sync.pulling');
     try {
       const remote = await pullNow();
       lastAt = getLastSyncAt();
       message = remote
-        ? `已拉取，云端共 ${Object.keys(remote.books || {}).length} 本书`
-        : '未启用同步';
+        ? tImmediate('sync.pulled', { n: Object.keys(remote.books || {}).length })
+        : tImmediate('sync.notEnabled');
     } catch (err: any) {
-      message = `拉取失败：${err?.message || err}`;
+      message = tImmediate('sync.pullFail', { err: err?.message || err });
     } finally {
       busy = false;
     }
@@ -113,34 +114,34 @@
 <div class="overlay" on:click|self={() => dispatch('close')}>
   <div class="sheet">
     <header>
-      <h2>跨设备同步</h2>
-      <button on:click={() => dispatch('close')} aria-label="关闭">
+      <h2>{$t('sync.title')}</h2>
+      <button on:click={() => dispatch('close')} aria-label={$t('sync.close')}>
         <Fa icon={faTimes} />
       </button>
     </header>
 
     <p class="lead">
-      32 字符 token 是认证。先在桌面端「设置 → 数据 → 同步」生成，把同一串粘进下方；或直接在这里生成、复制到桌面端。
+      {$t('sync.description')}
     </p>
 
     <label class="row">
       <input type="checkbox" checked={enabled} on:change={toggleEnabled} />
-      <span>启用同步</span>
+      <span>{$t('sync.enable')}</span>
     </label>
 
     <div class="row token-row">
       <input
         type="text"
         bind:value={tokenInput}
-        placeholder="32 字符 hex token"
+        placeholder={$t('sync.tokenPlaceholder')}
         class="token-input"
         spellcheck="false"
         autocapitalize="off"
         autocorrect="off"
       />
-      <button on:click={applyToken}>保存</button>
-      <button on:click={genNew}>生成</button>
-      <button class="icon" on:click={copyToken} disabled={!tokenInput} aria-label="复制">
+      <button on:click={applyToken}>{$t('sync.save')}</button>
+      <button on:click={genNew}>{$t('sync.generate')}</button>
+      <button class="icon" on:click={copyToken} disabled={!tokenInput} aria-label={$t('sync.copy')}>
         {#if copied}
           <Fa icon={faCheck} />
         {:else}
@@ -149,17 +150,34 @@
       </button>
     </div>
 
-    <p class="meta">本机 device-id：<span class="mono">{device || '（未生成）'}</span></p>
+    <p class="meta">{$t('sync.deviceIdLabel')}<span class="mono">{device || $t('sync.deviceIdUnset')}</span></p>
 
     <div class="actions">
-      <button on:click={manualPush} disabled={busy || !enabled || !tokenInput}>立刻推送</button>
-      <button on:click={manualPull} disabled={busy || !enabled || !tokenInput}>立刻拉取</button>
-      <span class="meta">上次：{formatTime(lastAt)}</span>
+      <button on:click={manualPush} disabled={busy || !enabled || !tokenInput}>{$t('sync.pushNow')}</button>
+      <button on:click={manualPull} disabled={busy || !enabled || !tokenInput}>{$t('sync.pullNow')}</button>
+      <span class="meta">{$t('sync.lastSync', { time: formatTime(lastAt) })}</span>
     </div>
 
     {#if message}
       <p class="message">{message}</p>
     {/if}
+
+    <!-- Language picker lives here (not in a top nav) because the PWA
+         has no global chrome and this sheet is where users go to
+         configure the app once. -->
+    <div class="locale-row">
+      <span class="meta">{$t('locale.label')}</span>
+      <div class="locale-chips">
+        {#each LOCALES as loc (loc)}
+          <button
+            type="button"
+            class="locale-chip"
+            class:active={$locale$ === loc}
+            on:click={() => locale$.set(loc)}
+          >{$t('locale.' + loc)}</button>
+        {/each}
+      </div>
+    </div>
   </div>
 </div>
 
@@ -237,6 +255,33 @@
     font-size: 0.75rem;
     color: var(--fg-dim);
     margin: 0;
+  }
+  .locale-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--fg-dim);
+    flex-wrap: wrap;
+  }
+  .locale-chips {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+  .locale-chip {
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--fg-dim);
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .locale-chip.active {
+    background: color-mix(in srgb, currentColor 18%, transparent);
+    font-weight: 600;
   }
   .mono {
     font-family: ui-monospace, monospace;

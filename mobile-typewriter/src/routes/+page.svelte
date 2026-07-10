@@ -29,6 +29,7 @@
     type SavedPosition
   } from '$lib/persist';
   import { deleteStoredBook, getStoredBook, storeBook } from '$lib/book-store';
+  import { t, tImmediate } from '$lib/i18n';
 
   const SPEED_KEY = 'tw-speed';
   const STOP_KEY = 'tw-stop-at-chapter';
@@ -241,11 +242,11 @@
   }
 
   function formatDuration(seconds: number): string {
-    if (seconds < 60) return `${seconds} 秒`;
+    if (seconds < 60) return tImmediate('duration.seconds', { n: seconds });
     const m = Math.floor(seconds / 60);
-    if (m < 60) return `${m} 分`;
+    if (m < 60) return tImmediate('duration.minutes', { n: m });
     const h = Math.floor(m / 60);
-    return `${h} 时 ${m % 60} 分`;
+    return tImmediate('duration.hours', { h, m: m % 60 });
   }
 
   $: if (engine) engine.setSpeed(speed);
@@ -298,7 +299,7 @@
     pdfLoadProgress = '';
     try {
       const loaded = await loadFile(file, (loadedPages, totalPages) => {
-        pdfLoadProgress = `渲染第 ${loadedPages} / ${totalPages} 页…`;
+        pdfLoadProgress = tImmediate('ingest.pdfProgress', { loaded: loadedPages, total: totalPages });
       });
       if (loaded.kind === 'pdf') {
         await openPdf(loaded.pdf);
@@ -315,7 +316,7 @@
         });
       }
     } catch (e: any) {
-      error = `读取失败：${e?.message || e}`;
+      error = tImmediate('ingest.readFail', { err: e?.message || e });
     } finally {
       busy = false;
       pdfLoadProgress = '';
@@ -397,7 +398,7 @@
     closeAnyBook();
     const parsed = parseText(text);
     if (!parsed.totalChars) {
-      error = '这个文件好像没有可读内容';
+      error = tImmediate('ingest.noReadableContent');
       return;
     }
     title = name;
@@ -445,7 +446,7 @@
           revealed: pdfCurrentPage,
           total: pdfBook.pages.length,
           updatedAt: Date.now(),
-          preview: `共 ${pdfBook.pages.length} 页`,
+          preview: tImmediate('ingest.pdfPreview', { n: pdfBook.pages.length }),
           kind: 'pdf',
           page: pdfCurrentPage,
           ...(coverDataUrl ? { coverDataUrl } : {})
@@ -687,27 +688,27 @@
         if (!file) return;
         try {
           const loaded = await loadFile(file, (p, t) => {
-            pdfLoadProgress = `渲染第 ${p} / ${t} 页…`;
+            pdfLoadProgress = tImmediate('ingest.pdfProgress', { loaded: p, total: t });
           });
           if (loaded.kind === 'pdf') {
             const h = await hashContent(
               `pdf:${loaded.pdf.title}:${loaded.pdf.pages.length}:${loaded.pdf.totalChars}`
             );
             if (h !== item.hash) {
-              error = '这不是同一本书：哈希不对。换个文件再试。';
+              error = tImmediate('ingest.hashMismatch');
               return;
             }
             await openPdf(loaded.pdf);
           } else {
             const h = await hashContent(parseText(loaded.text).flatText);
             if (h !== item.hash) {
-              error = '这不是同一本书：哈希不对。换个文件再试。';
+              error = tImmediate('ingest.hashMismatch');
               return;
             }
             await loadBook(item.title, loaded.text);
           }
         } catch (e: any) {
-          error = `读取失败：${e?.message || e}`;
+          error = tImmediate('ingest.readFail', { err: e?.message || e });
         }
       };
       input.click();
@@ -747,14 +748,14 @@
     on:dragleave={onDragLeave}
     on:drop={onDrop}
     role="region"
-    aria-label="文件拖放区"
+    aria-label={$t('landing.dropAria')}
   >
     {#if dragOver}
-      <div class="drop-hint">松开导入</div>
+      <div class="drop-hint">{$t('landing.dropHint')}</div>
     {/if}
     <h1>AutoBook</h1>
-    <p class="lead">逐字浮现 + 扫描 PDF 滑屏。支持 .txt / .epub / .md / .pdf。</p>
-    <p class="lead-sub">桌面端可以直接把文件拖进这里。</p>
+    <p class="lead">{$t('landing.lead')}</p>
+    <p class="lead-sub">{$t('landing.leadSub')}</p>
 
     <label class="upload">
       <input
@@ -763,7 +764,7 @@
         on:change={handleFile}
         disabled={busy}
       />
-      <span>{busy ? (pdfLoadProgress || '读取中…') : '选择文件'}</span>
+      <span>{busy ? (pdfLoadProgress || $t('landing.loading')) : $t('landing.pickFile')}</span>
     </label>
 
     {#if error}
@@ -772,7 +773,7 @@
 
     {#if recents.length}
       <section class="recents">
-        <h2>最近读过</h2>
+        <h2>{$t('landing.recentTitle')}</h2>
         <ul>
           {#each recents as r (r.hash)}
             <li>
@@ -786,30 +787,30 @@
                   <div class="recent-title">{r.title}</div>
                   <div class="recent-meta">
                     {#if r.kind === 'pdf'}
-                      第 {(r.page ?? r.revealed) + 1} / {r.total} 页 · PDF
+                      {$t('landing.recentPagesPdf', { page: (r.page ?? r.revealed) + 1, total: r.total })}
                     {:else}
-                      {Math.round((r.revealed / r.total) * 100)}% · {r.preview}…
+                      {$t('landing.recentPct', { pct: Math.round((r.revealed / r.total) * 100), preview: r.preview })}
                     {/if}
                   </div>
                 </div>
               </button>
-              <button class="recent-del" title="删除记录" on:click={() => deleteRecent(r.hash)}>×</button>
+              <button class="recent-del" title={$t('landing.recentDelete')} on:click={() => deleteRecent(r.hash)}>×</button>
             </li>
           {/each}
         </ul>
-        <p class="hint">点条目重新选同一个文件即可继续上次进度。</p>
+        <p class="hint">{$t('landing.recentHint')}</p>
       </section>
     {/if}
 
     <footer>
-      <button class="link" on:click={() => (syncOpen = true)}>跨设备同步阅读时长</button>
-      <p>桌面完整版（高亮 / 笔记本 / AI / 离线词典 / Obsidian 同步）：<a href="https://github.com/fivood/autobook/releases/latest" rel="noopener">GitHub Releases</a></p>
+      <button class="link" on:click={() => (syncOpen = true)}>{$t('landing.syncOpen')}</button>
+      <p>{@html $t('landing.desktopFullLink', { link: '<a href="https://github.com/fivood/autobook/releases/latest" rel="noopener">GitHub Releases</a>' })}</p>
     </footer>
   </main>
 {:else}
   <div class="reader" class:immersive class:chrome-hidden={!chromeVisible}>
     <header class="topbar">
-      <button class="ghost" on:click={closeAnyBook}>‹ 关闭</button>
+      <button class="ghost" on:click={closeAnyBook}>{$t('reader.close')}</button>
       <div class="header-title">
         <div class="book-title">{title}</div>
         {#if bookKind === 'text' && currentChapterTitle}
@@ -819,14 +820,14 @@
       <button
         class="ghost immersive-toggle"
         on:click={toggleImmersive}
-        title={immersive ? '退出沉浸' : '沉浸模式'}
-        aria-label={immersive ? '退出沉浸' : '沉浸模式'}
+        title={immersive ? $t('reader.immersiveOff') : $t('reader.immersiveOn')}
+        aria-label={immersive ? $t('reader.immersiveOff') : $t('reader.immersiveOn')}
       >{immersive ? '◳' : '◰'}</button>
-      <span class="progress-tag" title="今日累计 (含其它设备)">
+      <span class="progress-tag" title={$t('reader.progressAria')}>
         {#if bookKind === 'pdf'}
-          {pdfCurrentPage + 1}/{total} 页 · {formatDuration(todaySeconds)}
+          {$t('reader.pdfProgress', { cur: pdfCurrentPage + 1, total, duration: formatDuration(todaySeconds) })}
         {:else}
-          {progressPct}% · {formatDuration(todaySeconds)}
+          {$t('reader.textProgress', { pct: progressPct, duration: formatDuration(todaySeconds) })}
         {/if}
       </span>
     </header>
@@ -853,7 +854,7 @@
             >
               <img
                 src={pdfPageUrls[i]}
-                alt="第 {i + 1} 页"
+                alt={$t('pdf.alt', { n: i + 1 })}
                 loading="lazy"
                 decoding="async"
                 class="pdf-page-img"
@@ -933,18 +934,18 @@
           class="chip"
           on:click={() => requestScrollToPdfPage(Math.max(0, pdfCurrentPage - 1))}
           disabled={pdfCurrentPage <= 0}
-          aria-label="上一页"
+          aria-label={$t('pdf.prevPage')}
         >‹</button>
-        <span class="speed">第 {pdfCurrentPage + 1} / {total} 页</span>
+        <span class="speed">{$t('pdf.pageOf', { cur: pdfCurrentPage + 1, total })}</span>
         <button
           class="chip"
           on:click={() => requestScrollToPdfPage(Math.min(total - 1, pdfCurrentPage + 1))}
           disabled={pdfCurrentPage >= total - 1}
-          aria-label="下一页"
+          aria-label={$t('pdf.nextPage')}
         >›</button>
         <label class="row stop-at-chapter">
           <input type="checkbox" bind:checked={autoResumeOnVisible} />
-          <span title="切回 App 时回到原位置">续读</span>
+          <span title={$t('pdf.resumeTooltip')}>{$t('pdf.resume')}</span>
         </label>
       </div>
     {:else if book && readMode === 'scroll'}
@@ -955,8 +956,8 @@
         <button
           class="chip mode-chip"
           on:click={toggleReadMode}
-          title="切换到打字机模式"
-          aria-label="切换到打字机模式"
+          title={$t('scroll.toTypewriter')}
+          aria-label={$t('scroll.toTypewriter')}
         >
           <!-- Typewriter glyph: top "paper sheet" + keyboard body with
                three dots representing keys / chars typed -->
@@ -968,20 +969,20 @@
             <circle cx="16" cy="14" r="1.1" fill="var(--chip-bg)"/>
           </svg>
         </button>
-        <span class="speed">滑屏阅读</span>
+        <span class="speed">{$t('scroll.label')}</span>
         <label class="row stop-at-chapter">
           <input type="checkbox" bind:checked={autoResumeOnVisible} />
-          <span title="切回 App 时回到原位置">续读</span>
+          <span title={$t('pdf.resumeTooltip')}>{$t('pdf.resume')}</span>
         </label>
       </div>
     {:else if book}
       <div class="controls">
         <div class="row">
           <button class="chip" on:click={() => bumpSpeed(-1)}>−</button>
-          <span class="speed">{speed} 字/秒</span>
+          <span class="speed">{$t('typewriter.speedUnit', { n: speed })}</span>
           <button class="chip" on:click={() => bumpSpeed(1)}>+</button>
         </div>
-        <button class="play" on:click={togglePlay} aria-label={playing ? '暂停' : '播放'}>
+        <button class="play" on:click={togglePlay} aria-label={playing ? $t('typewriter.pause') : $t('typewriter.play')}>
           {#if playing}
             <svg viewBox="0 0 24 24" width="32" height="32"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
           {:else}
@@ -991,8 +992,8 @@
         <button
           class="chip mode-chip"
           on:click={toggleReadMode}
-          title="切换到手动滑屏阅读"
-          aria-label="切换到手动滑屏阅读"
+          title={$t('typewriter.toScroll')}
+          aria-label={$t('typewriter.toScroll')}
         >
           <!-- Scroll glyph: vertical double-headed arrow (up + down) +
                three short content lines suggesting "scroll through" -->
@@ -1002,31 +1003,31 @@
         </button>
         <label class="row stop-at-chapter">
           <input type="checkbox" bind:checked={autoResumeOnVisible} />
-          <span title="切回 App 时若之前在播则继续">续读</span>
+          <span title={$t('typewriter.resumeTooltip')}>{$t('typewriter.resume')}</span>
         </label>
         <label class="row stop-at-chapter">
           <input type="checkbox" bind:checked={stopAtChapter} />
-          <span>章止</span>
+          <span>{$t('typewriter.chapterStop')}</span>
         </label>
       </div>
 
       {#if book.chapters.length > 1}
         <details class="toc">
-          <summary>目录 · {book.chapters.length} 章</summary>
+          <summary>{$t('typewriter.tocSummary', { n: book.chapters.length })}</summary>
           <ul>
             {#each book.chapters as ch, i (i)}
               <li>
                 <button class:active={i === chapterIdx} on:click={() => jumpToChapter(i)}>
-                  {ch.title || `（无标题段 ${i + 1}）`}
+                  {ch.title || $t('typewriter.untitledChapter', { n: i + 1 })}
                 </button>
               </li>
             {/each}
           </ul>
-          <button class="restart" on:click={restart}>从头开始</button>
+          <button class="restart" on:click={restart}>{$t('typewriter.restart')}</button>
         </details>
       {/if}
     {/if}
-    <button class="sync-fab" title="同步设置" on:click={() => (syncOpen = true)}>⇅</button>
+    <button class="sync-fab" title={$t('landing.syncFab')} on:click={() => (syncOpen = true)}>⇅</button>
   </div>
 {/if}
 
