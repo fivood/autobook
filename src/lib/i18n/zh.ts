@@ -135,7 +135,7 @@ export default {
 
   // Reader footer / progress strip
   'readerFooter.copyProgress': '点击复制进度',
-  'readerFooter.statsMenu': '单击打开统计菜单，双击切换统计',
+  'readerFooter.statsMenu': '单击打开统计菜单，双击切换追踪',
   'readerFooter.menuAria': '显示阅读器菜单',
 
   // TOC panel
@@ -236,7 +236,7 @@ export default {
   'settings.section.paraIndent': '段落首行缩进',
   'settings.section.paraIndentHint': '段落首行缩进（rem）',
   'settings.section.paraSpacingMode': '段落间距模式',
-  'settings.section.paraSpacingModeHint': '切到手动模式可指定段落间距值',
+  'settings.section.paraSpacingModeHint': '切换到手动模式可指定段落间距值',
   'settings.section.paraSpacing': '段落间距',
   'settings.section.paraSpacingHint': '段落间距（rem）',
   'settings.section.justify': '两端对齐',
@@ -249,7 +249,7 @@ export default {
   'settings.section.furigana': '日文振假名',
   // Reader sections
   'settings.section.viewMode': '阅读视图模式',
-  'settings.section.viewModeHint': '决定可用的播放方式：滚动 = 打字机自动播放；分页 = TTS 朗读 + 自动翻页',
+  'settings.section.viewModeHint': '决定可用的阅读方式：滚动 = 打字机自动播放；分页 = TTS 朗读 + 自动翻页',
   'settings.section.readerBehavior.continuous': '滚动模式行为',
   'settings.section.readerBehavior.paginated': '分页模式行为',
   'settings.section.readerBehavior.continuousHint': '自定义阅读点、窗口变化时的定位行为',
@@ -288,13 +288,13 @@ export default {
   'stats.header.readingTime': '阅读时间',
   'stats.header.charactersRead': '已读字数',
   'stats.header.copyTmw': '以 TMW 日志格式复制数据',
-  'stats.header.summaryActive': '您已在汇总标签页',
+  'stats.header.summaryActive': '已在汇总标签页',
   'stats.header.summarySwitch': '切换到汇总标签页',
-  'stats.header.heatmapActive': '您已在热力图标签页',
+  'stats.header.heatmapActive': '已在热力图标签页',
   'stats.header.heatmapSwitch': '切换到热力图标签页',
   'stats.header.titleFilter': '打开标题筛选菜单',
   'stats.header.openSettings': '打开统计设置',
-  'stats.header.backToBook': '回到当前书',
+  'stats.header.backToBook': '返回当前书籍',
   'stats.summary.sortByProp': '点击按此属性选择/排序',
 
   // Statistics heatmap
@@ -319,7 +319,7 @@ export default {
   'stats.heatmap.highlightStreaks': '高亮连续记录',
 
   // Notebook page
-  'notebook.title': '笔记本',
+  'notebook.title': '笔记',
   'notebook.search': '搜索原文、备注、书名、标签',
   'notebook.review.button': '回顾',
   'notebook.review.tooltip': '今日回顾：随机选 10 条久未回看的内容',
@@ -357,7 +357,7 @@ export default {
   'notebook.foldersHeader': '文件夹',
   'notebook.noFolders': '还没有文件夹',
   'notebook.folderNamePrompt': '文件夹名称',
-  'notebook.folderDeleteConfirm': '删除文件夹「{name}」？里面的高亮会变成"未归档"，但不会被删除。',
+  'notebook.folderDeleteConfirm': '删除文件夹「{name}」？里面的高亮会变成「未归档」，但不会被删除。',
 
   // AI drawer (visible UI only; system prompts stay Chinese for LLM steering)
   'ai.title': 'AI 助手',
@@ -366,7 +366,7 @@ export default {
   'ai.clearChat': '清空对话',
   'ai.providerOpenaiLabel': 'OpenAI 兼容（含 OpenRouter / Ollama）',
   'ai.baseUrlLabel': 'Base URL（OpenAI 兼容时填，留空用官方）',
-  'ai.privacyNote': '仅本地保存。Anthropic 在浏览器中直连用了 dangerous-direct-browser-access 头。',
+  'ai.privacyNote': '仅本地保存。Anthropic 在浏览器中直连用了 dangerous-direct-browser-access 请求头。',
   'ai.emptyHint1': '问我关于已读内容的任何问题。',
   'ai.emptyHint2': '「这个人是谁？」「之前提过 X 吗？」「这条线索什么意思？」',
   'ai.inputPlaceholder': '问点什么…  Ctrl+Enter 发送',
@@ -377,7 +377,7 @@ export default {
 
   // Page <title>s
   'pageTitle.home': '首页',
-  'pageTitle.manage': '书库管理',
+  'pageTitle.manage': '书库',
   'pageTitle.settings': '设置',
   'pageTitle.changelog': '更新历史',
 
@@ -444,7 +444,7 @@ export default {
   'settings.tip.diagnosticLog': '导出包含设置与运行日志的诊断文件，反馈问题时附上能加快定位',
 
   // Reading tracker menu (opens from the reader footer during a session)
-  'tracker.action.toggle': '切换统计',
+  'tracker.action.toggle': '切换追踪',
   'tracker.action.updateLocation': '更新位置',
   'tracker.action.freezeLocation': '切换冻结位置',
   'tracker.action.save': '保存',
@@ -453,7 +453,7 @@ export default {
   'tracker.section.session': '当前会话',
   'tracker.section.today': '今日',
   'tracker.section.allTime': '累计',
-  'tracker.section.completed': '已完成',
+  'tracker.section.completed': '已读',
   'tracker.section.autoScroll': '自动滚动',
   'tracker.currentReadingGoal': '当前阅读目标:',
   'tracker.timeGoalRow': '{used} / {goal} 分钟 ({pct}%)',
@@ -491,7 +491,7 @@ export default {
   'dataPaths.refreshTooltip': '重新读取大小',
   'dataPaths.clearAll': '清除全部本地数据并重启',
   'dataPaths.section.library.label': '书库 + 高亮 + 笔记本 + 统计',
-  'dataPaths.section.library.hint': '主存储。受 WebView2 管理，无法直接搬迁。备份请用上方「跨设备同步」推阅读统计，单本可用 FS 同步',
+  'dataPaths.section.library.hint': '主存储。受 WebView2 管理，无法直接搬迁。备份请用上方「跨设备同步」推送阅读统计，单本可用 FS 同步',
   'dataPaths.section.ui.label': 'UI 设置 / token / API key',
   'dataPaths.section.ui.hint': '「数据 → 重置 UI 设置」可单独清此处，不影响书库',
   'dataPaths.section.fs.label': '本地 FS 同步副本',
@@ -508,7 +508,7 @@ export default {
   'sync.tokenCleared': 'token 已清除',
   'sync.tokenInvalid': 'token 必须是 32 字符 hex',
   'sync.saved': '已保存',
-  'sync.generated': '已生成并保存。把它粘到其它设备即可同步',
+  'sync.generated': '已生成并保存。粘贴到其它设备即可同步',
   'sync.copyFail': '复制失败：{err}',
   'sync.regenConfirm': '重新生成 device-id 后，此设备过往天数的统计在云端会被记成新设备的贡献，可能造成总时长虚高。确定？',
   'sync.newDeviceId': '新 device-id：{id}',
