@@ -8,6 +8,7 @@
     "strict": true,
     "noImplicitReturns": true,
     "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
     // kokoro-js + @huggingface/transformers ship type definitions that don't
     // pass strict — skip checking node_modules .d.ts files (our own code is
     // still strict-checked).

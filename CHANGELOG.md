@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.15.1
+
+- **修 Calibre 转换 MOBI/AZW3 时弹出黑窗口并卡住**：`ebook-convert` 在 Windows GUI 父进程下会闪现控制台窗口，且某些文件会让它无限挂起。改为隐藏窗口 + 5 分钟超时，超时时强制杀掉子进程并提示用户手动转 EPUB
+- **修更新失败没有遥测**：自动更新报错只在对话框显示，运维侧看不到。失败时自动把错误信息提交到 `sync.fivood.com/report`
+- **新增错误报告提交入口**：诊断日志弹窗（设置 → 数据 → 导出诊断日志触发）新增「提交报告」按钮，把日志匿名提交到 Cloudflare Worker
+- **MOBI/AZW 导入失败自动上报**：导入出错且包含 MOBI/AZW 文件时，自动提交类型为 `import` 的错误报告，便于跟踪 Calibre 兼容性问题
+- **修 MOBI/AZW 文件拖入无反应**：Tauri WebView 里 `webkitGetAsEntry()` 可能返回空，导致拖入文件不触发导入。`get-drop-event-files.ts` 在 FileSystemEntry 不可用时回退到 `dataTransfer.files`，拖入和选择器行为一致
+- 后端 `stats-sync` Worker 新增 `POST /report` 端点，接收 64 KB 以内的匿名错误/安装/更新/导入报告，存在 KV 中
+
 ## 1.15.0
 
 - **中 / 英 / 日 三语界面切换**：顶栏语言选择器（🌐 图标），首次访问按浏览器语言自动选择，其后每次会话记住选择

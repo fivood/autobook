@@ -56,6 +56,7 @@
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
+  import { submitReport } from '$lib/functions/report-error';
   import { importBackup, importData, replicateData } from '$lib/functions/replication/replicator';
   import { throwIfAborted } from '$lib/functions/replication/replication-error';
   import {
@@ -516,6 +517,14 @@
     resetProgress();
 
     if (error) {
+      // Auto-submit telemetry for MOBI/AZW import failures so we can see how
+      // often Calibre / native parser hangs in the wild.
+      const hasMobi = files.some((f) => /\.(mobi|azw3?)$/i.test(f.name));
+      if (hasMobi) {
+        submitReport({ type: 'import', message: error, context: { filenames: files.map((f) => f.name) } }).catch(
+          () => undefined
+        );
+      }
       showError(errorTitle, error, '书籍导入期间发生错误');
     }
   }

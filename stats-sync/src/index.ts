@@ -19,6 +19,22 @@ export interface Env {
 const TOKEN_RE = /^[0-9a-f]{32}$/i;
 const MAX_BODY_BYTES = 64 * 1024; // 64 KB per push is plenty for daily deltas
 const MAX_STATE_BYTES = 2 * 1024 * 1024; // hard cap to keep KV reads cheap
+const MAX_REPORT_BYTES = 64 * 1024; // anonymous error reports
+
+const REPORT_TYPES = ['error', 'install', 'update', 'import'] as const;
+type ReportType = (typeof REPORT_TYPES)[number];
+
+interface ReportPayload {
+  type: ReportType;
+  version?: string;
+  currentVersion?: string;
+  targetVersion?: string;
+  message?: string;
+  stack?: string;
+  context?: Record<string, unknown>;
+  timestamp?: number;
+  userAgent?: string;
+}
 
 interface DayEntry {
   /** Per-device daily totals; server keeps max(client-reported) per device. */
@@ -116,6 +132,50 @@ function mergeInto(server: UserState, incoming: IncomingPayload, now: number): U
   return server;
 }
 
+function generateReportId(): string {
+  // crypto.randomUUID is available in Cloudflare Workers.
+  return crypto.randomUUID();
+}
+
+async function saveReport(env: Env, id: string, payload: ReportPayload): Promise<void> {
+  const body = JSON.stringify({ ...payload, receivedAt: Date.now(), id });
+  if (body.length > MAX_REPORT_BYTES) {
+    throw new Error('report too large');
+  }
+  await env.STATS.put(`report:${id}`, body);
+}
+
+function isValidReportType(value: unknown): value is ReportType {
+  return typeof value === 'string' && REPORT_TYPES.includes(value as ReportType);
+}
+
+async function handleReport(request: Request, env: Env): Promise<Response> {
+  if (request.method !== 'POST') {
+    return json({ error: 'method not allowed' }, { status: 405 });
+  }
+  const contentLength = Number(request.headers.get('content-length') || 0);
+  if (contentLength > MAX_REPORT_BYTES) {
+    return json({ error: 'payload too large' }, { status: 413 });
+  }
+  let payload: ReportPayload;
+  try {
+    payload = (await request.json()) as ReportPayload;
+  } catch {
+    return json({ error: 'invalid json' }, { status: 400 });
+  }
+  if (!isValidReportType(payload.type)) {
+    return json({ error: 'type must be one of error/install/update/import' }, { status: 400 });
+  }
+
+  const id = generateReportId();
+  try {
+    await saveReport(env, id, payload);
+  } catch (e: any) {
+    return json({ error: e?.message || 'save failed' }, { status: 500 });
+  }
+  return json({ ok: true, id });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -125,6 +185,11 @@ export default {
     if (url.pathname === '/health') {
       return json({ ok: true });
     }
+
+    if (url.pathname === '/report') {
+      return handleReport(request, env);
+    }
+
     if (url.pathname !== '/sync') {
       return json({ error: 'not found' }, { status: 404 });
     }
