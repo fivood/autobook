@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.16.3
+
+原生 MOBI/KF8 解析器修掉 9 个硬失败（之前必须靠 Calibre 才能 import 的文件）。用 Rust 侧诊断测试扫了本地 241 个 MOBI/AZW3 定位根因，修完 241 文件 0 error。
+
+- **修大体量漫画 AZW3 的 HUFF 表溢出 panic**（4 文件：哆啦A梦7-12卷 / 龙珠第3·4·36-42卷，均 165–271MB）：`mobi_parser.rs:182` 建 HUFF maxcode 表时 `max_raw + 1` 用普通 `+`，debug 下 `max_raw == u32::MAX` 时溢出 panic（被 `catch_unwind` 转成 Err）。标准 HUFF maxcode 公式 `((max+1)<<shift)-1` 的末位已用 `wrapping_sub`，唯独 `+1` 漏了 wrapping。改 `wrapping_add(1)`
+- **修 joint AZW3「expected MOBI signature」**（1 文件：世界的凛冬全3册）：record 0 本就是 KF8 头（format_version==8），但 `find_boundary` 优先级高于 `is_pure_kf8`，找到一个次要 BOUNDARY（@595）后 `kf8_start=596`，而 records[596] 是 "CONT..." 段不是 PalmDoc+MOBI 头 → 报错。改成先查 `is_pure_kf8(records[0])`，是纯 KF8 就 `kf8_start=0`（BOUNDARY 是次要段/假阳性时不再误导）
+- **修真 MOBI6-only「文件可能损坏」误报**（4 文件：大医·日出篇上/下 / 暮光之城全集 / 魔印人Ⅳ）：这些是 MOBI6-only（无 BOUNDARY、全记录无 KF8 头、record 0 format_version==6），文字本就少（图像/扫描书）。`is_kf8_only`（文本<50字）误触发 → dispatch KF8 → `Ok(None)` → 报「损坏」。改成 `Ok(None)` 时不报错、fall through 到 MOBI6 提取（返回 文本+图片，用户至少能打开）
+- **诊断测试**：新增 `src-tauri/src/mobi_scan_test.rs`，`#[ignore]`（CI 不跑），用 `AUTOBOOK_MOBI_SCAN_DIR` env 指定目录扫 MOBI/AZW3 出质量报告（TSV：html 字数 / 图片数 / pagebreak / FFFD 比例 / 错误），输出到 OS temp。用于定位 Phase-2（KF8 skeleton/chunk/FDST 结构重组）目标 + 验证 parser 修复不回归
+- 顺带修正 Cargo.lock 的 `app` 版本（之前 stale 在 1.15.1，与 Cargo.toml 不同步；CI 本地 build 时自动修，但提交的 lock 一直 stale）
+
+> 注：这 9 个文件现在能 native import 不再强制 Calibre，但其中图像/扫描类（大医·日出篇等）文字本就少、部分 MOBI6 的文本提取仍偏少（如暮光之城全集 47k 字）——这是 KF8/MOBI6 文本提取的下一阶段（Phase 2：skeleton/chunk/FDST 结构重组）要解决的，不在本次范围。
+
 ## 1.16.2
 
 弹窗基建修复 + 第一个巨石文件拆分。无新功能。
