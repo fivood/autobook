@@ -73,6 +73,7 @@ export async function loadEpub(file: File): Promise<LoadedEpub> {
     let coverDataUrl: string | undefined;
     if (coverHref) {
       const coverEntry = byPath.get(coverHref.toLowerCase()) as unknown as FileEntry | undefined;
+      // zip.js's FileEntry.getData() isn't in its shipped TS types; reach through `as any`.
       if (coverEntry && typeof (coverEntry as any).getData === 'function') {
         try {
           const blob = await (coverEntry as any).getData(new BlobWriter(mimeFromExt(coverHref)));

@@ -98,5 +98,9 @@ export default {
   'sync.pushFail': '推送失败：{err}',
   'sync.pulling': '拉取中…',
   'sync.pulled': '已拉取，云端共 {n} 本书',
-  'sync.pullFail': '拉取失败：{err}'
+  'sync.pullFail': '拉取失败：{err}',
+
+  // Install prompt chip (+layout.svelte)
+  'install.prompt': '安装到主屏幕',
+  'install.dismiss': '关闭'
 };

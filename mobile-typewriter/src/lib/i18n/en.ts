@@ -86,5 +86,9 @@ export default {
   'sync.pushFail': 'Push failed: {err}',
   'sync.pulling': 'Pulling…',
   'sync.pulled': 'Pulled — {n} books in the cloud',
-  'sync.pullFail': 'Pull failed: {err}'
+  'sync.pullFail': 'Pull failed: {err}',
+
+  // Install prompt chip (+layout.svelte)
+  'install.prompt': 'Install app',
+  'install.dismiss': 'Dismiss'
 };

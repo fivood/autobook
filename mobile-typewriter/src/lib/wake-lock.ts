@@ -41,6 +41,7 @@ export async function acquireWakeLock(): Promise<boolean> {
   if (!isSupported()) return false;
   if (sentinel && !sentinel.released) return true;
   try {
+    // Wake Lock API isn't in the TS DOM lib version we ship; cast through `as any`.
     sentinel = (await (navigator as any).wakeLock.request('screen')) as Sentinel;
     sentinel.addEventListener('release', () => {
       // Browser released — usually because the page went hidden. We DON'T

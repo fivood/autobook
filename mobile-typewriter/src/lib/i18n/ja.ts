@@ -86,5 +86,9 @@ export default {
   'sync.pushFail': 'プッシュ失敗：{err}',
   'sync.pulling': '取得中…',
   'sync.pulled': '取得完了、クラウドに {n} 冊',
-  'sync.pullFail': '取得失敗：{err}'
+  'sync.pullFail': '取得失敗：{err}',
+
+  // Install prompt chip (+layout.svelte)
+  'install.prompt': 'アプリをインストール',
+  'install.dismiss': '閉じる'
 };

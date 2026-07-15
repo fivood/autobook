@@ -9,6 +9,24 @@
   "background_color": "#f0efe6",
   "theme_color": "#5f7e7b",
   "lang": "zh-CN",
+  "share_target": {
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "action": "/share-target",
+    "params": {
+      "files": [
+        {
+          "name": "file",
+          "accept": [
+            "application/epub+zip",
+            "application/pdf",
+            "text/plain",
+            "text/markdown"
+          ]
+        }
+      ]
+    }
+  },
   "icons": [
     {
       "src": "/icon-192.png",

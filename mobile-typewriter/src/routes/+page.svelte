@@ -152,6 +152,26 @@
   }
 
   onMount(async () => {
+    // Web Share Target pickup: if the SW redirected here (/?shared=1) after a
+    // share, grab the stashed blob and ingest it, then clear the stash. The
+    // rest of onMount (prefs, listeners, sync) still runs so the reader UI is
+    // fully wired even for a shared-file first open.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('shared')) {
+        const resp = await fetch('/__pending_share__');
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const name = resp.headers.get('x-filename') || 'shared';
+          const cache = await caches.open('pending-share');
+          await cache.delete('/__pending_share__');
+          history.replaceState({}, '', location.pathname);
+          await ingestFile(new File([blob], name));
+        }
+      }
+    } catch {
+      // best-effort: fall through to normal mount
+    }
     speed = Number(localStorage.getItem(SPEED_KEY)) || 8;
     stopAtChapter = localStorage.getItem(STOP_KEY) === '1';
     // Default both UX prefs ON — they're the whole point of the v1.14.2
@@ -1191,11 +1211,7 @@
     font-size: 0.78rem;
     color: var(--fg-dim);
   }
-  footer a {
-    color: inherit;
-  }
-
-  .reader {
+    .reader {
     display: flex;
     flex-direction: column;
     height: 100vh;
