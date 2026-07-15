@@ -4,6 +4,7 @@
 
 // See https://kit.svelte.dev/docs/types#the-app-namespace
 // for information about these interfaces
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SvelteKit app-type extension point; ambient namespace, intentionally unused until app types are added
 declare namespace App {
   // interface Locals {}
   // interface Platform {}

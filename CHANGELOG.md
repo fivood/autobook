@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.16.2
+
+弹窗基建修复 + 第一个巨石文件拆分。无新功能。
+
+- **dialogManager 支持链式弹窗**：`+layout.svelte` 的 `on:close` 原是 `closeAllDialogs`（清空整个 `dialogs$`），而 ConfirmDialog 的 `resolver` 先跑、`dispatch('close')` 后跑——resolver 里 push 的下一个 dialog 会被紧跟的清空砸掉，链式弹窗不可用（这正是此前 `settings-data-paths` 双确认一直留原生 `confirm()` 的原因）。改成 `removeDialog(dialog)`（按引用移除该个）：旧 dialog 此时已不在数组 → no-op → 新 dialog 存活。单个 dialog 行为不变，backdrop 仍 dismiss-all
+- **原生 `confirm()` 全应用清零**：最后一个残留 `settings-data-paths.clearAll` 的双确认（清除全部本地数据）改用链式 `ConfirmDialog`（第一段带 `pre-line` 保 bullet 换行，header 复用 `dataPaths.clearAll`）。至此原生 confirm 全部迁到应用内弹窗
+- **`database.service` 高亮簇拆出 `HighlightRepository`**（巨石机会式拆分第一刀，CLAUDE.md「不要往巨石文件里继续堆代码」）：新建 `highlight-repository.ts`，14 个高亮方法（getHighlights / addHighlight / deleteHighlight / linkHighlights / markHighlightReviewed / 文件夹 CRUD …）移入，仅依赖注入的 `db` + `highlightsChanged$`，自洽。`database.service` 留 14 个一行 facade，**所有 `database.addHighlight` 等调用点零改动**；`storeHighlightsForTitle` 留在 service（跨 data 域，用 `getDataByTitle`）。service 净减 ~140 行实现，高亮逻辑内聚到独立模块
+- **lint 首次全绿**：`app.d.ts` 的 `App` 命名空间（SvelteKit 模板类型扩展点，ambient 声明被误报 unused）加 `eslint-disable`，清掉最后 1 个 warning。eslint 现为 0 errors / 0 warnings
+
 ## 1.16.1
 
 代码卫生批次：无新功能、无可见行为变化（除 confirm 弹窗改用应用内自定义弹窗），主要是去重、合规与 lint 清理。

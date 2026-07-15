@@ -3,6 +3,8 @@
   import Fa from 'svelte-fa';
   import { faFolderOpen, faTrash, faRotateRight } from '@fortawesome/free-solid-svg-icons';
   import { isTauri } from '$lib/data/env';
+  import { dialogManager } from '$lib/data/dialog-manager';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import { t, tImmediate } from '$lib/i18n';
 
   interface DataPaths {
@@ -60,17 +62,42 @@
     }
   }
 
-  async function clearAll() {
-    if (!confirm(tImmediate('dataPaths.clearConfirm'))) return;
-    if (!confirm(tImmediate('dataPaths.clearConfirmAgain'))) return;
-    busy = true;
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('schedule_full_reset');
-    } catch (err: any) {
-      message = tImmediate('dataPaths.clearFail', { err: err?.message || err });
-      busy = false;
-    }
+  function clearAll() {
+    const header = tImmediate('dataPaths.clearAll');
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: header,
+          dialogMessage: tImmediate('dataPaths.clearConfirm'),
+          contentStyles: 'white-space: pre-line;',
+          resolver: (wasCanceled: boolean) => {
+            if (wasCanceled) return;
+            // Second confirm — chaining works now (+layout's removeDialog fix).
+            dialogManager.dialogs$.next([
+              {
+                component: ConfirmDialog,
+                props: {
+                  dialogHeader: header,
+                  dialogMessage: tImmediate('dataPaths.clearConfirmAgain'),
+                  resolver: async (wasCanceledAgain: boolean) => {
+                    if (wasCanceledAgain) return;
+                    busy = true;
+                    try {
+                      const { invoke } = await import('@tauri-apps/api/core');
+                      await invoke('schedule_full_reset');
+                    } catch (err: any) {
+                      message = tImmediate('dataPaths.clearFail', { err: err?.message || err });
+                      busy = false;
+                    }
+                  }
+                }
+              }
+            ]);
+          }
+        }
+      }
+    ]);
   }
 
   function formatBytes(b: number): string {

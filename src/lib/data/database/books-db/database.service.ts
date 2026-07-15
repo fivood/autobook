@@ -38,6 +38,7 @@ import type BooksDb from '$lib/data/database/books-db/versions/books-db';
 import type { IDBPDatabase } from 'idb';
 import LogReportDialog from '$lib/components/log-report-dialog.svelte';
 import { MergeMode } from '$lib/data/merge-mode';
+import { HighlightRepository } from './highlight-repository';
 import MessageDialog from '$lib/components/message-dialog.svelte';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { dialogManager } from '$lib/data/dialog-manager';
@@ -118,6 +119,8 @@ export class DatabaseService {
 
   highlightsChanged$ = new Subject<void>();
 
+  private highlightRepo!: HighlightRepository;
+
   /** Fires whenever storeStatistics finishes, so cross-device sync can push. */
   statisticsChanged$ = new Subject<void>();
 
@@ -144,6 +147,7 @@ export class DatabaseService {
   constructor(public db: Promise<IDBPDatabase<BooksDb>>) {
     this.db$ = from(db).pipe(shareReplay({ refCount: true, bufferSize: 1 }));
     this.isReady$ = this.db$.pipe(map((x) => !!x));
+    this.highlightRepo = new HighlightRepository(db, this.highlightsChanged$);
   }
 
   async getLastModifiedForType(title: string, dataType: string) {
@@ -458,19 +462,15 @@ export class DatabaseService {
   }
 
   async getHighlights(dataId: number): Promise<BooksDbHighlight[]> {
-    const db = await this.db;
-    return db.getAllFromIndex('highlight', 'dataId', dataId);
+    return this.highlightRepo.getHighlights(dataId);
   }
 
   async getAllHighlights(): Promise<BooksDbHighlight[]> {
-    const db = await this.db;
-    return db.getAll('highlight');
+    return this.highlightRepo.getAllHighlights();
   }
 
   async getHighlightsForTitle(title: string): Promise<BooksDbHighlight[]> {
-    const db = await this.db;
-    const all = await db.getAll('highlight');
-    return all.filter((h) => h.bookTitle === title);
+    return this.highlightRepo.getHighlightsForTitle(title);
   }
 
   async storeHighlightsForTitle(
@@ -515,136 +515,47 @@ export class DatabaseService {
   }
 
   async putHighlight(highlight: BooksDbHighlight): Promise<number> {
-    const db = await this.db;
-    const id = await db.put('highlight', highlight);
-    this.highlightsChanged$.next();
-    return id;
+    return this.highlightRepo.putHighlight(highlight);
   }
 
   async addHighlight(highlight: Omit<BooksDbHighlight, 'id'>): Promise<number> {
-    const db = await this.db;
-    const id = await db.add('highlight', highlight as BooksDbHighlight);
-    this.highlightsChanged$.next();
-    return id;
+    return this.highlightRepo.addHighlight(highlight);
   }
 
   async deleteHighlight(id: number): Promise<void> {
-    const db = await this.db;
-    await db.delete('highlight', id);
-    this.highlightsChanged$.next();
+    return this.highlightRepo.deleteHighlight(id);
   }
 
   async getHighlightFolders(): Promise<BooksDbHighlightFolder[]> {
-    const db = await this.db;
-    const list = await db.getAll('highlightFolder');
-    return list.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+    return this.highlightRepo.getHighlightFolders();
   }
 
   async addHighlightFolder(name: string, parentId?: number): Promise<number> {
-    const db = await this.db;
-    const existing = await db.getAll('highlightFolder');
-    const sortOrder = existing.length
-      ? Math.max(...existing.map((f) => f.sortOrder)) + 1
-      : 0;
-    const now = Date.now();
-    const id = await db.add('highlightFolder', {
-      name,
-      ...(parentId !== undefined ? { parentId } : {}),
-      sortOrder,
-      createdAt: now,
-      lastModified: now
-    } as BooksDbHighlightFolder);
-    this.highlightsChanged$.next();
-    return id;
+    return this.highlightRepo.addHighlightFolder(name, parentId);
   }
 
   async renameHighlightFolder(id: number, name: string): Promise<void> {
-    const db = await this.db;
-    const folder = await db.get('highlightFolder', id);
-    if (!folder) return;
-    await db.put('highlightFolder', { ...folder, name, lastModified: Date.now() });
-    this.highlightsChanged$.next();
+    return this.highlightRepo.renameHighlightFolder(id, name);
   }
 
   async deleteHighlightFolder(id: number): Promise<void> {
-    const db = await this.db;
-    const all = await db.getAll('highlight');
-    const tx = db.transaction(['highlight', 'highlightFolder'], 'readwrite');
-    for (const h of all) {
-      if (h.folderId === id) {
-        const { folderId: _drop, ...rest } = h;
-        await tx.objectStore('highlight').put(rest as BooksDbHighlight);
-      }
-    }
-    await tx.objectStore('highlightFolder').delete(id);
-    await tx.done;
-    this.highlightsChanged$.next();
+    return this.highlightRepo.deleteHighlightFolder(id);
   }
 
   async setHighlightFolder(highlightId: number, folderId: number | undefined): Promise<void> {
-    const db = await this.db;
-    const h = await db.get('highlight', highlightId);
-    if (!h) return;
-    const updated: BooksDbHighlight = {
-      ...h,
-      lastModified: Date.now()
-    };
-    if (folderId === undefined) delete updated.folderId;
-    else updated.folderId = folderId;
-    await db.put('highlight', updated);
-    this.highlightsChanged$.next();
+    return this.highlightRepo.setHighlightFolder(highlightId, folderId);
   }
 
   async linkHighlights(aId: number, bId: number): Promise<void> {
-    if (aId === bId) return;
-    const db = await this.db;
-    const tx = db.transaction('highlight', 'readwrite');
-    const [a, b] = await Promise.all([
-      tx.store.get(aId),
-      tx.store.get(bId)
-    ]);
-    if (!a || !b) {
-      await tx.done;
-      return;
-    }
-    const now = Date.now();
-    const aLinks = new Set(a.linkedIds || []);
-    const bLinks = new Set(b.linkedIds || []);
-    aLinks.add(bId);
-    bLinks.add(aId);
-    await tx.store.put({ ...a, linkedIds: [...aLinks], lastModified: now });
-    await tx.store.put({ ...b, linkedIds: [...bLinks], lastModified: now });
-    await tx.done;
-    this.highlightsChanged$.next();
+    return this.highlightRepo.linkHighlights(aId, bId);
   }
 
   async unlinkHighlights(aId: number, bId: number): Promise<void> {
-    const db = await this.db;
-    const tx = db.transaction('highlight', 'readwrite');
-    const [a, b] = await Promise.all([
-      tx.store.get(aId),
-      tx.store.get(bId)
-    ]);
-    const now = Date.now();
-    if (a) {
-      const next = (a.linkedIds || []).filter((id) => id !== bId);
-      await tx.store.put({ ...a, linkedIds: next.length ? next : undefined, lastModified: now });
-    }
-    if (b) {
-      const next = (b.linkedIds || []).filter((id) => id !== aId);
-      await tx.store.put({ ...b, linkedIds: next.length ? next : undefined, lastModified: now });
-    }
-    await tx.done;
-    this.highlightsChanged$.next();
+    return this.highlightRepo.unlinkHighlights(aId, bId);
   }
 
   async markHighlightReviewed(id: number): Promise<void> {
-    const db = await this.db;
-    const h = await db.get('highlight', id);
-    if (!h) return;
-    const now = Date.now();
-    await db.put('highlight', { ...h, lastReviewedAt: now, lastModified: now });
-    this.highlightsChanged$.next();
+    return this.highlightRepo.markHighlightReviewed(id);
   }
 
   async getStorageSources() {

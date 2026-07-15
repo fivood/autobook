@@ -113,6 +113,14 @@
     zIndex = '';
   }
 
+  // Remove only the dialog that dispatched 'close' (by identity), not the whole
+  // stack. This lets a dialog's resolver push a follow-up dialog before close
+  // fires — closeAllDialogs would wipe that just-pushed dialog (the chaining bug
+  // that kept settings-data-paths' double-confirm on native confirm()).
+  function removeDialog(closing: Dialog) {
+    dialogManager.dialogs$.next(dialogs.filter((d) => d !== closing));
+  }
+
   dialogManager.dialogs$.subscribe((d) => {
     clickOnCloseDisabled = d[0]?.disableCloseOnClick ?? false;
     zIndex = d[0]?.zIndex ?? '';
@@ -214,7 +222,7 @@
         {#if typeof dialog.component === 'string'}
           {@html dialog.component}
         {:else}
-          <svelte:component this={dialog.component} {...dialog.props} on:close={closeAllDialogs} />
+          <svelte:component this={dialog.component} {...dialog.props} on:close={() => removeDialog(dialog)} />
         {/if}
       {/each}
     </div>
