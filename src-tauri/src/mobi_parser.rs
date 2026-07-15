@@ -158,7 +158,7 @@ impl HuffCdic {
             let term = (v & 0x80) != 0;
             let maxcode_raw = v >> 8;
             let maxcode = if codelen > 0 {
-                ((maxcode_raw + 1) << (32 - codelen)).wrapping_sub(1)
+                ((maxcode_raw.wrapping_add(1)) << (32 - codelen)).wrapping_sub(1)
             } else {
                 0
             };
@@ -179,7 +179,11 @@ impl HuffCdic {
             ]);
             let cl = i + 1;
             mincode[cl] = min_raw << (32 - cl);
-            maxcode_table[cl] = ((max_raw + 1) << (32 - cl)).wrapping_sub(1);
+            // `max_raw + 1` can overflow u32 at cl=32 (max_raw=0xFFFFFFFF) — wrap,
+            // matching the `.wrapping_sub(1)` already used below (standard HUFF
+            // maxcode modular arithmetic). Without this large manga AZW3 files
+            // panic in debug builds ("attempt to add with overflow").
+            maxcode_table[cl] = ((max_raw.wrapping_add(1)) << (32 - cl)).wrapping_sub(1);
         }
 
         let mut dictionary: Vec<(Vec<u8>, bool)> = Vec::new();
@@ -305,8 +309,7 @@ fn strip_mobi_control_chars(raw: &mut Vec<u8>) {
 /// Extract raw decompressed content bytes by parsing PalmDB directly,
 /// bypassing the mobi crate's record handling and string conversion.
 /// Returns (bytes, declared_encoding).
-/// declared_encoding: 1252 = CP1252, 65001 = UTF-8.
-fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)> {
+pub(crate) fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)> {
     use crate::kf8_parser::{parse_palmdb_records, strip_record_trailers};
 
     let (records, _title) = parse_palmdb_records(file_bytes).ok()?;
@@ -560,7 +563,10 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
         match crate::kf8_parser::try_parse_kf8(bytes) {
             Ok(Some(parsed)) => return Ok(parsed),
             Ok(None) => {
-                return Err("本文件 MOBI6 段为空且未找到 KF8 段，文件可能损坏。".into());
+                // No BOUNDARY and not pure KF8 → genuine MOBI6-only (often
+                // image-heavy / scanned books with little text). Don't error;
+                // fall through to the MOBI6 extraction below so the user gets
+                // the book (text + images) instead of a "文件可能损坏" dead-end.
             }
             Err(e) => {
                 return Err(format!("KF8 解析失败: {e}"));

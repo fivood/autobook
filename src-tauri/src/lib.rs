@@ -13,6 +13,9 @@ mod kf8_parser;
 mod mobi_parser;
 mod winrt_tts;
 
+#[cfg(test)]
+mod mobi_scan_test;
+
 
 /// Set when the tray "退出" menu item is chosen so the WindowEvent handler
 /// knows to let the close request through instead of hiding to tray.

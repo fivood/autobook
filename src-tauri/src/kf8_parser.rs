@@ -436,14 +436,17 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         return Ok(None);
     }
 
-    let kf8_start = match find_boundary_index(&records) {
-        Some(boundary) => boundary + 1,
-        None => {
-            if is_pure_kf8(records[0]) {
-                0
-            } else {
-                return Ok(None);
-            }
+    // Pure KF8 (record 0 is a KF8 header, fv==8) takes precedence over the
+    // BOUNDARY scan: some AZW3 files have a valid KF8 header at record 0 AND
+    // a BOUNDARY marker later (a secondary/legacy segment). Previously the
+    // BOUNDARY scan won and pointed kf8_start past it, where records[boundary+1]
+    // isn't a PalmDoc+MOBI header → "expected MOBI signature" error.
+    let kf8_start = if is_pure_kf8(records[0]) {
+        0
+    } else {
+        match find_boundary_index(&records) {
+            Some(boundary) => boundary + 1,
+            None => return Ok(None),
         }
     };
 
