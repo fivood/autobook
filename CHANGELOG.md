@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.16.0
+
+笔记本（跨书高亮 / 独立笔记）整轮优化，覆盖搜索、编辑、交互、性能四方面。无数据结构改动，排序选「默认（阅读顺序）」时与改造前完全一致。
+
+- **搜索：字段语法 + 命中高亮 + 排序 + 颜色筛选 + 标签 AND/OR**：原搜索是单字段整串子串匹配，且过滤/分组/标签统计全堆在 `+page.svelte` 里。抽出 `src/lib/functions/notebook/notebook-search.ts` 模块，支持 `memo:` `tag:` `book:` `color:` `kind:` 字段过滤（空格分隔，裸词跨字段搜），命中处 `<mark>` 黄底（escape 安全：分段转义后插标签，不靠整体 escape 后再 regex）；新增排序切换（默认阅读顺序 / 最近修改 / 创建时间 / 相关度，相关度按命中权重计分）；4 色高亮首次暴露为筛选维度（之前完全没入口）；标签 chip 旁加且/或切换。多词搜索从「字面短语」改为「词的 AND」，与新字段语义一致
+- **独立笔记专属编辑器**：原独立笔记复用高亮备注弹窗（单行、强制黄色、无预览、误关即丢）。新建 `note-editor-dialog.svelte`：多行 textarea、编辑/预览切换（marked 渲染，带 `.nb-preview` 排版）、实时字数、4 色选择（不再强制黄）、Markdown 草稿自动存 localStorage——下次打开恢复 + 「丢弃」入口，保存清空、取消保留（防误关丢失）。书内高亮编辑仍走原弹窗，行为不变
+- **修笔记本侧栏 active 高亮失效**：`class:bg-black-5` 是无效 Svelte class 指令（Tailwind 透明度用 `bg-black/5`，斜杠在 class 指令里解析不了），导致「全部」视图选中时无背景高亮。改为条件 class 字符串，并给三个视图按钮 + 文件夹行补一致的 active 背景
+- **文件夹新建/重命名/删除换自定义弹窗**：原先用浏览器原生 `prompt()`/`confirm()`，与书库侧栏（`library-folders/folder-sidebar` 已用 `TextInputDialog`/`ConfirmDialog`）不一致。notebook 侧栏对齐该模式：新建走 `TextInputDialog`、删除走 `ConfirmDialog`、重命名改内联输入（Enter 提交 / Esc 取消 / blur 提交）
+- **回顾模态键盘快捷键**：`Enter`=已看、`→`/`Space`=跳过、`Esc`=关闭，按钮 `title` 带提示 + 底部一行可发现提示。window handler 里 `preventDefault()` 阻断按钮默认 Enter 激活，避免双触发跳两条
+- **修链接选择器聚焦 + 补 Esc/Enter**：`<input autofocus>` 在 Svelte 里不可靠（组件挂载时机），改 `tick().then(focus)`（与 `HighlightMemoDialog`/`TextInputDialog` 同模式）；补 Esc 关闭、Enter 选第一条结果
+- **搜索防抖 + 关联派生**：搜索输入 90ms 防抖（`debouncedQuery` 驱动解析/过滤），快打字时合并重算；`getLinked(h)` 原在模板里每条每帧调 3 次（`if` / `count` / `each` 各一次，每次 `.map().filter()`），改为 `buildLinkedById(groups, highlightById)` 每渲染周期算一次 `Map<id, linked[]>`，模板用 `{@const linked = ...}`
+- i18n 三语各补约 50 条 `notebook.*` key（搜索 / 排序 / 标签 / 编辑器 / 文件夹弹窗）
+
 ## 1.15.1
 
 - **修 Calibre 转换 MOBI/AZW3 时弹出黑窗口并卡住**：`ebook-convert` 在 Windows GUI 父进程下会闪现控制台窗口，且某些文件会让它无限挂起。改为隐藏窗口 + 5 分钟超时，超时时强制杀掉子进程并提示用户手动转 EPUB
