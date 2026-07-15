@@ -535,6 +535,7 @@ export default {
   'sync.generated': '已生成并保存。粘贴到其它设备即可同步',
   'sync.copyFail': '复制失败：{err}',
   'sync.regenConfirm': '重新生成 device-id 后，此设备过往天数的统计在云端会被记成新设备的贡献，可能造成总时长虚高。确定？',
+  'sync.regenHeader': '重置设备 ID',
   'sync.newDeviceId': '新 device-id：{id}',
   'sync.pushing': '同步中…',
   'sync.pushed': '已推送 {n} 条新增/变化',

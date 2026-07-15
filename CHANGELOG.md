@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.16.1
+
+代码卫生批次：无新功能、无可见行为变化（除 confirm 弹窗改用应用内自定义弹窗），主要是去重、合规与 lint 清理。
+
+- **colorDot 三处重复定义归一**：`highlight-sidebar` / `note-editor-dialog` / `notebook+page` 各写一份 4 色 rgba map，新建 `src/lib/data/highlight-color.ts` 导出 `HIGHLIGHT_COLORS` + `HIGHLIGHT_COLOR_DOT`，三处改 import
+- **reset-UI 流程去重**：`changelog.performReset` 与 `settings-content.resetUiSettings` 是近乎一模一样的重复（confirm + Tauri `schedule_ui_reset` / localStorage 清空 + reload），新建 `src/lib/functions/reset-ui-settings.ts` 统一 `confirmResetUiSettings()`，两处变 1-3 行调用
+- **notebook 条目删除改用应用内弹窗**：`removeOne` 原用浏览器原生 `confirm()`，与同页文件夹删除已用的 `ConfirmDialog` 不一致；换 `ConfirmDialog`（`white-space: pre-line` 保换行）
+- **原生 `confirm()` 跨应用统一（4/6 处）**：settings-sync 重置设备 ID、settings-theme-editor 删主题、changelog / settings-content 重置 UI 设置 改用 `ConfirmDialog`。`settings-data-paths` 的双确认保留原生——`+layout` 的 `closeAllDialogs` 在 `on:close` 清空 `dialogs$`，而 ConfirmDialog resolver 先跑、`dispatch('close')` 后跑，链式弹窗的第二个会被紧跟的清空砸掉；要彻底修得改共享 close 逻辑（高风险），留待后续
+- **`as any` 审计（25 处全合规）**：CLAUDE.md 要求每个 `as any` 带注释。修 3 处真味道——`utils.ts` 的 `('x' in navigator) as any`（`in` 返回 boolean，cast 无意义；`msMaxTouchPoints` 是 IE-only 不在 TS DOM lib，改正确的 `Navigator & { msMaxTouchPoints?: number }` cast）；kokoro 的 `(mod as any).KokoroTTS` 两处重复抽成 `loadKokoroTtsClass()` helper；`pdf-ocr-banner` 的 `$ocrLang$ as any` 改 `as OcrLanguage`（顺手让 `ocr-job-manager` re-export `OcrLanguage` 供调用方取）。其余合理项（CSS Custom Highlight API、Tauri/调试全局、pdfjs 类型漂移、`{}` reduce seed 等）补注释
+- **console 清理**：`logger.ts` 的 `console.debug` 加 eslint-disable（logger 抽象层正当用）；`replicator.ts` 的 `console.log` → `console.info`（放行方法）。其余 console 早已带 disable 注释，合规
+- **lint 清理（25→1 warning）**：13 文件清 unused imports/vars；参数型（`storageSourceName` / `storageSourceManager`·`window` / `isPaginated`）按 CLAUDE.md 前缀 `_`；`load-pdf.ts` 删死变量 `bestArea`（当初想比尺寸、后改取首个的残留）。剩 1 warning 是 `app.d.ts` 的 `App` 命名空间（SvelteKit 模板扩展点，ambient 声明误报，删了丢扩展位故留）
+- 巨石文件评估（`settings-content` 3227 / `b/+page` 2747 / `database.service` 1275 / `statistics-heatmap` 1408）：各文件的可提取 cohesive 簇已识别，按 CLAUDE.md「机会式」——下次因功能改动碰到对应文件时顺手提取，不现在盲拆（无法跑 app 验证，盲拆千行易留暗坑）
+
 ## 1.16.0
 
 笔记本（跨书高亮 / 独立笔记）整轮优化，覆盖搜索、编辑、交互、性能四方面。无数据结构改动，排序选「默认（阅读顺序）」时与改造前完全一致。

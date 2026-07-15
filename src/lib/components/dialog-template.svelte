@@ -8,7 +8,7 @@
   // themes (white text on white card = invisible).
   $: resolved = (() => {
     const fallback =
-      availableThemes.get('sage-green-theme') || availableThemes.get('light-theme') || ({} as any);
+      availableThemes.get('sage-green-theme') || availableThemes.get('light-theme') || ({} as any); // empty fallback if no built-in theme registered
     const picked = $customThemes$[$theme$] || availableThemes.get($theme$) || fallback;
     return { ...fallback, ...picked } as Record<string, string>;
   })();

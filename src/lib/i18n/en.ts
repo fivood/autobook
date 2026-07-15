@@ -496,6 +496,7 @@ export default {
   'sync.generated': 'Generated and saved. Paste it into another device to sync.',
   'sync.copyFail': 'Copy failed: {err}',
   'sync.regenConfirm': "Regenerating the device-id makes this device's past days count as a new device's contribution in the cloud — total time may inflate. Sure?",
+  'sync.regenHeader': 'Reset device ID',
   'sync.newDeviceId': 'New device-id: {id}',
   'sync.pushing': 'Syncing…',
   'sync.pushed': 'Pushed {n} additions / changes',

@@ -26,6 +26,9 @@ interface Segment {
 
 const HIGHLIGHT_NAME = 'tts-sentence';
 
+// CSS Custom Highlight API (window.Highlight / CSS.highlights) isn't in the
+// TS DOM lib version we ship; the `as any` casts here and in apply()/clear()
+// reach through it. Feature-detected at runtime since Safari lacks it.
 function hasHighlightApi(): boolean {
   return (
     typeof window !== 'undefined' &&

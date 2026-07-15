@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Fa from 'svelte-fa';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
+  import { dialogManager } from '$lib/data/dialog-manager';
   import {
     faCopy,
     faRotateRight,
@@ -75,10 +77,21 @@
   }
 
   function regenDevice() {
-    if (!confirm(tImmediate('sync.regenConfirm'))) return;
-    syncDeviceId$.next('');
-    ensureDeviceId();
-    message = tImmediate('sync.newDeviceId', { id: $syncDeviceId$ });
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: tImmediate('sync.regenHeader'),
+          dialogMessage: tImmediate('sync.regenConfirm'),
+          resolver: (wasCanceled: boolean) => {
+            if (wasCanceled) return;
+            syncDeviceId$.next('');
+            ensureDeviceId();
+            message = tImmediate('sync.newDeviceId', { id: $syncDeviceId$ });
+          }
+        }
+      }
+    ]);
   }
 
   async function manualPush() {

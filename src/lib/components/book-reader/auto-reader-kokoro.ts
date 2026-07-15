@@ -41,12 +41,18 @@ import {
 // Lazy-loaded once on first synth; cached for the lifetime of the page.
 let ttsPromise: Promise<any> | null = null;
 
+/** kokoro-js's TS bundle doesn't export the KokoroTTS class cleanly, so both
+ *  the engine and the settings preview route through this single cast. */
+export async function loadKokoroTtsClass(): Promise<any> {
+  const mod = await import('kokoro-js');
+  return (mod as any).KokoroTTS;
+}
+
 async function loadModel(onProgress: (status: KokoroLoadStatus) => void) {
   if (ttsPromise) return ttsPromise;
   ttsPromise = (async () => {
     onProgress({ phase: 'loading', message: '正在加载 Kokoro-82M…', loaded: 0, total: 0 });
-    const mod = await import('kokoro-js');
-    const KokoroTTS = (mod as any).KokoroTTS;
+    const KokoroTTS = await loadKokoroTtsClass();
     if (!KokoroTTS?.from_pretrained) {
       throw new Error('kokoro-js 模块加载异常（未找到 KokoroTTS.from_pretrained）');
     }

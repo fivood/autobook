@@ -126,7 +126,6 @@
     openTrackerOnCompletion$,
     addCharactersOnCompletion$,
     statisticsMergeMode$,
-    isOnline$,
     manualBookmark$,
     customThemes$,
     overwriteBookCompletion$,
@@ -165,8 +164,6 @@
     }
   }
   import DictPopup from '$lib/components/dict/dict-popup.svelte';
-  import { dictFolderPath$ } from '$lib/data/store';
-  import { scanDictFolder, loadedDicts$ } from '$lib/data/dict/dict-manager';
   import {
     highlights$ as hlStore$,
     initHighlightManager,

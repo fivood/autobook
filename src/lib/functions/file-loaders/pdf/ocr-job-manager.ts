@@ -29,6 +29,7 @@ import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-ty
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { runOcr, type OcrProgress } from './pdf-ocr-runner';
 import type { OcrLanguage } from './pdf-ocr';
+export type { OcrLanguage };
 
 /**
  * Push the updated bookData (with new OCR-injected elementHtml + blobs) to

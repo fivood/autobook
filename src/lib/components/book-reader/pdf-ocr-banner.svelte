@@ -9,7 +9,8 @@
     clearOcrJob,
     isOcrJobRunning,
     ocrJob$,
-    startOcrJob
+    startOcrJob,
+    type OcrLanguage
   } from '$lib/functions/file-loaders/pdf/ocr-job-manager';
   import { pdfOcrPromptEnabled$, pdfOcrSkippedBookIds$ as ocrSkippedBooks$ } from '$lib/data/store';
 
@@ -40,7 +41,7 @@
 
   function start() {
     if (isOcrJobRunning()) return;
-    startOcrJob(book, $ocrLang$ as any);
+    startOcrJob(book, $ocrLang$ as OcrLanguage);
   }
 
   function applyAndReload() {

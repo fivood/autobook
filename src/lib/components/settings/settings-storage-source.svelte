@@ -52,7 +52,7 @@
         type: storageSourceType,
         storedInManager: false,
         encryptionDisabled: true,
-        data: {} as any,
+        data: {} as any, // placeholder — the manager populates data later
         lastSourceModified: Date.now()
       };
 

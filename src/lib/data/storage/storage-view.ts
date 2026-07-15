@@ -22,8 +22,8 @@ export interface StorageIconElement extends StorageIcon {
 
 export function isStorageSourceAvailable(
   storageSource: StorageKey,
-  storageSourceManager: string,
-  window: Window
+  _storageSourceManager: string,
+  _window: Window
 ) {
   switch (storageSource) {
     case StorageKey.BROWSER:

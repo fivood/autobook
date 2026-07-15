@@ -74,7 +74,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     readingGoalsMergeMode: MergeMode,
     cacheStorageData: boolean,
     askForStorageUnlock: boolean,
-    storageSourceName: string
+    _storageSourceName: string
   ) {
     this.window = window;
     this.isForBrowser = isForBrowser;

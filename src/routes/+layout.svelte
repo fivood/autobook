@@ -51,7 +51,7 @@
     setVar('--menu-background', theme.menuBackgroundColor, '#2b5a69');
     setVar('--menu-foreground', theme.menuFontColor, '#f0efe6');
     setVar('--button-selected', theme.buttonSelectedColor, '#2b5a69');
-    setVar('--button-border', (theme as any).buttonBorderColor, theme.buttonSelectedColor);
+    setVar('--button-border', (theme as any).buttonBorderColor, theme.buttonSelectedColor); // optional/legacy theme key not on the Theme type
     setVar('--button-hover', theme.buttonHoverColor, 'rgba(95,126,123,0.18)');
     setVar('--selection-background', theme.selectionBackgroundColor, '#5f7e7b');
     setVar('--selection-foreground', theme.selectionFontColor, '#f0efe6');

@@ -7,6 +7,7 @@
   import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
   import type { Section } from '$lib/data/database/books-db/versions/books-db';
   import { clickOutside } from '$lib/functions/use-click-outside';
+  import { HIGHLIGHT_COLOR_DOT as colorDot } from '$lib/data/highlight-color';
 
   export let highlights: BooksDbHighlight[] = [];
   export let sections: Section[] = [];
@@ -17,13 +18,6 @@
     delete: BooksDbHighlight;
     close: void;
   }>();
-
-  const colorDot: Record<string, string> = {
-    yellow: 'rgba(255,235,59,0.8)',
-    blue: 'rgba(100,181,246,0.7)',
-    green: 'rgba(129,199,132,0.7)',
-    pink: 'rgba(244,143,177,0.7)'
-  };
 
   interface GroupedSection {
     label: string;

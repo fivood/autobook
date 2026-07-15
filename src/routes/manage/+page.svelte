@@ -36,8 +36,6 @@
     confirmStatisticsDeletion$,
     database,
     fileCountData$,
-    hideExternalReadHint$,
-    isOnline$,
     keepLocalStatisticsOnDeletion$,
     lastExportedTarget$,
     lastExportedTypes$,

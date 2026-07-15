@@ -18,6 +18,9 @@ import type { Section } from '$lib/data/database/books-db/versions/books-db';
 import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
 import { pagePath } from '$lib/data/env';
 
+// pdfjs-dist's shipped TS types drift from the actual runtime API
+// (TextContent.items shape, PDFDocumentProxy.getOutline/destroy). The
+// `as any` / `as any[]` casts below paper over that drift intentionally.
 type PdfjsBundle = {
   pdfjs: typeof import('pdfjs-dist');
   cmapUrl: string;
@@ -313,7 +316,6 @@ async function extractPageImage(page: any): Promise<Blob | undefined> {
     const OPS_PAINT_IMAGE = 85; // OPS.paintImageXObject
 
     let bestObjId: string | null = null;
-    let bestArea = 0;
 
     for (let i = 0; i < ops.fnArray.length; i++) {
       if (ops.fnArray[i] === OPS_PAINT_IMAGE) {

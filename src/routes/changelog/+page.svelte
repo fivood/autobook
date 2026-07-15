@@ -7,8 +7,8 @@
     faRotateLeft
   } from '@fortawesome/free-solid-svg-icons';
   import { pagePath } from '$lib/data/env';
-  import { isTauri } from '$lib/data/env';
   import { formatPageTitle } from '$lib/functions/format-page-title';
+  import { confirmResetUiSettings } from '$lib/functions/reset-ui-settings';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import rawChangelog from '../../../CHANGELOG.md?raw';
@@ -55,32 +55,10 @@
     if (mainEl) mainEl.scrollTop = 0;
   }
 
-  async function performReset() {
-    if (
-      typeof window === 'undefined' ||
-      !confirm(
-        '将清除本地保存的 UI 设置（主题、字体、自定义快捷键、TTS 引擎选项等），书库与统计数据保留。应用会自动重启。\n\n继续吗？'
-      )
-    ) {
-      return;
-    }
-    resetting = true;
-    if (isTauri()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('schedule_ui_reset');
-        return;
-      } catch (err) {
-        console.warn('[changelog] reset failed, falling back to in-page clear:', err);
-      }
-    }
-    const toClear: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k) toClear.push(k);
-    }
-    toClear.forEach((k) => localStorage.removeItem(k));
-    window.location.reload();
+  function performReset() {
+    confirmResetUiSettings(() => {
+      resetting = true;
+    });
   }
 
   function needsResetButton(callouts: string[]): boolean {

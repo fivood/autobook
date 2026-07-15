@@ -8,8 +8,8 @@ import { internalStorageSourceName } from '$lib/data/storage/storage-types';
 
 import type { BooksDbStorageSource } from '$lib/data/database/books-db/versions/books-db';
 import StorageUnlock from '$lib/components/storage-unlock.svelte';
-import { dialogManager } from '$lib/data/dialog-manager';
-import { logger } from '$lib/data/logger';
+  import { dialogManager } from '$lib/data/dialog-manager';
+
 
 const saltByteLength = 16;
 const ivByteLength = 12;

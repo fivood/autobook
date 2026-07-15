@@ -3,6 +3,7 @@
   import { marked } from 'marked';
   import type { HighlightColor } from '$lib/data/database/books-db/versions/books-db';
   import { t } from '$lib/i18n';
+  import { HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_DOT as colorDot } from '$lib/data/highlight-color';
 
   export let mode: 'create' | 'edit' = 'create';
   export let memo = '';
@@ -15,13 +16,6 @@
   }>();
 
   const DRAFT_KEY = 'notebook:note-draft';
-  const COLORS: HighlightColor[] = ['yellow', 'blue', 'green', 'pink'];
-  const colorDot: Record<HighlightColor, string> = {
-    yellow: 'rgba(255,235,59,0.8)',
-    blue: 'rgba(100,181,246,0.7)',
-    green: 'rgba(129,199,132,0.7)',
-    pink: 'rgba(244,143,177,0.7)'
-  };
 
   marked.setOptions({ breaks: true, gfm: true });
 
@@ -156,7 +150,7 @@
     <div class="mt-2 flex items-center justify-between text-xs">
       <div class="flex items-center gap-1.5 opacity-70">
         <span>{$t('notebook.editor.color')}</span>
-        {#each COLORS as c (c)}
+        {#each HIGHLIGHT_COLORS as c (c)}
           <button
             type="button"
             class="rounded-full p-0.5"

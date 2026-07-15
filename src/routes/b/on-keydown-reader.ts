@@ -32,7 +32,7 @@ export function onKeydownReader(
   handleSetCustomReadingPoint: () => void,
   toggleTracker: () => void,
   freezeTrackerPosition: () => void,
-  isPaginated: boolean
+  _isPaginated: boolean
 ) {
   const action = bookReaderKeybindMap[ev.code || ev.key?.toLowerCase()];
 

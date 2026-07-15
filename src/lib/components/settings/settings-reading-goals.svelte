@@ -30,7 +30,6 @@
   import {
     cacheStorageData$,
     database,
-    isOnline$,
     readingGoal$,
     readingGoalsMergeMode$,
     replicationSaveBehavior$,

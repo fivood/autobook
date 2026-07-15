@@ -501,6 +501,7 @@ export default {
   'sync.generated': '生成して保存。他のデバイスに同じ token を貼り付ければ同期できます',
   'sync.copyFail': 'コピー失敗：{err}',
   'sync.regenConfirm': 'device-id を再生成すると、このデバイスの過去の統計がクラウドで新デバイス扱いになり、合計時間が過大になる可能性があります。よろしいですか？',
+  'sync.regenHeader': 'デバイス ID をリセット',
   'sync.newDeviceId': '新 device-id：{id}',
   'sync.pushing': '同期中…',
   'sync.pushed': '{n} 件の追加／変更をプッシュ',

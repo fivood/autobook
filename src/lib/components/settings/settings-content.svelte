@@ -33,6 +33,7 @@
   import { inputClasses } from '$lib/css-classes';
   import { BlurMode } from '$lib/data/blur-mode';
   import { dialogManager } from '$lib/data/dialog-manager';
+  import { confirmResetUiSettings } from '$lib/functions/reset-ui-settings';
   import { LocalFont } from '$lib/data/fonts';
   import { FuriganaStyle } from '$lib/data/furigana-style';
   import { ImportHTMLFixMode } from '$lib/data/import-html-fix-mode';
@@ -851,10 +852,9 @@
       }
       previewState = 'loading';
       try {
-        const { ensureKokoroLoaded } = await import('$lib/components/book-reader/auto-reader-kokoro');
+        const { ensureKokoroLoaded, loadKokoroTtsClass } = await import('$lib/components/book-reader/auto-reader-kokoro');
         await ensureKokoroLoaded();
-        const mod = await import('kokoro-js');
-        const KokoroTTS = (mod as any).KokoroTTS;
+        const KokoroTTS = await loadKokoroTtsClass();
         const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
           dtype: 'q8',
           device: 'wasm'
@@ -959,34 +959,8 @@
     }
   }
 
-  async function resetUiSettings() {
-    if (
-      typeof window === 'undefined' ||
-      !confirm(
-        '将清除本地保存的 UI 设置（主题、字体、自定义快捷键、TTS 引擎选项等），书库与统计数据保留。应用会自动重启。\n\n继续吗？'
-      )
-    ) {
-      return;
-    }
-    if (isTauri()) {
-      // Desktop: schedule a Local Storage wipe in Rust and restart, so it
-      // works even when stale UI state would otherwise block the page.
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('schedule_ui_reset');
-        return;
-      } catch (err) {
-        console.warn('[reset] schedule failed, falling back to in-page clear:', err);
-      }
-    }
-    // Browser fallback / desktop degraded path
-    const toClear: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k) toClear.push(k);
-    }
-    toClear.forEach((k) => localStorage.removeItem(k));
-    window.location.reload();
+  function resetUiSettings() {
+    confirmResetUiSettings();
   }
 
   let themeImportInput: HTMLInputElement | undefined;

@@ -21,6 +21,8 @@
     HighlightColor
   } from '$lib/data/database/books-db/versions/books-db';
   import { database } from '$lib/data/store';
+  import { dialogManager } from '$lib/data/dialog-manager';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import { pagePath } from '$lib/data/env';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
@@ -42,17 +44,10 @@
     highlightHtml
   } from '$lib/functions/notebook/notebook-search';
   import type { NotebookSortKey, TagMode, NotebookGroup } from '$lib/functions/notebook/notebook-search';
+  import { HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_DOT as colorDot } from '$lib/data/highlight-color';
 
   const REVIEW_BATCH = 10;
   const FRESH_REVIEW_MS = 1000 * 60 * 60 * 24 * 7; // less than 7d since reviewed = down-weight
-
-  const colorDot: Record<string, string> = {
-    yellow: 'rgba(255,235,59,0.8)',
-    blue: 'rgba(100,181,246,0.7)',
-    green: 'rgba(129,199,132,0.7)',
-    pink: 'rgba(244,143,177,0.7)'
-  };
-  const HIGHLIGHT_COLORS: HighlightColor[] = ['yellow', 'blue', 'green', 'pink'];
 
   let highlights: BooksDbHighlight[] = [];
   let folders: BooksDbHighlightFolder[] = [];
@@ -203,10 +198,24 @@
     goto(`${pagePath}/b?id=${bookId}&hl=${h.id}`);
   }
 
-  async function removeOne(h: BooksDbHighlight) {
-    if (!confirm(tImmediate('notebook.deleteConfirm', { preview: (h.text || h.memo).slice(0, 60) }))) return;
-    await database.deleteHighlight(h.id);
-    highlights = highlights.filter((x) => x.id !== h.id);
+  function removeOne(h: BooksDbHighlight) {
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: tImmediate('notebook.delete'),
+          dialogMessage: tImmediate('notebook.deleteConfirm', {
+            preview: (h.text || h.memo).slice(0, 60)
+          }),
+          contentStyles: 'white-space: pre-line;',
+          resolver: async (wasCanceled: boolean) => {
+            if (wasCanceled) return;
+            await database.deleteHighlight(h.id);
+            highlights = highlights.filter((x) => x.id !== h.id);
+          }
+        }
+      }
+    ]);
   }
 
   function openCreateNote() {

@@ -1,16 +1,13 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
   import {
     faCircleQuestion,
     faCloudArrowUp,
     faPenToSquare,
     faPlus,
     faSpinner,
-    faTableList,
     faTrash,
     faTriangleExclamation
   } from '@fortawesome/free-solid-svg-icons';
-  import MessageDialog from '$lib/components/message-dialog.svelte';
   import Popover from '$lib/components/popover/popover.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsStorageSource from '$lib/components/settings/settings-storage-source.svelte';
@@ -22,15 +19,12 @@
     type FsHandle,
     type StorageSourceSaveResult,
     type StorageUnlockAction,
-    type RemoteContext,
     unlockStorageData
   } from '$lib/data/storage/storage-source-manager';
-  import { StorageKey } from '$lib/data/storage/storage-types';
   import { getStorageIconData } from '$lib/data/storage/storage-view';
   import {
     autoReplication$,
     database,
-    isOnline$,
     syncTarget$
   } from '$lib/data/store';
   import { AutoReplicationType } from '$lib/functions/replication/replication-options';
