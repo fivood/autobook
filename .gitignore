@@ -23,7 +23,9 @@ latest.json
 release-notes-*.md
 test-dicts/
 
-# pdfjs sidecar assets (cmaps / standard_fonts / wasm), populated by
-# scripts/copy-vendor-assets.js on npm install. ~200 upstream files —
-# tracking them would churn the repo on every pdfjs bump.
+# static/vendor/ runtime assets (libarchive / ort / pdfjs sidecars),
+# all populated by scripts/copy-vendor-assets.js on npm install. Tracking
+# them bloats the repo with ~32 MB of binaries and churns on every upstream bump.
+static/vendor/libarchive/
+static/vendor/ort/
 static/vendor/pdfjs/
