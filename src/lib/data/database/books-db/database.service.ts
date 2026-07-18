@@ -11,8 +11,8 @@ import type {
   BooksDbHighlight,
   BooksDbHighlightFolder,
   BooksDbReadingGoal,
+  BooksDbSession,
   BooksDbStatistic,
-  BooksDbStorageSource,
   BooksDbSubtitleData
 } from '$lib/data/database/books-db/versions/books-db';
 import { Observable, Subject, from } from 'rxjs';
@@ -30,7 +30,7 @@ import {
   mergeReadingGoals,
   readingGoalSortFunction
 } from '$lib/data/reading-goal';
-import { lastReadingGoalsModified$, readingGoal$, syncTarget$ } from '$lib/data/store';
+import { lastReadingGoalsModified$, readingGoal$ } from '$lib/data/store';
 
 import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import type { BookStatistic } from '$lib/components/statistics/statistics-types';
@@ -49,7 +49,6 @@ import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
 import { logger } from '$lib/data/logger';
 import pLimit from 'p-limit';
 import { replicationProgress$ } from '$lib/functions/replication/replication-progress';
-import { setStorageSourceDefault } from '$lib/data/storage/storage-source-manager';
 import { storageSource$ } from '$lib/data/storage/storage-view';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 
@@ -124,6 +123,9 @@ export class DatabaseService {
   /** Fires whenever storeStatistics finishes, so cross-device sync can push. */
   statisticsChanged$ = new Subject<void>();
 
+  /** Fires after appendSession succeeds, so the year tab knows to refresh. */
+  sessionsChanged$ = new Subject<void>();
+
   bookmarksChanged$ = new Subject<void>();
 
   bookmarks$ = this.bookmarksChanged$.pipe(
@@ -141,8 +143,6 @@ export class DatabaseService {
     switchMap((db) => db.get('lastItem', LAST_ITEM_KEY)),
     shareReplay({ refCount: true, bufferSize: 1 })
   );
-
-  storageSourcesChanged$ = new Subject<BooksDbStorageSource[]>();
 
   constructor(public db: Promise<IDBPDatabase<BooksDb>>) {
     this.db$ = from(db).pipe(shareReplay({ refCount: true, bufferSize: 1 }));
@@ -558,77 +558,6 @@ export class DatabaseService {
     return this.highlightRepo.markHighlightReviewed(id);
   }
 
-  async getStorageSources() {
-    const db = await this.db;
-
-    return db.getAll('storageSource');
-  }
-
-  async saveStorageSource(
-    storageSource: BooksDbStorageSource,
-    oldName: string,
-    isSyncTarget: boolean,
-    isStorageSourceDefault: boolean
-  ) {
-    const db = await this.db;
-    const tx = db.transaction(['storageSource'], 'readwrite');
-
-    try {
-      const store = tx.objectStore('storageSource');
-
-      if (oldName && storageSource.name !== oldName) {
-        await store.delete(oldName);
-      }
-
-      if (storageSource.name === oldName) {
-        await store.put(storageSource);
-      } else {
-        await store.add(storageSource);
-      }
-
-      await tx.done;
-
-      if (isSyncTarget) {
-        syncTarget$.next(storageSource.name);
-      } else if (oldName) {
-        syncTarget$.next('');
-      }
-
-      if (isStorageSourceDefault) {
-        setStorageSourceDefault(storageSource.name, storageSource.type);
-      } else if (oldName) {
-        setStorageSourceDefault('', storageSource.type);
-      }
-    } catch (error: any) {
-      try {
-        tx.abort();
-        await tx.done;
-      } catch (_) {
-        // no-op
-      }
-
-      throw error;
-    }
-  }
-
-  async deleteStorageSource(
-    toDelete: BooksDbStorageSource,
-    wasSyncTarget: boolean,
-    wasStorageSourceDefault: boolean
-  ) {
-    const db = await this.db;
-
-    await db.delete('storageSource', toDelete.name);
-
-    if (wasSyncTarget) {
-      syncTarget$.next('');
-    }
-
-    if (wasStorageSourceDefault) {
-      setStorageSourceDefault('', toDelete.type);
-    }
-  }
-
   async getStatisticsForBook(bookTitle: string) {
     const db = await this.db;
 
@@ -645,6 +574,32 @@ export class DatabaseService {
     const db = await this.db;
 
     return db.getAllFromIndex('statistic', 'dateKey', IDBKeyRange.bound(startDate, endDate));
+  }
+
+  /**
+   * Persist a completed reading session. The tracker calls this when it flushes
+   * a buffered stretch — commit is best-effort: we don't want a transient DB
+   * hiccup to interrupt reading, so callers should catch and log.
+   */
+  async appendSession(session: Omit<BooksDbSession, 'id'>) {
+    const db = await this.db;
+    const id = await db.add('session', session as BooksDbSession);
+    this.sessionsChanged$.next();
+    return id;
+  }
+
+  async getSessionsForRange(startDateKey: string, endDateKey: string) {
+    const db = await this.db;
+    return db.getAllFromIndex(
+      'session',
+      'dateKey',
+      IDBKeyRange.bound(startDateKey, endDateKey)
+    );
+  }
+
+  async getAllSessions() {
+    const db = await this.db;
+    return db.getAll('session');
   }
 
   async getStatisticsUntilDate(bookTitle: string, maxDate: string) {

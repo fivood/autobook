@@ -7,6 +7,7 @@
   import { HeatmapType } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
   import StatisticsHeatmap from '$lib/components/statistics/statistics-heatmap/statistics-heatmap.svelte';
   import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary.svelte';
+  import StatisticsYear from '$lib/components/statistics/statistics-year/statistics-year.svelte';
   import type {
     StatisticsDeleteRequest,
     StatisticsEditRequest
@@ -17,7 +18,6 @@
     StatisticsTab,
     StatisticsReadingDataAggregationMode,
     statisticsRangeTemplates,
-    copyStatisticsData$,
     statisticsTitleFilterEnabled$,
     statisticsTitleFilterIsOpen$,
     type StatisticsTitleFilterItem,
@@ -55,7 +55,6 @@
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import {
     getDateString,
-    getNumberFromObject,
     getStartHoursDate,
     secondsToMinutes
   } from '$lib/functions/statistic-util';
@@ -67,52 +66,6 @@
   import Fa from 'svelte-fa';
   import { quintInOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
-
-  const copyStatisticsDataHandler$ = copyStatisticsData$.pipe(
-    tap((dataKeyToCopy) => {
-      const statistics =
-        $lastPrimaryReadingDataAggregationMode$ === StatisticsReadingDataAggregationMode.TITLE
-          ? aggregratedStatistics
-          : getAggregatedStatistics(StatisticsReadingDataAggregationMode.TITLE);
-
-      let logKey = '';
-
-      switch (dataKeyToCopy) {
-        case 'readingTime':
-          logKey = 'readtime';
-          break;
-
-        default:
-          logKey = 'reading';
-          break;
-      }
-
-      const dataLines = [`Reading Data for ${statisticsDateRangeLabel}\n`];
-
-      for (let index = 0, { length } = statistics; index < length; index += 1) {
-        const statistic = statistics[index];
-
-        let loggedValue = 0;
-
-        if (dataKeyToCopy === 'readingTime') {
-          loggedValue = Math.floor(secondsToMinutes(statistic.readingTime));
-        } else {
-          loggedValue = getNumberFromObject(statistic, dataKeyToCopy);
-        }
-
-        if (loggedValue) {
-          dataLines.push(`.log ${logKey} ${loggedValue} ${statistic.title}`);
-        }
-      }
-
-      if (dataLines.length > 1) {
-        navigator.clipboard
-          .writeText(dataLines.join('\n'))
-          .catch((error) => logger.error(`Error writing to clipboard: ${error.message}`));
-      }
-    }),
-    reduceToEmptyString()
-  );
 
   const exportStatisticsDataHandler$ = exportStatisticsData$.pipe(
     tap(async (exportAllData) => {
@@ -802,7 +755,6 @@
   }
 </script>
 
-{$copyStatisticsDataHandler$ ?? ''}
 {$exportStatisticsDataHandler$ ?? ''}
 {$deleteStatisticsDataHandler$ ?? ''}
 {$setStatisticsDatesToAllTimeHandler$ ?? ''}
@@ -842,6 +794,9 @@
       on:delete={handleDeleteRequest}
       on:edit={handleEditRequest}
     />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.YEAR}
+    <StatisticsYear />
   {/if}
 {/if}
 {#if $statisticsTitleFilterIsOpen$}

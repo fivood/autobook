@@ -1,4 +1,4 @@
-import { version as appVersion } from '../../../package.json';
+const appVersion = __APP_VERSION__;
 
 export const REPORT_ENDPOINT = 'https://sync.fivood.com/report';
 

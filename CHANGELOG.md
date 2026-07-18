@@ -1,6 +1,21 @@
 # Changelog
 
-## 1.16.3
+## 1.17.0
+
+存储/备份 UI 统一 + 统计模块整轮重设计。存储路径可自定义并支持迁移，多源存储那套空壳彻底移除；统计新增「年度」tab（叙事式回顾），tracker 开始持久化 session 记录以支撑将来的时段分析。
+
+- **书库文件夹可自定义 + 迁移**：`TauriFsStorageHandler` 里 `Documents/AutoBook` 原是写死常量（`ROOT_DIR` + `BaseDirectory.Document`），无法搬到外挂盘或云盘同步目录。改成读 `fsRoot$`（新 localStorage 键）：非空 → 绝对路径模式（`baseDir` 传 undefined，plugin-fs 直接把路径当绝对）；空 → 保留老 default。Rust 新增 `move_directory`（同盘 `fs::rename` 秒完，跨盘 fallback 到递归 copy+remove）+ `default_fs_root`；`get_data_paths` 收 `fsRoot` 参数返回有效根。Settings → 存储与备份 → 本地数据路径 大格显示当前路径 + 「更改文件夹…」（拉起 Tauri 原生目录选择器）+ 「恢复默认」。**修选完新目录后没切换的 bug**：文件选择器返回的目标路径必然已存在，旧 `move_directory` `if (to.exists()) return Err()` 直接失败、JS 侧 catch 后 `return` 就不再更新 `fsRoot$`。改成允许目标是空目录（先 `remove_dir` 再 rename，Windows rename 到已存在目录会失败即使空的），JS 侧解耦「换根」与「搬数据」——选新路径必切根，搬移失败只弹错误不回滚
+- **多源存储 UI 与代码全清**：`SettingsStorageSourceList` / `SettingsStorageSource` / `SettingsSyncDialog` / `StorageUnlock` 4 个组件删除；`syncTarget$` store、`SyncSelection` 类型、`storageSourcesChanged$` / `getStorageSources` / `saveStorageSource` / `deleteStorageSource` DB API 全部移除；`storage-source-manager.ts` 精简成只留 `FsHandle` / `RemoteContext` 两个历史 IDB 迁移文件用的类型定义。这些原是为 PWA 阅读时长跨端同步设计的，但 `sync-manager.ts` + `sync.fivood.com` token 早就把该功能接过去了，多源那套一直是没用的空壳（能新建、点击不产生任何实际差异）。`+page.svelte` 的 `getStorageHandlerByName` 简化——只 `INTERNAL_TAURI_FS` 走 TAURI_FS handler，DB `storageSource` 表查询移除；auto-replication 目标固定为 TAURI_FS 内建源
+- **新增「年度」统计 tab**：叙事式回顾，替代「热图 + 表格」的分析工作台风格。Hero 4 格（累计小时 / 阅读天数 / 完成书数 / 总字数）+ 月度 12 柱 + 4 张小卡（最长连续 / 最强单日 / 开卷第一天 / 最近一次）+ Top 5 书 + 24 小时时段分布柱图。年份可切换（上一年 / 下一年）。计算逻辑 pure fn 抽到 `statistics-year/year-summary.ts`（输入日聚合 + session、输出显示就绪结构），Svelte 侧纯渲染
+- **IDB v10：新增 `session` object store**（`{ id, title, startTs, endTs, durationSec, charsRead, dateKey, sectionsRead? }`，索引 `dateKey` / `title` / `startTs`）。老的 `statistic` 每日聚合表**不动**——`sync-manager` 靠它推云端、PWA 也读它，兼容性零风险。年度 tab 的时段分布、session 时长中位/p95/最长这些从新表来；老年份没 session 数据的部分显示提示条
+- **Tracker 增加 session 持久化**：unpause → `startActiveSession(now)` 开缓冲；每 tick 在 `processStatistics` 里把 timeDiff/charDiff 正向累加到 buffer（守 `if (>0)` 防 history-revert 走负值路径 commit 出负值）；pause / unmount → `commitActiveSession()` ≥ 30s 才写 IDB，短抖动直接丢。老 `sessionStatistics` in-memory 累计不动（那是「书打开到关闭」的口径，跟「一次 unpause-to-pause」不是同一概念），新 buffer 独立
+- **统计 header 瘦身**：删掉「以 TMW 日志格式复制数据」popover（上游 ttu-reader 遗留的 Discord 沉浸日志格式，中文阅读用户完全用不到）和独立的筛选按钮位；「筛选书籍」并入设置抽屉顶栏，点击先关设置抽屉再开筛选抽屉。相关 `copyStatisticsData$` subject / handler、`stats.header.readingTime` `charactersRead` `copyTmw` `titleFilter` 4 组 i18n key 一并清理
+- **修统计设置抽屉配色写死**：右侧滑入的设置面板原用 `bg-gray-700 text-white`，深色主题下与主内容对不上。改为 `var(--font-color)` / `var(--background-color)`
+- **修统计侧栏「每日起始小时」滑块用系统蓝色**：加全局 `input[type='range'] { accent-color: var(--accent-color) }`，站内所有 range 都跟主题走
+- **修 `report-error.ts` 引起 Vite dev 404**：`import { version } from '../../../package.json'` 在生产 build 被静态打进 bundle 没问题，但 dev 模式下 Vite 把它当 URL 去取，`package.json` 在 `server.fs.allow` 允许根之外 → 404。改成 `vite.config.js` 读一次 `package.json` 通过 `define` 注入编译期常量 `__APP_VERSION__`
+- **修 `settings-reading-goals` 里失效的「同步」按钮**：原「同步阅读目标」按钮拉起 `SettingsSyncDialog` 让用户在多个存储源之间对拷；多源被移除后已经没有目标可选，按钮 + 相关代码一起删
+
+
 
 原生 MOBI/KF8 解析器修掉 9 个硬失败（之前必须靠 Calibre 才能 import 的文件）。用 Rust 侧诊断测试扫了本地 241 个 MOBI/AZW3 定位根因，修完 241 文件 0 error。
 

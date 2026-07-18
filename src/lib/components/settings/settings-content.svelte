@@ -25,7 +25,6 @@
   import SettingsFontSelector from '$lib/components/settings/settings-font-selector.svelte';
   import SettingsReadingGoals from '$lib/components/settings/settings-reading-goals.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
-  import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
   import SettingsSync from '$lib/components/settings/settings-sync.svelte';
   import SettingsDataPaths from '$lib/components/settings/settings-data-paths.svelte';
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
@@ -37,9 +36,7 @@
   import { LocalFont } from '$lib/data/fonts';
   import { FuriganaStyle } from '$lib/data/furigana-style';
   import { ImportHTMLFixMode } from '$lib/data/import-html-fix-mode';
-  import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
-  import { isAppDefault } from '$lib/data/storage/storage-source-manager';
   import {
     customThemes$,
     database,
@@ -85,7 +82,6 @@
     ReplicationSaveBehavior,
     AutoReplicationType
   } from '$lib/functions/replication/replication-options';
-  import { map } from 'rxjs';
   import Fa from 'svelte-fa';
   import { onDestroy } from 'svelte';
 
@@ -1182,12 +1178,6 @@
     }
   ];
 
-  const storageSources$ = database.storageSourcesChanged$.pipe(
-    map((storageSources) =>
-      storageSources.filter((storageSource) => !isAppDefault(storageSource.name))
-    )
-  );
-
   let showSpinner = false;
   let furiganaStyleTooltip = '';
   let importHTMLFixModeTooltip = '';
@@ -1278,17 +1268,6 @@
       break;
   }
 
-  $: if ((activeSettings === 'Data' || activeSettings === 'Statistics') && !$storageSources$) {
-    database
-      .getStorageSources()
-      .then((storageSources) => {
-        database.storageSourcesChanged$.next(storageSources);
-      })
-      .catch((error) => {
-        logger.error(`Failed to retrieve storage sources: ${error.message}`);
-        database.storageSourcesChanged$.next([]);
-      });
-  }
 </script>
 
 <div class="grid grid-cols-1 items-center sm:grid-cols-2 sm:gap-6 lg:md:gap-8 lg:grid-cols-3">
@@ -2934,8 +2913,7 @@
       </button>
     </SettingsItemGroup>
 
-    <SettingsSectionHeader title={$t('settings.section.storageSourcesDiag')} hint={$t('settings.section.storageSourcesDiagHint')} />
-    <SettingsStorageSourceList storageSources={$storageSources$} />
+    <SettingsSectionHeader title={$t('settings.section.diagnostics')} hint={$t('settings.section.diagnosticsHint')} />
     <SettingsItemGroup title={$t('settings.item.diagnosticLog')} tooltip={$t('settings.tip.diagnosticLog')}>
       <button
         class="m-1 rounded-md border-2 border-gray-400 p-2"
@@ -3179,10 +3157,7 @@
       {/if}
       <SettingsSectionHeader title="阅读目标" hint="按日 / 周设定的字数与时长目标" />
       <div class="lg:col-span-3">
-        <SettingsReadingGoals
-          storageSources={$storageSources$}
-          on:spinner={({ detail }) => (showSpinner = detail)}
-        />
+        <SettingsReadingGoals on:spinner={({ detail }) => (showSpinner = detail)} />
       </div>
     {/if}
   {/if}

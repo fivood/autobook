@@ -18,7 +18,7 @@ import type {
   BooksDbHighlight
 } from '$lib/data/database/books-db/versions/books-db';
 
-import { database } from '$lib/data/store';
+import { database, fsRoot$ } from '$lib/data/store';
 import { mergeReadingGoals, readingGoalSortFunction } from '$lib/data/reading-goal';
 import { mergeStatistics, updateStatisticToStore } from '$lib/functions/statistic-util';
 import { BaseStorageHandler, FilePrefix } from '$lib/data/storage/handler/base-handler';
@@ -42,13 +42,30 @@ import {
   writeFile
 } from '@tauri-apps/plugin-fs';
 
-const ROOT_DIR = 'AutoBook';
-const BASE_DIR = BaseDirectory.Document;
+const DEFAULT_ROOT_DIR = 'AutoBook';
 
 interface FileEntry {
   name: string;
-  /** path relative to BASE_DIR */
+  /** path relative to `baseDir`, or absolute when `baseDir` is undefined */
   path: string;
+}
+
+interface RootConfig {
+  rootDir: string;
+  /** undefined = absolute path mode (custom fsRoot); Document = default AutoBook folder. */
+  baseDir: BaseDirectory | undefined;
+}
+
+/**
+ * Resolve current root. Empty fsRoot$ = default Documents/AutoBook via
+ * BaseDirectory.Document. Non-empty = absolute path, baseDir omitted.
+ */
+function currentRoot(): RootConfig {
+  const configured = fsRoot$.getValue().trim();
+  if (configured) {
+    return { rootDir: configured, baseDir: undefined };
+  }
+  return { rootDir: DEFAULT_ROOT_DIR, baseDir: BaseDirectory.Document };
 }
 
 function joinPath(...parts: string[]): string {
@@ -65,6 +82,12 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   private titleToFiles = new Map<string, FileEntry[]>();
 
   private rootFileEntries = new Map<string, FileEntry>();
+
+  private rootDir = DEFAULT_ROOT_DIR;
+
+  private baseDir: BaseDirectory | undefined = BaseDirectory.Document;
+
+  private lastFsRoot = '';
 
   updateSettings(
     window: Window,
@@ -84,6 +107,17 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     this.cacheStorageData = cacheStorageData;
     this.askForStorageUnlock = askForStorageUnlock;
     this.storageSourceName = InternalStorageSources.INTERNAL_TAURI_FS;
+
+    // Re-read the configured root. If it changed since last call (user picked a
+    // new folder), drop any cached listings so we don't serve stale data.
+    const current = fsRoot$.getValue().trim();
+    if (current !== this.lastFsRoot) {
+      this.lastFsRoot = current;
+      this.clearData(true);
+    }
+    const resolved = currentRoot();
+    this.rootDir = resolved.rootDir;
+    this.baseDir = resolved.baseDir;
   }
 
   clearData(clearAll = true) {
@@ -104,7 +138,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
 
       try {
         await this.ensureRoot();
-        const entries = await readDir(ROOT_DIR, { baseDir: BASE_DIR });
+        const entries = await readDir(this.rootDir, { baseDir: this.baseDir });
         const directories = entries
           .filter((e) => e.isDirectory)
           .map((e) => e.name as string);
@@ -168,7 +202,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     const { file, files, dirPath } = await this.getExternalFile('bookdata_');
     if (!file) return;
 
-    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const bytes = await readFile(file.path, { baseDir: this.baseDir });
     const oldFilename = file.name;
     const filename = BaseStorageHandler.getBookFileName(book);
     const { characters, lastBookModified, lastBookOpen } =
@@ -299,7 +333,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   async getBook() {
     const { file } = await this.getExternalFile('bookdata_', this.isForBrowser ? 0.4 : 0.8);
     if (!file) return undefined;
-    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const bytes = await readFile(file.path, { baseDir: this.baseDir });
     const bookFile = fileFromBytes(bytes, file.name);
     return this.isForBrowser ? this.extractBookData(bookFile, bookFile.name, 0.6) : bookFile;
   }
@@ -307,7 +341,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   async getProgress() {
     const { file } = await this.getExternalFile('progress_', this.isForBrowser ? 0.6 : 0.8);
     if (!file) return undefined;
-    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const bytes = await readFile(file.path, { baseDir: this.baseDir });
     if (this.isForBrowser) {
       const text = new TextDecoder().decode(bytes);
       BaseStorageHandler.reportProgress(0.4);
@@ -319,7 +353,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   async getStatistics() {
     const { file } = await this.getExternalFile('statistics_', 0.6);
     if (!file) return { statistics: undefined, lastStatisticModified: 0 };
-    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const bytes = await readFile(file.path, { baseDir: this.baseDir });
     const statistics = JSON.parse(new TextDecoder().decode(bytes));
     BaseStorageHandler.reportProgress(0.4);
     return {
@@ -336,7 +370,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     }
     const { file } = await this.getExternalFile('cover_', 0.8);
     if (!file) return undefined;
-    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const bytes = await readFile(file.path, { baseDir: this.baseDir });
     return new Blob([new Uint8Array(bytes)], {
       type: BaseStorageHandler.getImageMimeTypeFromExtension(file.name)
     });
@@ -345,7 +379,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   async getReadingGoals() {
     const { file } = await this.getRootFile(BaseStorageHandler.readingGoalsFilePrefix, 0.6);
     if (!file) return { readingGoals: undefined, lastGoalModified: 0 };
-    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const bytes = await readFile(file.path, { baseDir: this.baseDir });
     const readingGoals = JSON.parse(new TextDecoder().decode(bytes));
     BaseStorageHandler.reportProgress(0.4);
     return {
@@ -360,7 +394,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
       this.isForBrowser ? 0.6 : 0.8
     );
     if (!file) return undefined;
-    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const bytes = await readFile(file.path, { baseDir: this.baseDir });
     if (this.isForBrowser) {
       const audioBook = JSON.parse(new TextDecoder().decode(bytes));
       BaseStorageHandler.reportProgress(0.4);
@@ -372,7 +406,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   async getSubtitleData() {
     const { file } = await this.getExternalFile(FilePrefix.SUBTITLE, this.isForBrowser ? 0.6 : 0.8);
     if (!file) return undefined;
-    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const bytes = await readFile(file.path, { baseDir: this.baseDir });
     if (this.isForBrowser) {
       const subtitleData = JSON.parse(new TextDecoder().decode(bytes));
       BaseStorageHandler.reportProgress(0.4);
@@ -384,7 +418,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   async getHighlightData() {
     const { file } = await this.getExternalFile(FilePrefix.HIGHLIGHT, 0.6);
     if (!file) return { highlights: undefined, lastHighlightModified: 0 };
-    const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+    const bytes = await readFile(file.path, { baseDir: this.baseDir });
     const highlights = JSON.parse(new TextDecoder().decode(bytes));
     BaseStorageHandler.reportProgress(0.4);
     return {
@@ -454,7 +488,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     if (isMerge) {
       let existingData: BooksDbStatistic[] = [];
       if (file) {
-        const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+        const bytes = await readFile(file.path, { baseDir: this.baseDir });
         existingData = JSON.parse(new TextDecoder().decode(bytes));
       }
       statisticsToStore = mergeStatistics(
@@ -510,7 +544,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     if (isMerge) {
       let existingData: BooksDbReadingGoal[] = [];
       if (file) {
-        const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+        const bytes = await readFile(file.path, { baseDir: this.baseDir });
         existingData = JSON.parse(new TextDecoder().decode(bytes));
       }
       ({ readingGoalsToStore, newReadingGoalModified } = mergeReadingGoals(
@@ -524,7 +558,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     readingGoalsToStore.sort(readingGoalSortFunction);
     const filename = BaseStorageHandler.getReadingGoalsFileName(newReadingGoalModified);
     await this.writeFileTo(
-      ROOT_DIR,
+      this.rootDir,
       filename,
       new TextEncoder().encode(JSON.stringify(readingGoalsToStore)),
       [],
@@ -579,8 +613,8 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
           try {
             throwIfAborted(cancelSignal);
             const sanitized = BaseStorageHandler.sanitizeForFilename(bookToDelete);
-            const bookDir = joinPath(ROOT_DIR, sanitized);
-            await remove(bookDir, { baseDir: BASE_DIR, recursive: true });
+            const bookDir = joinPath(this.rootDir, sanitized);
+            await remove(bookDir, { baseDir: this.baseDir, recursive: true });
 
             const deletedId = this.titleToBookCard.get(bookToDelete)?.id;
             if (deletedId) deleted.push(deletedId);
@@ -606,9 +640,9 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
 
   private async ensureRoot(): Promise<void> {
     if (this.rootReady) return;
-    const present = await exists(ROOT_DIR, { baseDir: BASE_DIR });
+    const present = await exists(this.rootDir, { baseDir: this.baseDir });
     if (!present) {
-      await mkdir(ROOT_DIR, { baseDir: BASE_DIR, recursive: true });
+      await mkdir(this.rootDir, { baseDir: this.baseDir, recursive: true });
     }
     this.rootReady = true;
   }
@@ -621,8 +655,8 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
       tasks.push(
         listLimiter(async () => {
           try {
-            const bookDirPath = joinPath(ROOT_DIR, dirName);
-            const entries = await readDir(bookDirPath, { baseDir: BASE_DIR });
+            const bookDirPath = joinPath(this.rootDir, dirName);
+            const entries = await readDir(bookDirPath, { baseDir: this.baseDir });
             const files: FileEntry[] = entries
               .filter((e) => e.isFile)
               .map((e) => ({ name: e.name as string, path: joinPath(bookDirPath, e.name as string) }));
@@ -653,7 +687,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
                 bookCard.lastBookmarkModified = m.lastBookmarkModified;
                 bookCard.progress = m.progress;
               } else if (file.name.startsWith('cover_')) {
-                const bytes = await readFile(file.path, { baseDir: BASE_DIR });
+                const bytes = await readFile(file.path, { baseDir: this.baseDir });
                 bookCard.imagePath = new Blob([new Uint8Array(bytes)], {
                   type: BaseStorageHandler.getImageMimeTypeFromExtension(file.name)
                 });
@@ -683,7 +717,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
 
     const files = await this.getExternalFiles();
     const file = files.find((e) => e.name.startsWith(fileIdentifier));
-    const dirPath = joinPath(ROOT_DIR, this.sanitizedTitle);
+    const dirPath = joinPath(this.rootDir, this.sanitizedTitle);
     BaseStorageHandler.reportProgress(progressPerStep);
     return { file, files, dirPath };
   }
@@ -701,8 +735,8 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
       (!this.cacheStorageData || !this.dataListFetched) &&
       !this.titleToFiles.has(this.currentContext.title)
     ) {
-      const bookDirPath = joinPath(ROOT_DIR, this.sanitizedTitle);
-      if (await exists(bookDirPath, { baseDir: BASE_DIR })) {
+      const bookDirPath = joinPath(this.rootDir, this.sanitizedTitle);
+      if (await exists(bookDirPath, { baseDir: this.baseDir })) {
         await this.setTitleData([this.sanitizedTitle]);
       }
     }
@@ -711,10 +745,10 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
 
   private async setRootFiles() {
     if ((!this.cacheStorageData || !this.rootFileListFetched) && !this.rootFiles.size) {
-      const entries = await readDir(ROOT_DIR, { baseDir: BASE_DIR });
+      const entries = await readDir(this.rootDir, { baseDir: this.baseDir });
       const files = entries
         .filter((e) => e.isFile)
-        .map((e) => ({ name: e.name as string, path: joinPath(ROOT_DIR, e.name as string) }));
+        .map((e) => ({ name: e.name as string, path: joinPath(this.rootDir, e.name as string) }));
 
       for (const f of files) {
         for (const validPrefix of this.validRootFiles) {
@@ -738,24 +772,24 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   ) {
     const progressPerStep = progressBase / 2;
     const targetDir = rootFilePrefix
-      ? ROOT_DIR
+      ? this.rootDir
       : (() => {
           // Ensure the per-book directory exists
           return dirPath;
         })();
 
     if (!rootFilePrefix) {
-      const dirExists = await exists(targetDir, { baseDir: BASE_DIR });
-      if (!dirExists) await mkdir(targetDir, { baseDir: BASE_DIR, recursive: true });
+      const dirExists = await exists(targetDir, { baseDir: this.baseDir });
+      if (!dirExists) await mkdir(targetDir, { baseDir: this.baseDir, recursive: true });
     }
 
     const newPath = joinPath(targetDir, filename);
-    await writeFile(newPath, data, { baseDir: BASE_DIR });
+    await writeFile(newPath, data, { baseDir: this.baseDir });
     BaseStorageHandler.reportProgress(progressPerStep);
 
     if (file && file.path !== newPath) {
       try {
-        await remove(file.path, { baseDir: BASE_DIR });
+        await remove(file.path, { baseDir: this.baseDir });
       } catch {
         // best effort
       }

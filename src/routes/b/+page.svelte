@@ -113,7 +113,6 @@
     viewMode$,
     selectionToBookmarkEnabled$,
     lineHeight$,
-    syncTarget$,
     autoReplication$,
     skipKeyDownListener$,
     replicationSaveBehavior$,
@@ -402,8 +401,10 @@
 
         if (bookData.storageSource) {
           externalStorageHandler = await getStorageHandlerByName(bookData.storageSource, true);
-        } else if ($autoReplication$ !== AutoReplicationType.Off) {
-          externalStorageHandler = await getStorageHandlerByName($syncTarget$);
+        } else if ($autoReplication$ !== AutoReplicationType.Off && isTauri()) {
+          externalStorageHandler = await getStorageHandlerByName(
+            InternalStorageSources.INTERNAL_TAURI_FS
+          );
         }
 
         bookData.lastBookOpen = new Date().getTime();
@@ -457,7 +458,7 @@
           $readingGoalsMergeMode$,
           $cacheStorageData$,
           false,
-          bookData.storageSource || $syncTarget$
+          bookData.storageSource || InternalStorageSources.INTERNAL_TAURI_FS
         );
       }
 
@@ -1431,13 +1432,16 @@
       if (throwIfNotFound) {
         throw new Error(`No storage source found`);
       }
-
       return undefined;
     }
 
+    // After the storage-sources unification: the only external target is
+    // the on-disk library (INTERNAL_TAURI_FS). INTERNAL_DEFAULT still maps
+    // here for books saved before the split.
     if (
-      storageSourceName === InternalStorageSources.INTERNAL_TAURI_FS ||
-      (storageSourceName === InternalStorageSources.INTERNAL_DEFAULT && isTauri())
+      isTauri() &&
+      (storageSourceName === InternalStorageSources.INTERNAL_TAURI_FS ||
+        storageSourceName === InternalStorageSources.INTERNAL_DEFAULT)
     ) {
       return getStorageHandler(
         window,
@@ -1450,41 +1454,12 @@
         $readingGoalsMergeMode$
       );
     }
-    if (storageSourceName) {
-      const db = await database.db;
-      const storageSource = await db.get('storageSource', storageSourceName);
 
-      if (storageSource) {
-        return getStorageHandler(
-          window,
-          storageSource.type,
-          storageSourceName,
-          true,
-          $cacheStorageData$,
-          $replicationSaveBehavior$,
-          $statisticsMergeMode$,
-          $readingGoalsMergeMode$
-        );
-      }
-      if (throwIfNotFound) {
-        throw new Error(`No storage source with name ${storageSourceName} found`);
-      }
+    if (throwIfNotFound) {
+      throw new Error(`No storage source with name ${storageSourceName} found`);
     }
 
-    const message = `未找到名为 ${storageSourceName} 的存储来源 - 跳过自动导入/导出`;
-
-    logger.warn(message);
-
-    dialogManager.dialogs$.next([
-      {
-        component: MessageDialog,
-        props: {
-          title: '配置错误',
-          message
-        }
-      }
-    ]);
-
+    logger.warn(`跳过外部存储：不再支持的来源 ${storageSourceName}`);
     return undefined;
   }
 
@@ -1901,7 +1876,8 @@
       openActionBackdrop();
     }
 
-    const currentHandlerStorageSource = $rawBookData$.storageSource || $syncTarget$;
+    const currentHandlerStorageSource =
+      $rawBookData$.storageSource || InternalStorageSources.INTERNAL_TAURI_FS;
 
     externalStorageHandler.updateSettings(
       window,

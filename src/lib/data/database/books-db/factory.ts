@@ -9,7 +9,7 @@ import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 9, {
+  return openDB<BooksDb>(name, 10, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -76,6 +76,15 @@ export function createBooksDb(name = 'books') {
           });
           freshBookFolderStore.createIndex('bookId', 'bookId');
           freshBookFolderStore.createIndex('folderId', 'folderId');
+
+          // v10: reading sessions.
+          const freshSessionStore = oldDb.createObjectStore('session', {
+            keyPath: 'id',
+            autoIncrement: true
+          });
+          freshSessionStore.createIndex('dateKey', 'dateKey');
+          freshSessionStore.createIndex('title', 'title');
+          freshSessionStore.createIndex('startTs', 'startTs');
 
           break;
         }
@@ -161,6 +170,18 @@ export function createBooksDb(name = 'books') {
               autoIncrement: true
             });
             highlightFolderStore.createIndex('sortOrder', 'sortOrder');
+          }
+          // fall through to v9 → v10 upgrade.
+        }
+        case 9: {
+          if (!oldDb.objectStoreNames.contains('session')) {
+            const sessionStore = oldDb.createObjectStore('session', {
+              keyPath: 'id',
+              autoIncrement: true
+            });
+            sessionStore.createIndex('dateKey', 'dateKey');
+            sessionStore.createIndex('title', 'title');
+            sessionStore.createIndex('startTs', 'startTs');
           }
           break;
         }

@@ -457,7 +457,12 @@ export const showExternalPlaceholder$ = writableBooleanLocalStorageSubject()(
 );
 
 
-export const syncTarget$ = writableStringLocalStorageSubject()('syncTarget', '');
+/**
+ * User-chosen absolute path for the on-disk library folder used by
+ * TauriFsStorageHandler. Empty string = fall back to Documents/AutoBook
+ * (BaseDirectory.Document + "AutoBook").
+ */
+export const fsRoot$ = writableStringLocalStorageSubject()('fsRoot', '');
 
 export const keepLocalStatisticsOnDeletion$ = writableBooleanLocalStorageSubject()(
   'keepLocalStatisticsOnDeletion',

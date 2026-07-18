@@ -119,8 +119,7 @@ async function getOcrInstance(lang: OcrLanguage): Promise<PaddleOcrLike> {
       const summary = (created as { getInitializationSummary?: () => unknown })
         .getInitializationSummary?.();
       if (summary) {
-        // eslint-disable-next-line no-console
-        console.log('[ocr] PaddleOCR init', summary);
+        console.info('[ocr] PaddleOCR init', summary);
       }
     } catch {
       // ignore

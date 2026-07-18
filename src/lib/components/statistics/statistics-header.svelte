@@ -2,21 +2,13 @@
   import { goto } from '$app/navigation';
   import {
     faCalendarDays,
-    faCopy,
-    faFilter,
+    faChartLine,
     faMap,
     faSliders
   } from '@fortawesome/free-solid-svg-icons';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
-  import Popover from '$lib/components/popover/popover.svelte';
-  import {
-    StatisticsTab,
-    copyStatisticsData$,
-    statisticsTitleFilterEnabled$,
-    statisticsTitleFilterIsOpen$,
-    type StatisticsDataSource
-  } from '$lib/components/statistics/statistics-types';
+  import { StatisticsTab } from '$lib/components/statistics/statistics-types';
   import { baseHeaderClasses, baseIconClasses, pxScreen } from '$lib/css-classes';
   import { pagePath } from '$lib/data/env';
   import { lastStatisticsTab$ } from '$lib/data/store';
@@ -26,46 +18,11 @@
 
   export let currentBookId: number | undefined;
   export let showStatisticsSettings: boolean;
-
-  // Note: StatisticsDataSource still requires `label` (the shape is used
-  // by other stats consumers). We ignore it at render time and read
-  // labelKey instead so a locale switch redraws — see template.
-  const copyStatisticsDataItems: (StatisticsDataSource & { labelKey: string })[] = [
-    { key: 'readingTime', label: '阅读时间', labelKey: 'stats.header.readingTime' },
-    { key: 'charactersRead', label: '已读字数', labelKey: 'stats.header.charactersRead' }
-  ];
-
-  let copyStatisticsDataPopover: Popover;
 </script>
 
 <div class="elevation-4 fixed inset-x-0 top-0 z-10">
   <div class={baseHeaderClasses}>
     <div class="{pxScreen} flex justify-end px-0 md:px-5">
-      <div class="relative transform-gpu">
-        <Popover
-          placement="bottom"
-          fallbackPlacements={['bottom-end', 'bottom-start']}
-          yOffset={0}
-          bind:this={copyStatisticsDataPopover}
-        >
-          <div title={$t('stats.header.copyTmw')} slot="icon" class={baseIconClasses}>
-            <Fa icon={faCopy} />
-          </div>
-          <div class="flex flex-col justify-center w-36 bg-menu text-menu" slot="content">
-            {#each copyStatisticsDataItems as copyStatisticsDataItem (copyStatisticsDataItem.key)}
-              <button
-                class="p-2 hover-menu-inverted"
-                on:click={() => {
-                  copyStatisticsData$.next(copyStatisticsDataItem.key);
-                  copyStatisticsDataPopover.toggleOpen();
-                }}
-              >
-                {$t(copyStatisticsDataItem.labelKey)}
-              </button>
-            {/each}
-          </div>
-        </Popover>
-      </div>
       <div
         tabindex="0"
         role="button"
@@ -95,19 +52,15 @@
       <div
         tabindex="0"
         role="button"
-        title={$t('stats.header.titleFilter')}
+        title={$lastStatisticsTab$ === StatisticsTab.YEAR
+          ? $t('stats.header.yearActive')
+          : $t('stats.header.yearSwitch')}
         class={baseIconClasses}
-        style:cursor={$statisticsTitleFilterEnabled$ ? 'pointer' : 'not-allowed'}
-        on:click={() => {
-          if (!$statisticsTitleFilterEnabled$) {
-            return;
-          }
-
-          $statisticsTitleFilterIsOpen$ = true;
-        }}
+        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.YEAR}
+        on:click={() => ($lastStatisticsTab$ = StatisticsTab.YEAR)}
         on:keyup={dummyFn}
       >
-        <Fa icon={faFilter} />
+        <Fa icon={faChartLine} />
       </div>
       <div
         tabindex="0"

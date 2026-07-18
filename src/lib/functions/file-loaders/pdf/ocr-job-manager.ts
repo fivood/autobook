@@ -48,8 +48,7 @@ async function pushOcrResultToExternalStorage(updated: BooksDbBookData): Promise
   const source = updated.storageSource;
   if (!source) return;
   if (source !== InternalStorageSources.INTERNAL_TAURI_FS) {
-    // eslint-disable-next-line no-console
-    console.log(`[ocr] not auto-pushing to ${source} (Tauri FS only for now)`);
+    console.info(`[ocr] not auto-pushing to ${source} (Tauri FS only for now)`);
     return;
   }
   try {
@@ -72,8 +71,7 @@ async function pushOcrResultToExternalStorage(updated: BooksDbBookData): Promise
     // the id since file-name on FS is derived from title + metadata, not id.
     const { id: _id, ...dataWithoutId } = updated;
     await handler.saveBook(dataWithoutId, true);
-    // eslint-disable-next-line no-console
-    console.log('[ocr] synced OCR result to Tauri FS');
+    console.info('[ocr] synced OCR result to Tauri FS');
   } catch (err) {
     console.warn('[ocr] failed to sync OCR result to external storage', err);
   }

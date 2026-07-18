@@ -142,6 +142,12 @@ a:visited {
   color: var(--link-color, #2b5a69);
 }
 
+input[type='range'] {
+  // Recolor the native track/thumb to the current theme's accent (falls back
+  // to the sage-green palette when a theme doesn't set --accent-color).
+  accent-color: var(--accent-color, #5f7e7b);
+}
+
 @layer base {
   body {
     color: var(--font-color);

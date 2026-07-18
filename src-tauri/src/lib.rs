@@ -179,11 +179,25 @@ fn schedule_full_reset(app: tauri::AppHandle) -> Result<(), String> {
   app.restart();
 }
 
-/// Return paths the frontend can show in a Settings → Data panel so the
-/// user knows where their books and settings actually live. Sizes are
-/// computed best-effort; huge directories may report 0 to avoid blocking.
+fn default_documents_root_path() -> std::path::PathBuf {
+  std::env::var("USERPROFILE")
+    .map(|h| std::path::PathBuf::from(h).join("Documents").join("AutoBook"))
+    .unwrap_or_default()
+}
+
+/// The default library folder (`%USERPROFILE%\Documents\AutoBook`) — the
+/// frontend uses this to show what "restore default" would pick.
 #[tauri::command]
-fn get_data_paths() -> serde_json::Value {
+fn default_fs_root() -> String {
+  default_documents_root_path().to_string_lossy().into_owned()
+}
+
+/// Return paths the frontend can show in a Settings → Data panel so the
+/// user knows where their books and settings actually live. `fs_root` is
+/// the user-chosen library folder (empty = default). Sizes are computed
+/// best-effort; huge directories may report 0 to avoid blocking.
+#[tauri::command]
+fn get_data_paths(fs_root: Option<String>) -> serde_json::Value {
   fn dir_size(p: &std::path::Path) -> u64 {
     let mut total: u64 = 0;
     if let Ok(entries) = std::fs::read_dir(p) {
@@ -203,9 +217,13 @@ fn get_data_paths() -> serde_json::Value {
   let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
   let webview_root =
     std::path::PathBuf::from(&local_appdata).join("io.github.fukki.ebookreader/EBWebView");
-  let docs_root = std::env::var("USERPROFILE")
-    .map(|h| std::path::PathBuf::from(h).join("Documents").join("AutoBook"))
-    .unwrap_or_default();
+  let default_root = default_documents_root_path();
+  let effective_root = fs_root
+    .as_deref()
+    .map(str::trim)
+    .filter(|s| !s.is_empty())
+    .map(std::path::PathBuf::from)
+    .unwrap_or_else(|| default_root.clone());
 
   let ls_dirs: Vec<String> = webview_local_storage_dirs()
     .into_iter()
@@ -217,17 +235,78 @@ fn get_data_paths() -> serde_json::Value {
     .collect();
 
   let idb_size: u64 = webview_indexeddb_dirs().iter().map(|p| dir_size(p)).sum();
-  let docs_size = if docs_root.exists() { dir_size(&docs_root) } else { 0 };
+  let root_size = if effective_root.exists() { dir_size(&effective_root) } else { 0 };
 
   serde_json::json!({
     "webviewRoot": webview_root.to_string_lossy(),
     "localStorageDirs": ls_dirs,
     "indexeddbDirs": idb_dirs,
     "indexeddbBytes": idb_size,
-    "documentsRoot": docs_root.to_string_lossy(),
-    "documentsBytes": docs_size,
-    "documentsExists": docs_root.exists(),
+    "fsRoot": effective_root.to_string_lossy(),
+    "fsRootBytes": root_size,
+    "fsRootExists": effective_root.exists(),
+    "defaultFsRoot": default_root.to_string_lossy(),
+    "isDefaultFsRoot": effective_root == default_root,
   })
+}
+
+fn dir_is_empty(p: &std::path::Path) -> bool {
+  std::fs::read_dir(p).map(|mut it| it.next().is_none()).unwrap_or(false)
+}
+
+/// Move a directory to a new location. Tries a plain rename first (instant,
+/// same volume); on cross-volume rename failure it falls back to recursive
+/// copy + remove. `to` may be an empty existing directory — that's the normal
+/// case when the frontend's folder picker returned an already-created folder.
+/// Refuses to clobber a target that already contains files.
+#[tauri::command]
+fn move_directory(from: String, to: String) -> Result<(), String> {
+  let from_path = std::path::PathBuf::from(&from);
+  let to_path = std::path::PathBuf::from(&to);
+  if !from_path.exists() {
+    return Err(format!("源文件夹不存在: {from}"));
+  }
+  if from_path == to_path {
+    return Ok(());
+  }
+  if to_path.exists() {
+    if !to_path.is_dir() {
+      return Err(format!("目标不是目录: {to}"));
+    }
+    if !dir_is_empty(&to_path) {
+      return Err(format!("目标已存在且不为空: {to}"));
+    }
+    // Rename won't work when the target dir already exists (even empty) on
+    // Windows — remove it first so the rename can create it fresh.
+    std::fs::remove_dir(&to_path).map_err(|e| e.to_string())?;
+  }
+  if let Some(parent) = to_path.parent() {
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+  }
+
+  if std::fs::rename(&from_path, &to_path).is_ok() {
+    return Ok(());
+  }
+
+  // Cross-volume or locked — fall back to copy + remove.
+  copy_dir_recursive(&from_path, &to_path).map_err(|e| e.to_string())?;
+  std::fs::remove_dir_all(&from_path).map_err(|e| e.to_string())?;
+  Ok(())
+}
+
+fn copy_dir_recursive(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+  std::fs::create_dir_all(to)?;
+  for entry in std::fs::read_dir(from)? {
+    let entry = entry?;
+    let file_type = entry.file_type()?;
+    let target = to.join(entry.file_name());
+    if file_type.is_dir() {
+      copy_dir_recursive(&entry.path(), &target)?;
+    } else {
+      std::fs::copy(entry.path(), &target)?;
+    }
+  }
+  Ok(())
 }
 
 /// Open a folder in the OS file manager (Explorer on Windows). The path
@@ -345,6 +424,8 @@ pub fn run() {
       schedule_full_reset,
       get_data_paths,
       open_data_folder,
+      default_fs_root,
+      move_directory,
       mobi_parser::parse_mobi,
       calibre_converter::check_calibre,
       calibre_converter::convert_with_calibre

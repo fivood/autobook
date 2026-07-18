@@ -34,6 +34,10 @@
     lastStatisticsRangeTemplate$,
     lastStatisticsStartDate$
   } from '$lib/data/store';
+  import {
+    statisticsTitleFilterEnabled$,
+    statisticsTitleFilterIsOpen$
+  } from '$lib/components/statistics/statistics-types';
   import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -70,6 +74,12 @@
 
     deleteStatisticsData$.next(deleteAllStatisticsData);
   }
+
+  function openTitleFilter() {
+    // Close this drawer first so the filter drawer isn't stacked underneath.
+    dispatch('close');
+    statisticsTitleFilterIsOpen$.next(true);
+  }
 </script>
 
 <div class="flex items-center p-4">
@@ -77,6 +87,15 @@
     <Fa icon={faXmark} />
   </button>
   <div class="flex flex-1 justify-end">
+    <button
+      class="mr-2 sm:mr-4 hover:text-red-500"
+      class:opacity-40={!$statisticsTitleFilterEnabled$}
+      disabled={!$statisticsTitleFilterEnabled$}
+      title={$statisticsTitleFilterEnabled$ ? '按书名筛选' : '当前视图无可筛选内容'}
+      on:click={openTitleFilter}
+    >
+      筛选书籍
+    </button>
     <button class="mr-2 sm:mr-4 hover:text-red-500" on:click={() => exportStatisticsData(false)}>
       导出选中项
     </button>

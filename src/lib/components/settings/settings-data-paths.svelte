@@ -1,10 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Fa from 'svelte-fa';
-  import { faFolderOpen, faTrash, faRotateRight } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faFolderOpen,
+    faTrash,
+    faRotateRight,
+    faPen,
+    faArrowRotateLeft
+  } from '@fortawesome/free-solid-svg-icons';
   import { isTauri } from '$lib/data/env';
   import { dialogManager } from '$lib/data/dialog-manager';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
+  import { fsRoot$ } from '$lib/data/store';
   import { t, tImmediate } from '$lib/i18n';
 
   interface DataPaths {
@@ -12,9 +19,11 @@
     localStorageDirs: string[];
     indexeddbDirs: string[];
     indexeddbBytes: number;
-    documentsRoot: string;
-    documentsBytes: number;
-    documentsExists: boolean;
+    fsRoot: string;
+    fsRootBytes: number;
+    fsRootExists: boolean;
+    defaultFsRoot: string;
+    isDefaultFsRoot: boolean;
   }
 
   let paths: DataPaths | undefined;
@@ -29,7 +38,7 @@
     }
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      paths = (await invoke('get_data_paths')) as DataPaths;
+      paths = (await invoke('get_data_paths', { fsRoot: $fsRoot$ })) as DataPaths;
     } catch (err: any) {
       message = tImmediate('dataPaths.readFail', { err: err?.message || err });
     } finally {
@@ -62,6 +71,91 @@
     }
   }
 
+  async function pickFsRoot() {
+    if (!isTauri() || !paths) return;
+    busy = true;
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const picked = await open({
+        directory: true,
+        multiple: false,
+        defaultPath: paths.fsRoot
+      });
+      if (!picked || typeof picked !== 'string') return;
+      const nextRoot = picked;
+      if (nextRoot === paths.fsRoot) return;
+      await applyFsRoot(nextRoot, paths.fsRoot, paths.fsRootExists);
+    } catch (err: any) {
+      message = tImmediate('dataPaths.pickFail', { err: err?.message || err });
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function applyFsRoot(nextRoot: string, prevRoot: string, prevExists: boolean) {
+    // Two decoupled steps: (1) switch where new data is written, (2) optional
+    // one-shot migration of the old folder. Switching happens first and always
+    // succeeds; a failed migration leaves the root switched with an error toast.
+    const oldHasData = prevExists && !(await isDirEmpty(prevRoot));
+    let wantMove = false;
+
+    if (oldHasData) {
+      wantMove = await new Promise<boolean>((resolver) => {
+        dialogManager.dialogs$.next([
+          {
+            component: ConfirmDialog,
+            props: {
+              dialogHeader: tImmediate('dataPaths.migrate.title'),
+              dialogMessage: tImmediate('dataPaths.migrate.body', {
+                from: prevRoot,
+                to: nextRoot
+              }),
+              contentStyles: 'white-space: pre-line;',
+              disableCloseOnClick: true,
+              resolver: (wasCanceled: boolean) => resolver(!wasCanceled)
+            },
+            disableCloseOnClick: true
+          }
+        ]);
+      });
+    }
+
+    if (wantMove) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('move_directory', { from: prevRoot, to: nextRoot });
+      } catch (err: any) {
+        // Report the failure but continue: the user picked a new folder, we
+        // owe them the switch even if the data-move step didn't work.
+        message = tImmediate('dataPaths.migrateFail', { err: err?.message || err });
+      }
+    }
+
+    $fsRoot$ = nextRoot;
+    await load();
+  }
+
+  async function isDirEmpty(path: string): Promise<boolean> {
+    if (!isTauri()) return true;
+    try {
+      const { readDir } = await import('@tauri-apps/plugin-fs');
+      const entries = await readDir(path);
+      return entries.length === 0;
+    } catch {
+      // If we can't read it, treat as empty — nothing meaningful to migrate.
+      return true;
+    }
+  }
+
+  async function restoreDefault() {
+    if (!paths) return;
+    const defaultRoot = paths.defaultFsRoot;
+    if (paths.isDefaultFsRoot) return;
+    await applyFsRoot('', paths.fsRoot, paths.fsRootExists);
+    // Refresh reads the effective default; nothing else to do.
+    void defaultRoot;
+  }
+
   function clearAll() {
     const header = tImmediate('dataPaths.clearAll');
     dialogManager.dialogs$.next([
@@ -73,7 +167,6 @@
           contentStyles: 'white-space: pre-line;',
           resolver: (wasCanceled: boolean) => {
             if (wasCanceled) return;
-            // Second confirm — chaining works now (+layout's removeDialog fix).
             dialogManager.dialogs$.next([
               {
                 component: ConfirmDialog,
@@ -116,6 +209,41 @@
 {:else if paths}
   <div class="text-sm">
     <div class="grid">
+      <div class="row fs-row">
+        <div class="label">{$t('dataPaths.section.fs.label')}</div>
+        <div class="meta">
+          {paths.isDefaultFsRoot
+            ? $t('dataPaths.section.fs.metaDefault', {
+                status: paths.fsRootExists
+                  ? formatBytes(paths.fsRootBytes)
+                  : $t('dataPaths.section.fs.notCreated')
+              })
+            : $t('dataPaths.section.fs.metaCustom', {
+                status: paths.fsRootExists
+                  ? formatBytes(paths.fsRootBytes)
+                  : $t('dataPaths.section.fs.notCreated')
+              })}
+        </div>
+        <div class="path-row">
+          <code class="path" title={paths.fsRoot}>{paths.fsRoot}</code>
+          <button class="btn icon" on:click={() => paths && copyPath(paths.fsRoot)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
+          <button class="btn icon" on:click={() => paths && openInExplorer(paths.fsRoot)} disabled={busy} title={$t('dataPaths.openInExplorer')}>
+            <Fa icon={faFolderOpen} size="xs" />
+          </button>
+        </div>
+        <div class="fs-actions">
+          <button class="btn" on:click={pickFsRoot} disabled={busy}>
+            <Fa icon={faPen} size="xs" /> {$t('dataPaths.section.fs.change')}
+          </button>
+          {#if !paths.isDefaultFsRoot}
+            <button class="btn" on:click={restoreDefault} disabled={busy}>
+              <Fa icon={faArrowRotateLeft} size="xs" /> {$t('dataPaths.section.fs.restoreDefault')}
+            </button>
+          {/if}
+        </div>
+        <p class="hint">{$t('dataPaths.section.fs.hint')}</p>
+      </div>
+
       <div class="row">
         <div class="label">{$t('dataPaths.section.library.label')}</div>
         <div class="meta">{$t('dataPaths.meta.idb', { size: formatBytes(paths.indexeddbBytes), n: paths.indexeddbDirs.length })}</div>
@@ -140,17 +268,6 @@
           </div>
         {/each}
         <p class="hint">{$t('dataPaths.section.ui.hint')}</p>
-      </div>
-
-      <div class="row">
-        <div class="label">{$t('dataPaths.section.fs.label')}</div>
-        <div class="meta">{$t('dataPaths.meta.fs', { status: paths.documentsExists ? formatBytes(paths.documentsBytes) : $t('dataPaths.section.fs.notCreated') })}</div>
-        <div class="path-row">
-          <code class="path" title={paths?.documentsRoot}>{paths?.documentsRoot}</code>
-          <button class="btn icon" on:click={() => paths && copyPath(paths.documentsRoot)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
-          <button class="btn icon" on:click={() => paths && openInExplorer(paths.documentsRoot)} disabled={busy} title={$t('dataPaths.openInExplorer')}><Fa icon={faFolderOpen} size="xs" /></button>
-        </div>
-        <p class="hint">{$t('dataPaths.section.fs.hint')}</p>
       </div>
     </div>
 
@@ -177,6 +294,9 @@
   @media (min-width: 1024px) {
     .grid {
       grid-template-columns: repeat(3, 1fr);
+    }
+    .fs-row {
+      grid-column: 1 / -1;
     }
   }
   .row {
@@ -241,6 +361,12 @@
   }
   .btn.danger:hover:not(:disabled) {
     background: rgba(198, 74, 74, 0.1);
+  }
+  .fs-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
   }
   .actions {
     display: flex;
