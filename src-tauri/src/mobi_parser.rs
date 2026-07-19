@@ -29,6 +29,12 @@ pub struct ParsedMobi {
     pub images: Vec<ParsedMobiImage>,
     /// 1-based index into `images` for the cover, or 0 if none.
     pub cover_index: usize,
+    /// True when the returned HTML came from KF8 Phase 3 fragment
+    /// reassembly (byte-accurate to the epub source). Frontend uses this
+    /// to skip DOMParser round-trip since Phase 3 output doesn't have
+    /// the split-tag attribute leaks that MOBI6 needs cleaning for.
+    #[serde(default)]
+    pub well_formed: bool,
 }
 
 fn replacement_char_ratio(s: &str) -> f32 {
@@ -633,5 +639,7 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
         html,
         images,
         cover_index,
+        // MOBI6 path — assume dirty (split-tag attribute leaks).
+        well_formed: false,
     })
 }

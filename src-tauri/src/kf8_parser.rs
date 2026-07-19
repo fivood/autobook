@@ -933,5 +933,10 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         html,
         images,
         cover_index,
+        // Phase 3 skeleton+fragment reassembly produces byte-accurate
+        // XHTML; flag it so the frontend can skip the DOMParser
+        // round-trip stripAttributeLeaks pass (only needed for MOBI6's
+        // split-tag garbage). Set when skeleton_split actually landed.
+        well_formed: skeleton_split.is_some(),
     }))
 }

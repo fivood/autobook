@@ -26,6 +26,10 @@ interface ParsedMobi {
   html: string;
   images: ParsedMobiImage[];
   cover_index: number;
+  /** True when the html came from KF8 Phase 3 fragment reassembly. Skips
+   * the DOMParser round-trip + attribute-leak fixup since those defects
+   * are MOBI6-only. */
+  well_formed?: boolean;
 }
 
 function base64ToBlob(b64: string, mime: string): Blob {
@@ -86,11 +90,20 @@ function stripAttributeLeaks(root: HTMLElement) {
   }
 }
 
-/** mobi HTML is often a fragment with orphaned tag attributes leaking
+/** MOBI6 HTML is often a fragment with orphaned tag attributes leaking
  * after partial pagebreak splits. Feed it through DOMParser so the browser's
  * tolerant parser fixes most malformations, strip attribute leaks in text
- * nodes, then re-serialize. */
-function cleanHtml(raw: string): string {
+ * nodes, then re-serialize.
+ *
+ * For KF8 Phase 3 (`wellFormed` = true) the HTML is byte-accurate XHTML
+ * from skeleton+fragment reassembly and has no attribute leaks, so we
+ * skip DOMParser entirely — a ~100-500ms savings on a 4MB flow 0. Still
+ * run the font-family regex strip inline since it's O(n) on the raw
+ * string and doesn't need a DOM. */
+function cleanHtml(raw: string, wellFormed: boolean): string {
+  if (wellFormed) {
+    return stripEmbeddedFontsRegex(raw);
+  }
   try {
     const wrapped = `<!doctype html><html><body><div id="autobook-mobi-root">${raw}</div></body></html>`;
     const doc = new DOMParser().parseFromString(wrapped, 'text/html');
@@ -104,17 +117,24 @@ function cleanHtml(raw: string): string {
   }
 }
 
+const FONT_FAMILY_RE = /font-family\s*:[^;}"']+[;]?/gi;
+
+function stripEmbeddedFontsRegex(html: string): string {
+  // The regex is safe to apply to the raw HTML string — it matches CSS
+  // declaration syntax that only occurs inside <style> blocks and style
+  // attribute values in practice. False positives (matching plain text
+  // that happens to contain `font-family:`) would be exotic.
+  return html.replace(FONT_FAMILY_RE, '');
+}
+
 function stripEmbeddedFonts(root: HTMLElement) {
   root.querySelectorAll('style').forEach((style) => {
-    style.textContent = (style.textContent || '').replace(
-      /font-family\s*:[^;}"']+[;]?/gi,
-      ''
-    );
+    style.textContent = (style.textContent || '').replace(FONT_FAMILY_RE, '');
   });
   root.querySelectorAll('[style]').forEach((el) => {
     const s = el.getAttribute('style') || '';
     if (/font-family/i.test(s)) {
-      el.setAttribute('style', s.replace(/font-family\s*:[^;}"']+[;]?/gi, ''));
+      el.setAttribute('style', s.replace(FONT_FAMILY_RE, ''));
     }
   });
 }
@@ -232,7 +252,7 @@ async function nativeParse(file: File, lastBookModified: number): Promise<LoadDa
 
   const blobs: Record<string, Blob> = {};
   const rewrittenHtml = rewriteImageRefs(parsed.html, blobs, parsed.images);
-  const cleaned = cleanHtml(rewrittenHtml);
+  const cleaned = cleanHtml(rewrittenHtml, !!parsed.well_formed);
   const { sectionedHtml, sections } = splitIntoSections(cleaned);
 
   let coverImage: Blob | undefined;

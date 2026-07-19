@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.17.4
+
+前端 KF8 导入路径省一次 DOMParser round-trip。大书 O(100-500ms) 的常数省下来。
+
+- **ParsedMobi 新增 `well_formed` bool**：KF8 Phase 3 skeleton+fragment 反嵌入或 Phase 2 concat 走通时 Rust 侧返 true（`skeleton_split.is_some()`），标记 HTML 已是 byte-accurate XHTML 没 attribute leak；MOBI6 路径固定 false 因为 PalmDoc 记录切分处会产生 `1em" width="2em">` 半截 tag 泄漏
+- **前端 `cleanHtml` 分岔**：`well_formed=true` 直接跑一遍字符串级 `stripEmbeddedFontsRegex(html)` 就返，跳过 `<!doctype html><html><body><div>…</div></body></html>` wrap + DOMParser + stripAttributeLeaks + re-serialize；`false` 走原来的 DOMParser 路径。字体正则化用共享的 `FONT_FAMILY_RE` 常量避免重复编译
+- 附带：kf8_indx.rs 新增 9 个单元测试（varint / FDST / TAGX decode 的 value_bytes 分支 / CNCX 池查名），几毫秒跑完，覆盖之前只靠 mobi_scan 整库 6 分钟集成扫描验证的关键 pure fn
+
 ## 1.17.3
 
 KF8 NCX 表解析，KF8 section TOC 现在用真章节名（原 epub `nav.xhtml` 里的），不用前端从 `<h*>` 抓。之前 fallback 到 `<h*>` 的问题是：很多 KF8 section 开头没标题元素（只有 `<p>` 或 `<div>`），或标题文本残缺（如「第一章」缺失章节名），生成的 TOC 项就是 fallback 的 `section-N`。
