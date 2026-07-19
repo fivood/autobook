@@ -19,6 +19,12 @@ interface ParsedMobiImage {
   data: string;
 }
 
+interface ParsedFlowResource {
+  flow_index: number;
+  ext: string;
+  data: string;
+}
+
 interface ParsedMobi {
   title: string;
   author: string;
@@ -30,6 +36,9 @@ interface ParsedMobi {
    * the DOMParser round-trip + attribute-leak fixup since those defects
    * are MOBI6-only. */
   well_formed?: boolean;
+  /** KF8 flow 1+ resources (SVG image masks) referenced via
+   * `kindle:flow:XXXX?mime=image/svg+xml`. */
+  flow_resources?: ParsedFlowResource[];
 }
 
 function base64ToBlob(b64: string, mime: string): Blob {
@@ -42,12 +51,29 @@ function base64ToBlob(b64: string, mime: string): Blob {
 const EXT_TO_MIME: Record<string, string> = {
   jpg: 'image/jpeg',
   png: 'image/png',
-  gif: 'image/gif'
+  gif: 'image/gif',
+  svg: 'image/svg+xml'
 };
 
-/** Inside the HTML, image refs look like `recindex:00042` (1-based index into
- * the images array). Swap those for blob URLs we register via a fake path the
- * existing reader pipeline already knows how to resolve. */
+/** Decode a Kindle "base32" string (alphabet 0-9A-V) — used in URLs like
+ * `kindle:embed:0003` and `kindle:flow:0001` — into a decimal index. */
+function fromBase32(s: string): number {
+  const digits = '0123456789ABCDEFGHIJKLMNOPQRSTUV';
+  let total = 0;
+  for (const c of s.toUpperCase()) {
+    const v = digits.indexOf(c);
+    if (v < 0) return NaN;
+    total = total * 32 + v;
+  }
+  return total;
+}
+
+/** Inside the HTML, image refs come in two flavors:
+ *   1. `recindex:00042` — 1-based index into the images array (MOBI6 style)
+ *   2. `kindle:embed:XXXX?mime=...` — 4-char Kindle-base32 encoded 1-based
+ *      resource index (KF8 style). Missed pre-1.17.5 → broken KF8 images.
+ * Both resolve to the same `images[]` array we get from Rust; swap to blob
+ * URLs registered under a fake path the reader pipeline already resolves. */
 function rewriteImageRefs(
   html: string,
   blobsByName: Record<string, Blob>,
@@ -59,11 +85,50 @@ function rewriteImageRefs(
     indexToName.set(img.index, name);
     blobsByName[name] = base64ToBlob(img.data, EXT_TO_MIME[img.ext] || 'image/jpeg');
   }
-  return html.replace(/recindex:(\d{4,6})/gi, (full, digits) => {
+  let out = html.replace(/recindex:(\d{4,6})/gi, (full, digits) => {
     const idx = parseInt(digits, 10);
     const name = indexToName.get(idx);
     return name ? name : full;
   });
+  out = out.replace(
+    /kindle:embed:([0-9A-V]{1,4})(\?[^"'\s<>]*)?/gi,
+    (full, base32) => {
+      const idx = fromBase32(base32);
+      if (!Number.isFinite(idx)) return full;
+      const name = indexToName.get(idx);
+      return name ? name : full;
+    }
+  );
+  return out;
+}
+
+/** KF8 `kindle:flow:XXXX?mime=image/svg+xml` refers to a non-flow-0
+ * FDST flow — typically an SVG image mask (covers, illustrations).
+ * Register each as a blob and rewrite the URL. */
+function rewriteFlowRefs(
+  html: string,
+  blobsByName: Record<string, Blob>,
+  flowResources: ParsedFlowResource[]
+): string {
+  if (flowResources.length === 0) return html;
+  const flowMap = new Map<number, string>();
+  for (const fr of flowResources) {
+    const name = `mobi-flow-${fr.flow_index}.${fr.ext}`;
+    flowMap.set(fr.flow_index, name);
+    blobsByName[name] = base64ToBlob(
+      fr.data,
+      EXT_TO_MIME[fr.ext] || 'application/octet-stream'
+    );
+  }
+  return html.replace(
+    /kindle:flow:([0-9A-V]{1,4})(\?[^"'\s<>]*)?/gi,
+    (full, base32) => {
+      const idx = fromBase32(base32);
+      if (!Number.isFinite(idx)) return full;
+      const name = flowMap.get(idx);
+      return name ? name : full;
+    }
+  );
 }
 
 /** Orphan tag-attribute fragments like `1em" width="2em" align="justify">` show
@@ -139,6 +204,26 @@ function stripEmbeddedFonts(root: HTMLElement) {
   });
 }
 
+/** KF8 in-book cross-references use `kindle:pos:fid:AID:off:OFFSET` URLs
+ * where AID matches the `<body aid="…">` attribute of the target section
+ * and OFFSET is a base32 character position within it. Calibre rewrites
+ * these to `partN.html#anchor` when exporting to epub. We do the same,
+ * targeting `#section-N` since we ignore off (jumping to section top is
+ * accurate enough for TOC clicks and inter-chapter links). */
+function rewriteKindlePosRefs(html: string, aidMap: Map<string, number>): string {
+  if (aidMap.size === 0) return html;
+  return html.replace(
+    /kindle:pos:fid:([0-9A-V]+)(?::off:[0-9A-V]+)?/gi,
+    (full, fid: string) => {
+      // URL fids are zero-padded to at least 4 base32 chars ("0001");
+      // body aids are the canonical form ("1"). Strip leading zeros.
+      const normalized = fid.toUpperCase().replace(/^0+/, '') || '0';
+      const secIdx = aidMap.get(normalized);
+      return secIdx !== undefined ? `#section-${secIdx}` : full;
+    }
+  );
+}
+
 /** mobi crate gives us one concatenated HTML blob. Split into sections on
  * KF8 pagebreak markers so the reader's TOC + char-count machinery work. */
 function splitIntoSections(html: string): { sectionedHtml: string; sections: Section[] } {
@@ -155,6 +240,10 @@ function splitIntoSections(html: string): { sectionedHtml: string; sections: Sec
   // heading text (e.g. "第一章 · 波洛的调查" vs bare "第一章").
   const rustLabelRe = /^\s*<!--autobook-section-label:([\s\S]*?)-->/;
   const headingLabelRe = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/i;
+  // Match `<body ... aid="...">` inside each section — used to build the
+  // kindle:pos → #section-N map for in-book cross-references.
+  const bodyAidRe = /<body\b[^>]*\baid="([^"]+)"/i;
+  const aidMap = new Map<string, number>();
   let totalChars = 0;
   const sections: Section[] = [];
   const sectionedParts: string[] = [];
@@ -169,6 +258,10 @@ function splitIntoSections(html: string): { sectionedHtml: string; sections: Sec
       rawLabel = hm ? hm[2] : '';
     }
     const label = rawLabel.replace(/<[^>]*>/g, '').trim() || id;
+    const aidMatch = bodyAidRe.exec(body);
+    if (aidMatch) {
+      aidMap.set(aidMatch[1].toUpperCase(), i + 1);
+    }
     // textContent measured via stripping tags; close enough for char counts.
     const text = body.replace(/<[^>]*>/g, '');
     const chars = Array.from(text).length;
@@ -182,7 +275,8 @@ function splitIntoSections(html: string): { sectionedHtml: string; sections: Sec
     totalChars += chars;
     sectionedParts.push(`<div id="${id}" class="mobi-section">${body}</div>`);
   });
-  return { sectionedHtml: sectionedParts.join('\n'), sections };
+  const joined = sectionedParts.join('\n');
+  return { sectionedHtml: rewriteKindlePosRefs(joined, aidMap), sections };
 }
 
 function languageHint(lang: string | null): string {
@@ -251,7 +345,8 @@ async function nativeParse(file: File, lastBookModified: number): Promise<LoadDa
   }
 
   const blobs: Record<string, Blob> = {};
-  const rewrittenHtml = rewriteImageRefs(parsed.html, blobs, parsed.images);
+  let rewrittenHtml = rewriteImageRefs(parsed.html, blobs, parsed.images);
+  rewrittenHtml = rewriteFlowRefs(rewrittenHtml, blobs, parsed.flow_resources || []);
   const cleaned = cleanHtml(rewrittenHtml, !!parsed.well_formed);
   const { sectionedHtml, sections } = splitIntoSections(cleaned);
 

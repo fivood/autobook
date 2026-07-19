@@ -12,9 +12,23 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct ParsedMobiImage {
-    /// 1-based index used by `recindex:NNNNN` references in the HTML.
+    /// 1-based index used by `recindex:NNNNN` and `kindle:embed:XXXX`
+    /// references in the HTML.
     pub index: usize,
-    /// File extension we infer from the magic bytes (jpg / png / gif).
+    /// File extension we infer from the magic bytes (jpg / png / gif / svg).
+    pub ext: String,
+    /// base64-encoded raw bytes.
+    pub data: String,
+}
+
+/// Resource extracted from a non-flow-0 FDST flow (typically SVG image
+/// masks or CSS). Referenced by HTML as `kindle:flow:XXXX?mime=...`
+/// where XXXX is the 4-char Kindle-base32 encoding of `flow_index`.
+#[derive(Serialize)]
+pub struct ParsedFlowResource {
+    /// FDST array index (0-based; kindle:flow:0001 → flow_index=1).
+    pub flow_index: u32,
+    /// "svg" or "css".
     pub ext: String,
     /// base64-encoded raw bytes.
     pub data: String,
@@ -35,6 +49,10 @@ pub struct ParsedMobi {
     /// the split-tag attribute leaks that MOBI6 needs cleaning for.
     #[serde(default)]
     pub well_formed: bool,
+    /// KF8 flow 1+ resources — SVG image masks referenced from HTML via
+    /// `kindle:flow:XXXX?mime=image/svg+xml`. Empty for MOBI6.
+    #[serde(default)]
+    pub flow_resources: Vec<ParsedFlowResource>,
 }
 
 fn replacement_char_ratio(s: &str) -> f32 {
@@ -641,5 +659,6 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
         cover_index,
         // MOBI6 path — assume dirty (split-tag attribute leaks).
         well_formed: false,
+        flow_resources: Vec::new(),
     })
 }

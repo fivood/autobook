@@ -328,6 +328,51 @@ fn find_huff_kf8_files() {
     println!("total Huff/CDIC KF8 files: {found}");
 }
 
+/// Count how many joint/pure-KF8 files have SVG flow resources extracted
+/// (Phase 4). Sample a few file names.
+#[test]
+#[ignore]
+fn phase4_svg_flow_stats() {
+    let dir = match scan_dir() {
+        Some(d) => d,
+        None => return,
+    };
+    let mut files = Vec::new();
+    walk(Path::new(&dir), &["mobi", "azw", "azw3", "prc"], &mut files);
+    files.sort();
+    let mut n_kf8 = 0;
+    let mut n_with_svg = 0;
+    let mut total_svg = 0usize;
+    let mut sample_examples: Vec<String> = Vec::new();
+    for f in &files {
+        let bytes = match fs::read(f) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        match try_parse_kf8(&bytes) {
+            Ok(Some(parsed)) => {
+                n_kf8 += 1;
+                if !parsed.flow_resources.is_empty() {
+                    n_with_svg += 1;
+                    total_svg += parsed.flow_resources.len();
+                    if sample_examples.len() < 5 {
+                        let name = f.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+                        sample_examples.push(format!(
+                            "{name} — {} SVG",
+                            parsed.flow_resources.len()
+                        ));
+                    }
+                }
+            }
+            _ => continue,
+        }
+    }
+    println!("KF8 files: {n_kf8}, with SVG: {n_with_svg}, total SVG resources: {total_svg}");
+    for s in &sample_examples {
+        println!("  {s}");
+    }
+}
+
 /// Dump first 6 fragments (raw fields) for 刺客正传2 so we can hand-check
 /// against Calibre's expected values.
 #[test]

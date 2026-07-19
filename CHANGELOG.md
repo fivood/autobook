@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.17.5
+
+补齐 KF8 相对 Calibre 的三大用户可感知差距：图片链接、SVG 封面、章节内跳转。之前 KF8 书里的图片有一部分显示破图（`kindle:embed:XXXX` 没重写）、封面破图（SVG 在 flow 1+ 里没抽出）、TOC 点击不跳（`kindle:pos:` 没重写）。
+
+- **`kindle:embed:XXXX` URL 重写**：KF8 里的 `<img src="kindle:embed:0003?mime=image/jpg">` 用 4-char Kindle-base32（字母表 `0-9A-V`）编码 1-based 资源索引，与 `recindex:00003` 语义等价，但 pre-1.17.5 的 rewriteImageRefs 只认 recindex → KF8 图片破图。加 `fromBase32(s)` decoder 和第二条 regex 走同一份 blob 表
+- **SVG flow 抽取**（Phase 4）：Kindle 封面和扫描图常用 `<image xlink:href="kindle:flow:0001?mime=image/svg+xml">` 引用 FDST flow 1+ 里的 SVG 文本。Phase 2 只留 flow 0 直接把 SVG 丢了。新增 `ParsedFlowResource { flow_index, ext, data }`，Rust 侧遍历 flow 1+，前 300 字节包含 `<svg` 就当 SVG 抽出（跳过 CSS 和 unknown 类型，我们不接原书 CSS）。扫本地 181 KF8 文件，15 个有 SVG 共 92 个资源。前端 `rewriteFlowRefs` 走跟 embed 相同的 blob 管道，mime 加 `svg → image/svg+xml`
+- **`kindle:pos:fid:XXXX:off:YYYY` 章节内跳转**：Kindle TOC 点击 / 内文交叉引用用这种 URL，fid 是目标 `<body aid="…">` 值的 Kindle-base32 表达。前端在 splitIntoSections 里扫每 section 的 `<body aid="…">` 建 aid→section-N 映射，然后跑 `rewriteKindlePosRefs` 把 URL 换成 `#section-N`（忽略 off 直接跳节顶，TOC 场景够用；精确到字符位置要另外做锚点，价值低）。URL fid 是零填充的（`0001`）body aid 是紧凑的（`1`），比较时两边都 strip leading zeros + uppercase 规整
+- 回归：242 文件 0 err，avg pagebreak 保持 145.6，avg chars 稳定；`kindle:embed`/`kindle:flow`/`kindle:pos` 只影响前端渲染路径，Rust 侧输出仅新增 flow_resources 字段
+
 ## 1.17.4
 
 前端 KF8 导入路径省一次 DOMParser round-trip。大书 O(100-500ms) 的常数省下来。

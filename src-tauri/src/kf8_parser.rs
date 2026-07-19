@@ -25,7 +25,7 @@
 use base64::{engine::general_purpose, Engine};
 use serde::Serialize;
 
-use crate::mobi_parser::{ParsedMobi, ParsedMobiImage};
+use crate::mobi_parser::{ParsedFlowResource, ParsedMobi, ParsedMobiImage};
 
 /// MOBIv8 header subset we need. All offsets are from the start of the MOBI
 /// signature (`b"MOBI"`), which lives at byte 16 of the first KF8 record
@@ -710,8 +710,11 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
     // Everything past flow 0 is CSS files, SVG image masks, and other
     // resources concatenated into the same decompressed byte stream.
     // Phase 1 returned all of it, dumping raw CSS + SVG markup into the
-    // visible content. Phase 2 keeps only flow 0.
+    // visible content. Phase 2 keeps only flow 0. Phase 4 extracts flow
+    // 1+ SVG so `<image xlink:href="kindle:flow:XXXX?mime=image/svg+xml"/>`
+    // renders (typically the cover page).
     let mut flow0_range: Option<(usize, usize)> = None;
+    let mut fdst_flows: Vec<crate::kf8_indx::FdstSection> = Vec::new();
     let fdst_abs = kf8_start.saturating_add(header.fdst_record as usize);
     if header.fdst_record != 0
         && header.fdst_record != u32::MAX
@@ -733,10 +736,37 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
                     flow0_range = Some((s, e));
                 }
             }
+            fdst_flows = flows;
         }
     }
     let (flow0_start, flow0_end) = flow0_range.unwrap_or((0, raw_html_bytes.len()));
     let flow0_bytes = &raw_html_bytes[flow0_start..flow0_end];
+
+    // Extract SVG flow resources (flow 1+ that look like SVG). Skip CSS
+    // and other unknown-type flows — we own the reader's CSS pipeline
+    // and don't want book-specific styling overriding it.
+    let mut flow_resources: Vec<ParsedFlowResource> = Vec::new();
+    for (i, flow) in fdst_flows.iter().enumerate().skip(1) {
+        let s = flow.start as usize;
+        let e = (flow.end as usize).min(raw_html_bytes.len());
+        if s >= e {
+            continue;
+        }
+        let bytes = &raw_html_bytes[s..e];
+        let head_len = bytes.len().min(300);
+        // Content sniff: an SVG resource either starts with an XML
+        // declaration followed by `<svg`, or with `<svg` directly.
+        let head = &bytes[..head_len];
+        let is_svg = head.windows(4).any(|w| w == b"<svg");
+        if !is_svg {
+            continue;
+        }
+        flow_resources.push(ParsedFlowResource {
+            flow_index: i as u32,
+            ext: "svg".into(),
+            data: general_purpose::STANDARD.encode(bytes),
+        });
+    }
 
     // Phase 2/3: skeleton INDX + fragment INDX — reassemble flow 0 into
     // per-section HTML with fragments inserted into their parent
@@ -938,5 +968,6 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         // round-trip stripAttributeLeaks pass (only needed for MOBI6's
         // split-tag garbage). Set when skeleton_split actually landed.
         well_formed: skeleton_split.is_some(),
+        flow_resources,
     }))
 }
