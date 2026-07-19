@@ -114,31 +114,37 @@ fn parse_mobi8_header(record: &[u8]) -> Result<Mobi8Header, String> {
     h.compression = compression;
     h.header_length = read_u32_be(record, mobi_start + 4);
 
-    // Field offsets within the MOBI header (relative to MOBI signature):
-    //   0x0C text_encoding
+    // Field offsets — all MOBI-sig-relative unless noted. Cross-referenced
+    // against KindleUnpack (mobi_header.py) and Calibre (mobi/reader/headers.py).
+    //   0x0C text_encoding      (1252 = CP1252, 65001 = UTF-8)
     //   0x40 first_non_book_index
-    //   0x58 format_version (8 = KF8)
+    //   0x58 format_version     (8 = KF8)
     //   0x5C first_image_index
-    //   0x60 huff_record
-    //   0x64 huff_count
-    //   0xC8 fdst_record (KF8 stores it here, MOBI6 leaves zero)
-    //   0xCC fdst_count
-    //   0xC0 skeleton_record (KF8 only)
-    //   0xC4 chunks_record (KF8 only)
+    //   0x60 huff_record / 0x64 huff_count
+    //   0xB0 fdst_index / 0xB4 fdst_count           (KF8 only)
+    //   0xE4 ncx_index                               (navigation, ignored)
+    //   0xE8 chunks_index (aka fragment)             (KF8 Phase 3)
+    //   0xEC skeleton_index                          (KF8 Phase 2)
+    // Header layout was probed empirically — several online references
+    // disagree about which of 0xE8 / 0xEC is skeleton vs. chunks. In our
+    // sample corpus the TAGX shape at 0xEC is `(1, 1, 3, 0), (6, 2, 12, 0)`
+    // which matches the documented skeleton layout (num_frags + [offset,
+    // length] pair encoded as tag 6 with num_values=2).
+    //   0xF2 extra_record_data_flags (u16) — record-relative, not sig-relative
+    // Cross-checked KindleUnpack mobi_header.py and Calibre latest;
+    // Phase 1 misread these (skeleton at 0xEC and fragment/skeleton
+    // swapped) which yielded NCX rows shaped like `off=1 len=0` when we
+    // tried to use them in Phase 2.
     h.text_encoding = read_u32_be(record, mobi_start + 0x0C);
     h.first_non_book_index = read_u32_be(record, mobi_start + 0x40);
     h.format_version = read_u32_be(record, mobi_start + 0x58);
     h.first_image_index = read_u32_be(record, mobi_start + 0x5C);
     h.huff_record = read_u32_be(record, mobi_start + 0x60);
     h.huff_count = read_u32_be(record, mobi_start + 0x64);
-    // KindleUnpack-verified offsets (record-relative, so subtract 16 for MOBI-sig-relative):
-    //   0xB0: fdst_table, 0xB4: fdst_count, 0xE8: fragment_table, 0xEC: skeleton_table
     h.fdst_record = read_u32_be(record, mobi_start + 0xB0);
     h.fdst_count = read_u32_be(record, mobi_start + 0xB4);
-    // KindleUnpack: fragment at record offset 0xF4, skeleton at record offset 0xFC
-    h.fragment_record = read_u32_be(record, 0xF4);
-    h.skeleton_record = read_u32_be(record, 0xFC);
-    // extra_record_data_flags: u16 at record offset 0xF2 (KindleUnpack-verified).
+    h.fragment_record = read_u32_be(record, mobi_start + 0xE8);
+    h.skeleton_record = read_u32_be(record, mobi_start + 0xEC);
     h.extra_record_data_flags = read_u16_be(record, 0xF2) as u32;
 
     // PalmDoc header (bytes 0..16 of the same record):
@@ -426,6 +432,130 @@ pub fn parse_mobi_full_name(record0: &[u8]) -> Option<String> {
     }
 }
 
+/// Phase 2 fallback: no fragment table available, so we can only slice
+/// each skeleton's full raw byte range (template + fragments back-to-back).
+/// HTML output isn't strictly valid — fragments trail past `</html>` —
+/// but tolerant parsers still render it.
+fn reassemble_phase2_concat(
+    skels: &[crate::kf8_indx::SkeletonRow],
+    raw_html_bytes: &[u8],
+    flow0_end: usize,
+) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::with_capacity(flow0_end.saturating_sub(skels[0].offset as usize));
+    let ends: Vec<usize> = (0..skels.len())
+        .map(|i| {
+            if i + 1 < skels.len() {
+                skels[i + 1].offset as usize
+            } else {
+                flow0_end
+            }
+        })
+        .collect();
+    let mut kept = 0usize;
+    for (i, row) in skels.iter().enumerate() {
+        let start = row.offset as usize;
+        let end = ends[i].min(raw_html_bytes.len());
+        if start >= end || start >= raw_html_bytes.len() {
+            continue;
+        }
+        buf.extend_from_slice(b"<mbp:pagebreak/>");
+        buf.extend_from_slice(&raw_html_bytes[start..end]);
+        kept += 1;
+    }
+    if kept < 2 {
+        buf.clear();
+    }
+    buf
+}
+
+/// Phase 3: fragment-into-skeleton reassembly. For each skeleton,
+/// interleave its fragment bytes into the template at each fragment's
+/// insert_pos. Produces byte-accurate per-section XHTML.
+///
+/// Matches Calibre `mobi8.py::Mobi8Reader::write_opf` — per-file layout
+/// is `base_xml[0:ip_1] + frag_1_data + base_xml[ip_1:ip_2] + frag_2_data
+/// + ... + base_xml[ip_N:]`. Fragment start_pos and length come directly
+/// from the fragment row (tag 6 tuple), not derived from position gaps.
+/// Grouping by parent skeleton is via `parent_ord` (Calibre's
+/// `file_number`, tag 3), which is populated for every well-formed KF8.
+fn reassemble_with_fragments(
+    skels: &[crate::kf8_indx::SkeletonRow],
+    frags: &[crate::kf8_indx::FragmentRow],
+    raw_html_bytes: &[u8],
+    _flow0_end: usize,
+) -> Vec<u8> {
+    // Group fragments by parent skeleton ordinal (Calibre `file_number`,
+    // tag 3). Fall back to sequential grouping by num_fragments if
+    // parent_ord looks bogus for the whole file.
+    let use_parent_ord = frags.iter().any(|f| f.parent_ord > 0)
+        && frags.iter().all(|f| (f.parent_ord as usize) < skels.len());
+    let mut groups: Vec<Vec<&crate::kf8_indx::FragmentRow>> = vec![Vec::new(); skels.len()];
+    if use_parent_ord {
+        for f in frags {
+            groups[f.parent_ord as usize].push(f);
+        }
+    } else {
+        let mut cursor = 0usize;
+        for (i, s) in skels.iter().enumerate() {
+            let take = (s.num_fragments as usize).min(frags.len().saturating_sub(cursor));
+            for f in &frags[cursor..cursor + take] {
+                groups[i].push(f);
+            }
+            cursor += take;
+        }
+    }
+
+    let total_estimate: usize = skels.iter().map(|s| s.length as usize).sum::<usize>()
+        + frags.iter().map(|f| f.length as usize).sum::<usize>()
+        + skels.len() * 16;
+    let mut buf: Vec<u8> = Vec::with_capacity(total_estimate);
+    let mut kept = 0usize;
+
+    for (i, skel) in skels.iter().enumerate() {
+        let tpl_start = skel.offset as usize;
+        let tpl_end = (tpl_start + skel.length as usize).min(raw_html_bytes.len());
+        if tpl_start >= tpl_end {
+            continue;
+        }
+        let base_xml = &raw_html_bytes[tpl_start..tpl_end];
+
+        // Fragment bytes for this skeleton live in raw text starting
+        // right after the template (i.e. at skel.offset + skel.length).
+        // Fragment.start_pos is an offset within that region, not an
+        // absolute offset — Calibre's `mobi8.py` computes fragment data
+        // as `text[fragment_start + start_pos : + length]`.
+        let frag_base = tpl_end;
+
+        let mut group = groups[i].clone();
+        // Reassemble in insert_pos order — walk the template linearly.
+        group.sort_by_key(|f| f.insert_pos);
+
+        buf.extend_from_slice(b"<mbp:pagebreak/>");
+        let mut cur = 0usize;
+        for f in &group {
+            let ip = (f.insert_pos as usize).min(base_xml.len());
+            if ip > cur {
+                buf.extend_from_slice(&base_xml[cur..ip]);
+                cur = ip;
+            }
+            let fs = frag_base + f.start_pos as usize;
+            let fe = (fs + f.length as usize).min(raw_html_bytes.len());
+            if fs < fe && fs < raw_html_bytes.len() {
+                buf.extend_from_slice(&raw_html_bytes[fs..fe]);
+            }
+        }
+        if cur < base_xml.len() {
+            buf.extend_from_slice(&base_xml[cur..]);
+        }
+        kept += 1;
+    }
+
+    if kept < 2 {
+        buf.clear();
+    }
+    buf
+}
+
 /// Top-level entry. Returns `Ok(Some(parsed))` if the file is KF8 (joint or
 /// pure) and we managed to parse it, `Ok(None)` if the file is pure MOBI6
 /// (caller should use the legacy MOBI6 path), or `Err` if parse failed.
@@ -523,10 +653,114 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         return Err("KF8 text records decompressed to nothing".into());
     }
 
+    // Phase 2: use FDST to slice out flow 0 (the HTML container).
+    // Everything past flow 0 is CSS files, SVG image masks, and other
+    // resources concatenated into the same decompressed byte stream.
+    // Phase 1 returned all of it, dumping raw CSS + SVG markup into the
+    // visible content. Phase 2 keeps only flow 0.
+    let mut flow0_range: Option<(usize, usize)> = None;
+    let fdst_abs = kf8_start.saturating_add(header.fdst_record as usize);
+    if header.fdst_record != 0
+        && header.fdst_record != u32::MAX
+        && header.fdst_count > 0
+        && fdst_abs < records.len()
+    {
+        // FDST usually lives in a single record but the header allows
+        // multiple — concatenate them before parsing.
+        let end_rec = (fdst_abs + header.fdst_count as usize).min(records.len());
+        let mut concat: Vec<u8> = Vec::new();
+        for i in fdst_abs..end_rec {
+            concat.extend_from_slice(records[i]);
+        }
+        if let Ok(flows) = crate::kf8_indx::parse_fdst(&concat) {
+            if let Some(first) = flows.first() {
+                let s = first.start as usize;
+                let e = (first.end as usize).min(raw_html_bytes.len());
+                if s < e {
+                    flow0_range = Some((s, e));
+                }
+            }
+        }
+    }
+    let (flow0_start, flow0_end) = flow0_range.unwrap_or((0, raw_html_bytes.len()));
+    let flow0_bytes = &raw_html_bytes[flow0_start..flow0_end];
+
+    // Phase 2/3: skeleton INDX + fragment INDX — reassemble flow 0 into
+    // per-section HTML with fragments inserted into their parent
+    // skeleton's template at the correct filepos.
+    //
+    // Phase 2 (fallback if fragment parse fails): concatenate
+    //   raw[skel.offset .. next_skel.offset)
+    // for each row. Template + fragments end up back-to-back (fragments
+    // fall after `</html>`), but tolerant HTML parsers still read the
+    // whole thing.
+    //
+    // Phase 3 (when fragment table parses): for each skeleton, interleave
+    // fragment content into the template at each fragment's insert_pos.
+    // The result is byte-accurate to the epub source's per-file HTML,
+    // one document per skeleton row, joined by <mbp:pagebreak/> so the
+    // frontend's splitIntoSections regex picks up the section
+    // boundaries.
+    let mut skeleton_split: Option<Vec<u8>> = None;
+    if header.skeleton_record != 0 && header.skeleton_record != u32::MAX {
+        let skel_prim_abs = kf8_start + header.skeleton_record as usize;
+        let frag_prim_abs = kf8_start + header.fragment_record as usize;
+        if skel_prim_abs < records.len() {
+            let primary = records[skel_prim_abs];
+            let data_count = crate::kf8_indx::primary_indx_data_count(primary);
+            let data_records: Vec<&[u8]> = (1..=data_count)
+                .filter_map(|i| records.get(skel_prim_abs + i).copied())
+                .collect();
+
+            let skel_rows = crate::kf8_indx::parse_skeleton_indx(primary, &data_records)
+                .ok()
+                .filter(|r| !r.is_empty());
+
+            // Try fragment table too. If it parses, do Phase 3
+            // reassembly; if not, fall back to Phase 2 concat.
+            let frag_rows = if header.fragment_record != 0
+                && header.fragment_record != u32::MAX
+                && frag_prim_abs < records.len()
+            {
+                let f_prim = records[frag_prim_abs];
+                let f_data_count = crate::kf8_indx::primary_indx_data_count(f_prim);
+                let f_data_records: Vec<&[u8]> = (1..=f_data_count)
+                    .filter_map(|i| records.get(frag_prim_abs + i).copied())
+                    .collect();
+                crate::kf8_indx::parse_fragment_indx(f_prim, &f_data_records)
+                    .ok()
+                    .filter(|r| !r.is_empty())
+            } else {
+                None
+            };
+
+            if let Some(skels) = skel_rows {
+                let buf = match frag_rows {
+                    Some(frags) => reassemble_with_fragments(
+                        &skels,
+                        &frags,
+                        raw_html_bytes.as_slice(),
+                        flow0_end,
+                    ),
+                    None => reassemble_phase2_concat(
+                        &skels,
+                        raw_html_bytes.as_slice(),
+                        flow0_end,
+                    ),
+                };
+                if !buf.is_empty() {
+                    skeleton_split = Some(buf);
+                }
+            }
+        }
+    }
+
+    let final_bytes: &[u8] = skeleton_split.as_deref().unwrap_or(flow0_bytes);
+
     let html = if header.text_encoding == 1252 {
-        encoding_rs::WINDOWS_1252.decode(&raw_html_bytes).0.into_owned()
+        encoding_rs::WINDOWS_1252.decode(final_bytes).0.into_owned()
     } else {
-        String::from_utf8_lossy(&raw_html_bytes).into_owned()
+        String::from_utf8_lossy(final_bytes).into_owned()
     };
 
     let first_image_abs = kf8_start + header.first_image_index as usize;

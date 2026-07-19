@@ -9,6 +9,7 @@ use tauri_plugin_fs::FsExt;
 
 mod calibre_converter;
 mod custom_tts;
+mod kf8_indx;
 mod kf8_parser;
 mod mobi_parser;
 mod winrt_tts;
