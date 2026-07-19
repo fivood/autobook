@@ -491,6 +491,124 @@ fn parse_ncx_data_record(
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── varint ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn varint_single_byte_stops_at_msb() {
+        // 0x82 = 0x02 with MSB (stop bit). Value = 2.
+        let (v, n) = read_varint_forward(&[0x82], 0);
+        assert_eq!((v, n), (2, 1));
+    }
+
+    #[test]
+    fn varint_two_byte_accumulates() {
+        // 0x0A → payload 0x0A (no MSB, continue)
+        // 0x82 → payload 0x02 (with MSB, stop)
+        // Value = (10 << 7) | 2 = 1282
+        let (v, n) = read_varint_forward(&[0x0A, 0x82], 0);
+        assert_eq!((v, n), (1282, 2));
+    }
+
+    #[test]
+    fn varint_reads_at_offset() {
+        // Leading garbage, then 0x83 (= 3 with stop).
+        let (v, n) = read_varint_forward(&[0xff, 0xff, 0x83], 2);
+        assert_eq!((v, n), (3, 1));
+    }
+
+    // ── FDST ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn fdst_parses_two_flows() {
+        // "FDST" + hdrlen=12 + num_sections=2 + [(0,4096), (4096,8192)]
+        let mut rec = b"FDST".to_vec();
+        rec.extend_from_slice(&12u32.to_be_bytes());
+        rec.extend_from_slice(&2u32.to_be_bytes());
+        rec.extend_from_slice(&0u32.to_be_bytes());
+        rec.extend_from_slice(&4096u32.to_be_bytes());
+        rec.extend_from_slice(&4096u32.to_be_bytes());
+        rec.extend_from_slice(&8192u32.to_be_bytes());
+        let flows = parse_fdst(&rec).unwrap();
+        assert_eq!(flows.len(), 2);
+        assert_eq!(flows[0].start, 0);
+        assert_eq!(flows[0].end, 4096);
+        assert_eq!(flows[1].start, 4096);
+        assert_eq!(flows[1].end, 8192);
+    }
+
+    #[test]
+    fn fdst_rejects_wrong_signature() {
+        let mut rec = b"XXXX".to_vec();
+        rec.extend_from_slice(&[0u8; 8]);
+        assert!(parse_fdst(&rec).is_err());
+    }
+
+    // ── decode_indx_entry (skeleton-shape TAGX) ────────────────────────
+
+    #[test]
+    fn decode_skeleton_shape_tag6_pair() {
+        // Skeleton TAGX: (1, 1, 3, 0), (6, 2, 12, 0), (0, 0, 0, 1)
+        // Two multi-bit masks (3 = 0b0011, 12 = 0b1100), both trigger the
+        // value_bytes varint branch.
+        let tagx = vec![
+            TagxEntry { tag: 1, num_values: 1, bitmask: 3, end_flag: 0 },
+            TagxEntry { tag: 6, num_values: 2, bitmask: 12, end_flag: 0 },
+            TagxEntry { tag: 0, num_values: 0, bitmask: 0, end_flag: 1 },
+        ];
+        // cbyte = 3 | 12 = 15 (both tags present, all bits set → bytes mode).
+        // Calibre reads all value_bytes varints first (one per multi-bit
+        // tag, in TAGX iteration order), then all value varints.
+        //
+        // Layout:
+        //   [cbyte=15]
+        //   [vb for tag 1 = 1 → 0x81]
+        //   [vb for tag 6 = 3 → 0x83]
+        //   [tag 1 value = 5 → 0x85]                       (1 byte, matches vb=1)
+        //   [tag 6 pair: 8, 488 → 0x88, 0x03, 0xE8]        (3 bytes, matches vb=3)
+        //     488 = (3 << 7) | 0x68; 0x03 no MSB, 0xE8 = 0x68 | 0x80 (stop)
+        let entry = vec![
+            15u8,
+            0x81, 0x83,
+            0x85,
+            0x88, 0x03, 0xE8,
+        ];
+        let vals = decode_indx_entry(&entry, &tagx, 1);
+        assert_eq!(vals.get(&1), Some(&vec![5]));
+        assert_eq!(vals.get(&6), Some(&vec![8, 488]));
+    }
+
+    #[test]
+    fn decode_absent_tag_returns_no_entry() {
+        // cbyte = 0 → nothing set.
+        let tagx = vec![
+            TagxEntry { tag: 1, num_values: 1, bitmask: 3, end_flag: 0 },
+            TagxEntry { tag: 0, num_values: 0, bitmask: 0, end_flag: 1 },
+        ];
+        let vals = decode_indx_entry(&[0u8], &tagx, 1);
+        assert!(vals.is_empty());
+    }
+
+    // ── CNCX ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn cncx_reads_named_at_offset() {
+        // [len_varint=3][b"abc"][len_varint=5][b"hello"]
+        let pool = vec![0x83, b'a', b'b', b'c', 0x85, b'h', b'e', b'l', b'l', b'o'];
+        assert_eq!(read_cncx_name(&pool, 0).as_deref(), Some("abc"));
+        assert_eq!(read_cncx_name(&pool, 4).as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn cncx_returns_none_out_of_bounds() {
+        assert!(read_cncx_name(&[], 0).is_none());
+        assert!(read_cncx_name(&[0x82, b'x'], 100).is_none());
+    }
+}
+
 /// Look up a name in a concatenated CNCX byte pool at the given offset.
 /// Layout at each offset: `[varint_length][utf8 bytes]`. Returns None if
 /// the offset is out of bounds or the length varint is malformed.
