@@ -128,7 +128,7 @@ struct HuffDict1Entry {
     maxcode: u32,
 }
 
-struct HuffCdic {
+pub(crate) struct HuffCdic {
     dict1: Vec<HuffDict1Entry>,
     mincode: Vec<u32>,
     maxcode: Vec<u32>,
@@ -136,7 +136,7 @@ struct HuffCdic {
 }
 
 impl HuffCdic {
-    fn load(huff_record: &[u8], cdic_records: &[&[u8]]) -> Result<Self, String> {
+    pub(crate) fn load(huff_record: &[u8], cdic_records: &[&[u8]]) -> Result<Self, String> {
         if huff_record.len() < 24 || &huff_record[0..8] != b"HUFF\x00\x00\x00\x18" {
             return Err("Invalid HUFF header".into());
         }
@@ -213,7 +213,7 @@ impl HuffCdic {
         Ok(HuffCdic { dict1, mincode, maxcode: maxcode_table, dictionary })
     }
 
-    fn unpack(&mut self, data: &[u8]) -> Vec<u8> {
+    pub(crate) fn unpack(&mut self, data: &[u8]) -> Vec<u8> {
         let mut bitsleft = (data.len() as i64) * 8;
         let mut padded = data.to_vec();
         padded.extend_from_slice(&[0u8; 8]);
@@ -556,10 +556,18 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
         decode_best(&raw_bytes)
     };
 
-    // Detect KF8:joint / pure KF8 and dispatch to dedicated parser
+    // Detect KF8:joint / pure KF8 and dispatch to dedicated parser.
+    // Pure KF8 (record 0 MOBI header format_version == 8) always goes
+    // to try_parse_kf8, even if the MOBI6 codepath above produced text —
+    // MOBI6 misreading a KF8 header often "works" (returns some bytes)
+    // but yields garbled content, especially for Huff/CDIC-compressed
+    // AZW3s where the flow / skeleton structure would otherwise get lost.
     let is_joint = records.iter().any(|r| r.starts_with(b"BOUNDARY"));
+    let is_pure_kf8 = rec0.len() >= 16 + 0x60
+        && &rec0[16..20] == b"MOBI"
+        && u32::from_be_bytes([rec0[16 + 0x58], rec0[16 + 0x59], rec0[16 + 0x5A], rec0[16 + 0x5B]]) == 8;
     let is_kf8_only = strip_tags(&html).trim().chars().count() < 50;
-    if is_joint || is_kf8_only {
+    if is_joint || is_pure_kf8 || is_kf8_only {
         match crate::kf8_parser::try_parse_kf8(bytes) {
             Ok(Some(parsed)) => return Ok(parsed),
             Ok(None) => {
@@ -569,7 +577,17 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
                 // the book (text + images) instead of a "文件可能损坏" dead-end.
             }
             Err(e) => {
-                return Err(format!("KF8 解析失败: {e}"));
+                // KF8 parse failed. Only surface the error to the user if
+                // we have no MOBI6 fallback content — the pre-KF8-dispatch
+                // MOBI6 codepath sometimes produces readable output even
+                // for pure KF8 files (garbled but not empty). Preferring
+                // partial content over a dead-end error was the pattern
+                // established in 1.16.3 for image-heavy scanned MOBI6.
+                let mobi6_len = strip_tags(&html).trim().chars().count();
+                if is_joint || mobi6_len < 50 {
+                    return Err(format!("KF8 解析失败: {e}"));
+                }
+                // else: fall through with MOBI6-derived html
             }
         }
     }

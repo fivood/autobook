@@ -275,6 +275,59 @@ fn hex_prefix(buf: &[u8], n: usize) -> String {
 /// records for a KF8 header (MOBI@16 + format_version==8). This tells us
 /// whether a KF8 segment exists (and where) for the "no KF8 found" files,
 /// and what's actually at records[boundary+1] for the "expected MOBI sig" file.
+/// Scan directory for any KF8 file whose PalmDoc header reports
+/// compression == 17480 (Huff/CDIC). Prints names so we can verify Huff
+/// KF8 decoding lands correctly.
+#[test]
+#[ignore]
+fn find_huff_kf8_files() {
+    let dir = match scan_dir() {
+        Some(d) => d,
+        None => return,
+    };
+    let mut files = Vec::new();
+    walk(Path::new(&dir), &["mobi", "azw", "azw3", "prc"], &mut files);
+    files.sort();
+    let mut found = 0;
+    for f in &files {
+        let bytes = match fs::read(f) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        let (records, _) = match parse_palmdb_records(&bytes) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        let boundary = records.iter().position(|r| r.starts_with(b"BOUNDARY"));
+        let is_pure_kf8 = records
+            .first()
+            .map(|r| r.len() >= 0x78 && &r[16..20] == b"MOBI" && read_be_u32_safe(r, 16 + 0x58) == 8)
+            .unwrap_or(false);
+        let kf8_start = if is_pure_kf8 {
+            0
+        } else if let Some(b) = boundary {
+            b + 1
+        } else {
+            continue;
+        };
+        if kf8_start >= records.len() {
+            continue;
+        }
+        let hdr = records[kf8_start];
+        if hdr.len() < 2 {
+            continue;
+        }
+        let comp = u16::from_be_bytes([hdr[0], hdr[1]]);
+        if comp == 17480 {
+            let name = f.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+            let sz = f.metadata().map(|m| m.len() / 1024).unwrap_or(0);
+            println!("HUFF-KF8: {name} ({sz} KB)");
+            found += 1;
+        }
+    }
+    println!("total Huff/CDIC KF8 files: {found}");
+}
+
 /// Dump first 6 fragments (raw fields) for 刺客正传2 so we can hand-check
 /// against Calibre's expected values.
 #[test]

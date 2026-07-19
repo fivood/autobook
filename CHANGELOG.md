@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.17.2
+
+KF8 Huff/CDIC 压缩解锁 + pure-KF8 dispatch 修复。1.17.1 只覆盖了 PalmDoc/uncompressed 压缩的 KF8；本地扫描发现 34+ 个 AZW3 用 Huff/CDIC（Kindle 商店主流压缩方式），之前都被 MOBI6 fallback 路径当成不完全 KF8 处理（返回半通不通的文本、0 pagebreak）。
+
+- **KF8 Huff/CDIC 解压**：MOBI6 侧的 `HuffCdic` struct 早就实现好了，只是 `try_parse_kf8` 遇到 compression==17480 直接报错让用户装 Calibre。把 HuffCdic + load/unpack 改成 `pub(crate)`，KF8 侧初始化一次然后每个 text record 走 `unpack`。huff_record 在 KF8 头 MOBI-sig+0x60 位置，读到相对 KF8 段的记录索引，加 `kf8_start` 得到绝对位置
+- **pure-KF8 强制 dispatch**：原 `parse_mobi_inner` 只在 `is_joint || is_kf8_only`（strip_tags 后文本 <50 字）时才 dispatch 到 `try_parse_kf8`。纯 KF8 AZW3 用 Huff/CDIC 时，MOBI6 路径能 decompress 出「看起来像文本」的字节（HuffCdic 是共用的），文本 > 50 字，dispatch 就不触发——结果 KF8 结构信息（flow / skeleton / fragment）全丢，用户拿到没 pagebreak 的一大坨。现在检测 record 0 的 `format_version == 8` 就当 pure KF8 强制 dispatch，扫描里 `夏目友人帐1-6` 178MB 漫画从 pagebreak=0 → 1143，`伟大的《沙丘》六部曲` 从 0 → 269 段
+- **KF8 dispatch 失败时对 pure KF8 兜底不再报错**：pure-KF8 强制 dispatch 后若 try_parse_kf8 出 Err，之前会把错误抛给用户。改成——只要 MOBI6 那边已经产生 ≥50 字符，就 fall through 到 MOBI6 图片抽取路径用它已经算好的 html（沿用 1.16.3 建立的「有部分内容比死路好」策略）。joint / true is_kf8_only 场景仍然报错（那些没有 MOBI6 输出可退）
+- 回归：242 文件仍 0 err，avg pagebreak 48.7 → 145.6（约 3x），avg chars 902k → 897k（-0.7%，是 KF8 路径正确剔除了 MOBI6 误读出的资源流字节）
+
 ## 1.17.1
 
 KF8/AZW3 原生解析器 Phase 2 + Phase 3：FDST 流分离 + skeleton 表章节切分 + fragment 反嵌入。KF8 合订本终于有 TOC，且每节 HTML 是 byte-accurate 的 XHTML（跟 epub 源同分布）。跑本地 242 文件回归，MOBI6-only 完全不变，49 个 joint/KF8 文件平均 pagebreak marker 从 0.7 → 226；内容仅掉 2%（是 Phase 1 混进去的 CSS/SVG 资源流被剔除）。

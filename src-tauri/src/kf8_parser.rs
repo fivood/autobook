@@ -594,11 +594,25 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         ));
     }
 
+    // Huff/CDIC decoder is loaded once and reused across all text
+    // records if this KF8 uses compression==17480. huff_record and
+    // huff_count in the KF8 header are relative to the KF8 segment.
+    let mut huff: Option<crate::mobi_parser::HuffCdic> = None;
     if header.compression == 17480 {
-        return Err(
-            "本文件使用 Huff/CDIC 压缩，KF8 解析器还在做（计划 1.6.0）。临时方案：用 Calibre 转 EPUB。"
-                .into(),
-        );
+        if header.huff_record == 0 || header.huff_count == 0 {
+            return Err("KF8 Huff/CDIC-compressed but header.huff_record==0".into());
+        }
+        let huff_abs = kf8_start + header.huff_record as usize;
+        if huff_abs + header.huff_count as usize > records.len() {
+            return Err("KF8 Huff/CDIC record range extends past file".into());
+        }
+        let cdic_records: Vec<&[u8]> = (1..header.huff_count as usize)
+            .map(|i| records[huff_abs + i])
+            .collect();
+        match crate::mobi_parser::HuffCdic::load(records[huff_abs], &cdic_records) {
+            Ok(h) => huff = Some(h),
+            Err(e) => return Err(format!("KF8 Huff/CDIC init failed: {e}")),
+        }
     }
 
     // Title: prefer MOBI full-name from KF8 header record, then from MOBI6
@@ -640,9 +654,13 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         let chunk = match header.compression {
             1 => trimmed.to_vec(),
             2 => decompress_palmdoc(trimmed),
+            17480 => match huff.as_mut() {
+                Some(h) => h.unpack(trimmed),
+                None => return Err("KF8 Huff/CDIC decoder not initialized".into()),
+            },
             other => {
                 return Err(format!(
-                    "unknown KF8 compression type: {other} (expected 1 or 2)"
+                    "unknown KF8 compression type: {other} (expected 1, 2, or 17480)"
                 ));
             }
         };
