@@ -128,15 +128,26 @@ function splitIntoSections(html: string): { sectionedHtml: string; sections: Sec
   if (parts.length === 0) {
     parts.push(html);
   }
-  // Try to harvest a heading per section for a friendlier TOC label.
-  const labelRe = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/i;
+  // Rust side emits `<!--autobook-section-label:TITLE-->` at the start of
+  // each KF8 section carrying the CNCX chapter title (Phase 3 with CNCX).
+  // Prefer that over scanning `<h*>` since the CNCX pool matches the epub
+  // source's nav.xhtml titles, which are often more accurate than the
+  // heading text (e.g. "第一章 · 波洛的调查" vs bare "第一章").
+  const rustLabelRe = /^\s*<!--autobook-section-label:([\s\S]*?)-->/;
+  const headingLabelRe = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/i;
   let totalChars = 0;
   const sections: Section[] = [];
   const sectionedParts: string[] = [];
   parts.forEach((body, i) => {
     const id = `section-${i + 1}`;
-    const match = labelRe.exec(body);
-    const rawLabel = match ? match[2] : '';
+    let rawLabel = '';
+    const rustMatch = rustLabelRe.exec(body);
+    if (rustMatch) {
+      rawLabel = rustMatch[1];
+    } else {
+      const hm = headingLabelRe.exec(body);
+      rawLabel = hm ? hm[2] : '';
+    }
     const label = rawLabel.replace(/<[^>]*>/g, '').trim() || id;
     // textContent measured via stripping tags; close enough for char counts.
     const text = body.replace(/<[^>]*>/g, '');

@@ -67,6 +67,8 @@ struct Mobi8Header {
     ///   skeleton_table at record offset 0xFC → MOBI sig + 0xEC
     fragment_record: u32,
     skeleton_record: u32,
+    /// NCX / TOC index (MOBI-sig+0xE4), Phase 4.
+    ncx_record: u32,
 }
 
 /// Read a big-endian u32 from `bytes` at `offset`, returning 0 if out of
@@ -143,6 +145,7 @@ fn parse_mobi8_header(record: &[u8]) -> Result<Mobi8Header, String> {
     h.huff_count = read_u32_be(record, mobi_start + 0x64);
     h.fdst_record = read_u32_be(record, mobi_start + 0xB0);
     h.fdst_count = read_u32_be(record, mobi_start + 0xB4);
+    h.ncx_record = read_u32_be(record, mobi_start + 0xE4);
     h.fragment_record = read_u32_be(record, mobi_start + 0xE8);
     h.skeleton_record = read_u32_be(record, mobi_start + 0xEC);
     h.extra_record_data_flags = read_u16_be(record, 0xF2) as u32;
@@ -483,6 +486,8 @@ fn reassemble_with_fragments(
     frags: &[crate::kf8_indx::FragmentRow],
     raw_html_bytes: &[u8],
     _flow0_end: usize,
+    cncx_pool: &[u8],
+    ncx_labels: &[Option<String>],
 ) -> Vec<u8> {
     // Group fragments by parent skeleton ordinal (Calibre `file_number`,
     // tag 3). Fall back to sequential grouping by num_fragments if
@@ -531,6 +536,36 @@ fn reassemble_with_fragments(
         group.sort_by_key(|f| f.insert_pos);
 
         buf.extend_from_slice(b"<mbp:pagebreak/>");
+        // Prefer the NCX-derived chapter label (real epub TOC name).
+        // Fall back to the fragment table's CNCX only if it isn't an
+        // xpath position anchor (e.g. `P-//*[@aid='UGI0']`, which is
+        // what fragment CNCX actually holds in practice) — this branch
+        // is defensive and rarely fires. If neither has a usable name,
+        // omit the marker and let the frontend scan `<h*>` in the body.
+        let label: Option<String> = ncx_labels
+            .get(i)
+            .cloned()
+            .flatten()
+            .or_else(|| {
+                let first = group.first()?;
+                if first.toc_cncx == 0 || cncx_pool.is_empty() {
+                    return None;
+                }
+                let name = crate::kf8_indx::read_cncx_name(cncx_pool, first.toc_cncx)?;
+                let looks_like_xpath =
+                    name.starts_with("P-//") || name.starts_with("//*[") || name.contains("[@aid");
+                if looks_like_xpath || name.trim().is_empty() {
+                    None
+                } else {
+                    Some(name)
+                }
+            });
+        if let Some(l) = label {
+            let sanitized = l.replace("-->", "-- >");
+            buf.extend_from_slice(b"<!--autobook-section-label:");
+            buf.extend_from_slice(sanitized.as_bytes());
+            buf.extend_from_slice(b"-->");
+        }
         let mut cur = 0usize;
         for f in &group {
             let ip = (f.insert_pos as usize).min(base_xml.len());
@@ -735,30 +770,105 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
                 .filter(|r| !r.is_empty());
 
             // Try fragment table too. If it parses, do Phase 3
-            // reassembly; if not, fall back to Phase 2 concat.
-            let frag_rows = if header.fragment_record != 0
+            // reassembly; if not, fall back to Phase 2 concat. Also load
+            // the fragment INDX's CNCX pool so we can attach real chapter
+            // titles to each section (Calibre's `toc_text` semantic).
+            let (frag_rows, cncx_pool) = if header.fragment_record != 0
                 && header.fragment_record != u32::MAX
                 && frag_prim_abs < records.len()
             {
                 let f_prim = records[frag_prim_abs];
                 let f_data_count = crate::kf8_indx::primary_indx_data_count(f_prim);
+                let f_cncx_count = crate::kf8_indx::primary_indx_cncx_count(f_prim);
                 let f_data_records: Vec<&[u8]> = (1..=f_data_count)
                     .filter_map(|i| records.get(frag_prim_abs + i).copied())
                     .collect();
-                crate::kf8_indx::parse_fragment_indx(f_prim, &f_data_records)
+                let cncx_start = frag_prim_abs + 1 + f_data_count;
+                let mut cncx_pool: Vec<u8> = Vec::new();
+                for i in 0..f_cncx_count {
+                    if let Some(rec) = records.get(cncx_start + i) {
+                        cncx_pool.extend_from_slice(rec);
+                    }
+                }
+                let rows = crate::kf8_indx::parse_fragment_indx(f_prim, &f_data_records)
                     .ok()
-                    .filter(|r| !r.is_empty())
+                    .filter(|r| !r.is_empty());
+                (rows, cncx_pool)
             } else {
-                None
+                (None, Vec::new())
+            };
+
+            // Also try to load NCX (real TOC with human-readable chapter
+            // names). Its CNCX pool holds the chapter titles; each row's
+            // position is a byte offset in flow 0 we can match to a
+            // skeleton by nearest-preceding.
+            let (ncx_rows, ncx_cncx_pool) = if header.ncx_record != 0
+                && header.ncx_record != u32::MAX
+                && (kf8_start + header.ncx_record as usize) < records.len()
+            {
+                let ncx_prim_abs = kf8_start + header.ncx_record as usize;
+                let n_prim = records[ncx_prim_abs];
+                let n_data_count = crate::kf8_indx::primary_indx_data_count(n_prim);
+                let n_cncx_count = crate::kf8_indx::primary_indx_cncx_count(n_prim);
+                let n_data_records: Vec<&[u8]> = (1..=n_data_count)
+                    .filter_map(|i| records.get(ncx_prim_abs + i).copied())
+                    .collect();
+                let n_cncx_start = ncx_prim_abs + 1 + n_data_count;
+                let mut pool: Vec<u8> = Vec::new();
+                for i in 0..n_cncx_count {
+                    if let Some(rec) = records.get(n_cncx_start + i) {
+                        pool.extend_from_slice(rec);
+                    }
+                }
+                let rows = crate::kf8_indx::parse_ncx_indx(n_prim, &n_data_records)
+                    .ok()
+                    .filter(|r| !r.is_empty());
+                (rows, pool)
+            } else {
+                (None, Vec::new())
             };
 
             if let Some(skels) = skel_rows {
+                // Build per-skeleton label lookup from NCX by finding the
+                // top-level (depth 0 or 1) NCX entry whose position falls
+                // in [skel.offset, next_skel.offset). Chapter names come
+                // from the NCX's own CNCX pool.
+                let skel_labels: Vec<Option<String>> = if let Some(nrows) = &ncx_rows {
+                    let mut top_level: Vec<&crate::kf8_indx::NcxRow> = nrows
+                        .iter()
+                        .filter(|n| n.depth == 0 || n.depth == 1)
+                        .collect();
+                    if top_level.is_empty() {
+                        top_level = nrows.iter().collect();
+                    }
+                    top_level.sort_by_key(|n| n.position);
+                    (0..skels.len())
+                        .map(|i| {
+                            let start = skels[i].offset;
+                            let end = if i + 1 < skels.len() {
+                                skels[i + 1].offset
+                            } else {
+                                flow0_end as u32
+                            };
+                            top_level
+                                .iter()
+                                .find(|n| n.position >= start && n.position < end)
+                                .and_then(|n| crate::kf8_indx::read_cncx_name(&ncx_cncx_pool, n.name_cncx))
+                                .filter(|s| !s.trim().is_empty())
+                        })
+                        .collect()
+                } else {
+                    vec![None; skels.len()]
+                };
+
                 let buf = match frag_rows {
                     Some(frags) => reassemble_with_fragments(
                         &skels,
                         &frags,
                         raw_html_bytes.as_slice(),
                         flow0_end,
+                        &cncx_pool,
+                        &skel_labels,
                     ),
                     None => reassemble_phase2_concat(
                         &skels,

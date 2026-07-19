@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.17.3
+
+KF8 NCX 表解析，KF8 section TOC 现在用真章节名（原 epub `nav.xhtml` 里的），不用前端从 `<h*>` 抓。之前 fallback 到 `<h*>` 的问题是：很多 KF8 section 开头没标题元素（只有 `<p>` 或 `<div>`），或标题文本残缺（如「第一章」缺失章节名），生成的 TOC 项就是 fallback 的 `section-N`。
+
+- **kf8_indx.rs 新增 NCX INDX 表解析**：MOBI-sig+0xE4 是 NCX 主 INDX 记录，Calibre 叫 `ncxidx`。TAGX shape `(1,1,1,0), (2,1,2,0), (3,1,4,0), (4,1,8,0), (21,1,16,0), (22,1,32,0), (23,1,64,0), (6,2,128,0)`：tag 1=pos（flow 0 字节位置）、tag 2=length、tag 3=CNCX name offset、tag 4=depth、tag 21=parent、tag 6=[pos_fid, offset] 元组。新增 `parse_ncx_indx` + `read_cncx_name`（varint length + utf8 bytes 的 CNCX 池按 offset 查名字）
+- **kf8_parser.rs 反嵌入时按 NCX pos 匹配 skeleton**：加载 NCX 表 + 独立的 NCX CNCX 池（跟 fragment 表的 CNCX 是分开的两份），按 `depth == 0/1` 过滤到顶层章节，按 position 排序，对每个 skeleton 找 `position ∈ [skel.offset, next_skel.offset)` 的 NCX 项拿名字。fragment 表的 `toc_cncx` 存的其实是 XPath 位置锚点（`P-//*[@aid='UGI0']`）而不是章节名，所以彻底不用它——保留一层 defensive 只在不像 xpath 且 NCX 没匹上时才用
+- **前端 load-mobi.ts 新增 rustLabelRe**：优先识别 Rust 侧插的 `<!--autobook-section-label:TITLE-->` marker（在 `<mbp:pagebreak/>` 后紧跟），拿到就用；没有再 fallback 到 `<h*>` 扫描。marker 里如果 title 含 `-->` 会在 Rust 侧转义成 `-- >` 防止提前闭合
+- 验证：3 个抽样文件的 187/39/11 sections 分别命中 175/37/10 个 NCX 标签（未命中的少数几个是 cover / 版权页这类无 NCX 条目的辅助 section）。典型标签：「一位女士的画像」「序曲 梦与苏醒」「1 泥泞湾」「第一章」——都是原 epub 的 nav.xhtml 里的字面文本
+- 回归：242 文件 0 err、avg pagebreak 保持 145.6、avg chars 896k → 897k（多的 1k 是 label markers 的常数开销）
+
 ## 1.17.2
 
 KF8 Huff/CDIC 压缩解锁 + pure-KF8 dispatch 修复。1.17.1 只覆盖了 PalmDoc/uncompressed 压缩的 KF8；本地扫描发现 34+ 个 AZW3 用 Huff/CDIC（Kindle 商店主流压缩方式），之前都被 MOBI6 fallback 路径当成不完全 KF8 处理（返回半通不通的文本、0 pagebreak）。

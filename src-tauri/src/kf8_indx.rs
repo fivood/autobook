@@ -381,6 +381,133 @@ pub fn primary_indx_data_count(primary: &[u8]) -> usize {
     read_u32_be(primary, 0x18) as usize
 }
 
+/// CNCX record count from the primary INDX header (offset 0x34). CNCX
+/// records follow the data records and hold a pool of names referenced by
+/// varint offsets from index entries.
+pub fn primary_indx_cncx_count(primary: &[u8]) -> usize {
+    read_u32_be(primary, 0x34) as usize
+}
+
+// ── NCX INDX table ─────────────────────────────────────────────────────
+//
+// NCX = the epub source's `nav.xhtml` / TOC, encoded as an INDX table.
+// Header ptr lives at MOBI-sig+0xE4 (Calibre `ncxidx`). Each row is a
+// TOC entry with a position in flow 0, a chapter name (via CNCX), and
+// hierarchy fields (depth, parent, first/last child) that let us
+// reconstruct a nested nav tree.
+//
+// TAGX shape (probed against sample corpus):
+//   tag 1  (mask=1)   — pos (byte position in flow 0)
+//   tag 2  (mask=2)   — length
+//   tag 3  (mask=4)   — CNCX offset for chapter name
+//   tag 4  (mask=8)   — depth / heading level
+//   tag 21 (mask=16)  — parent index
+//   tag 22 (mask=32)  — first child index
+//   tag 23 (mask=64)  — last child index
+//   tag 6  (mask=128, num_values=2) — [pos_fid, offset]
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NcxRow {
+    /// Byte position in flow 0 (roughly `skel.offset` for the section
+    /// this entry labels).
+    pub position: u32,
+    pub length: u32,
+    pub name_cncx: u32,
+    pub depth: u32,
+    pub parent: u32,
+}
+
+pub fn parse_ncx_indx(
+    primary: &[u8],
+    data_records: &[&[u8]],
+) -> Result<Vec<NcxRow>, String> {
+    if primary.len() < 4 || &primary[0..4] != b"INDX" {
+        return Err("NCX primary INDX signature missing".into());
+    }
+    let (tagx, control_byte_count) = parse_tagx(primary)?;
+    if tagx.is_empty() {
+        return Err("NCX TAGX has no entries".into());
+    }
+    let mut rows: Vec<NcxRow> = Vec::new();
+    for rec in data_records {
+        parse_ncx_data_record(rec, &tagx, control_byte_count, &mut rows)?;
+    }
+    Ok(rows)
+}
+
+fn parse_ncx_data_record(
+    rec: &[u8],
+    tagx: &[TagxEntry],
+    control_byte_count: u32,
+    out: &mut Vec<NcxRow>,
+) -> Result<(), String> {
+    if rec.len() < 0x20 || &rec[0..4] != b"INDX" {
+        return Err("NCX INDX data record signature missing".into());
+    }
+    let idxt_off = read_u32_be(rec, 0x14) as usize;
+    let count = read_u32_be(rec, 0x18) as usize;
+    if idxt_off + 4 + count * 2 > rec.len() {
+        return Err("NCX IDXT block extends past record".into());
+    }
+    if &rec[idxt_off..idxt_off + 4] != b"IDXT" {
+        return Err("NCX IDXT signature missing at declared offset".into());
+    }
+    let mut entry_offs: Vec<usize> = Vec::with_capacity(count);
+    for i in 0..count {
+        let off = read_u16_be(rec, idxt_off + 4 + i * 2) as usize;
+        entry_offs.push(off);
+    }
+    for i in 0..count {
+        let start = entry_offs[i];
+        let end = if i + 1 < count { entry_offs[i + 1] } else { idxt_off };
+        if start >= rec.len() || end > rec.len() || start >= end {
+            continue;
+        }
+        let entry = &rec[start..end];
+        if entry.is_empty() {
+            continue;
+        }
+        let name_len = entry[0] as usize;
+        if 1 + name_len > entry.len() {
+            continue;
+        }
+        // NCX entry names are typically hex ordinal like "0000000000".
+        // We ignore them — the meaningful name is at tag 3 via CNCX.
+        let tail = &entry[1 + name_len..];
+        let vals = decode_indx_entry(tail, tagx, control_byte_count);
+        let position = vals.get(&1).and_then(|v| v.first().copied()).unwrap_or(0) as u32;
+        let length = vals.get(&2).and_then(|v| v.first().copied()).unwrap_or(0) as u32;
+        let name_cncx = vals.get(&3).and_then(|v| v.first().copied()).unwrap_or(0) as u32;
+        let depth = vals.get(&4).and_then(|v| v.first().copied()).unwrap_or(0) as u32;
+        let parent = vals.get(&21).and_then(|v| v.first().copied()).unwrap_or(0) as u32;
+        out.push(NcxRow {
+            position,
+            length,
+            name_cncx,
+            depth,
+            parent,
+        });
+    }
+    Ok(())
+}
+
+/// Look up a name in a concatenated CNCX byte pool at the given offset.
+/// Layout at each offset: `[varint_length][utf8 bytes]`. Returns None if
+/// the offset is out of bounds or the length varint is malformed.
+pub fn read_cncx_name(cncx_pool: &[u8], offset: u32) -> Option<String> {
+    let off = offset as usize;
+    if off >= cncx_pool.len() {
+        return None;
+    }
+    let (len, consumed) = read_varint_forward(cncx_pool, off);
+    let start = off + consumed;
+    let end = start + len as usize;
+    if end > cncx_pool.len() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&cncx_pool[start..end]).to_string())
+}
+
 // ── Fragment / chunks INDX table (Phase 3) ──────────────────────────────
 //
 // Each fragment row describes one chunk of body text and where it should
