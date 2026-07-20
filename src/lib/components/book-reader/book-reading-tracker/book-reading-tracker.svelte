@@ -119,7 +119,19 @@
       const otherDayStatistics =
         statistics.get(otherDayKey) || getDefaultStatistic(bookTitle, otherDayKey);
 
-      updateStatistic(otherDayStatistics, otherDayTimeDiff, characterDiff, lastStatisticModified);
+      // The other-day chunk (typically the pre-midnight tail of an overlapping
+      // flush) happened before the start-of-day boundary, so bucket it into
+      // the last hour of that logical day. This is an approximation — a real
+      // multi-hour cross-boundary flush would need per-second attribution,
+      // but flushes are usually a few seconds wide so this is close enough.
+      const prevDayHour = (($startDayHoursForTracker$ - 1) + 24) % 24;
+      updateStatistic(
+        otherDayStatistics,
+        otherDayTimeDiff,
+        characterDiff,
+        lastStatisticModified,
+        overlappedDay ? prevDayHour : undefined
+      );
 
       statistics.set(otherDayKey, otherDayStatistics);
       statisticsToStore.add(otherDayKey);
@@ -780,7 +792,8 @@
     statisticObject: BooksDbStatistic,
     timeDiff: number,
     characterDiff: number,
-    lastStatisticModified: number
+    lastStatisticModified: number,
+    hourOverride?: number
   ) {
     const statistic = statisticObject;
 
@@ -802,7 +815,14 @@
     }
 
     if (timeDiff && statistic.dateKey && statistic.dateKey !== '-') {
-      const hour = new Date(lastStatisticModified).getHours();
+      // Session / all-time aggregates use dateKey '-' and are excluded above.
+      // For per-day rows, prefer an explicit hour (used by the cross-midnight
+      // branch to attribute the pre-boundary chunk to the previous day) and
+      // fall back to the hour of the tick's timestamp.
+      const hour =
+        hourOverride !== undefined
+          ? hourOverride
+          : new Date(lastStatisticModified).getHours();
       if (hour >= 0 && hour < 24) {
         const hourly = statistic.hourly?.length === 24 ? statistic.hourly : new Array(24).fill(0);
         hourly[hour] = Math.max(0, (hourly[hour] || 0) + timeDiff);

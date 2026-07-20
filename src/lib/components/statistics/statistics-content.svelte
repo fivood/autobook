@@ -13,6 +13,7 @@
   } from '$lib/components/statistics/statistics-summary/statistics-summary';
   import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
   import StatisticsHighlights from '$lib/components/statistics/statistics-highlights/statistics-highlights.svelte';
+  import StatisticsReadingHabits from '$lib/components/statistics/statistics-reading-habits/statistics-reading-habits.svelte';
   import StatisticsYearPanel from '$lib/components/statistics/statistics-year-panel/statistics-year-panel.svelte';
   import StatisticsTitleFilter from '$lib/components/statistics/statistics-title-filter.svelte';
   import {
@@ -276,6 +277,7 @@
       try {
         const { aggregateHighlightStats } = await import('$lib/functions/highlight-stats');
         const { aggregateMetadataStats } = await import('$lib/functions/metadata-stats');
+        const { aggregateReadingHabits } = await import('$lib/functions/reading-habits');
         const { buildYearReportMarkdown } = await import('$lib/functions/year-report');
 
         const [highlights, metadataList] = await Promise.all([
@@ -301,6 +303,12 @@
           endDate: $lastStatisticsEndDate$,
           titleFilter: statisticsTitleFilters
         });
+        const habitsSummary = aggregateReadingHabits(scopedStatistics, {
+          startDate: $lastStatisticsStartDate$,
+          endDate: $lastStatisticsEndDate$,
+          startDayHoursForTracker: $startDayHoursForTracker$,
+          titleFilter: statisticsTitleFilters
+        });
 
         const md = buildYearReportMarkdown({
           startDate: $lastStatisticsStartDate$,
@@ -308,7 +316,8 @@
           label: statisticsDateRangeLabel,
           statistics: scopedStatistics,
           highlights: highlightSummary,
-          metadata: metadataSummary
+          metadata: metadataSummary,
+          habits: habitsSummary
         });
 
         const safeLabel = statisticsDateRangeLabel.replace(/[^\w一-鿿-]+/g, '-');
@@ -997,6 +1006,12 @@
         />
       </div>
     {/if}
+    <StatisticsReadingHabits
+      statistics={statisticsData}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      titleFilter={statisticsTitleFilters}
+    />
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.SUMMARY}
     <StatisticsSummary

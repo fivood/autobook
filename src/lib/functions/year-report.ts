@@ -7,6 +7,7 @@
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
 import type { HighlightStatsSummary } from '$lib/functions/highlight-stats';
 import type { MetadataStatsSummary } from '$lib/functions/metadata-stats';
+import type { ReadingHabitsSummary } from '$lib/functions/reading-habits';
 import { toTimeString } from '$lib/functions/statistic-util';
 import { highlightColorLabels, highlightColors } from '$lib/functions/highlight-stats';
 
@@ -17,7 +18,10 @@ export interface YearReportInput {
   statistics: BooksDbStatistic[];
   highlights: HighlightStatsSummary;
   metadata: MetadataStatsSummary;
+  habits?: ReadingHabitsSummary;
 }
+
+const dowLabels = ['日', '一', '二', '三', '四', '五', '六'];
 
 interface DayTotals {
   readingTime: number;
@@ -25,7 +29,7 @@ interface DayTotals {
 }
 
 export function buildYearReportMarkdown(input: YearReportInput): string {
-  const { label, statistics, highlights, metadata } = input;
+  const { label, statistics, highlights, metadata, habits } = input;
 
   const totals = { readingTime: 0, charactersRead: 0 };
   const perDay = new Map<string, DayTotals>();
@@ -96,7 +100,42 @@ export function buildYearReportMarkdown(input: YearReportInput): string {
     lines.push('');
   }
 
-  if (metadata.hourlyTotal > 0) {
+  if (habits && habits.totalWithBucket > 0) {
+    lines.push('## 阅读习惯', '');
+
+    if (habits.peakHour >= 0) {
+      lines.push(
+        `- 阅读高峰：**${`${habits.peakHour}`.padStart(2, '0')}:00–${`${(habits.peakHour + 1) % 24}`.padStart(2, '0')}:00**`
+      );
+    }
+    if (habits.peakDow >= 0) {
+      lines.push(`- 最活跃：**周${dowLabels[habits.peakDow]}**`);
+    }
+    lines.push('');
+
+    lines.push('### 24 小时分布', '');
+    lines.push('| 时段 | 时长 |');
+    lines.push('|---|---|');
+    for (let h = 0; h < 24; h += 1) {
+      const sec = habits.hourly[h] || 0;
+      if (sec > 0) {
+        lines.push(`| ${`${h}`.padStart(2, '0')}:00 | ${toTimeString(sec)} |`);
+      }
+    }
+    lines.push('');
+
+    lines.push('### 每周分布', '');
+    lines.push('| 星期 | 时长 |');
+    lines.push('|---|---|');
+    for (let d = 0; d < 7; d += 1) {
+      const sec = habits.dow[d] || 0;
+      if (sec > 0) {
+        lines.push(`| 周${dowLabels[d]} | ${toTimeString(sec)} |`);
+      }
+    }
+    lines.push('');
+  } else if (metadata.hourlyTotal > 0) {
+    // Fallback path if the caller only passed metadata (older callsites).
     lines.push('## 阅读时段', '');
     lines.push('| 时段 | 时长 |');
     lines.push('|---|---|');
