@@ -4,6 +4,7 @@
     faBook,
     faCalendarDays,
     faCopy,
+    faFileArrowDown,
     faFilter,
     faHighlighter,
     faMap,
@@ -16,6 +17,7 @@
   import {
     StatisticsTab,
     copyStatisticsData$,
+    exportYearReport$,
     openManualStatisticsEntry$,
     statisticsTitleFilterEnabled$,
     statisticsTitleFilterIsOpen$,
@@ -144,6 +146,16 @@
         on:keyup={dummyFn}
       >
         <Fa icon={faPenToSquare} />
+      </div>
+      <div
+        tabindex="0"
+        role="button"
+        title="导出当前时间范围的年度报告为 Markdown"
+        class={baseIconClasses}
+        on:click={() => exportYearReport$.next()}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faFileArrowDown} />
       </div>
       <div
         tabindex="0"

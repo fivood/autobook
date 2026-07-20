@@ -95,6 +95,8 @@ export const setStatisticsDatesToAllTime$ = new Subject<void>();
 
 export const openManualStatisticsEntry$ = new Subject<void>();
 
+export const exportYearReport$ = new Subject<void>();
+
 export interface ManualStatisticEntry {
   title: string;
   dateKey: string;

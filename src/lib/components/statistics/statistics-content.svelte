@@ -22,6 +22,7 @@
     StatisticsReadingDataAggregationMode,
     statisticsRangeTemplates,
     copyStatisticsData$,
+    exportYearReport$,
     openManualStatisticsEntry$,
     statisticsTitleFilterEnabled$,
     statisticsTitleFilterIsOpen$,
@@ -264,6 +265,71 @@
           $lastStatisticsRangeTemplate$ = StatisticsRangeTemplate.CUSTOM;
           break;
         }
+      }
+    }),
+    reduceToEmptyString()
+  );
+
+  const exportYearReportHandler$ = exportYearReport$.pipe(
+    tap(async () => {
+      $statisticsActionInProgress$ = true;
+      try {
+        const { aggregateHighlightStats } = await import('$lib/functions/highlight-stats');
+        const { aggregateMetadataStats } = await import('$lib/functions/metadata-stats');
+        const { buildYearReportMarkdown } = await import('$lib/functions/year-report');
+
+        const [highlights, metadataList] = await Promise.all([
+          database.getAllHighlights(),
+          database.getAllBookMetadata()
+        ]);
+
+        const scopedStatistics = statisticsData.filter(
+          (s) =>
+            s.dateKey >= $lastStatisticsStartDate$ &&
+            s.dateKey <= $lastStatisticsEndDate$ &&
+            (!statisticsTitleFilters.size || statisticsTitleFilters.get(s.title))
+        );
+
+        const highlightSummary = aggregateHighlightStats(highlights, {
+          startDate: $lastStatisticsStartDate$,
+          endDate: $lastStatisticsEndDate$,
+          startDayHoursForTracker: $startDayHoursForTracker$,
+          titleFilter: statisticsTitleFilters
+        });
+        const metadataSummary = aggregateMetadataStats(scopedStatistics, metadataList, {
+          startDate: $lastStatisticsStartDate$,
+          endDate: $lastStatisticsEndDate$,
+          titleFilter: statisticsTitleFilters
+        });
+
+        const md = buildYearReportMarkdown({
+          startDate: $lastStatisticsStartDate$,
+          endDate: $lastStatisticsEndDate$,
+          label: statisticsDateRangeLabel,
+          statistics: scopedStatistics,
+          highlights: highlightSummary,
+          metadata: metadataSummary
+        });
+
+        const safeLabel = statisticsDateRangeLabel.replace(/[^\w一-鿿-]+/g, '-');
+        const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `autobook-report-${safeLabel || 'range'}.md`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (error: any) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: { title: '错误', message: `导出失败：${error?.message ?? error}` }
+          }
+        ]);
+      } finally {
+        $statisticsActionInProgress$ = false;
       }
     }),
     reduceToEmptyString()
@@ -902,6 +968,7 @@
 {$deleteStatisticsDataHandler$ ?? ''}
 {$setStatisticsDatesToAllTimeHandler$ ?? ''}
 {$manualEntryHandler$ ?? ''}
+{$exportYearReportHandler$ ?? ''}
 <svelte:window on:keyup={onKeyUp} />
 {#if isLoading}
   <div class="flex fixed items-center justify-center inset-0 h-full w-full text-7xl">
