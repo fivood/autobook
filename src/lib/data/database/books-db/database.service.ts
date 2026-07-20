@@ -732,6 +732,96 @@ export class DatabaseService {
     this.statisticsChanged$.next();
   }
 
+  /**
+   * Insert-or-merge a manual reading record (paper book, backfill, etc.).
+   * The [title, dateKey] pair is the primary key, so this doubles as an
+   * upsert for the "append to existing day" workflow. `overwrite` replaces
+   * the day's totals wholesale; the default `append` semantics add on top.
+   *
+   * Manual entries record no per-hour session data — they never feed the
+   * `session` store, only the aggregate `statistic` row. Speed columns are
+   * derived from the final time/chars pair; if chars is 0 the UI shows "—"
+   * instead of "0 / h" (see statistics-summary.svelte).
+   */
+  async upsertManualStatistic(entry: {
+    title: string;
+    dateKey: string;
+    readingTimeSeconds: number;
+    charactersRead: number;
+    markCompleted: boolean;
+    conflictStrategy: 'append' | 'overwrite';
+  }): Promise<{ statistic: BooksDbStatistic; existed: boolean }> {
+    const db = await this.db;
+    const tx = db.transaction(['statistic', 'lastModified'], 'readwrite');
+
+    try {
+      const statisticsStore = tx.objectStore('statistic');
+      const lastModifiedStore = tx.objectStore('lastModified');
+      const existing = await statisticsStore.get([entry.title, entry.dateKey]);
+      const now = Date.now();
+
+      let readingTime = entry.readingTimeSeconds;
+      let charactersRead = entry.charactersRead;
+
+      if (existing && entry.conflictStrategy === 'append') {
+        readingTime = (existing.readingTime || 0) + entry.readingTimeSeconds;
+        charactersRead = (existing.charactersRead || 0) + entry.charactersRead;
+      }
+
+      const speed = readingTime > 0 ? Math.ceil((3600 * charactersRead) / readingTime) : 0;
+
+      const merged: BooksDbStatistic = {
+        title: entry.title,
+        dateKey: entry.dateKey,
+        readingTime,
+        charactersRead,
+        minReadingSpeed: speed,
+        altMinReadingSpeed: speed,
+        lastReadingSpeed: speed,
+        maxReadingSpeed: speed,
+        lastStatisticModified: now,
+        completedBook: entry.markCompleted ? 1 : existing?.completedBook,
+        completedData: entry.markCompleted
+          ? {
+              dateKey: entry.dateKey,
+              readingTime,
+              charactersRead,
+              minReadingSpeed: speed,
+              altMinReadingSpeed: speed,
+              lastReadingSpeed: speed,
+              maxReadingSpeed: speed,
+              completedBook: 1
+            }
+          : existing?.completedData
+      };
+
+      if (!merged.completedBook) {
+        delete merged.completedBook;
+        delete merged.completedData;
+      }
+
+      await statisticsStore.put(merged);
+      await lastModifiedStore.put({
+        title: entry.title,
+        dataType: StorageDataType.STATISTICS,
+        lastModifiedValue: now
+      });
+
+      await tx.done;
+      this.statisticsChanged$.next();
+
+      return { statistic: merged, existed: !!existing };
+    } catch (error: any) {
+      try {
+        tx.abort();
+        await tx.done;
+      } catch (_) {
+        // no-op
+      }
+      throw error;
+    }
+  }
+
   async clearZombieStatistics() {
     try {
       const db = await this.db;

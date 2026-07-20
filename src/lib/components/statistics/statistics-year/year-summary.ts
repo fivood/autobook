@@ -86,26 +86,26 @@ function yearBounds(year: number, startDayHours: number) {
 }
 
 function monthOfDateKey(dateKey: string) {
-  // dateKey format: "YYYY/MM/DD" (see getDateString in statistic-util)
-  const parts = dateKey.split('/');
+  // dateKey format: "YYYY-MM-DD" (see getDateString in statistic-util)
+  const parts = dateKey.split('-');
   return parts.length >= 2 ? Number(parts[1]) : 0;
 }
 
 function daysBetweenKeys(a: string, b: string): number {
   const parseKey = (k: string) => {
-    const [y, m, d] = k.split('/').map(Number);
+    const [y, m, d] = k.split('-').map(Number);
     return new Date(y, m - 1, d).getTime();
   };
   return Math.round((parseKey(b) - parseKey(a)) / 86_400_000);
 }
 
 function nextDayKey(dateKey: string): string {
-  const [y, m, d] = dateKey.split('/').map(Number);
+  const [y, m, d] = dateKey.split('-').map(Number);
   const next = new Date(y, m - 1, d + 1);
   const yy = next.getFullYear();
   const mm = `${next.getMonth() + 1}`.padStart(2, '0');
   const dd = `${next.getDate()}`.padStart(2, '0');
-  return `${yy}/${mm}/${dd}`;
+  return `${yy}-${mm}-${dd}`;
 }
 
 function median(sorted: number[]): number {

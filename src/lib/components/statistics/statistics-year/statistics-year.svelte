@@ -29,8 +29,8 @@
   async function load() {
     loading = true;
     try {
-      const startKey = `${year}/01/01`;
-      const endKey = `${year}/12/31`;
+      const startKey = `${year}-01-01`;
+      const endKey = `${year}-12-31`;
       const [statistics, sessions] = await Promise.all([
         database.getStatisticsForTimeWindow(startKey, endKey),
         database.getSessionsForRange(startKey, endKey)

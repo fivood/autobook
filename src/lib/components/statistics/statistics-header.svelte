@@ -3,12 +3,19 @@
   import {
     faCalendarDays,
     faChartLine,
+    faFileArrowDown,
+    faHighlighter,
     faMap,
+    faPenToSquare,
     faSliders
   } from '@fortawesome/free-solid-svg-icons';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
-  import { StatisticsTab } from '$lib/components/statistics/statistics-types';
+  import {
+    StatisticsTab,
+    exportYearReport$,
+    openManualStatisticsEntry$
+  } from '$lib/components/statistics/statistics-types';
   import { baseHeaderClasses, baseIconClasses, pxScreen } from '$lib/css-classes';
   import { pagePath } from '$lib/data/env';
   import { lastStatisticsTab$ } from '$lib/data/store';
@@ -61,6 +68,39 @@
         on:keyup={dummyFn}
       >
         <Fa icon={faChartLine} />
+      </div>
+      <div
+        tabindex="0"
+        role="button"
+        title={$lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS
+          ? $t('stats.header.highlightsActive')
+          : $t('stats.header.highlightsSwitch')}
+        class={baseIconClasses}
+        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS}
+        on:click={() => ($lastStatisticsTab$ = StatisticsTab.HIGHLIGHTS)}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faHighlighter} />
+      </div>
+      <div
+        tabindex="0"
+        role="button"
+        title={$t('stats.header.manualEntry')}
+        class={baseIconClasses}
+        on:click={() => openManualStatisticsEntry$.next()}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faPenToSquare} />
+      </div>
+      <div
+        tabindex="0"
+        role="button"
+        title={$t('stats.header.exportReport')}
+        class={baseIconClasses}
+        on:click={() => exportYearReport$.next()}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faFileArrowDown} />
       </div>
       <div
         tabindex="0"

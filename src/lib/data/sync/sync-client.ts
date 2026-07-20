@@ -7,6 +7,9 @@ export const SYNC_ENDPOINT = 'https://sync.fivood.com/sync';
 
 export interface DayClients {
   clients: Record<string, number>;
+  /** Per-device chars-read totals; absent for entries only pushed by pre-v2
+   * clients. Merged server-side with the same max-by-device rule. */
+  charsClients?: Record<string, number>;
   updatedAt?: number;
 }
 
@@ -57,7 +60,16 @@ export async function pullState(token: string, signal?: AbortSignal): Promise<Re
 }
 
 export interface PushPayload {
-  books: Record<string, Record<string, { clients: Record<string, number> }>>;
+  books: Record<
+    string,
+    Record<
+      string,
+      {
+        clients: Record<string, number>;
+        charsClients?: Record<string, number>;
+      }
+    >
+  >;
 }
 
 export async function pushDelta(
@@ -100,20 +112,27 @@ export function flattenRemote(state: RemoteState): Array<{
   book: string;
   date: string;
   totalSeconds: number;
+  totalChars: number;
   clients: Record<string, number>;
+  charsClients: Record<string, number>;
 }> {
   const out: Array<{
     book: string;
     date: string;
     totalSeconds: number;
+    totalChars: number;
     clients: Record<string, number>;
+    charsClients: Record<string, number>;
   }> = [];
   for (const [book, dates] of Object.entries(state.books || {})) {
     for (const [date, entry] of Object.entries(dates || {})) {
       const clients = entry?.clients || {};
-      let total = 0;
-      for (const v of Object.values(clients)) total += v;
-      out.push({ book, date, totalSeconds: total, clients });
+      const charsClients = entry?.charsClients || {};
+      let totalSeconds = 0;
+      for (const v of Object.values(clients)) totalSeconds += v;
+      let totalChars = 0;
+      for (const v of Object.values(charsClients)) totalChars += v;
+      out.push({ book, date, totalSeconds, totalChars, clients, charsClients });
     }
   }
   return out;

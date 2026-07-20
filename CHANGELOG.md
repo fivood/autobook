@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.18.0
+
+统计模块四件小事：手动录入纸质书 / 高亮统计 tab / 桌面侧字数跨设备同步 / 一键导出 Markdown 报告。附带一个"年度回顾" tab 的隐性数据 bug 修复。
+
+- **手动添加阅读记录**：统计页顶部加 ✏️ 按钮，弹窗填书名 + 日期 + 时长 + 字数 +「标记读完」。用 `[title, dateKey]` 作键，跟自动追踪的记录并存在同一张 statistic 表里，热力图 / 汇总 / 年度回顾自动包含。同一天同一书已存在时提示追加还是覆盖。纸质书场景字数可留 0，汇总表速度列会显示「—」而不是「0 / h」避免污染平均速度视觉
+- **高亮 & 笔记统计**：新第 4 个 tab 🖍️「高亮」，按当前时间范围与标题过滤器聚合 `highlight` 表——展示总条数、4 色分布、Top 划线最多的书（前 10）、Top 标签云（前 20）、按月柱状图。数据一直都在 IDB 里，只是之前统计页没查
+- **桌面侧字数跨设备同步**：Worker/PWA 在 v1.17.x 期间已经上线了新协议（`charsClients` 字段），桌面客户端一直只推 `readingTime` 导致多设备用户的当日字数不聚合。sync-manager 补上 `charsClients` push + pull + 本地贡献缓存镜像；wire 格式向后兼容——老客户端 push 不带该字段服务端就存 0，新客户端 pull 到没有该字段的日期按 0 处理
+- **年度报告 Markdown 导出**：header 加 📥 按钮，一键把当前时间范围 + 覆盖年份的完整 YearSummary + 高亮汇总组装成 `.md` 文件下载。范围段有本期总量 + Top 书籍，年度段有月度分布 / 最长连续 / 最强的一天 / 全年 Top / 会话统计 / 24 小时时段，另有高亮章节含颜色分布 / Top 书 / 标签云
+- **修：「年度回顾」tab 之前显示为空**。1.17.0 加的 statistics-year 用 `${year}/01/01` 格式的 dateKey 去查 statistic 表，但实际存的键是 `YYYY-MM-DD`——`getStatisticsForTimeWindow(startKey, endKey)` 的 IDBKeyRange 全部落到 0 条命中。同时 year-summary.ts 的 `monthOfDateKey/daysBetweenKeys/nextDayKey` 三个 helper 也都在 split `/`。改成 `-` 一致后年度 tab 才真正能展示当年数据
+
 ## 1.17.5
 
 补齐 KF8 相对 Calibre 的三大用户可感知差距：图片链接、SVG 封面、章节内跳转。之前 KF8 书里的图片有一部分显示破图（`kindle:embed:XXXX` 没重写）、封面破图（SVG 在 flow 1+ 里没抽出）、TOC 点击不跳（`kindle:pos:` 没重写）。
