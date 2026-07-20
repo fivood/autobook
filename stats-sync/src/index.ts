@@ -21,8 +21,13 @@ const MAX_BODY_BYTES = 64 * 1024; // 64 KB per push is plenty for daily deltas
 const MAX_STATE_BYTES = 2 * 1024 * 1024; // hard cap to keep KV reads cheap
 
 interface DayEntry {
-  /** Per-device daily totals; server keeps max(client-reported) per device. */
+  /** Per-device daily reading-time totals (seconds); server keeps
+   * max(client-reported) per device. */
   clients: Record<string, number>;
+  /** Per-device daily characters read; same max-by-device rule. Optional so
+   * that entries pushed by old clients (before chars sync) stay valid — the
+   * absence means "no chars reported by any device for this day". */
+  charsClients?: Record<string, number>;
   /** Server-side last update millis. */
   updatedAt: number;
 }
@@ -79,8 +84,19 @@ async function saveState(env: Env, token: string, state: UserState): Promise<voi
 }
 
 interface IncomingPayload {
-  books?: Record<string, Record<string, { clients?: Record<string, number> }>>;
+  books?: Record<
+    string,
+    Record<
+      string,
+      {
+        clients?: Record<string, number>;
+        charsClients?: Record<string, number>;
+      }
+    >
+  >;
 }
+
+const MAX_CHARS_PER_DAY = 5_000_000; // absurd upper bound; anything higher is a bug/attack
 
 function mergeInto(server: UserState, incoming: IncomingPayload, now: number): UserState {
   if (!incoming.books) return server;
@@ -107,6 +123,17 @@ function mergeInto(server: UserState, incoming: IncomingPayload, now: number): U
         const prior = day.clients[clientId] || 0;
         if (capped > prior) {
           day.clients[clientId] = capped;
+          changed = true;
+        }
+      }
+      const incomingChars = entry.charsClients || {};
+      for (const [clientId, chars] of Object.entries(incomingChars)) {
+        if (typeof chars !== 'number' || !isFinite(chars) || chars < 0) continue;
+        const capped = Math.min(Math.floor(chars), MAX_CHARS_PER_DAY);
+        if (!day.charsClients) day.charsClients = {};
+        const prior = day.charsClients[clientId] || 0;
+        if (capped > prior) {
+          day.charsClients[clientId] = capped;
           changed = true;
         }
       }

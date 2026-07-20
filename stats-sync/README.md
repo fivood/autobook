@@ -13,14 +13,16 @@ Cloudflare Worker + KV 端点，跨设备同步 AutoBook 阅读时长统计。
     "books": {
       "三体": {
         "2026-06-22": {
-          "clients": { "desktop-uuid": 1800, "phone-uuid": 600 },
+          "clients":      { "desktop-uuid": 1800, "phone-uuid": 600 }, // 阅读时长（秒）
+          "charsClients": { "desktop-uuid": 3800, "phone-uuid": 1200 }, // 已读字数（可选）
           "updatedAt": 1719093600000
         }
       }
     }
   }
   ```
-- 合并规则：服务端按 device-id 取 max。客户端每次推自己"当天累计"，服务端记下每个设备贡献的最大值。日合计 = `sum(clients.values())`，因此两设备非并发使用会正确累加。
+- 合并规则：服务端按 device-id 取 max，`clients` 与 `charsClients` 分别独立合并。客户端每次推自己"当天累计"，服务端记下每个设备贡献的最大值。日合计 = `sum(clients.values())` / `sum(charsClients.values())`，因此两设备非并发使用会正确累加。
+- 向后兼容：`charsClients` 缺失即视为该设备没上报字数（可能来自 v2 之前的旧客户端），累计取 0，不影响时长同步。
 - token 即认证。泄露 → 用户自己换 token，旧数据成孤儿。
 
 ## 接口
@@ -28,7 +30,7 @@ Cloudflare Worker + KV 端点，跨设备同步 AutoBook 阅读时长统计。
 ```
 GET  /health                       → { ok: true }
 GET  /sync?token=<32hex>           → 完整状态 JSON
-POST /sync?token=<32hex>           Body: { books: { [title]: { [date]: { clients } } } }
+POST /sync?token=<32hex>           Body: { books: { [title]: { [date]: { clients, charsClients? } } } }
                                    → 合并后的完整状态
 OPTIONS *                          → CORS 预检
 ```

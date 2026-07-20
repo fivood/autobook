@@ -26,8 +26,13 @@ const PUSH_DEBOUNCE_MS = 30_000;
 const PULL_INTERVAL_MS = 5 * 60_000;
 
 interface MyContribState {
-  /** books[title][dateKey] = secondsThisDeviceContributedSoFar */
+  /** books[title][dateKey] = secondsThisDeviceContributedSoFar. Kept as a raw
+   * number for backward compatibility with pre-chars-sync caches — objects
+   * (see `booksChars`) carry the chars counterpart separately. */
   books: Record<string, Record<string, number>>;
+  /** books[title][dateKey] = charsThisDeviceContributedSoFar. Optional — an
+   * older cache on disk simply won't have it, and reads must tolerate that. */
+  booksChars?: Record<string, Record<string, number>>;
 }
 
 function loadMyContrib(): MyContribState {
@@ -80,28 +85,44 @@ export function ensureDeviceId(): string {
 }
 
 /**
- * Read local statistics, take the per-(book, date) reading time, treat it as
- * THIS DEVICE's contribution for the day, and build the wire payload. We send
- * only entries that grew since the last successful push to keep payloads small.
+ * Read local statistics, take the per-(book, date) reading time + chars, treat
+ * both as THIS DEVICE's contribution for the day, and build the wire payload.
+ * We send only entries that grew (in either dimension) since the last successful
+ * push to keep payloads small.
  */
 async function buildPushPayload(): Promise<{
-  books: Record<string, Record<string, { clients: Record<string, number> }>>;
-  changedKeys: Array<[string, string]>;
+  books: Record<
+    string,
+    Record<string, { clients: Record<string, number>; charsClients?: Record<string, number> }>
+  >;
+  changedKeys: Array<[string, string, number, number]>;
 } | null> {
   const deviceId = ensureDeviceId();
   const db = await database.db;
   const stats = await db.getAll('statistic');
   const cache = loadMyContrib();
-  const books: Record<string, Record<string, { clients: Record<string, number> }>> = {};
-  const changed: Array<[string, string]> = [];
+  const books: Record<
+    string,
+    Record<string, { clients: Record<string, number>; charsClients?: Record<string, number> }>
+  > = {};
+  const changed: Array<[string, string, number, number]> = [];
   for (const s of stats) {
-    const local = s.readingTime || 0;
-    if (local <= 0) continue;
-    const prior = cache.books[s.title]?.[s.dateKey] ?? -1;
-    if (local === prior) continue;
+    const localTime = s.readingTime || 0;
+    const localChars = s.charactersRead || 0;
+    if (localTime <= 0 && localChars <= 0) continue;
+    const priorTime = cache.books[s.title]?.[s.dateKey] ?? -1;
+    const priorChars = cache.booksChars?.[s.title]?.[s.dateKey] ?? -1;
+    if (localTime === priorTime && localChars === priorChars) continue;
     books[s.title] = books[s.title] || {};
-    books[s.title][s.dateKey] = { clients: { [deviceId]: local } };
-    changed.push([s.title, s.dateKey]);
+    const entry: {
+      clients: Record<string, number>;
+      charsClients?: Record<string, number>;
+    } = { clients: { [deviceId]: localTime } };
+    if (localChars > 0) {
+      entry.charsClients = { [deviceId]: localChars };
+    }
+    books[s.title][s.dateKey] = entry;
+    changed.push([s.title, s.dateKey, localTime, localChars]);
   }
   if (!changed.length) return null;
   return { books, changedKeys: changed };
@@ -112,34 +133,50 @@ async function applyRemoteToLocal(remote: RemoteState) {
   const db = await database.db;
   const tx = db.transaction('statistic', 'readwrite');
   const store = tx.objectStore('statistic');
+  const contrib = loadMyContrib();
   for (const row of flattenRemote(remote)) {
-    if (!row.totalSeconds) continue;
+    if (!row.totalSeconds && !row.totalChars) continue;
     const key: [string, string] = [row.book, row.date];
     const existing = await store.get(key);
-    const otherDevices = Object.entries(row.clients)
+    const otherDevicesTime = Object.entries(row.clients)
       .filter(([id]) => id !== deviceId)
       .reduce((sum, [, sec]) => sum + sec, 0);
+    const otherDevicesChars = Object.entries(row.charsClients)
+      .filter(([id]) => id !== deviceId)
+      .reduce((sum, [, c]) => sum + c, 0);
     if (!existing) {
-      if (otherDevices > 0) {
+      if (otherDevicesTime > 0 || otherDevicesChars > 0) {
+        const speed =
+          otherDevicesTime > 0
+            ? Math.ceil((3600 * otherDevicesChars) / otherDevicesTime)
+            : 0;
         await store.put({
           title: row.book,
           dateKey: row.date,
-          charactersRead: 0,
-          readingTime: otherDevices,
-          minReadingSpeed: 0,
-          altMinReadingSpeed: 0,
-          lastReadingSpeed: 0,
-          maxReadingSpeed: 0,
+          charactersRead: otherDevicesChars,
+          readingTime: otherDevicesTime,
+          minReadingSpeed: speed,
+          altMinReadingSpeed: speed,
+          lastReadingSpeed: speed,
+          maxReadingSpeed: speed,
           lastStatisticModified: Date.now()
         });
       }
       continue;
     }
-    const myContribKnown =
-      loadMyContrib().books[row.book]?.[row.date] ?? existing.readingTime;
-    const desired = myContribKnown + otherDevices;
-    if (desired > (existing.readingTime || 0)) {
-      await store.put({ ...existing, readingTime: desired, lastStatisticModified: Date.now() });
+    const myTimeKnown = contrib.books[row.book]?.[row.date] ?? existing.readingTime;
+    const myCharsKnown = contrib.booksChars?.[row.book]?.[row.date] ?? existing.charactersRead;
+    const desiredTime = myTimeKnown + otherDevicesTime;
+    const desiredChars = myCharsKnown + otherDevicesChars;
+    const timeGrew = desiredTime > (existing.readingTime || 0);
+    const charsGrew = desiredChars > (existing.charactersRead || 0);
+    if (timeGrew || charsGrew) {
+      await store.put({
+        ...existing,
+        readingTime: timeGrew ? desiredTime : existing.readingTime,
+        charactersRead: charsGrew ? desiredChars : existing.charactersRead,
+        lastStatisticModified: Date.now()
+      });
     }
   }
   await tx.done;
@@ -155,9 +192,14 @@ export async function pushNow(): Promise<{ pushed: number } | null> {
   try {
     const merged = await pushDelta(token, { books: payload.books });
     const cache = loadMyContrib();
-    for (const [title, date] of payload.changedKeys) {
+    for (const [title, date, timeSec, chars] of payload.changedKeys) {
       cache.books[title] = cache.books[title] || {};
-      cache.books[title][date] = payload.books[title][date].clients[ensureDeviceId()];
+      cache.books[title][date] = timeSec;
+      if (chars > 0) {
+        cache.booksChars = cache.booksChars || {};
+        cache.booksChars[title] = cache.booksChars[title] || {};
+        cache.booksChars[title][date] = chars;
+      }
     }
     saveMyContrib(cache);
     saveCachedRemote(merged);
