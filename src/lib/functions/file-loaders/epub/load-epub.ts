@@ -20,11 +20,41 @@ export default async function loadEpub(
   const { contents, result: data, contentsDirectory } = await extractEpub(file);
   const result = generateEpubHtml(data, contents, document, contentsDirectory);
 
-  const displayData = {
+  const displayData: {
+    title: string;
+    language: string;
+    hasThumb: boolean;
+    styleSheet: string;
+    _extractedMetadata?: {
+      author?: string;
+      publisher?: string;
+      subjects?: string[];
+      isbn?: string;
+      language?: string;
+    };
+  } = {
     title: file.name,
     language: '',
     hasThumb: true,
     styleSheet: generateEpubStyleSheet(data, contents)
+  };
+
+  const readDcText = (value: unknown): string | undefined => {
+    if (typeof value === 'string') return value.trim() || undefined;
+    if (value && typeof value === 'object' && '#text' in (value as Record<string, unknown>)) {
+      const t = (value as Record<string, unknown>)['#text'];
+      if (typeof t === 'string') return t.trim() || undefined;
+    }
+    return undefined;
+  };
+  const readAllDcTexts = (value: unknown): string[] => {
+    const arr = Array.isArray(value) ? value : [value];
+    const out: string[] = [];
+    for (const item of arr) {
+      const t = readDcText(item);
+      if (t) out.push(t);
+    }
+    return out;
   };
 
   const metadata = isOPFType(contents)
@@ -63,6 +93,32 @@ export default async function loadEpub(
 
         return languages;
       }, [])?.[0] || '';
+
+    const extracted: NonNullable<typeof displayData._extractedMetadata> = {};
+    // `metadata` is typed as the OPF-required subset (dc:title / dc:language);
+    // real files carry many more Dublin Core fields, so index dynamically.
+    const bag = metadata as Record<string, unknown>;
+
+    const authors = readAllDcTexts(bag['dc:creator']);
+    if (authors.length) extracted.author = authors.join(', ');
+
+    const publisherRaw = Array.isArray(bag['dc:publisher'])
+      ? (bag['dc:publisher'] as unknown[])[0]
+      : bag['dc:publisher'];
+    const publisher = readDcText(publisherRaw);
+    if (publisher) extracted.publisher = publisher;
+
+    const subjects = readAllDcTexts(bag['dc:subject']);
+    if (subjects.length) extracted.subjects = subjects;
+
+    const identifiers = readAllDcTexts(bag['dc:identifier']);
+    const isbn = identifiers.find((v) => /isbn/i.test(v)) || identifiers[0];
+    if (isbn) extracted.isbn = isbn;
+
+    if (Object.keys(extracted).length) {
+      if (displayData.language) extracted.language = displayData.language;
+      displayData._extractedMetadata = extracted;
+    }
   }
 
   if (!displayData.language) {

@@ -225,6 +225,15 @@ export class DatabaseService {
   ) {
     const db = await this.db;
 
+    // Loaders may attach `_extractedMetadata` on the LoadData object as a
+    // transient side-channel for the import pipeline — strip it here so it
+    // doesn't get persisted into the `data` store.
+    if ((data as any)._extractedMetadata) {
+      // eslint-disable-next-line no-param-reassign
+      data = { ...data };
+      delete (data as any)._extractedMetadata;
+    }
+
     let dataId: number;
     let bookData: BooksDbBookData;
 
@@ -438,6 +447,45 @@ export class DatabaseService {
     replicationProgress$.next({ progressToAdd: 1 });
 
     return dataId;
+  }
+
+  async putBookMetadata(entry: {
+    title: string;
+    author?: string;
+    publisher?: string;
+    subjects?: string[];
+    isbn?: string;
+    language?: string;
+    source: 'imported' | 'manual';
+  }): Promise<void> {
+    if (!entry.title) return;
+    const db = await this.db;
+    const existing = await db.get('bookMetadata', entry.title);
+    const merged = {
+      title: entry.title,
+      author: entry.author ?? existing?.author,
+      publisher: entry.publisher ?? existing?.publisher,
+      subjects: entry.subjects ?? existing?.subjects,
+      isbn: entry.isbn ?? existing?.isbn,
+      language: entry.language ?? existing?.language,
+      // Once imported, don't downgrade back to 'manual'; likewise manual
+      // additions shouldn't upgrade to 'imported' unless the caller says so.
+      source: entry.source === 'imported' || existing?.source === 'imported'
+        ? 'imported'
+        : entry.source,
+      lastMetadataModified: Date.now()
+    } as const;
+    await db.put('bookMetadata', merged);
+  }
+
+  async getBookMetadata(title: string) {
+    const db = await this.db;
+    return db.get('bookMetadata', title);
+  }
+
+  async getAllBookMetadata() {
+    const db = await this.db;
+    return db.getAll('bookMetadata');
   }
 
   async getHighlights(dataId: number): Promise<BooksDbHighlight[]> {

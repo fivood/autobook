@@ -140,6 +140,20 @@ export async function importData(
 
           dataIds.push(await targetHandler.saveBook(bookContent, false));
 
+          if (bookContent._extractedMetadata) {
+            try {
+              await database.putBookMetadata({
+                title: bookContent.title,
+                source: 'imported',
+                ...bookContent._extractedMetadata
+              });
+            } catch (metaErr) {
+              // Metadata is nice-to-have; never fail an import over it.
+              // eslint-disable-next-line no-console
+              console.warn('[import] failed to persist book metadata', metaErr);
+            }
+          }
+
           checkCancelAndProgress(cancelSignal, false);
 
           if (bookContent.coverImage) {

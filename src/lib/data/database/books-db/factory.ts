@@ -9,7 +9,7 @@ import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 9, {
+  return openDB<BooksDb>(name, 10, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -164,6 +164,20 @@ export function createBooksDb(name = 'books') {
               autoIncrement: true
             });
             highlightFolderStore.createIndex('sortOrder', 'sortOrder');
+          }
+          // Fall through to v9 → v10 upgrade.
+        }
+        // v9 → v10: new title-keyed `bookMetadata` store for bibliographic
+        // details (author / publisher / subjects / isbn / language). Existing
+        // rows continue to work unchanged; imports and manual entries write
+        // into the new store going forward.
+        // eslint-disable-next-line no-fallthrough
+        case 9: {
+          if (!oldDb.objectStoreNames.contains('bookMetadata')) {
+            const metadataStore = oldDb.createObjectStore('bookMetadata', {
+              keyPath: 'title'
+            });
+            metadataStore.createIndex('source', 'source');
           }
           break;
         }

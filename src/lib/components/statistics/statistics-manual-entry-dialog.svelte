@@ -15,6 +15,7 @@
   const todayKey = getDateString(getStartHoursDate(startDayHoursForTracker));
 
   let title = '';
+  let author = '';
   let dateKey = todayKey;
   let minutes: number | null = null;
   let characters: number | null = 0;
@@ -59,7 +60,8 @@
       readingTimeSeconds,
       charactersRead,
       markCompleted,
-      conflictStrategy
+      conflictStrategy,
+      author: author.trim() || undefined
     });
   }
 </script>
@@ -82,6 +84,11 @@
           <option value={t} />
         {/each}
       </datalist>
+    </label>
+
+    <label class="flex flex-col">
+      <span class="text-xs opacity-70">作者（可选，用于年度作者排行）</span>
+      <input type="text" class={inputClasses} bind:value={author} placeholder="例如：刘慈欣" />
     </label>
 
     <label class="flex flex-col">

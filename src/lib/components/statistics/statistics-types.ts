@@ -101,6 +101,7 @@ export interface ManualStatisticEntry {
   charactersRead: number;
   markCompleted: boolean;
   conflictStrategy: 'append' | 'overwrite';
+  author?: string;
 }
 
 export const statisticsActionInProgress$ = writableSubject<boolean>(false);

@@ -298,6 +298,20 @@
       try {
         const { statistic } = await database.upsertManualStatistic(result);
 
+        if (result.author) {
+          try {
+            await database.putBookMetadata({
+              title: result.title,
+              author: result.author,
+              source: 'manual'
+            });
+          } catch (metaErr) {
+            // Metadata is nice-to-have; never fail an entry over it.
+            // eslint-disable-next-line no-console
+            console.warn('[stats] failed to persist manual book metadata', metaErr);
+          }
+        }
+
         const nextRow: BookStatistic = {
           ...statistic,
           id: `${statistic.title}_${statistic.dateKey}`,
