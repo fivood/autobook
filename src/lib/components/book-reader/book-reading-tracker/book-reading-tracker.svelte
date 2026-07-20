@@ -801,6 +801,15 @@
         : statistic.lastReadingSpeed;
     }
 
+    if (timeDiff && statistic.dateKey && statistic.dateKey !== '-') {
+      const hour = new Date(lastStatisticModified).getHours();
+      if (hour >= 0 && hour < 24) {
+        const hourly = statistic.hourly?.length === 24 ? statistic.hourly : new Array(24).fill(0);
+        hourly[hour] = Math.max(0, (hourly[hour] || 0) + timeDiff);
+        statistic.hourly = hourly;
+      }
+    }
+
     return statistic;
   }
 

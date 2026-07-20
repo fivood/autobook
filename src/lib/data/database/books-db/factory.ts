@@ -9,7 +9,7 @@ import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 10, {
+  return openDB<BooksDb>(name, 11, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -179,6 +179,14 @@ export function createBooksDb(name = 'books') {
             });
             metadataStore.createIndex('source', 'source');
           }
+          // Fall through to v10 → v11 upgrade.
+        }
+        // v10 → v11: statistic rows may now carry an optional `hourly: number[24]`
+        // that the tracker updates as it flushes. No store or index change; old
+        // rows continue to work and simply contribute nothing to the
+        // hour-of-day breakdown until they're touched again.
+        // eslint-disable-next-line no-fallthrough
+        case 10: {
           break;
         }
       }

@@ -40,6 +40,8 @@ export interface MetadataStatsSummary {
   subjects: SubjectAggregate[];
   completedBooks: CompletedBookEntry[];
   unattributedTime: number;
+  hourly: number[];
+  hourlyTotal: number;
 }
 
 export interface MetadataStatsFilter {
@@ -61,6 +63,8 @@ export function aggregateMetadataStats(
   const subjectMap = new Map<string, SubjectAggregate>();
   const languageTitleSeen = new Map<string, Set<string>>();
   const completedBooks: CompletedBookEntry[] = [];
+  const hourly = new Array(24).fill(0) as number[];
+  let hourlyTotal = 0;
   let unattributedTime = 0;
 
   for (const s of statistics) {
@@ -127,6 +131,15 @@ export function aggregateMetadataStats(
       }
     }
 
+    const rowHourly = (s as { hourly?: number[] }).hourly;
+    if (rowHourly?.length === 24) {
+      for (let h = 0; h < 24; h += 1) {
+        const v = rowHourly[h] || 0;
+        hourly[h] += v;
+        hourlyTotal += v;
+      }
+    }
+
     if (s.completedBook) {
       const cd = s.completedData;
       completedBooks.push({
@@ -144,6 +157,8 @@ export function aggregateMetadataStats(
     languages: [...languageMap.values()].sort((a, b) => b.readingTime - a.readingTime),
     subjects: [...subjectMap.values()].sort((a, b) => b.count - a.count),
     completedBooks: completedBooks.sort((a, b) => (a.dateKey < b.dateKey ? 1 : -1)),
-    unattributedTime
+    unattributedTime,
+    hourly,
+    hourlyTotal
   };
 }

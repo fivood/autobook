@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-import type BooksDbV10 from '$lib/data/database/books-db/versions/v10/books-db-v10';
+import type BooksDbV11 from '$lib/data/database/books-db/versions/v11/books-db-v11';
 
 export type { Section } from '$lib/data/database/books-db/versions/v6/books-db-v6';
 export type {
@@ -17,7 +17,7 @@ export type {
   BooksDbV9HighlightFolder as BooksDbHighlightFolder
 } from '$lib/data/database/books-db/versions/v9/books-db-v9';
 
-type BooksDb = BooksDbV10;
+type BooksDb = BooksDbV11;
 
 export type BooksDbBookData = BooksDb['data']['value'];
 export type BooksDbBookmarkData = BooksDb['bookmark']['value'];
@@ -28,6 +28,6 @@ export type BooksDbLastModified = BooksDb['lastModified']['value'];
 export type BooksDbAudioBook = BooksDb['audioBook']['value'];
 export type BooksDbSubtitleData = BooksDb['subtitle']['value'];
 export type BooksDbHandle = BooksDb['handle']['value'];
-export const currentDbVersion = 10;
+export const currentDbVersion = 11;
 
 export type { BooksDb as default };

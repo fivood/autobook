@@ -45,6 +45,9 @@
         summary.completedBooks.length >
       0
     : false;
+
+  $: hourlyMax = summary ? Math.max(1, ...summary.hourly) : 1;
+  $: hasHourly = summary ? summary.hourlyTotal > 0 : false;
 </script>
 
 {#if isLoading}
@@ -59,6 +62,35 @@
       当前范围下没有可用的书籍元数据。<br />
       导入 EPUB 会自动带入作者/分类；手动录入的纸质书可在弹窗里填作者。
     </div>
+  {/if}
+
+  {#if hasHourly}
+    <section class="my-6">
+      <h3 class="text-lg mb-2">阅读时段分布（24 小时）</h3>
+      <div class="flex items-end gap-[2px] h-24 border-b border-gray-500/20">
+        {#each summary.hourly as sec, hour}
+          <div
+            class="flex-1 flex flex-col items-center justify-end gap-1"
+            title="{`${hour}`.padStart(2, '0')}:00 – {toTimeString(sec)}"
+          >
+            <div
+              class="w-full bg-current/60 rounded-t"
+              style="height:{(sec / hourlyMax) * 100}%;min-height:2px;opacity:.6"
+            ></div>
+          </div>
+        {/each}
+      </div>
+      <div class="flex gap-[2px] mt-1">
+        {#each summary.hourly as _, hour}
+          <div class="flex-1 text-[10px] opacity-60 text-center">
+            {hour % 3 === 0 ? hour : ''}
+          </div>
+        {/each}
+      </div>
+      <div class="text-xs opacity-60 mt-1">
+        统计从 v11 起记录；此前的阅读时长不带小时信息，不计入本图。
+      </div>
+    </section>
   {/if}
 
   {#if summary.completedBooks.length}
