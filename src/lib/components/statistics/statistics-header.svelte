@@ -5,6 +5,7 @@
     faCopy,
     faFilter,
     faMap,
+    faPenToSquare,
     faSliders
   } from '@fortawesome/free-solid-svg-icons';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
@@ -13,6 +14,7 @@
   import {
     StatisticsTab,
     copyStatisticsData$,
+    openManualStatisticsEntry$,
     statisticsTitleFilterEnabled$,
     statisticsTitleFilterIsOpen$,
     type StatisticsDataSource
@@ -104,6 +106,16 @@
         on:keyup={dummyFn}
       >
         <Fa icon={faFilter} />
+      </div>
+      <div
+        tabindex="0"
+        role="button"
+        title="手动添加阅读记录（纸质书 / 补录）"
+        class={baseIconClasses}
+        on:click={() => openManualStatisticsEntry$.next()}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faPenToSquare} />
       </div>
       <div
         tabindex="0"

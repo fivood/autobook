@@ -554,16 +554,24 @@
             <label for="reset-min-max" class="ml-1">Reset Min/Max</label>
           </div>
         {:else}
+          {@const speedValue = getNumberFromObject(
+            currentStatisticsSummaryRow,
+            $lastReadingSpeedDataSource$
+          )}
+          {@const hasSpeed = currentStatisticsSummaryRow.charactersRead > 0 && speedValue > 0}
           <button
             class="text-left"
             class:blur={$lastBlurredTrackerItems$.has('lastReadingSpeed')}
+            title={hasSpeed ? '' : '未记录字数，无法计算阅读速度'}
             on:click={(event) => {
-              statisticsSummaryPopoverDetails = [
-                `Speed: ${currentStatisticsSummaryRow.lastReadingSpeed}`,
-                `Min Speed: ${currentStatisticsSummaryRow.minReadingSpeed}`,
-                `Alt Min Speed: ${currentStatisticsSummaryRow.altMinReadingSpeed}`,
-                `Max Speed: ${currentStatisticsSummaryRow.maxReadingSpeed}`
-              ];
+              statisticsSummaryPopoverDetails = hasSpeed
+                ? [
+                    `Speed: ${currentStatisticsSummaryRow.lastReadingSpeed}`,
+                    `Min Speed: ${currentStatisticsSummaryRow.minReadingSpeed}`,
+                    `Alt Min Speed: ${currentStatisticsSummaryRow.altMinReadingSpeed}`,
+                    `Max Speed: ${currentStatisticsSummaryRow.maxReadingSpeed}`
+                  ]
+                : ['未记录字数，无法计算阅读速度'];
 
               tick().then(() => {
                 if (event.target instanceof HTMLElement) {
@@ -572,7 +580,11 @@
               });
             }}
           >
-            {getNumberFromObject(currentStatisticsSummaryRow, $lastReadingSpeedDataSource$)} / h
+            {#if hasSpeed}
+              {speedValue} / h
+            {:else}
+              —
+            {/if}
           </button>
         {/if}
       {/each}

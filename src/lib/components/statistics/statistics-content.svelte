@@ -11,13 +11,16 @@
     StatisticsDeleteRequest,
     StatisticsEditRequest
   } from '$lib/components/statistics/statistics-summary/statistics-summary';
+  import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
   import StatisticsTitleFilter from '$lib/components/statistics/statistics-title-filter.svelte';
   import {
     type BookStatistic,
+    type ManualStatisticEntry,
     StatisticsTab,
     StatisticsReadingDataAggregationMode,
     statisticsRangeTemplates,
     copyStatisticsData$,
+    openManualStatisticsEntry$,
     statisticsTitleFilterEnabled$,
     statisticsTitleFilterIsOpen$,
     type StatisticsTitleFilterItem,
@@ -259,6 +262,82 @@
           $lastStatisticsRangeTemplate$ = StatisticsRangeTemplate.CUSTOM;
           break;
         }
+      }
+    }),
+    reduceToEmptyString()
+  );
+
+  const manualEntryHandler$ = openManualStatisticsEntry$.pipe(
+    tap(async () => {
+      const existingKeys: string[] = [];
+      for (let index = 0, { length } = statisticsData; index < length; index += 1) {
+        const s = statisticsData[index];
+        existingKeys.push(`${s.title}__${s.dateKey}`);
+      }
+
+      const result = await new Promise<ManualStatisticEntry | undefined>((resolver) => {
+        dialogManager.dialogs$.next([
+          {
+            component: StatisticsManualEntryDialog,
+            props: {
+              existingTitles: existingKeys,
+              startDayHoursForTracker: $startDayHoursForTracker$,
+              resolver
+            },
+            disableCloseOnClick: true,
+            zIndex: '70'
+          }
+        ]);
+      });
+
+      if (!result) return;
+
+      $statisticsActionInProgress$ = true;
+
+      try {
+        const { statistic } = await database.upsertManualStatistic(result);
+
+        const nextRow: BookStatistic = {
+          ...statistic,
+          id: `${statistic.title}_${statistic.dateKey}`,
+          averageReadingTime: statistic.readingTime,
+          averageWeightedReadingTime: statistic.readingTime,
+          averageCharactersRead: statistic.charactersRead,
+          averageWeightedCharactersRead: statistic.charactersRead,
+          averageReadingSpeed: statistic.lastReadingSpeed,
+          averageWeightedReadingSpeed: statistic.lastReadingSpeed
+        };
+
+        const existingIndex = statisticsData.findIndex(
+          (s) => s.title === statistic.title && s.dateKey === statistic.dateKey
+        );
+
+        if (existingIndex >= 0) {
+          statisticsData[existingIndex] = nextRow;
+        } else {
+          statisticsData = [...statisticsData, nextRow].sort((a, b) =>
+            a.dateKey > b.dateKey ? 1 : -1
+          );
+        }
+
+        if (!statisticsTitleFilters.has(statistic.title)) {
+          statisticsTitleFilters.set(statistic.title, true);
+          statisticsTitleFilters = statisticsTitleFilters;
+        }
+
+        updateStatisticsData();
+      } catch (error: any) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: '错误',
+              message: `添加失败：${error?.message ?? error}`
+            }
+          }
+        ]);
+      } finally {
+        $statisticsActionInProgress$ = false;
       }
     }),
     reduceToEmptyString()
@@ -806,6 +885,7 @@
 {$exportStatisticsDataHandler$ ?? ''}
 {$deleteStatisticsDataHandler$ ?? ''}
 {$setStatisticsDatesToAllTimeHandler$ ?? ''}
+{$manualEntryHandler$ ?? ''}
 <svelte:window on:keyup={onKeyUp} />
 {#if isLoading}
   <div class="flex fixed items-center justify-center inset-0 h-full w-full text-7xl">

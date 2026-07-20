@@ -91,6 +91,17 @@ export const deleteStatisticsData$ = new Subject<boolean>();
 
 export const setStatisticsDatesToAllTime$ = new Subject<void>();
 
+export const openManualStatisticsEntry$ = new Subject<void>();
+
+export interface ManualStatisticEntry {
+  title: string;
+  dateKey: string;
+  readingTimeSeconds: number;
+  charactersRead: number;
+  markCompleted: boolean;
+  conflictStrategy: 'append' | 'overwrite';
+}
+
 export const statisticsActionInProgress$ = writableSubject<boolean>(false);
 
 export const statisticsTitleFilterEnabled$ = writableSubject<boolean>(false);
