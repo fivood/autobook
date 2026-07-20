@@ -12,6 +12,7 @@
     StatisticsEditRequest
   } from '$lib/components/statistics/statistics-summary/statistics-summary';
   import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
+  import StatisticsHighlights from '$lib/components/statistics/statistics-highlights/statistics-highlights.svelte';
   import StatisticsTitleFilter from '$lib/components/statistics/statistics-title-filter.svelte';
   import {
     type BookStatistic,
@@ -921,6 +922,14 @@
       {statisticsDateRangeLabel}
       on:delete={handleDeleteRequest}
       on:edit={handleEditRequest}
+    />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS}
+    <StatisticsHighlights
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      {statisticsDateRangeLabel}
+      titleFilter={statisticsTitleFilters}
     />
   {/if}
 {/if}

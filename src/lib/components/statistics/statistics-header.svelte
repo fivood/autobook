@@ -4,6 +4,7 @@
     faCalendarDays,
     faCopy,
     faFilter,
+    faHighlighter,
     faMap,
     faPenToSquare,
     faSliders
@@ -89,6 +90,19 @@
         on:keyup={dummyFn}
       >
         <Fa icon={faMap} />
+      </div>
+      <div
+        tabindex="0"
+        role="button"
+        title={$lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS
+          ? '您已在高亮标签页'
+          : '切换到高亮统计'}
+        class={baseIconClasses}
+        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS}
+        on:click={() => ($lastStatisticsTab$ = StatisticsTab.HIGHLIGHTS)}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faHighlighter} />
       </div>
       <div
         tabindex="0"
