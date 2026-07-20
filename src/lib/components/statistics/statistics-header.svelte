@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import {
+    faBook,
     faCalendarDays,
     faCopy,
     faFilter,
@@ -103,6 +104,19 @@
         on:keyup={dummyFn}
       >
         <Fa icon={faHighlighter} />
+      </div>
+      <div
+        tabindex="0"
+        role="button"
+        title={$lastStatisticsTab$ === StatisticsTab.METADATA
+          ? '您已在书目标签页'
+          : '切换到书目/作者统计'}
+        class={baseIconClasses}
+        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.METADATA}
+        on:click={() => ($lastStatisticsTab$ = StatisticsTab.METADATA)}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faBook} />
       </div>
       <div
         tabindex="0"

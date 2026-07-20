@@ -13,6 +13,7 @@
   } from '$lib/components/statistics/statistics-summary/statistics-summary';
   import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
   import StatisticsHighlights from '$lib/components/statistics/statistics-highlights/statistics-highlights.svelte';
+  import StatisticsYearPanel from '$lib/components/statistics/statistics-year-panel/statistics-year-panel.svelte';
   import StatisticsTitleFilter from '$lib/components/statistics/statistics-title-filter.svelte';
   import {
     type BookStatistic,
@@ -944,6 +945,15 @@
       endDate={$lastStatisticsEndDate$}
       {statisticsDateRangeLabel}
       titleFilter={statisticsTitleFilters}
+    />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.METADATA}
+    <StatisticsYearPanel
+      {statisticsDateRangeLabel}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      titleFilter={statisticsTitleFilters}
+      statistics={statisticsData}
     />
   {/if}
 {/if}
