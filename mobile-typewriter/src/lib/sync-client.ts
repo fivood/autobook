@@ -6,6 +6,11 @@ export const SYNC_ENDPOINT = 'https://sync.fivood.com/sync';
 
 export interface DayClients {
   clients: Record<string, number>;
+  /** Per-device chars-read totals; absent when only pre-chars-sync clients
+   * (this PWA before mid-2026, or older desktop builds) have reported for
+   * this day. Merged server-side with the same max-by-device rule as
+   * `clients`. */
+  charsClients?: Record<string, number>;
   updatedAt?: number;
 }
 export interface RemoteState {
@@ -43,7 +48,18 @@ export async function pullState(token: string, signal?: AbortSignal): Promise<Re
 
 export async function pushDelta(
   token: string,
-  payload: { books: Record<string, Record<string, { clients: Record<string, number> }>> },
+  payload: {
+    books: Record<
+      string,
+      Record<
+        string,
+        {
+          clients: Record<string, number>;
+          charsClients?: Record<string, number>;
+        }
+      >
+    >;
+  },
   signal?: AbortSignal
 ): Promise<RemoteState> {
   const res = await fetch(`${SYNC_ENDPOINT}?token=${token}`, {

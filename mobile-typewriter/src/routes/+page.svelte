@@ -112,6 +112,11 @@
 
   let visible = true;
   let lastTickMs = 0;
+  /** Baseline for the chars-read delta pushed into stats each tick. Text
+   * books use the typewriter's revealed count (monotonic); PDF books skip
+   * chars entirely (their `revealed` is a page index) and set this to -1
+   * as a sentinel. */
+  let lastRevealedForTick = -1;
 
   // Manual-reading activity window. PDF and scroll-mode text books have no
   // `playing` state — the reader is "active" as long as the user keeps
@@ -240,13 +245,27 @@
     if (readingActive) {
       if (!tickTimer) {
         lastTickMs = Date.now();
+        // Baseline for the chars delta; typewriter's `revealed` grows
+        // monotonically as characters get revealed. PDF mode uses `revealed`
+        // as a page index, so we deliberately skip chars for that case.
+        lastRevealedForTick = bookKind === 'text' ? revealed : -1;
         tickTimer = setInterval(() => {
           const now = Date.now();
           const elapsedMs = Math.min(now - lastTickMs, 2000);
           lastTickMs = now;
           const seconds = Math.round(elapsedMs / 1000);
+          let charsDelta = 0;
+          if (bookKind === 'text' && lastRevealedForTick >= 0) {
+            const raw = revealed - lastRevealedForTick;
+            // Cap per-tick delta so a user-initiated seek (jump chapters etc.)
+            // doesn't dump thousands of "read" chars into today's totals.
+            // Typewriter tops out at 60 chars/sec; 200 leaves generous slack.
+            const cap = Math.max(1, seconds) * 200;
+            charsDelta = raw > cap ? 0 : Math.max(0, raw);
+            lastRevealedForTick = revealed;
+          }
           if (seconds > 0) {
-            addReadingSeconds(title, seconds);
+            addReadingSeconds(title, seconds, charsDelta);
             todaySeconds = getTodayTotal(title, remoteCache);
           }
         }, 1000);
