@@ -22,7 +22,6 @@
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { preFilteredTitlesForStatistics$ } from '$lib/components/statistics/statistics-types';
-  import { pxScreen } from '$lib/css-classes';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath } from '$lib/data/env';
@@ -37,24 +36,25 @@
     confirmStatisticsDeletion$,
     database,
     fileCountData$,
-    hideExternalReadHint$,
-    isOnline$,
     keepLocalStatisticsOnDeletion$,
     lastExportedTarget$,
     lastExportedTypes$,
+    libraryFilter$,
     pendingLaunchFiles$,
     readingGoalsMergeMode$,
     replicationSaveBehavior$,
     showExternalPlaceholder$,
     statisticsMergeMode$
   } from '$lib/data/store';
+  import { t } from '$lib/i18n';
+  import { detectBookFormat } from '$lib/functions/book-format';
   import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
   import { cloneMutateSet } from '$lib/functions/clone-mutate-set';
   import { getDropEventFiles } from '$lib/functions/file-dom/get-drop-event-files';
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { formatPageTitle } from '$lib/functions/format-page-title';
-  import { keyBy } from '$lib/functions/key-by';
   import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
+  import { submitReport } from '$lib/functions/report-error';
   import { importBackup, importData, replicateData } from '$lib/functions/replication/replicator';
   import { throwIfAborted } from '$lib/functions/replication/replication-error';
   import {
@@ -65,41 +65,79 @@
   import { pluralize } from '$lib/functions/utils';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import pLimit from 'p-limit';
-  import { combineLatest, map, Observable, share, Subject, switchMap, takeUntil } from 'rxjs';
+  import {
+    combineLatest,
+    defer,
+    map,
+    Observable,
+    share,
+    shareReplay,
+    startWith,
+    Subject,
+    switchMap,
+    takeUntil
+  } from 'rxjs';
   import { onDestroy, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
 
   const booksAreLoading$ = database.listLoading$.pipe(map((isLoading) => isLoading));
 
+  // IDB data.id → title map. Tauri FS card.id is stableIdFromTitle(title) (a
+  // hash), but bookmark.dataId is the IDB book.id (autoincrement, e.g. 5).
+  // The two id spaces never overlap, so any merge keyed on dataId/id always
+  // misses. Bridge: bookmark.dataId → IDB data row → title, then match FS
+  // cards by title. Re-fetches whenever books are added or removed.
+  const idbTitleByDataId$ = database.dataListChanged$.pipe(
+    startWith(undefined as unknown),
+    switchMap(() =>
+      defer(async () => {
+        const db = await database.db;
+        const records = await db.getAll('data');
+        const m = new Map<number, string>();
+        for (const r of records) m.set(r.id, r.title);
+        return m;
+      })
+    ),
+    shareReplay({ refCount: true, bufferSize: 1 })
+  );
+
   const bookCards$: Observable<BookCardProps[]> = combineLatest([
     database.dataList$,
     database.bookmarks$,
-    booklistSortOptions$
+    booklistSortOptions$,
+    idbTitleByDataId$
   ]).pipe(
-    map(([dataList, bookmarks]) => {
+    map(([dataList, bookmarks, _sortOpts, titleByDataId]) => {
       const sortProp = $booklistSortOptions$[$storageSource$];
       const isTitleSort = sortProp.property === 'title';
+      const isBrowserSource = $storageSource$ === StorageKey.BROWSER;
 
-      if ($storageSource$ === StorageKey.BROWSER) {
-        const bookmarkMap = keyBy(bookmarks, 'dataId');
-
-        return [
-          ...dataList
-            .filter((d) => $showExternalPlaceholder$ || !d.isPlaceholder)
-            .map((d) => ({
-              ...d,
-              ...bookmarkToProgress(bookmarkMap.get(d.id))
-            }))
-            .sort((card1: BookCardProps, card2: BookCardProps) =>
-              sortBookCards(card1, card2, sortProp, isTitleSort)
-            )
-        ];
+      // Build title → bookmark map by joining bookmarks (keyed by IDB id)
+      // through the IDB data store. Works for both BROWSER and Tauri FS:
+      // browser-handler card.title === IDB data.title; tauri-fs-handler card
+      // title is desanitizeFilename(dirName), which round-trips through the
+      // same sanitizeFilename used at write time.
+      const titleToBookmark = new Map<string, BooksDbBookmarkData>();
+      for (const b of bookmarks) {
+        const title = titleByDataId.get(b.dataId);
+        if (title) titleToBookmark.set(title, b);
       }
 
       return [
-        ...dataList.sort((card1: BookCardProps, card2: BookCardProps) =>
-          sortBookCards(card1, card2, sortProp, isTitleSort)
-        )
+        ...dataList
+          .filter((d) => !isBrowserSource || $showExternalPlaceholder$ || !d.isPlaceholder)
+          .map((d) => {
+            const bm = titleToBookmark.get(d.title);
+            // No IDB bookmark for this title? Keep handler-provided values
+            // (tauri-fs-handler reads progress / lastBookmarkModified from
+            // on-disk `progress_*.json` filename when the book was synced
+            // but not opened locally).
+            if (!bm) return d;
+            return { ...d, ...bookmarkToProgress(bm, d.characters || 0) };
+          })
+          .sort((card1: BookCardProps, card2: BookCardProps) =>
+            sortBookCards(card1, card2, sortProp, isTitleSort)
+          )
       ];
     }),
     share()
@@ -111,20 +149,41 @@
   const filteredBookCards$: Observable<BookCardProps[]> = combineLatest([
     bookCards$,
     bookFolders$,
-    activeFolderFilter$
+    activeFolderFilter$,
+    libraryFilter$
   ]).pipe(
-    map(([cards, bookFolders, filter]) => {
-      if (filter === 'all') return cards;
+    map(([cards, bookFolders, filter, libFilter]) => {
+      let result = cards;
       if (filter === 'uncategorized') {
         const assigned = new Set(bookFolders.map((bf) => bf.bookId));
-        return cards.filter((c) => !assigned.has(c.id));
+        result = result.filter((c) => !assigned.has(c.id));
+      } else if (filter !== 'all') {
+        const folderId = Number(filter);
+        if (Number.isFinite(folderId)) {
+          const inFolder = new Set(
+            bookFolders.filter((bf) => bf.folderId === folderId).map((bf) => bf.bookId)
+          );
+          result = result.filter((c) => inFolder.has(c.id));
+        }
       }
-      const folderId = Number(filter);
-      if (!Number.isFinite(folderId)) return cards;
-      const inFolder = new Set(
-        bookFolders.filter((bf) => bf.folderId === folderId).map((bf) => bf.bookId)
-      );
-      return cards.filter((c) => inFolder.has(c.id));
+
+      if (libFilter.formats.length) {
+        const allowed = new Set(libFilter.formats);
+        result = result.filter((c) => allowed.has(detectBookFormat(c.title)));
+      }
+
+      if (libFilter.completion !== 'all') {
+        result = result.filter((c) => {
+          // bookmarkToProgress normalizes to 0–1; "done" is anything >= 0.995
+          // to absorb floating-point drift in the final-bookmark calculation.
+          const p = c.progress || 0;
+          if (libFilter.completion === 'unread') return p === 0;
+          if (libFilter.completion === 'done') return p >= 0.995;
+          return p > 0 && p < 0.995;
+        });
+      }
+
+      return result;
     }),
     share()
   );
@@ -136,6 +195,15 @@
 
   let selectedBookIds: ReadonlySet<number> = new Set();
   let selectMode = false;
+  /** Free-text title search. Deliberately NOT persisted — users
+   * expect to see their full library on next open. */
+  let searchQuery = '';
+  $: visibleBookCards = (() => {
+    const cards = $filteredBookCards$ || [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter((c) => c.title.toLowerCase().includes(q));
+  })();
   let cancelToken = new AbortController();
   let cancelSignal = cancelToken.signal;
   let cancelTooltip = '';
@@ -205,13 +273,30 @@
     }, 1800);
   }
 
-  function bookmarkToProgress(b: BooksDbBookmarkData | undefined) {
-    return b?.progress
-      ? {
-          progress: typeof b.progress === 'string' ? +b.progress.slice(0, -1) : b.progress,
-          lastBookmarkModified: b.lastBookmarkModified || 0
-        }
-      : { progress: 0, lastBookmarkModified: 0 };
+  function bookmarkToProgress(
+    b: BooksDbBookmarkData | undefined,
+    bookCharCount: number
+  ) {
+    if (!b) return { progress: 0, lastBookmarkModified: 0 };
+    // Normalize to 0–1. Three cases observed in IDB across versions:
+    //   1. New (≥1.5): bookmark.progress is a 0–1 number
+    //   2. Legacy: bookmark.progress is a "45%" string
+    //   3. Very old: no progress field at all — only exploredCharCount.
+    //      Without the fallback below, finished books from old versions
+    //      keep showing 0% on hover / 0%-wide progress bar.
+    let raw: number | undefined;
+    if (b.progress != null) {
+      raw = typeof b.progress === 'string' ? +b.progress.slice(0, -1) / 100 : b.progress;
+    } else if (b.exploredCharCount && bookCharCount > 0) {
+      raw = b.exploredCharCount / bookCharCount;
+    }
+    if (raw == null || Number.isNaN(raw)) {
+      return { progress: 0, lastBookmarkModified: b.lastBookmarkModified || 0 };
+    }
+    return {
+      progress: Math.max(0, Math.min(1, raw)),
+      lastBookmarkModified: b.lastBookmarkModified || 0
+    };
   }
 
   function sortBookCards(
@@ -391,7 +476,7 @@
 
     initializeReplicationProgressData();
 
-    const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz)$/i;
+    const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz|cbr|cb7|cbt)$/i;
     const errorTitle = '书籍导入失败';
     const expanded = await expandZipArchives(Array.from(fileList)).catch((err) => {
       logger.warn(`Error expanding zip: ${err.message}`);
@@ -404,7 +489,7 @@
 
       showError(
         errorTitle,
-        '文件必须是 EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3 / PDF，或包含这些格式的 ZIP',
+        '文件必须是 EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3 / PDF / CBZ / CBR / CB7 / CBT，或包含这些格式的 ZIP',
         ''
       );
       return;
@@ -430,6 +515,14 @@
     resetProgress();
 
     if (error) {
+      // Auto-submit telemetry for MOBI/AZW import failures so we can see how
+      // often Calibre / native parser hangs in the wild.
+      const hasMobi = files.some((f) => /\.(mobi|azw3?)$/i.test(f.name));
+      if (hasMobi) {
+        submitReport({ type: 'import', message: error, context: { filenames: files.map((f) => f.name) } }).catch(
+          () => undefined
+        );
+      }
       showError(errorTitle, error, '书籍导入期间发生错误');
     }
   }
@@ -474,10 +567,9 @@
 
         for (const entry of entries) {
           if (entry.directory || !entry.getData) continue;
-          if (!/\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz)$/i.test(entry.filename)) continue;
+          if (!/\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz|cbr|cb7|cbt)$/i.test(entry.filename)) continue;
 
           const name = entry.filename.split('/').pop() || entry.filename;
-          // eslint-disable-next-line no-await-in-loop
           const blob = await entry.getData(new BlobWriter());
           out.push(new File([blob], name, { lastModified: file.lastModified }));
         }
@@ -829,7 +921,7 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('书库管理')}</title>
+  <title>{formatPageTitle($t('pageTitle.manage'))}</title>
 </svelte:head>
 
 {$replicator$ ?? ''}
@@ -876,7 +968,7 @@
   <div
     tabindex="0"
     role="button"
-    class="{pxScreen} relative flex-1 overflow-auto"
+    class="px-4 md:px-8 mx-auto w-full relative flex-1 overflow-auto"
     on:dragenter={(ev) => {
       ev.preventDefault();
       if (ev.dataTransfer?.types?.includes('Files')) isDragOver = true;
@@ -922,13 +1014,36 @@
       {/if}
     </div>
   {/if}
+  <div class="mb-3 flex items-center gap-2">
+    <div class="relative flex-1 max-w-md">
+      <input
+        type="search"
+        placeholder={$t('library.search.placeholder')}
+        class="library-search w-full"
+        bind:value={searchQuery}
+      />
+      {#if searchQuery}
+        <button
+          type="button"
+          class="absolute right-2 top-1/2 -translate-y-1/2 text-xs opacity-50 hover:opacity-100"
+          on:click={() => (searchQuery = '')}
+          title={$t('library.search.clear')}
+        >✕</button>
+      {/if}
+    </div>
+    {#if visibleBookCards && $filteredBookCards$ && visibleBookCards.length !== $filteredBookCards$.length}
+      <span class="text-xs opacity-60">
+        {visibleBookCards.length} / {$filteredBookCards$.length}
+      </span>
+    {/if}
+  </div>
   {#if !$filteredBookCards$ || $booksAreLoading$}
     加载中...
-  {:else if $filteredBookCards$.length}
+  {:else if visibleBookCards.length}
     <BookCardList
       currentBookId={$currentBookId$}
       {selectedBookIds}
-      bookCards={$filteredBookCards$}
+      bookCards={visibleBookCards}
       on:bookClick={(ev) => onBookClick(ev.detail.id)}
       on:removeBookClick={(ev) => handleRemove([ev.detail.id])}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
@@ -947,7 +1062,7 @@
       </span>
       <input
         type="file"
-        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,.cbz,application/zip,.zip"
+        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,.cbz,.cbr,.cb7,.cbt,application/zip,.zip"
         multiple
         hidden
         use:inputFile={onFilesChange}

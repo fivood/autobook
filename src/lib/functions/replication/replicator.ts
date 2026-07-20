@@ -14,13 +14,16 @@ import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadMd from '$lib/functions/file-loaders/md/load-md';
 import loadMobi, { setForceNativeParser } from '$lib/functions/file-loaders/mobi/load-mobi';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
+import loadCbr from '$lib/functions/file-loaders/cbr/load-cbr';
 import loadPdf from '$lib/functions/file-loaders/pdf/load-pdf';
 import { sniffFormat, sniffZipKind } from '$lib/functions/file-loaders/utils/sniff-format';
 
+// dev-only console toggle: window.__forceNativeMobi(true) forces the built-in
+// MOBI parser, bypassing Calibre. Mirrors the __autobook hook in store.ts.
 if (typeof window !== 'undefined') {
   (window as any).__forceNativeMobi = (val = true) => {
     setForceNativeParser(val);
-    console.log(val ? '已切换到内置 MOBI 解析器' : '已恢复 Calibre 优先模式');
+    console.info(val ? '已切换到内置 MOBI 解析器' : '已恢复 Calibre 优先模式');
   };
 }
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
@@ -94,6 +97,8 @@ export async function importData(
             bookContent = await loadPdf(file, lastBookModified);
           } else if (/\.cbz$/i.test(file.name)) {
             bookContent = await loadCbz(file, lastBookModified);
+          } else if (/\.(cbr|cb7|cbt)$/i.test(file.name)) {
+            bookContent = await loadCbr(file, lastBookModified);
           } else if (/\.htmlz$/i.test(file.name)) {
             bookContent = await loadHtmlz(file, document, lastBookModified);
           } else {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Fa from 'svelte-fa';
-  import { faVolumeHigh, faVolumeXmark, faGears } from '@fortawesome/free-solid-svg-icons';
+  import { faVolumeHigh, faVolumeXmark, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import type { AutoReader } from '$lib/components/book-reader/types';
   import {
     readerRate$,
@@ -11,6 +11,7 @@
   } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
+  import { t } from '$lib/i18n';
 
   export let autoReader: AutoReader | undefined;
   /** Section-relative char count to seek to when no resume position applies. */
@@ -20,21 +21,7 @@
 
   let enabled = false;
   let sub: Subscription | undefined;
-  let showSettings = false;
   let voices: SpeechSynthesisVoice[] = [];
-  let nativeVoices: { id: string; name: string; language: string }[] = [];
-
-  async function loadNativeVoices() {
-    nativeVoices = [];
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      nativeVoices = await invoke<typeof nativeVoices>('sapi_list_voices');
-    } catch {
-      nativeVoices = [];
-    }
-  }
-
-  $: if ($ttsEngine$ === 'sapi') loadNativeVoices();
 
   $: {
     sub?.unsubscribe();
@@ -87,11 +74,9 @@
 
     loadVoices();
     window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
-    document.addEventListener('click', handleDocClick, true);
 
     return () => {
       window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
-      document.removeEventListener('click', handleDocClick, true);
     };
   });
 
@@ -99,13 +84,12 @@
     sub?.unsubscribe();
   });
 
-  let settingsRoot: HTMLElement | undefined;
-  function handleDocClick(ev: MouseEvent) {
-    if (!showSettings) return;
-    const t = ev.target as Node;
-    if (settingsRoot && !settingsRoot.contains(t)) {
-      showSettings = false;
-    }
+  // Web Speech voice is picked in 设置 → 阅读 now (the FAB's gear panel
+  // is gone); react to the store so a change made there applies to a
+  // reader opened later in the same session without reloading voices.
+  $: if (autoReader && $ttsEngine$ !== 'sapi' && voices.length && $readerVoiceUri$) {
+    const found = voices.find((v) => v.voiceURI === $readerVoiceUri$);
+    if (found) autoReader.voice = found;
   }
 
   function toggle() {
@@ -135,25 +119,12 @@
     autoReader?.toggle();
   }
 
-  function handleRateChange(ev: Event) {
-    const v = +(ev.target as HTMLInputElement).value;
+  function setRate(next: number) {
+    // 0.1 steps accumulate float dust (0.7000000000000001) — round back.
+    const v = Math.round(Math.min(2, Math.max(0.5, next)) * 10) / 10;
     readerRate$.next(v);
     if (autoReader) {
       autoReader.rate = v;
-    }
-  }
-
-  function handleVoiceChange(ev: Event) {
-    const uri = (ev.target as HTMLSelectElement).value;
-    if ($ttsEngine$ === 'sapi') {
-      ttsSapiVoiceId$.next(uri);
-      if (autoReader) autoReader.voice = uri ? ({ voiceURI: uri } as SpeechSynthesisVoice) : undefined;
-      return;
-    }
-    readerVoiceUri$.next(uri);
-    const found = voices.find((v) => v.voiceURI === uri);
-    if (autoReader && found) {
-      autoReader.voice = found;
     }
   }
 
@@ -163,90 +134,67 @@
 </script>
 
 {#if autoReader}
-  <div bind:this={settingsRoot} class="group fixed bottom-6 right-20 z-30 flex flex-col items-end gap-2">
+  <!-- The speaker shares the play button's row (same bottom anchor 64px,
+       same h-9/h-12 sizes per state — aligned in EVERY state) and the
+       rate pill OVERLAYS the typewriter speed pill's slot right under
+       the play button: the two pills are mutually exclusive — TTS
+       enabling turns the auto-scroller off, and AutoScrollFab hides its
+       pill (incl. hover preview) whenever TTS is active. So this pill
+       shows exactly when enabled, no hover preview.
+       pointer-events-none on the container is load-bearing: its bbox
+       (x24-128, y24-112) covers the play button and the shared pill
+       slot, and this component mounts after AutoScrollFab — without it
+       the container's empty area would eat clicks aimed at play.
+       History: the old gear + settings panel sat below the speaker at
+       bottom-6, exactly overlapping the typewriter's − speed button,
+       and its hover-revealed gear ate clicks aimed at −. Voice
+       selection moved to 设置 → 阅读; the FAB keeps only start/stop
+       + rate. -->
+  <div class="group pointer-events-none fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">
     <button
       type="button"
-      title={enabled ? '暂停朗读 (V)' : '开始朗读 (V)'}
+      title={enabled ? $t('tts.pause') : $t('tts.play')}
       on:click={toggle}
-      class="relative flex items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-150"
-      class:h-12={enabled || showSettings}
-      class:w-12={enabled || showSettings}
-      class:h-9={!enabled && !showSettings}
-      class:w-9={!enabled && !showSettings}
-      class:opacity-100={enabled || showSettings}
-      class:opacity-30={!enabled && !showSettings}
-      class:group-hover:opacity-95={!enabled && !showSettings}
-      class:group-hover:h-12={!enabled && !showSettings}
-      class:group-hover:w-12={!enabled && !showSettings}
+      class="pointer-events-auto relative mr-14 flex items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-150"
+      class:h-12={enabled}
+      class:w-12={enabled}
+      class:h-9={!enabled}
+      class:w-9={!enabled}
+      class:opacity-100={enabled}
+      class:opacity-30={!enabled}
+      class:group-hover:opacity-95={!enabled}
+      class:group-hover:h-12={!enabled}
+      class:group-hover:w-12={!enabled}
       style="background-color: rgba(95, 126, 123, 0.92); color: #f0efe6;"
     >
       <Fa icon={enabled ? faVolumeHigh : faVolumeXmark} size="lg" />
-      <span class="sr-only">{enabled ? '暂停' : '开始'}朗读</span>
+      <span class="sr-only">{enabled ? $t('tts.pauseAria') : $t('tts.playAria')}</span>
     </button>
 
-    <button
-      type="button"
-      title="语音设置"
-      on:click={() => (showSettings = !showSettings)}
-      class="flex h-9 w-9 items-center justify-center rounded-full shadow backdrop-blur transition-all duration-150"
-      class:opacity-0={!enabled && !showSettings}
-      class:pointer-events-none={!enabled && !showSettings}
-      class:group-hover:opacity-100={!enabled && !showSettings}
-      class:group-hover:pointer-events-auto={!enabled && !showSettings}
+    <div
+      class="flex items-center gap-1 rounded-full px-2 py-1 shadow backdrop-blur transition-all duration-150"
+      class:opacity-0={!enabled}
+      class:pointer-events-none={!enabled}
+      class:pointer-events-auto={enabled}
       style="background-color: rgba(195, 193, 175, 0.9); color: #405a5c;"
     >
-      <Fa icon={faGears} />
-    </button>
-
-    {#if showSettings}
-      <div
-        class="flex flex-col gap-2 rounded-lg p-3 shadow-lg"
-        style="background-color: rgba(43, 90, 105, 0.95); color: #f0efe6;"
+      <button
+        type="button"
+        title={$t('tts.rateSlower')}
+        on:click={() => setRate($readerRate$ - 0.1)}
+        class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
       >
-        <label class="flex items-center gap-2 text-xs">
-          <span>语速</span>
-          <input
-            type="range"
-            min="0.5"
-            max="2"
-            step="0.1"
-            value={$readerRate$}
-            on:input={handleRateChange}
-          />
-          <span>{$readerRate$}×</span>
-        </label>
-
-        <label class="flex flex-col gap-1 text-xs">
-          <span>语音 ({$ttsEngine$ === 'sapi' ? '系统 SAPI' : $ttsEngine$ === 'custom' ? '自定义 HTTP' : 'Web Speech'})</span>
-          {#if $ttsEngine$ === 'sapi'}
-            <select
-              class="rounded bg-black/20 px-2 py-1 text-xs"
-              value={$ttsSapiVoiceId$}
-              on:change={handleVoiceChange}
-            >
-              <option value="">系统默认</option>
-              {#each nativeVoices as voice (voice.id)}
-                <option value={voice.id}>{voice.name} ({voice.language})</option>
-              {/each}
-            </select>
-          {:else if $ttsEngine$ === 'custom'}
-            <p class="text-xs opacity-80">使用「设置 → 自定义 HTTP TTS」里配的接口</p>
-          {:else}
-            <select
-              class="rounded bg-black/20 px-2 py-1 text-xs"
-              value={$readerVoiceUri$}
-              on:change={handleVoiceChange}
-            >
-              <option value="">系统默认</option>
-              {#each voices as voice}
-                <option value={voice.voiceURI}>
-                  {voice.name} ({voice.lang})
-                </option>
-              {/each}
-            </select>
-          {/if}
-        </label>
-      </div>
-    {/if}
+        <Fa icon={faMinus} size="xs" />
+      </button>
+      <span class="min-w-[2rem] text-center text-[10px]">{$readerRate$}×</span>
+      <button
+        type="button"
+        title={$t('tts.rateFaster')}
+        on:click={() => setRate($readerRate$ + 0.1)}
+        class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
+      >
+        <Fa icon={faPlus} size="xs" />
+      </button>
+    </div>
   </div>
 {/if}

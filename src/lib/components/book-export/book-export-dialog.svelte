@@ -5,11 +5,7 @@
   import Ripple from '$lib/components/ripple.svelte';
   import { buttonClasses } from '$lib/css-classes';
   import { StorageKey } from '$lib/data/storage/storage-types';
-  import {
-    getStorageIconData,
-    isStorageSourceAvailable,
-    storageSource$
-  } from '$lib/data/storage/storage-view';
+  import { getStorageIconData, storageSource$ } from '$lib/data/storage/storage-view';
   import {
     lastExportedTarget$,
     lastExportedTypes$

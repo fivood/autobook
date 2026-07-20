@@ -17,7 +17,8 @@ import {
   ttsCustomBody$,
   ttsCustomEndpoint$,
   ttsCustomHeaders$,
-  ttsCustomMethod$
+  ttsCustomMethod$,
+  ttsCustomProxyUrl$
 } from '$lib/data/store';
 import {
   computeGlobalCharIndex,
@@ -26,6 +27,7 @@ import {
   selectionToCharIndex,
   splitSentences
 } from './auto-reader-shared';
+import { wrapPcmAsWav } from '$lib/functions/pcm-to-wav';
 
 export class AutoReaderCustom implements AutoReader {
   wasReaderEnabled$ = new BehaviorSubject<boolean>(false);
@@ -52,6 +54,7 @@ export class AutoReaderCustom implements AutoReader {
   }
 
   setContentEl(el: HTMLElement | undefined) {
+    if (this.contentEl === el) return;
     this.contentEl = el;
     this.reset();
   }
@@ -115,6 +118,13 @@ export class AutoReaderCustom implements AutoReader {
     if (!this.paragraphs.length) return;
     this.paraIndex = Math.min(Math.max(0, para), this.paragraphs.length - 1);
     this.charOffset = Math.min(Math.max(0, offset), this.paragraphs[this.paraIndex].length);
+  }
+
+  getCurrentSentence(): { globalStart: number; globalEnd: number; text: string } | null {
+    if (this.paraIndex >= this.paragraphs.length) return null;
+    const text = this.paragraphs[this.paraIndex];
+    const globalStart = computeGlobalCharIndex(this.paragraphs, this.paraIndex, 0);
+    return { globalStart, globalEnd: globalStart + text.length, text };
   }
 
   toggle() {
@@ -199,6 +209,7 @@ export class AutoReaderCustom implements AutoReader {
         headers: headersObj,
         bodyTemplate: ttsCustomBody$.getValue() || '',
         audioPath: ttsCustomAudioPath$.getValue() || null,
+        proxyUrl: ttsCustomProxyUrl$.getValue() || null,
         text
       });
       if (token !== this.currentSpeakToken || !this.enabled$.getValue()) return;
@@ -206,7 +217,17 @@ export class AutoReaderCustom implements AutoReader {
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes as BlobPart], { type: 'audio/mpeg' });
+      // Detect Gemini 2.5 Flash TTS responses which return headerless L16
+      // PCM at 24kHz mono. The browser can't play raw PCM, so we slap a
+      // standard WAV header in front of it. Other engines stream MP3 / WAV
+      // bytes that browsers play out of the box.
+      const audioPath = ttsCustomAudioPath$.getValue() || '';
+      const isGeminiPcm =
+        endpoint.includes('generativelanguage.googleapis.com') &&
+        /inlineData\.data$/.test(audioPath);
+      const blob = isGeminiPcm
+        ? wrapPcmAsWav(bytes, 24000, 16, 1)
+        : new Blob([bytes as BlobPart], { type: 'audio/mpeg' });
       const url = URL.createObjectURL(blob);
 
       const audio = new Audio(url);
@@ -215,6 +236,23 @@ export class AutoReaderCustom implements AutoReader {
         audio.removeAttribute('src');
         audio.load();
         URL.revokeObjectURL(url);
+      };
+      // See auto-reader-sapi.ts for the rationale: custom-HTTP TTS also
+      // returns one audio blob per paragraph with no granular timing, so
+      // we synthesize boundaries from audio.currentTime to keep page-flip
+      // logic in lockstep with playback.
+      const paraStartGlobalIndex = globalIndex;
+      const paraLength = text.length;
+      let lastReportedFraction = 0;
+      audio.ontimeupdate = () => {
+        if (token !== this.currentSpeakToken) return;
+        if (!audio.duration || !isFinite(audio.duration) || audio.duration <= 0) return;
+        const fraction = Math.min(1, audio.currentTime / audio.duration);
+        if (fraction - lastReportedFraction < 0.02) return;
+        lastReportedFraction = fraction;
+        const localOffset = Math.floor(paraLength * fraction);
+        this.charOffset = localOffset;
+        this.onBoundary?.(paraStartGlobalIndex + localOffset);
       };
       audio.onended = () => {
         cleanup();
@@ -235,7 +273,6 @@ export class AutoReaderCustom implements AutoReader {
     } catch (err: any) {
       if (token !== this.currentSpeakToken) return;
       const message = typeof err === 'string' ? err : err?.message ?? String(err);
-      // eslint-disable-next-line no-console
       console.warn('[custom-tts] failed:', message);
       this.onError?.(message);
       this.off();

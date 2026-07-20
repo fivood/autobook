@@ -7,6 +7,9 @@
   import { HeatmapType } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
   import StatisticsHeatmap from '$lib/components/statistics/statistics-heatmap/statistics-heatmap.svelte';
   import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary.svelte';
+  import StatisticsYear from '$lib/components/statistics/statistics-year/statistics-year.svelte';
+  import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
+  import StatisticsHighlights from '$lib/components/statistics/statistics-highlights/statistics-highlights.svelte';
   import type {
     StatisticsDeleteRequest,
     StatisticsEditRequest
@@ -14,16 +17,18 @@
   import StatisticsTitleFilter from '$lib/components/statistics/statistics-title-filter.svelte';
   import {
     type BookStatistic,
+    type ManualStatisticEntry,
     StatisticsTab,
     StatisticsReadingDataAggregationMode,
     statisticsRangeTemplates,
-    copyStatisticsData$,
     statisticsTitleFilterEnabled$,
     statisticsTitleFilterIsOpen$,
     type StatisticsTitleFilterItem,
     preFilteredTitlesForStatistics$,
     statisticsDataAggregrationModes,
     exportStatisticsData$,
+    exportYearReport$,
+    openManualStatisticsEntry$,
     statisticsActionInProgress$,
     deleteStatisticsData$,
     setStatisticsDatesToAllTime$,
@@ -55,7 +60,6 @@
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import {
     getDateString,
-    getNumberFromObject,
     getStartHoursDate,
     secondsToMinutes
   } from '$lib/functions/statistic-util';
@@ -67,52 +71,6 @@
   import Fa from 'svelte-fa';
   import { quintInOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
-
-  const copyStatisticsDataHandler$ = copyStatisticsData$.pipe(
-    tap((dataKeyToCopy) => {
-      const statistics =
-        $lastPrimaryReadingDataAggregationMode$ === StatisticsReadingDataAggregationMode.TITLE
-          ? aggregratedStatistics
-          : getAggregatedStatistics(StatisticsReadingDataAggregationMode.TITLE);
-
-      let logKey = '';
-
-      switch (dataKeyToCopy) {
-        case 'readingTime':
-          logKey = 'readtime';
-          break;
-
-        default:
-          logKey = 'reading';
-          break;
-      }
-
-      const dataLines = [`Reading Data for ${statisticsDateRangeLabel}\n`];
-
-      for (let index = 0, { length } = statistics; index < length; index += 1) {
-        const statistic = statistics[index];
-
-        let loggedValue = 0;
-
-        if (dataKeyToCopy === 'readingTime') {
-          loggedValue = Math.floor(secondsToMinutes(statistic.readingTime));
-        } else {
-          loggedValue = getNumberFromObject(statistic, dataKeyToCopy);
-        }
-
-        if (loggedValue) {
-          dataLines.push(`.log ${logKey} ${loggedValue} ${statistic.title}`);
-        }
-      }
-
-      if (dataLines.length > 1) {
-        navigator.clipboard
-          .writeText(dataLines.join('\n'))
-          .catch((error) => logger.error(`Error writing to clipboard: ${error.message}`));
-      }
-    }),
-    reduceToEmptyString()
-  );
 
   const exportStatisticsDataHandler$ = exportStatisticsData$.pipe(
     tap(async (exportAllData) => {
@@ -259,6 +217,156 @@
           $lastStatisticsRangeTemplate$ = StatisticsRangeTemplate.CUSTOM;
           break;
         }
+      }
+    }),
+    reduceToEmptyString()
+  );
+
+  const exportYearReportHandler$ = exportYearReport$.pipe(
+    tap(async () => {
+      $statisticsActionInProgress$ = true;
+      try {
+        const { aggregateHighlightStats } = await import('$lib/functions/highlight-stats');
+        const { computeYearSummary } = await import(
+          '$lib/components/statistics/statistics-year/year-summary'
+        );
+        const { buildYearReportMarkdown } = await import('$lib/functions/year-report');
+
+        const [highlights, sessions] = await Promise.all([
+          database.getAllHighlights(),
+          database.getAllSessions()
+        ]);
+
+        const scopedStatistics = statisticsData.filter(
+          (s) =>
+            s.dateKey >= $lastStatisticsStartDate$ &&
+            s.dateKey <= $lastStatisticsEndDate$ &&
+            (!statisticsTitleFilters.size || statisticsTitleFilters.get(s.title))
+        );
+
+        const highlightSummary = aggregateHighlightStats(highlights, {
+          startDate: $lastStatisticsStartDate$,
+          endDate: $lastStatisticsEndDate$,
+          startDayHoursForTracker: $startDayHoursForTracker$,
+          titleFilter: statisticsTitleFilters
+        });
+
+        // Pick the year that contains the range start. Multi-year ranges get
+        // the start year's picture; users who want the other year just export
+        // twice with a shifted range.
+        const yearRaw = Number(($lastStatisticsStartDate$ || '').slice(0, 4));
+        const year = Number.isFinite(yearRaw) && yearRaw > 0 ? yearRaw : new Date().getFullYear();
+        const yearSummary = computeYearSummary({
+          year,
+          startDayHours: $startDayHoursForTracker$,
+          statistics: statisticsData,
+          sessions
+        });
+
+        const md = buildYearReportMarkdown({
+          label: statisticsDateRangeLabel,
+          startDate: $lastStatisticsStartDate$,
+          endDate: $lastStatisticsEndDate$,
+          statistics: scopedStatistics,
+          highlights: highlightSummary,
+          year: yearSummary
+        });
+
+        const safeLabel = statisticsDateRangeLabel.replace(/[^\w一-鿿-]+/g, '-');
+        const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `autobook-report-${safeLabel || 'range'}.md`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (error: any) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: { title: '错误', message: `导出失败：${error?.message ?? error}` }
+          }
+        ]);
+      } finally {
+        $statisticsActionInProgress$ = false;
+      }
+    }),
+    reduceToEmptyString()
+  );
+
+  const manualEntryHandler$ = openManualStatisticsEntry$.pipe(
+    tap(async () => {
+      const existingKeys: string[] = [];
+      for (let index = 0, { length } = statisticsData; index < length; index += 1) {
+        const s = statisticsData[index];
+        existingKeys.push(`${s.title}__${s.dateKey}`);
+      }
+
+      const result = await new Promise<ManualStatisticEntry | undefined>((resolver) => {
+        dialogManager.dialogs$.next([
+          {
+            component: StatisticsManualEntryDialog,
+            props: {
+              existingTitles: existingKeys,
+              startDayHoursForTracker: $startDayHoursForTracker$,
+              resolver
+            },
+            disableCloseOnClick: true,
+            zIndex: '70'
+          }
+        ]);
+      });
+
+      if (!result) return;
+
+      $statisticsActionInProgress$ = true;
+
+      try {
+        const { statistic } = await database.upsertManualStatistic(result);
+
+        const nextRow: BookStatistic = {
+          ...statistic,
+          id: `${statistic.title}_${statistic.dateKey}`,
+          averageReadingTime: statistic.readingTime,
+          averageWeightedReadingTime: statistic.readingTime,
+          averageCharactersRead: statistic.charactersRead,
+          averageWeightedCharactersRead: statistic.charactersRead,
+          averageReadingSpeed: statistic.lastReadingSpeed,
+          averageWeightedReadingSpeed: statistic.lastReadingSpeed
+        };
+
+        const existingIndex = statisticsData.findIndex(
+          (s) => s.title === statistic.title && s.dateKey === statistic.dateKey
+        );
+
+        if (existingIndex >= 0) {
+          statisticsData[existingIndex] = nextRow;
+        } else {
+          statisticsData = [...statisticsData, nextRow].sort((a, b) =>
+            a.dateKey > b.dateKey ? 1 : -1
+          );
+        }
+
+        if (!statisticsTitleFilters.has(statistic.title)) {
+          statisticsTitleFilters.set(statistic.title, true);
+          statisticsTitleFilters = statisticsTitleFilters;
+        }
+
+        updateStatisticsData();
+      } catch (error: any) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: '错误',
+              message: `添加失败：${error?.message ?? error}`
+            }
+          }
+        ]);
+      } finally {
+        $statisticsActionInProgress$ = false;
       }
     }),
     reduceToEmptyString()
@@ -802,10 +910,11 @@
   }
 </script>
 
-{$copyStatisticsDataHandler$ ?? ''}
 {$exportStatisticsDataHandler$ ?? ''}
 {$deleteStatisticsDataHandler$ ?? ''}
 {$setStatisticsDatesToAllTimeHandler$ ?? ''}
+{$manualEntryHandler$ ?? ''}
+{$exportYearReportHandler$ ?? ''}
 <svelte:window on:keyup={onKeyUp} />
 {#if isLoading}
   <div class="flex fixed items-center justify-center inset-0 h-full w-full text-7xl">
@@ -841,6 +950,17 @@
       {statisticsDateRangeLabel}
       on:delete={handleDeleteRequest}
       on:edit={handleEditRequest}
+    />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.YEAR}
+    <StatisticsYear />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS}
+    <StatisticsHighlights
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      {statisticsDateRangeLabel}
+      titleFilter={statisticsTitleFilters}
     />
   {/if}
 {/if}

@@ -10,6 +10,16 @@
     <link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="%sveltekit.assets%/icon-192.png" />
+    <!-- iOS picks the apple-touch-icon link closest to its target tile.
+         All sources are generated from `static/logo.svg` onto a white
+         square (no transparent corners → no black wedges under Apple's
+         squircle mask). The 1024 file is the retina sweet spot: iOS
+         downsamples from it crisply at any actual display size. The
+         180 is kept for older iOS that won't browse a larger candidate.
+         icon-192 / 512 are PWA-purpose-any tiles that double as
+         apple-touch-icon fallbacks. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/apple-touch-icon-180.png" />
+    <link rel="apple-touch-icon" sizes="1024x1024" href="%sveltekit.assets%/apple-touch-icon.png" />
     <link rel="apple-touch-icon" sizes="192x192" href="%sveltekit.assets%/icon-192.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="%sveltekit.assets%/icon-512.png" />
     %sveltekit.head%

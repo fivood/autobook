@@ -9,7 +9,9 @@
    * theme by id; built-ins are saved as a same-id override in customThemes.
    */
   import Ripple from '$lib/components/ripple.svelte';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import SettingsCustomThemeInput from '$lib/components/settings/settings-custom-theme-input.svelte';
+  import { dialogManager } from '$lib/data/dialog-manager';
   import { customThemes$, theme$ } from '$lib/data/store';
   import { availableThemes, type CustomThemeValue, type ThemeOption } from '$lib/data/theme-option';
   import { createEventDispatcher, onMount } from 'svelte';
@@ -127,11 +129,22 @@
 
   function handleDelete() {
     if (!isCustom) return;
-    if (!confirm(`确认删除主题「${themeId}」？`)) return;
-    const next = { ...$customThemes$ };
-    delete next[themeId];
-    $customThemes$ = next;
-    dispatch('deleted', themeId);
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: '删除主题',
+          dialogMessage: `确认删除主题「${themeId}」？`,
+          resolver: (wasCanceled: boolean) => {
+            if (wasCanceled) return;
+            const next = { ...$customThemes$ };
+            delete next[themeId];
+            $customThemes$ = next;
+            dispatch('deleted', themeId);
+          }
+        }
+      }
+    ]);
   }
 </script>
 

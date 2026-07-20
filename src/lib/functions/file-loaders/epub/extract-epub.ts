@@ -75,7 +75,6 @@ export default async function extractEpub(blob: Blob) {
             mediaType === 'application/font-woff';
 
           if (isNonCritical) {
-            // eslint-disable-next-line no-console
             console.warn(`[epub] skipping missing resource: ${fileRelativePath}`);
             return;
           }

@@ -4,6 +4,7 @@
   import { buttonClasses } from '$lib/css-classes';
   import { isTauri } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
+  import { submitReport } from '$lib/functions/report-error';
   import {
     theme$,
     viewMode$,
@@ -47,7 +48,6 @@
     autoReplication$,
     replicationSaveBehavior$,
     showExternalPlaceholder$,
-    syncTarget$,
     keepLocalStatisticsOnDeletion$,
     overwriteBookCompletion$,
     startDayHoursForTracker$,
@@ -140,7 +140,6 @@
           autoReplication: autoReplication$.getValue(),
           replicationSaveBehavior: replicationSaveBehavior$.getValue(),
           showExternalPlaceholder: showExternalPlaceholder$.getValue(),
-          syncTarget: !!syncTarget$.getValue(),
           keepLocalStatisticsOnDeletion: keepLocalStatisticsOnDeletion$.getValue(),
           overwriteBookCompletion: overwriteBookCompletion$.getValue(),
           startDayHoursForTracker: startDayHoursForTracker$.getValue(),
@@ -171,6 +170,18 @@
     );
 
   let downloadStatus = '';
+  let submitStatus = '';
+
+  async function submitReportToCloud() {
+    submitStatus = '';
+    const payload = JSON.parse(reportPayload) as Record<string, unknown>;
+    const result = await submitReport({
+      type: 'error',
+      message: message || '用户提交诊断日志',
+      context: payload
+    });
+    submitStatus = result.ok ? `已提交（ID: ${result.id}）` : `提交失败: ${result.error}`;
+  }
 
   async function openRepo() {
     const url = 'https://github.com/fivood/autobook';
@@ -208,7 +219,6 @@
         return;
       }
     } catch (err: any) {
-      // eslint-disable-next-line no-console
       console.warn('[log-report] tauri save failed, falling back:', err);
     }
     // Browser fallback: blob download trick (data: URIs are rejected by WebView2).
@@ -232,6 +242,9 @@
     {#if downloadStatus}
       <p class="text-xs opacity-70 mt-2">{downloadStatus}</p>
     {/if}
+    {#if submitStatus}
+      <p class="text-xs opacity-70 mt-2">{submitStatus}</p>
+    {/if}
   </svelte:fragment>
   <svelte:fragment slot="footer">
     <button class={buttonClasses} on:click={openRepo}>
@@ -240,6 +253,10 @@
     </button>
     <button class={buttonClasses} on:click={downloadReport}>
       下载报告
+      <Ripple />
+    </button>
+    <button class={buttonClasses} on:click={submitReportToCloud}>
+      提交报告
       <Ripple />
     </button>
   </svelte:fragment>

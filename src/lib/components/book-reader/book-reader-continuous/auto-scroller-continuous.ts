@@ -86,15 +86,19 @@ export class AutoScrollerContinuous implements AutoScroller {
     this.revealedIndex = 0;
   }
 
+  /** Public hook: wrap characters now (idempotent) so TTS can drive
+   * seekToCharIndex without the typewriter's own interval running. */
+  prepare() {
+    this.ensurePrepared();
+  }
+
   private ensurePrepared() {
     if (this.prepared) return;
     if (!this.contentEl) {
-      // eslint-disable-next-line no-console
       console.warn('[typewriter] no contentEl yet');
       return;
     }
     this.prepareChars();
-    // eslint-disable-next-line no-console
     console.info(`[typewriter] prepared ${this.chars.length} chars`);
     this.revealAlreadyScrolled();
     this.prepared = true;
@@ -128,7 +132,6 @@ export class AutoScrollerContinuous implements AutoScroller {
       const text = node.textContent || '';
       if (!text) continue;
       const frag = this.doc.createDocumentFragment();
-      // eslint-disable-next-line no-restricted-syntax
       for (const ch of text) {
         if (ch === '\n' || ch === '\r' || ch === '\t') {
           frag.appendChild(this.doc.createTextNode(ch));
@@ -180,7 +183,11 @@ export class AutoScrollerContinuous implements AutoScroller {
       const rect = span.getBoundingClientRect();
       const w = this.doc.defaultView || window;
       const vh = w.innerHeight || 0;
-      if (rect.bottom > vh - 80) {
+      // Keep the active line well above the bottom-right FAB stack
+      // (pause / speed / keyboard-help take ~220px); scrolling sooner
+      // means the typewriter caret never enters the occluded region.
+      const safeBottom = Math.max(120, Math.floor(vh * 0.32));
+      if (rect.bottom > vh - safeBottom) {
         span.scrollIntoView({ block: 'center', behavior: 'auto' });
       }
     }

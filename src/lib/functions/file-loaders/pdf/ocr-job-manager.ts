@@ -16,10 +16,81 @@
  */
 
 import { writable, type Readable } from 'svelte/store';
-import { database } from '$lib/data/store';
+import {
+  cacheStorageData$,
+  database,
+  pdfOcrSkippedBookIds$,
+  readingGoalsMergeMode$,
+  replicationSaveBehavior$,
+  statisticsMergeMode$
+} from '$lib/data/store';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
+import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-types';
+import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { runOcr, type OcrProgress } from './pdf-ocr-runner';
 import type { OcrLanguage } from './pdf-ocr';
+export type { OcrLanguage };
+
+/**
+ * Push the updated bookData (with new OCR-injected elementHtml + blobs) to
+ * the external storage source the book was imported from. Without this, the
+ * OCR result lives only in IDB; on next reload `saveExternalLastRead` would
+ * still find the stale pre-OCR copy on disk (current versions guard against
+ * the clobber, but other devices opening the same book see the unchanged
+ * scan). Best-effort — failures are logged, never surfaced to the user, so
+ * the local-IDB save still counts as success.
+ *
+ * Currently only handles Tauri FS — the most common desktop case. Dropbox
+ * et al. will get the same treatment in a follow-up; for now the export
+ * flow remains the fallback.
+ */
+async function pushOcrResultToExternalStorage(updated: BooksDbBookData): Promise<void> {
+  const source = updated.storageSource;
+  if (!source) return;
+  if (source !== InternalStorageSources.INTERNAL_TAURI_FS) {
+    console.info(`[ocr] not auto-pushing to ${source} (Tauri FS only for now)`);
+    return;
+  }
+  try {
+    const handler = getStorageHandler(
+      window,
+      StorageKey.TAURI_FS,
+      source,
+      true,
+      cacheStorageData$.getValue(),
+      replicationSaveBehavior$.getValue(),
+      statisticsMergeMode$.getValue(),
+      readingGoalsMergeMode$.getValue()
+    );
+    handler.startContext({
+      id: updated.id,
+      title: updated.title,
+      imagePath: updated.coverImage
+    });
+    // saveBook signature accepts Omit<BooksDbBookData, 'id'> | File; strip
+    // the id since file-name on FS is derived from title + metadata, not id.
+    const { id: _id, ...dataWithoutId } = updated;
+    await handler.saveBook(dataWithoutId, true);
+    console.info('[ocr] synced OCR result to Tauri FS');
+  } catch (err) {
+    console.warn('[ocr] failed to sync OCR result to external storage', err);
+  }
+}
+
+function markBookOcrComplete(bookId: number) {
+  // Belt-and-suspenders alongside the sentinel inserted by runOcr: once a
+  // book finishes OCR (regardless of result quality, or whether the user
+  // pressed "应用并刷新"), add it to the per-book skip list so the
+  // "detected scanned PDF" banner doesn't re-prompt on later opens. Covers
+  // edge cases where every page yielded empty text and the sentinel was
+  // somehow not picked up by isScannedPdf.
+  const raw = pdfOcrSkippedBookIds$.value || '';
+  const ids = new Set(raw.split(',').filter(Boolean).map(Number));
+  if (!ids.has(bookId)) {
+    ids.add(bookId);
+    pdfOcrSkippedBookIds$.next(Array.from(ids).join(','));
+  }
+}
 
 export type OcrJobStatus = 'running' | 'finished' | 'errored';
 
@@ -73,6 +144,11 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
       );
       const db = await database.db;
       await db.put('data', updated);
+      markBookOcrComplete(book.id);
+      // Fire-and-forget the external-storage push so the "finished" state
+      // can flip immediately and the user can hit "应用并刷新" without
+      // waiting on disk I/O.
+      pushOcrResultToExternalStorage(updated).catch(() => {});
       _store.update((s) => (s ? { ...s, status: 'finished' } : s));
     } catch (err: any) {
       const msg = err?.name === 'AbortError' ? '已中止' : err?.message || String(err);

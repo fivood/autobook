@@ -58,6 +58,14 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   setContentEl(el: HTMLElement | undefined) {
+    // Idempotent: re-running with the same element node (which the
+    // continuous reader's $:{} block does on every prop change, including
+    // multiplier ticks from the speed buttons) would otherwise reset()
+    // the engine — which calls off() and emits a spurious
+    // wasReaderEnabled=false. The +page.svelte subscriber then runs
+    // autoScroller.revealAll(), the typewriter hits end-of-content, and
+    // playback dies.
+    if (this.contentEl === el) return;
     this.contentEl = el;
     this.reset();
   }
@@ -147,6 +155,13 @@ export class AutoReaderContinuous implements AutoReader {
     this.charOffset = Math.min(Math.max(0, offset), this.paragraphs[this.paraIndex].length);
   }
 
+  getCurrentSentence(): { globalStart: number; globalEnd: number; text: string } | null {
+    if (this.paraIndex >= this.paragraphs.length) return null;
+    const text = this.paragraphs[this.paraIndex];
+    const globalStart = computeGlobalCharIndex(this.paragraphs, this.paraIndex, 0);
+    return { globalStart, globalEnd: globalStart + text.length, text };
+  }
+
   seekToExplored(exploredCharCount: number) {
     const pos = seekParagraphsToExplored(this.paragraphs, exploredCharCount);
     this.paraIndex = pos.paraIndex;
@@ -223,6 +238,19 @@ export class AutoReaderContinuous implements AutoReader {
     }
 
     const text = this.paragraphs[this.paraIndex].slice(this.charOffset);
+    // Skip empty / whitespace-only slices and roll forward. This triggers
+    // when the cursor-start strategy lands the position at the end of a
+    // paragraph — without this guard Web Speech rejects the empty
+    // utterance with `invalid-argument`, which the error handler used to
+    // treat as fatal and stop the whole session ("only one paragraph
+    // reads then nothing"). SAPI / custom / Kokoro engines already do
+    // this skip explicitly.
+    if (!text || !text.trim()) {
+      this.paraIndex += 1;
+      this.charOffset = 0;
+      queueMicrotask(() => this.speakNext());
+      return;
+    }
     const utt = new SpeechSynthesisUtterance(text);
     utt.rate = this._rate;
     utt.lang = this._lang;
@@ -261,7 +289,21 @@ export class AutoReaderContinuous implements AutoReader {
       if (ev.error === 'canceled' || ev.error === 'interrupted') {
         return;
       }
-      // eslint-disable-next-line no-console
+      // Recoverable errors: skip this paragraph and try the next one
+      // instead of killing the whole session. invalid-argument is the
+      // common one we hit on empty / whitespace-only chunks after the
+      // user restarts TTS with the cursor near a paragraph boundary.
+      if (
+        ev.error === 'invalid-argument' ||
+        ev.error === 'text-too-long' ||
+        ev.error === 'audio-busy'
+      ) {
+        console.warn('[auto-reader] speech recoverable error, skipping paragraph:', ev.error);
+        this.paraIndex += 1;
+        this.charOffset = 0;
+        queueMicrotask(() => this.speakNext());
+        return;
+      }
       console.warn('[auto-reader] speech error:', ev.error);
       this.off();
     };

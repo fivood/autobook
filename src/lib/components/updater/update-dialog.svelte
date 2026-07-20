@@ -5,6 +5,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import type { UpdateInfo, ProgressEvent } from '$lib/functions/updater/check-for-update';
   import { relaunchApp } from '$lib/functions/updater/check-for-update';
+  import { submitReport } from '$lib/functions/report-error';
   import { marked } from 'marked';
 
   marked.setOptions({ breaks: true, gfm: true });
@@ -83,6 +84,17 @@
     } catch (err: any) {
       phase = 'error';
       errorMessage = err?.message ?? String(err);
+      // Best-effort telemetry: let the operator know when auto-updates fail
+      // in the wild (installer locks, network, signature issues, etc.).
+      submitReport({
+        type: 'update',
+        message: errorMessage,
+        currentVersion: update.currentVersion,
+        targetVersion: update.version,
+        context: { name: err?.name, code: err?.code }
+      }).catch(() => {
+        /* silent: we already show the error in the dialog */
+      });
     }
   }
 

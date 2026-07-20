@@ -6,8 +6,10 @@
 
 - 上传 `.txt` / `.epub` / `.md`，按章节切好（中英章节标题都认）
 - 屏幕上一字一字浮现，1–60 字/秒可调，章止开关
+- **`.pdf` 滑屏阅读**：扫描版纯看图，带文字层的还能用手指拖选复制
 - 进度按内容哈希存 `localStorage`，下次重新选同一个文件直接续读
 - 装到主屏后离线可用（service worker 缓存）
+- 屏幕常亮（Wake Lock）+ 整块阅读区轻点暂停 + 沉浸模式
 - 浅 / 深主题跟随系统
 - 不需要服务器，纯静态站
 
@@ -37,25 +39,25 @@ npm run build    # 产物在 build/
 
 1. Cloudflare 控制台 → Pages → Create project → Connect to Git
 2. 仓库选这个项目，Build settings：
-   - Production branch: `main`
+   - Production branch: `release/1.6.0`
    - Build command: `npm install && npm run build`
    - Build output directory: `build`
    - Root directory: `mobile-typewriter`
 3. Custom domain → `book.fivood.com`
 
-每次推 main 自动构建部署。
+每次推 `release/1.6.0` 自动构建部署。桌面端 AutoBook 也用这条分支发版（GitHub Releases + Tauri updater），两边共用一条流水线。`main` 留作 PR-merge 历史归档不动。
 
 ## 支持的格式
 
 - `.txt` — BOM 嗅探 + UTF-8 严格 + GBK/Shift-JIS/BIG5 评分回退
 - `.epub` — unzip → container.xml → OPF spine 按阅读顺序拼接，HTML 转纯文本
 - `.md` / `.markdown` — 剥语法保留正文，`#` 标题当章节头
+- `.pdf` — PDF.js 渲染每页为 JPEG（dynamic import，首次选 PDF 才下载 worker），带文字层的 PDF 自动叠透明定位 span 让你拖选复制；扫描版纯看图
 
 ## 暂不支持
 
-- MOBI / AZW3 / PDF：桌面专属（需要 Rust 解析器或 PDF.js，体积太大不上手机）
-
-如果要在手机上读 MOBI/AZW3，桌面端 AutoBook 打开后另存为 `.epub` 或 `.txt` 再传过来。
+- MOBI / AZW3：桌面专属（需要 Rust 解析器，体积太大不上手机）
+- PDF OCR：扫描版 PDF 没有可选文字。要 OCR 请上桌面端 AutoBook 跑完再传 epub/txt 回来
 
 ## License
 

@@ -150,6 +150,8 @@ export const ttsCustomHeaders$ = writableStringLocalStorageSubject()(
 export const ttsCustomBody$ = writableStringLocalStorageSubject()('ttsCustomBody', '');
 /** Dot-path to base64 audio in a JSON response (e.g. choices.0.message.audio.data). Empty = raw audio bytes. */
 export const ttsCustomAudioPath$ = writableStringLocalStorageSubject()('ttsCustomAudioPath', '');
+/** Optional HTTP/SOCKS5 proxy for the TTS request (e.g. http://127.0.0.1:7890). Empty = no proxy. */
+export const ttsCustomProxyUrl$ = writableStringLocalStorageSubject()('ttsCustomProxyUrl', '');
 
 export interface TtsCustomPresetState {
   endpoint: string;
@@ -157,6 +159,7 @@ export interface TtsCustomPresetState {
   headers: string;
   body: string;
   audioPath: string;
+  proxyUrl: string;
 }
 
 /** Which named preset is currently active. The five ttsCustom* stores above
@@ -347,6 +350,84 @@ export const hideExternalReadHint$ = writableBooleanLocalStorageSubject()(
   false
 );
 
+export const pdfOcrPromptEnabled$ = writableBooleanLocalStorageSubject()(
+  'pdfOcrPromptEnabled',
+  true
+);
+
+export const pdfOcrSkippedBookIds$ = writableStringLocalStorageSubject()(
+  'pdfOcrSkippedBookIds',
+  ''
+);
+
+// Kokoro-82M offline TTS engine. The model is NOT downloaded until the
+// user opts in via the settings UI; the accepted flag persists so they
+// don't have to re-consent on every cold start.
+export const kokoroAccepted$ = writableBooleanLocalStorageSubject()(
+  'kokoroAccepted',
+  false
+);
+// kokoro-js v1.0 ONNX bundles English voices only (am_/af_/bm_/bf_). The
+// older zf_ / zm_ Chinese voice IDs my first cut suggested don't exist in
+// this build, so we default to af_heart and gate to the known-good list.
+export const kokoroVoiceId$ = writableStringLocalStorageSubject()(
+  'kokoroVoiceId',
+  'af_heart'
+);
+
+export interface KokoroLoadStatus {
+  phase: 'idle' | 'loading' | 'ready' | 'errored';
+  message: string;
+  loaded: number;
+  total: number;
+}
+export const kokoroLoadStatus$ = writableSubject<KokoroLoadStatus>({
+  phase: 'idle',
+  message: '',
+  loaded: 0,
+  total: 0
+});
+
+// Library cover card min-width in px. Grid uses repeat(auto-fill, minmax(..., 1fr))
+// so smaller value = denser library (more columns at the same window width).
+export const bookCoverMinWidth$ = writableNumberLocalStorageSubject()(
+  'bookCoverMinWidth',
+  170
+);
+
+// Library filter — applied AFTER the folder filter, before sort.
+// Empty formats[] means "all formats"; completion 'all' means no filter.
+// Persisted via localStorage so the user's filter survives reloads.
+export type LibraryCompletion = 'all' | 'unread' | 'reading' | 'done';
+export interface LibraryFilter {
+  formats: string[];
+  completion: LibraryCompletion;
+}
+const _libFilterRaw$ = writableStringLocalStorageSubject()('libraryFilter', '');
+export const libraryFilter$ = writableSubject<LibraryFilter>({
+  formats: [],
+  completion: 'all'
+});
+if (typeof window !== 'undefined') {
+  const initial = _libFilterRaw$.getValue();
+  if (initial) {
+    try {
+      const parsed = JSON.parse(initial);
+      if (parsed && typeof parsed === 'object') {
+        libraryFilter$.next({
+          formats: Array.isArray(parsed.formats) ? parsed.formats : [],
+          completion: ['all', 'unread', 'reading', 'done'].includes(parsed.completion)
+            ? parsed.completion
+            : 'all'
+        });
+      }
+    } catch {
+      /* corrupt entry — fall back to default */
+    }
+  }
+  libraryFilter$.subscribe((v) => _libFilterRaw$.next(JSON.stringify(v)));
+}
+
 export const importHTMLFixMode$ = writableStringLocalStorageSubject<ImportHTMLFixMode>()(
   'importHTMLFixMode',
   ImportHTMLFixMode.OFF
@@ -376,7 +457,12 @@ export const showExternalPlaceholder$ = writableBooleanLocalStorageSubject()(
 );
 
 
-export const syncTarget$ = writableStringLocalStorageSubject()('syncTarget', '');
+/**
+ * User-chosen absolute path for the on-disk library folder used by
+ * TauriFsStorageHandler. Empty string = fall back to Documents/AutoBook
+ * (BaseDirectory.Document + "AutoBook").
+ */
+export const fsRoot$ = writableStringLocalStorageSubject()('fsRoot', '');
 
 export const keepLocalStatisticsOnDeletion$ = writableBooleanLocalStorageSubject()(
   'keepLocalStatisticsOnDeletion',
@@ -668,3 +754,20 @@ export const isOnline$ = writableSubject<boolean>(true);
 export const skipKeyDownListener$ = writableSubject<boolean>(false);
 
 export const userFonts$ = writableArrayLocalStorageSubject<UserFont>()('userfonts', []);
+
+// --- Dev-only console handle. Run `npm run dev` and inspect
+// `window.__autobook.database.bookmarks$.subscribe(b => console.log(b))`
+// to watch bookmarks observable updates live. Stripped in prod builds. ---
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  (window as any).__autobook = {
+    database,
+    bookmarksChanged$: undefined as any, // populated below once available
+    stores: {
+      ttsPositions$,
+      bookReaderKeybindMap$,
+      lastItem$: database.lastItem$
+    }
+  };
+  // database isn't a circular ref problem because we just exposed it above.
+  (window as any).__autobook.bookmarksChanged$ = database.bookmarksChanged$;
+}

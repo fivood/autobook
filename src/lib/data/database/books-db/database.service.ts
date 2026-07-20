@@ -11,8 +11,8 @@ import type {
   BooksDbHighlight,
   BooksDbHighlightFolder,
   BooksDbReadingGoal,
+  BooksDbSession,
   BooksDbStatistic,
-  BooksDbStorageSource,
   BooksDbSubtitleData
 } from '$lib/data/database/books-db/versions/books-db';
 import { Observable, Subject, from } from 'rxjs';
@@ -30,7 +30,7 @@ import {
   mergeReadingGoals,
   readingGoalSortFunction
 } from '$lib/data/reading-goal';
-import { lastReadingGoalsModified$, readingGoal$, syncTarget$ } from '$lib/data/store';
+import { lastReadingGoalsModified$, readingGoal$ } from '$lib/data/store';
 
 import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import type { BookStatistic } from '$lib/components/statistics/statistics-types';
@@ -38,6 +38,7 @@ import type BooksDb from '$lib/data/database/books-db/versions/books-db';
 import type { IDBPDatabase } from 'idb';
 import LogReportDialog from '$lib/components/log-report-dialog.svelte';
 import { MergeMode } from '$lib/data/merge-mode';
+import { HighlightRepository } from './highlight-repository';
 import MessageDialog from '$lib/components/message-dialog.svelte';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { dialogManager } from '$lib/data/dialog-manager';
@@ -48,7 +49,6 @@ import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
 import { logger } from '$lib/data/logger';
 import pLimit from 'p-limit';
 import { replicationProgress$ } from '$lib/functions/replication/replication-progress';
-import { setStorageSourceDefault } from '$lib/data/storage/storage-source-manager';
 import { storageSource$ } from '$lib/data/storage/storage-view';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 
@@ -118,8 +118,13 @@ export class DatabaseService {
 
   highlightsChanged$ = new Subject<void>();
 
+  private highlightRepo!: HighlightRepository;
+
   /** Fires whenever storeStatistics finishes, so cross-device sync can push. */
   statisticsChanged$ = new Subject<void>();
+
+  /** Fires after appendSession succeeds, so the year tab knows to refresh. */
+  sessionsChanged$ = new Subject<void>();
 
   bookmarksChanged$ = new Subject<void>();
 
@@ -139,11 +144,10 @@ export class DatabaseService {
     shareReplay({ refCount: true, bufferSize: 1 })
   );
 
-  storageSourcesChanged$ = new Subject<BooksDbStorageSource[]>();
-
   constructor(public db: Promise<IDBPDatabase<BooksDb>>) {
     this.db$ = from(db).pipe(shareReplay({ refCount: true, bufferSize: 1 }));
     this.isReady$ = this.db$.pipe(map((x) => !!x));
+    this.highlightRepo = new HighlightRepository(db, this.highlightsChanged$);
   }
 
   async getLastModifiedForType(title: string, dataType: string) {
@@ -329,7 +333,21 @@ export class DatabaseService {
   async putBookmark(bookmarkData: BooksDbBookmarkData) {
     const db = await this.db;
 
-    return db.put('bookmark', bookmarkData);
+    const result = await db.put('bookmark', bookmarkData);
+    // bookmarks$ feeds library hover popovers and the progress bar on
+    // book cards; without this nudge they keep showing the stale
+    // app-start snapshot and never reflect new reading progress.
+    this.bookmarksChanged$.next();
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('[autobook:dbg] putBookmark', {
+        dataId: bookmarkData.dataId,
+        progress: bookmarkData.progress,
+        exploredCharCount: bookmarkData.exploredCharCount,
+        lastBookmarkModified: bookmarkData.lastBookmarkModified
+      });
+    }
+    return result;
   }
 
   async putAudioBook(audioBook: BooksDbAudioBook) {
@@ -424,6 +442,9 @@ export class DatabaseService {
       if (shouldDeleteLastItem) {
         this.lastItemChanged$.next();
       }
+      if (shouldDeleteBookmark) {
+        this.bookmarksChanged$.next();
+      }
     } catch (error: any) {
       try {
         tx.abort();
@@ -441,19 +462,15 @@ export class DatabaseService {
   }
 
   async getHighlights(dataId: number): Promise<BooksDbHighlight[]> {
-    const db = await this.db;
-    return db.getAllFromIndex('highlight', 'dataId', dataId);
+    return this.highlightRepo.getHighlights(dataId);
   }
 
   async getAllHighlights(): Promise<BooksDbHighlight[]> {
-    const db = await this.db;
-    return db.getAll('highlight');
+    return this.highlightRepo.getAllHighlights();
   }
 
   async getHighlightsForTitle(title: string): Promise<BooksDbHighlight[]> {
-    const db = await this.db;
-    const all = await db.getAll('highlight');
-    return all.filter((h) => h.bookTitle === title);
+    return this.highlightRepo.getHighlightsForTitle(title);
   }
 
   async storeHighlightsForTitle(
@@ -498,207 +515,47 @@ export class DatabaseService {
   }
 
   async putHighlight(highlight: BooksDbHighlight): Promise<number> {
-    const db = await this.db;
-    const id = await db.put('highlight', highlight);
-    this.highlightsChanged$.next();
-    return id;
+    return this.highlightRepo.putHighlight(highlight);
   }
 
   async addHighlight(highlight: Omit<BooksDbHighlight, 'id'>): Promise<number> {
-    const db = await this.db;
-    const id = await db.add('highlight', highlight as BooksDbHighlight);
-    this.highlightsChanged$.next();
-    return id;
+    return this.highlightRepo.addHighlight(highlight);
   }
 
   async deleteHighlight(id: number): Promise<void> {
-    const db = await this.db;
-    await db.delete('highlight', id);
-    this.highlightsChanged$.next();
+    return this.highlightRepo.deleteHighlight(id);
   }
 
   async getHighlightFolders(): Promise<BooksDbHighlightFolder[]> {
-    const db = await this.db;
-    const list = await db.getAll('highlightFolder');
-    return list.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+    return this.highlightRepo.getHighlightFolders();
   }
 
   async addHighlightFolder(name: string, parentId?: number): Promise<number> {
-    const db = await this.db;
-    const existing = await db.getAll('highlightFolder');
-    const sortOrder = existing.length
-      ? Math.max(...existing.map((f) => f.sortOrder)) + 1
-      : 0;
-    const now = Date.now();
-    const id = await db.add('highlightFolder', {
-      name,
-      ...(parentId !== undefined ? { parentId } : {}),
-      sortOrder,
-      createdAt: now,
-      lastModified: now
-    } as BooksDbHighlightFolder);
-    this.highlightsChanged$.next();
-    return id;
+    return this.highlightRepo.addHighlightFolder(name, parentId);
   }
 
   async renameHighlightFolder(id: number, name: string): Promise<void> {
-    const db = await this.db;
-    const folder = await db.get('highlightFolder', id);
-    if (!folder) return;
-    await db.put('highlightFolder', { ...folder, name, lastModified: Date.now() });
-    this.highlightsChanged$.next();
+    return this.highlightRepo.renameHighlightFolder(id, name);
   }
 
   async deleteHighlightFolder(id: number): Promise<void> {
-    const db = await this.db;
-    const all = await db.getAll('highlight');
-    const tx = db.transaction(['highlight', 'highlightFolder'], 'readwrite');
-    for (const h of all) {
-      if (h.folderId === id) {
-        const { folderId: _drop, ...rest } = h;
-        await tx.objectStore('highlight').put(rest as BooksDbHighlight);
-      }
-    }
-    await tx.objectStore('highlightFolder').delete(id);
-    await tx.done;
-    this.highlightsChanged$.next();
+    return this.highlightRepo.deleteHighlightFolder(id);
   }
 
   async setHighlightFolder(highlightId: number, folderId: number | undefined): Promise<void> {
-    const db = await this.db;
-    const h = await db.get('highlight', highlightId);
-    if (!h) return;
-    const updated: BooksDbHighlight = {
-      ...h,
-      lastModified: Date.now()
-    };
-    if (folderId === undefined) delete updated.folderId;
-    else updated.folderId = folderId;
-    await db.put('highlight', updated);
-    this.highlightsChanged$.next();
+    return this.highlightRepo.setHighlightFolder(highlightId, folderId);
   }
 
   async linkHighlights(aId: number, bId: number): Promise<void> {
-    if (aId === bId) return;
-    const db = await this.db;
-    const tx = db.transaction('highlight', 'readwrite');
-    const [a, b] = await Promise.all([
-      tx.store.get(aId),
-      tx.store.get(bId)
-    ]);
-    if (!a || !b) {
-      await tx.done;
-      return;
-    }
-    const now = Date.now();
-    const aLinks = new Set(a.linkedIds || []);
-    const bLinks = new Set(b.linkedIds || []);
-    aLinks.add(bId);
-    bLinks.add(aId);
-    await tx.store.put({ ...a, linkedIds: [...aLinks], lastModified: now });
-    await tx.store.put({ ...b, linkedIds: [...bLinks], lastModified: now });
-    await tx.done;
-    this.highlightsChanged$.next();
+    return this.highlightRepo.linkHighlights(aId, bId);
   }
 
   async unlinkHighlights(aId: number, bId: number): Promise<void> {
-    const db = await this.db;
-    const tx = db.transaction('highlight', 'readwrite');
-    const [a, b] = await Promise.all([
-      tx.store.get(aId),
-      tx.store.get(bId)
-    ]);
-    const now = Date.now();
-    if (a) {
-      const next = (a.linkedIds || []).filter((id) => id !== bId);
-      await tx.store.put({ ...a, linkedIds: next.length ? next : undefined, lastModified: now });
-    }
-    if (b) {
-      const next = (b.linkedIds || []).filter((id) => id !== aId);
-      await tx.store.put({ ...b, linkedIds: next.length ? next : undefined, lastModified: now });
-    }
-    await tx.done;
-    this.highlightsChanged$.next();
+    return this.highlightRepo.unlinkHighlights(aId, bId);
   }
 
   async markHighlightReviewed(id: number): Promise<void> {
-    const db = await this.db;
-    const h = await db.get('highlight', id);
-    if (!h) return;
-    const now = Date.now();
-    await db.put('highlight', { ...h, lastReviewedAt: now, lastModified: now });
-    this.highlightsChanged$.next();
-  }
-
-  async getStorageSources() {
-    const db = await this.db;
-
-    return db.getAll('storageSource');
-  }
-
-  async saveStorageSource(
-    storageSource: BooksDbStorageSource,
-    oldName: string,
-    isSyncTarget: boolean,
-    isStorageSourceDefault: boolean
-  ) {
-    const db = await this.db;
-    const tx = db.transaction(['storageSource'], 'readwrite');
-
-    try {
-      const store = tx.objectStore('storageSource');
-
-      if (oldName && storageSource.name !== oldName) {
-        await store.delete(oldName);
-      }
-
-      if (storageSource.name === oldName) {
-        await store.put(storageSource);
-      } else {
-        await store.add(storageSource);
-      }
-
-      await tx.done;
-
-      if (isSyncTarget) {
-        syncTarget$.next(storageSource.name);
-      } else if (oldName) {
-        syncTarget$.next('');
-      }
-
-      if (isStorageSourceDefault) {
-        setStorageSourceDefault(storageSource.name, storageSource.type);
-      } else if (oldName) {
-        setStorageSourceDefault('', storageSource.type);
-      }
-    } catch (error: any) {
-      try {
-        tx.abort();
-        await tx.done;
-      } catch (_) {
-        // no-op
-      }
-
-      throw error;
-    }
-  }
-
-  async deleteStorageSource(
-    toDelete: BooksDbStorageSource,
-    wasSyncTarget: boolean,
-    wasStorageSourceDefault: boolean
-  ) {
-    const db = await this.db;
-
-    await db.delete('storageSource', toDelete.name);
-
-    if (wasSyncTarget) {
-      syncTarget$.next('');
-    }
-
-    if (wasStorageSourceDefault) {
-      setStorageSourceDefault('', toDelete.type);
-    }
+    return this.highlightRepo.markHighlightReviewed(id);
   }
 
   async getStatisticsForBook(bookTitle: string) {
@@ -717,6 +574,32 @@ export class DatabaseService {
     const db = await this.db;
 
     return db.getAllFromIndex('statistic', 'dateKey', IDBKeyRange.bound(startDate, endDate));
+  }
+
+  /**
+   * Persist a completed reading session. The tracker calls this when it flushes
+   * a buffered stretch — commit is best-effort: we don't want a transient DB
+   * hiccup to interrupt reading, so callers should catch and log.
+   */
+  async appendSession(session: Omit<BooksDbSession, 'id'>) {
+    const db = await this.db;
+    const id = await db.add('session', session as BooksDbSession);
+    this.sessionsChanged$.next();
+    return id;
+  }
+
+  async getSessionsForRange(startDateKey: string, endDateKey: string) {
+    const db = await this.db;
+    return db.getAllFromIndex(
+      'session',
+      'dateKey',
+      IDBKeyRange.bound(startDateKey, endDateKey)
+    );
+  }
+
+  async getAllSessions() {
+    const db = await this.db;
+    return db.getAll('session');
   }
 
   async getStatisticsUntilDate(bookTitle: string, maxDate: string) {
@@ -849,6 +732,96 @@ export class DatabaseService {
     this.statisticsChanged$.next();
   }
 
+  /**
+   * Insert-or-merge a manual reading record (paper book, backfill, etc.).
+   * The [title, dateKey] pair is the primary key, so this doubles as an
+   * upsert for the "append to existing day" workflow. `overwrite` replaces
+   * the day's totals wholesale; the default `append` semantics add on top.
+   *
+   * Manual entries record no per-hour session data — they never feed the
+   * `session` store, only the aggregate `statistic` row. Speed columns are
+   * derived from the final time/chars pair; if chars is 0 the UI shows "—"
+   * instead of "0 / h" (see statistics-summary.svelte).
+   */
+  async upsertManualStatistic(entry: {
+    title: string;
+    dateKey: string;
+    readingTimeSeconds: number;
+    charactersRead: number;
+    markCompleted: boolean;
+    conflictStrategy: 'append' | 'overwrite';
+  }): Promise<{ statistic: BooksDbStatistic; existed: boolean }> {
+    const db = await this.db;
+    const tx = db.transaction(['statistic', 'lastModified'], 'readwrite');
+
+    try {
+      const statisticsStore = tx.objectStore('statistic');
+      const lastModifiedStore = tx.objectStore('lastModified');
+      const existing = await statisticsStore.get([entry.title, entry.dateKey]);
+      const now = Date.now();
+
+      let readingTime = entry.readingTimeSeconds;
+      let charactersRead = entry.charactersRead;
+
+      if (existing && entry.conflictStrategy === 'append') {
+        readingTime = (existing.readingTime || 0) + entry.readingTimeSeconds;
+        charactersRead = (existing.charactersRead || 0) + entry.charactersRead;
+      }
+
+      const speed = readingTime > 0 ? Math.ceil((3600 * charactersRead) / readingTime) : 0;
+
+      const merged: BooksDbStatistic = {
+        title: entry.title,
+        dateKey: entry.dateKey,
+        readingTime,
+        charactersRead,
+        minReadingSpeed: speed,
+        altMinReadingSpeed: speed,
+        lastReadingSpeed: speed,
+        maxReadingSpeed: speed,
+        lastStatisticModified: now,
+        completedBook: entry.markCompleted ? 1 : existing?.completedBook,
+        completedData: entry.markCompleted
+          ? {
+              dateKey: entry.dateKey,
+              readingTime,
+              charactersRead,
+              minReadingSpeed: speed,
+              altMinReadingSpeed: speed,
+              lastReadingSpeed: speed,
+              maxReadingSpeed: speed,
+              completedBook: 1
+            }
+          : existing?.completedData
+      };
+
+      if (!merged.completedBook) {
+        delete merged.completedBook;
+        delete merged.completedData;
+      }
+
+      await statisticsStore.put(merged);
+      await lastModifiedStore.put({
+        title: entry.title,
+        dataType: StorageDataType.STATISTICS,
+        lastModifiedValue: now
+      });
+
+      await tx.done;
+      this.statisticsChanged$.next();
+
+      return { statistic: merged, existed: !!existing };
+    } catch (error: any) {
+      try {
+        tx.abort();
+        await tx.done;
+      } catch (_) {
+        // no-op
+      }
+      throw error;
+    }
+  }
+
   async clearZombieStatistics() {
     try {
       const db = await this.db;
@@ -974,7 +947,6 @@ export class DatabaseService {
       const hadDataMap = new Map<string, boolean>();
 
       if (startDateString) {
-        // eslint-disable-next-line prefer-const
         let { referenceDate, dateString } = advanceDateDays(getDate(startDateString), 0);
 
         while (dateString <= endDateString) {

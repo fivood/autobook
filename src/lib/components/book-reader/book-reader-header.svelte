@@ -27,6 +27,7 @@
   import { dummyFn, isMobile$, isOnOldUrl } from '$lib/functions/utils';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
 
   export let hasChapterData: boolean;
   export let hasText: boolean;
@@ -55,13 +56,19 @@
     bookManagerClick: void;
   }>();
 
+  // labelKey is the i18n key rendered via {$t(...)}; `action` is the
+  // untranslated event id dispatched to the reader page.
   const customReadingPointMenuItems: {
-    label: string;
+    labelKey: string;
     action: any;
   }[] = [
-    ...(hasCustomReadingPoint ? [{ label: '显示阅读点', action: 'showCustomReadingPoint' }] : []),
-    { label: '设置阅读点', action: 'setCustomReadingPoint' },
-    ...(hasCustomReadingPoint ? [{ label: '重置阅读点', action: 'resetCustomReadingPoint' }] : [])
+    ...(hasCustomReadingPoint
+      ? [{ labelKey: 'reader.customReadingPoint.show', action: 'showCustomReadingPoint' }]
+      : []),
+    { labelKey: 'reader.customReadingPoint.set', action: 'setCustomReadingPoint' },
+    ...(hasCustomReadingPoint
+      ? [{ labelKey: 'reader.customReadingPoint.reset', action: 'resetCustomReadingPoint' }]
+      : [])
   ];
 
   let customReadingPointMenuElm: Popover;
@@ -69,8 +76,10 @@
   let menuItems: {
     routeId: string;
     label: string;
+    labelKey?: string;
     icon: IconDefinition;
     title: string;
+    titleKey?: string;
   }[] = [];
 
   $: isOldUrl = browser && isOnOldUrl(window);
@@ -109,7 +118,7 @@
       <div
         tabindex="0"
         role="button"
-        title="打开目录"
+        title={$t('reader.toc')}
         class={baseIconClasses}
         on:click={() => dispatch('tocClick')}
         on:keyup={dummyFn}
@@ -120,7 +129,7 @@
     <div
       tabindex="0"
       role="button"
-      title="高亮笔记"
+      title={$t('reader.highlights')}
       class={baseIconClasses}
       on:click={() => dispatch('highlightClick')}
       on:keyup={dummyFn}
@@ -130,7 +139,7 @@
     <div
       tabindex="0"
       role="button"
-      title="AI 助手（剧透安全）"
+      title={$t('reader.ai')}
       class={baseIconClasses}
       on:click={() => dispatch('aiClick')}
       on:keyup={dummyFn}
@@ -140,7 +149,7 @@
     <div
       tabindex="0"
       role="button"
-      title="添加书签"
+      title={$t('reader.bookmark')}
       class={baseIconClasses}
       on:click={() => dispatch('bookmarkClick')}
       on:keyup={dummyFn}
@@ -151,7 +160,7 @@
       <div
         tabindex="0"
         role="button"
-        title="返回书签位置"
+        title={$t('reader.bookmarkReturn')}
         class={baseIconClasses}
         on:click={() => dispatch('scrollToBookmarkClick')}
         on:keyup={dummyFn}
@@ -162,7 +171,7 @@
     {#if $viewMode$ === ViewMode.Continuous && !$isMobile$}
       <div
         class="flex items-center px-4 text-xl xl:px-3 xl:text-lg"
-        title="当前自动滚动速度"
+        title={$t('reader.autoScrollSpeed')}
       >
         {autoScrollMultiplier}x
       </div>
@@ -173,7 +182,7 @@
     <div
       tabindex="0"
       role="button"
-      title="完成本书"
+      title={$t('reader.finishBook')}
       class={baseIconClasses}
       on:click={() => dispatch('completeBook')}
       on:keyup={dummyFn}
@@ -188,11 +197,11 @@
           yOffset={0}
           bind:this={customReadingPointMenuElm}
         >
-          <div slot="icon" title="打开自定义阅读点操作" class={baseIconClasses}>
+          <div slot="icon" title={$t('reader.customReadingPointMenu')} class={baseIconClasses}>
             <Fa icon={faCrosshairs} />
           </div>
           <div class="w-40 bg-menu text-menu md:w-32" slot="content">
-            {#each customReadingPointMenuItems as actionItem (actionItem.label)}
+            {#each customReadingPointMenuItems as actionItem (actionItem.action)}
               <div
                 tabindex="0"
                 role="button"
@@ -200,7 +209,7 @@
                 on:click={() => dispatchCustomReadingPointAction(actionItem.action)}
                 on:keyup={dummyFn}
               >
-                {actionItem.label}
+                {$t(actionItem.labelKey)}
               </div>
             {/each}
           </div>
@@ -211,7 +220,7 @@
       <div
         tabindex="0"
         role="button"
-        title="切换全屏"
+        title={$t('reader.fullscreen')}
         class={baseIconClasses}
         on:click={() => dispatch('fullscreenClick')}
         on:keyup={dummyFn}

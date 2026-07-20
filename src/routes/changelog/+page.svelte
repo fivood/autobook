@@ -1,15 +1,16 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { t } from '$lib/i18n';
+  import { afterNavigate } from '$app/navigation';
   import Fa from 'svelte-fa';
   import {
-    faArrowLeft,
     faTriangleExclamation,
     faRotateLeft
   } from '@fortawesome/free-solid-svg-icons';
   import { pagePath } from '$lib/data/env';
-  import { isTauri } from '$lib/data/env';
   import { formatPageTitle } from '$lib/functions/format-page-title';
+  import { confirmResetUiSettings } from '$lib/functions/reset-ui-settings';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
+  import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import rawChangelog from '../../../CHANGELOG.md?raw';
 
   interface Section {
@@ -54,62 +55,35 @@
     if (mainEl) mainEl.scrollTop = 0;
   }
 
-  async function performReset() {
-    if (
-      typeof window === 'undefined' ||
-      !confirm(
-        '将清除本地保存的 UI 设置（主题、字体、自定义快捷键、TTS 引擎选项等），书库与统计数据保留。应用会自动重启。\n\n继续吗？'
-      )
-    ) {
-      return;
-    }
-    resetting = true;
-    if (isTauri()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('schedule_ui_reset');
-        return;
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[changelog] reset failed, falling back to in-page clear:', err);
-      }
-    }
-    const toClear: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k) toClear.push(k);
-    }
-    toClear.forEach((k) => localStorage.removeItem(k));
-    window.location.reload();
+  function performReset() {
+    confirmResetUiSettings(() => {
+      resetting = true;
+    });
   }
 
   function needsResetButton(callouts: string[]): boolean {
     return callouts.some((c) => /重置|reset/i.test(c));
   }
 
-  function handleBack() {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      window.history.back();
-    } else {
-      goto(`${pagePath}${mergeEntries.MANAGE.routeId}`);
-    }
-  }
+  let prevPage = `${pagePath}${mergeEntries.MANAGE.routeId}`;
+
+  afterNavigate((navigation) => {
+    const { from } = navigation;
+    if (!from) return;
+    prevPage = `${from.url.pathname}${from.url.search}`;
+  });
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('更新历史')}</title>
+  <title>{formatPageTitle($t('pageTitle.changelog'))}</title>
 </svelte:head>
 
 <div class="flex h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">
   <header class="flex flex-shrink-0 items-center gap-4 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
-    <button
-      type="button"
-      class="relative z-20 rounded p-2 hover:bg-black/5"
-      title="返回"
-      on:click={handleBack}
-    ><Fa icon={faArrowLeft} /></button>
     <h1 class="text-xl font-medium">更新历史</h1>
     <span class="text-sm opacity-50">共 {sections.length} 个版本</span>
+    <div class="flex-1" />
+    <MergedHeaderIcon leavePageLink={prevPage} />
   </header>
 
   <div class="flex flex-1 overflow-hidden">

@@ -15,6 +15,7 @@
     deleteFolder,
     addBooksToFolder
   } from '$lib/data/library-folders';
+  import { t, tImmediate } from '$lib/i18n';
 
   /** Total book count in the library — shown next to "全部书籍". */
   export let totalBookCount: number;
@@ -37,7 +38,7 @@
       {
         component: TextInputDialog,
         props: {
-          dialogHeader: '新建分类',
+          dialogHeader: tImmediate('folders.dialog.new'),
           placeholder: '',
           resolver: async (name: string | undefined) => {
             if (!name) return;
@@ -67,8 +68,8 @@
       {
         component: ConfirmDialog,
         props: {
-          dialogHeader: '删除文件夹',
-          dialogMessage: `删除"${name}"？只移除分类，里面的书不会被删。`,
+          dialogHeader: tImmediate('folders.dialog.delete'),
+          dialogMessage: tImmediate('folders.dialog.deleteConfirm', { name }),
           resolver: async (wasCanceled: boolean) => {
             if (!wasCanceled) await deleteFolder(id);
           }
@@ -110,7 +111,7 @@
   class="flex w-52 shrink-0 flex-col gap-1 border-r-2 border-gray-400/60 py-3 pr-2 pl-3 text-sm"
   style="background: rgba(127, 127, 127, 0.08); min-height: calc(100vh - 4rem);"
 >
-  <div class="px-3 pb-1 text-xs uppercase tracking-wide opacity-60">书库</div>
+  <div class="px-3 pb-1 text-xs uppercase tracking-wide opacity-60">{$t('folders.section')}</div>
 
   <button
     type="button"
@@ -119,7 +120,7 @@
     class:bg-opacity-30={'all' === $activeFolderFilter$}
     on:click={() => activeFolderFilter$.next('all')}
   >
-    <span>全部书籍</span>
+    <span>{$t('folders.allBooks')}</span>
     <span class="opacity-60">{totalBookCount}</span>
   </button>
 
@@ -130,15 +131,15 @@
     class:bg-opacity-30={'uncategorized' === $activeFolderFilter$}
     on:click={() => activeFolderFilter$.next('uncategorized')}
   >
-    <span>未分类</span>
+    <span>{$t('folders.uncategorized')}</span>
     <span class="opacity-60">{uncategorizedCount}</span>
   </button>
 
   <div class="mt-3 flex items-center justify-between px-3 pb-1 text-xs uppercase tracking-wide opacity-60">
-    <span>分类</span>
+    <span>{$t('folders.groupHeader')}</span>
     <button
       type="button"
-      title="新建文件夹"
+      title={$t('folders.new')}
       class="rounded p-1 hover:bg-gray-400/20"
       on:click={onCreateFolder}
     >
@@ -187,7 +188,7 @@
         <span class="text-xs opacity-60">{countForFolder(folder.id)}</span>
         <button
           type="button"
-          title="重命名"
+          title={$t('folders.rename')}
           class="opacity-0 group-hover:opacity-60 hover:opacity-100 px-1"
           on:click|stopPropagation={() => startRename(folder.id, folder.name)}
         >
@@ -195,7 +196,7 @@
         </button>
         <button
           type="button"
-          title="删除"
+          title={$t('folders.delete')}
           class="opacity-0 group-hover:opacity-60 hover:opacity-100 px-1"
           on:click|stopPropagation={() => confirmDelete(folder.id, folder.name)}
         >
@@ -204,7 +205,7 @@
       </div>
     {/each}
     {#if !$folders$.length}
-      <div class="px-3 pt-2 text-xs opacity-50">还没有分类，点 + 新建</div>
+      <div class="px-3 pt-2 text-xs opacity-50">{$t('folders.empty')}</div>
     {/if}
   </div>
 </aside>

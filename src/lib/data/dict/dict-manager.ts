@@ -2,8 +2,7 @@ import {
   buildStarDict,
   decompressDictDz,
   parseIdx,
-  parseIfo,
-  type StarDict
+  parseIfo
 } from '$lib/data/dict/stardict';
 
 export interface LoadedDict {

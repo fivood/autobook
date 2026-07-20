@@ -1,8 +1,12 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, tick } from 'svelte';
   import Fa from 'svelte-fa';
   import { faPlus, faPen, faTrash, faFolder } from '@fortawesome/free-solid-svg-icons';
   import type { BooksDbHighlightFolder } from '$lib/data/database/books-db/versions/books-db';
+  import { t, tImmediate } from '$lib/i18n';
+  import { dialogManager } from '$lib/data/dialog-manager';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
+  import TextInputDialog from '$lib/components/text-input-dialog.svelte';
 
   export let folders: BooksDbHighlightFolder[] = [];
   export let counts: Record<string, number> = {};
@@ -15,85 +19,133 @@
     delete: number;
   }>();
 
+  let renamingId: number | null = null;
+  let renameDraft = '';
+  let renameInputEl: HTMLInputElement | undefined;
+
   function startCreate() {
-    const name = prompt('文件夹名称');
-    if (name && name.trim()) dispatch('create', name.trim());
+    dialogManager.dialogs$.next([
+      {
+        component: TextInputDialog,
+        props: {
+          dialogHeader: tImmediate('notebook.dialog.new'),
+          placeholder: tImmediate('notebook.folderNamePrompt'),
+          resolver: (name: string | undefined) => {
+            if (name) dispatch('create', name);
+          }
+        }
+      }
+    ]);
   }
 
   function startRename(f: BooksDbHighlightFolder) {
-    const name = prompt('重命名', f.name);
-    if (name && name.trim() && name.trim() !== f.name) {
-      dispatch('rename', { id: f.id, name: name.trim() });
-    }
+    renamingId = f.id;
+    renameDraft = f.name;
+    tick().then(() => renameInputEl?.focus());
+  }
+
+  function commitRename() {
+    if (renamingId == null) return;
+    const id = renamingId;
+    const next = renameDraft.trim();
+    const current = folders.find((f) => f.id === id)?.name ?? '';
+    renamingId = null;
+    if (next && next !== current) dispatch('rename', { id, name: next });
+  }
+
+  function cancelRename() {
+    renamingId = null;
   }
 
   function startDelete(f: BooksDbHighlightFolder) {
-    if (confirm(`删除文件夹「${f.name}」？里面的高亮会变成"未归档"，但不会被删除。`)) {
-      dispatch('delete', f.id);
-    }
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: tImmediate('notebook.dialog.delete'),
+          dialogMessage: tImmediate('notebook.folderDeleteConfirm', { name: f.name }),
+          resolver: (wasCanceled: boolean) => {
+            if (!wasCanceled) dispatch('delete', f.id);
+          }
+        }
+      }
+    ]);
   }
 </script>
 
 <aside class="flex w-48 flex-shrink-0 flex-col border-r border-current/10 p-3 text-sm">
   <div class="mb-1 flex items-center justify-between">
-    <h2 class="text-xs font-medium uppercase opacity-50">视图</h2>
+    <h2 class="text-xs font-medium uppercase opacity-50">{$t('notebook.sidebar.views')}</h2>
   </div>
   <button
     type="button"
-    class="rounded px-2 py-1.5 text-left hover:bg-black/5"
-    class:bg-black-5={selectedKey === 'all'}
+    class="rounded px-2 py-1.5 text-left hover:bg-black/5 {selectedKey === 'all' ? 'bg-black/5' : ''}"
     style:font-weight={selectedKey === 'all' ? '600' : '400'}
     on:click={() => dispatch('select', 'all')}
-  >全部 <span class="text-xs opacity-50">{counts.all ?? 0}</span></button>
+  >{$t('notebook.sidebar.all')} <span class="text-xs opacity-50">{counts.all ?? 0}</span></button>
   <button
     type="button"
-    class="rounded px-2 py-1.5 text-left hover:bg-black/5"
+    class="rounded px-2 py-1.5 text-left hover:bg-black/5 {selectedKey === 'unfiled' ? 'bg-black/5' : ''}"
     style:font-weight={selectedKey === 'unfiled' ? '600' : '400'}
     on:click={() => dispatch('select', 'unfiled')}
-  >未归档 <span class="text-xs opacity-50">{counts.unfiled ?? 0}</span></button>
+  >{$t('notebook.uncategorized')} <span class="text-xs opacity-50">{counts.unfiled ?? 0}</span></button>
   <button
     type="button"
-    class="rounded px-2 py-1.5 text-left hover:bg-black/5"
+    class="rounded px-2 py-1.5 text-left hover:bg-black/5 {selectedKey === 'standalone' ? 'bg-black/5' : ''}"
     style:font-weight={selectedKey === 'standalone' ? '600' : '400'}
     on:click={() => dispatch('select', 'standalone')}
-  >独立笔记 <span class="text-xs opacity-50">{counts.standalone ?? 0}</span></button>
+  >{$t('notebook.standalone')} <span class="text-xs opacity-50">{counts.standalone ?? 0}</span></button>
 
   <div class="mt-4 mb-1 flex items-center justify-between">
-    <h2 class="text-xs font-medium uppercase opacity-50">文件夹</h2>
+    <h2 class="text-xs font-medium uppercase opacity-50">{$t('notebook.foldersHeader')}</h2>
     <button
       type="button"
       class="opacity-50 hover:opacity-100"
-      title="新建文件夹"
+      title={$t('folders.new')}
       on:click={startCreate}
     ><Fa icon={faPlus} size="xs" /></button>
   </div>
   {#if !folders.length}
-    <p class="px-2 py-1 text-xs opacity-40">还没有文件夹</p>
+    <p class="px-2 py-1 text-xs opacity-40">{$t('notebook.noFolders')}</p>
   {/if}
   {#each folders as f (f.id)}
     {@const key = `folder:${f.id}`}
-    <div class="group flex items-center gap-1">
-      <button
-        type="button"
-        class="flex-1 truncate rounded px-2 py-1.5 text-left hover:bg-black/5"
-        style:font-weight={selectedKey === key ? '600' : '400'}
-        on:click={() => dispatch('select', key)}
-      >
-        <Fa icon={faFolder} size="xs" class="mr-1 opacity-60" />
-        {f.name} <span class="text-xs opacity-50">{counts[key] ?? 0}</span>
-      </button>
-      <button
-        type="button"
-        class="opacity-0 group-hover:opacity-50 hover:!opacity-100"
-        title="重命名"
-        on:click={() => startRename(f)}
-      ><Fa icon={faPen} size="xs" /></button>
-      <button
-        type="button"
-        class="opacity-0 group-hover:opacity-50 hover:!opacity-100 hover:text-red-500"
-        title="删除"
-        on:click={() => startDelete(f)}
-      ><Fa icon={faTrash} size="xs" /></button>
+    {@const active = selectedKey === key}
+    <div class="group flex items-center gap-1 rounded hover:bg-black/5 {active ? 'bg-black/5' : ''}">
+      <Fa icon={faFolder} size="xs" class="ml-2 opacity-60" />
+      {#if renamingId === f.id}
+        <input
+          class="min-w-0 flex-1 rounded border border-current/20 bg-transparent px-1.5 py-1 text-sm"
+          bind:value={renameDraft}
+          bind:this={renameInputEl}
+          on:keydown={(ev) => {
+            if (ev.key === 'Enter') commitRename();
+            if (ev.key === 'Escape') cancelRename();
+          }}
+          on:blur={commitRename}
+        />
+      {:else}
+        <button
+          type="button"
+          class="flex-1 truncate py-1.5 pr-2 text-left"
+          style:font-weight={active ? '600' : '400'}
+          on:click={() => dispatch('select', key)}
+        >
+          {f.name} <span class="text-xs opacity-50">{counts[key] ?? 0}</span>
+        </button>
+        <button
+          type="button"
+          class="opacity-0 group-hover:opacity-50 hover:!opacity-100"
+          title={$t('folders.rename')}
+          on:click={() => startRename(f)}
+        ><Fa icon={faPen} size="xs" /></button>
+        <button
+          type="button"
+          class="opacity-0 group-hover:opacity-50 hover:!opacity-100 hover:text-red-500"
+          title={$t('folders.delete')}
+          on:click={() => startDelete(f)}
+        ><Fa icon={faTrash} size="xs" /></button>
+      {/if}
     </div>
   {/each}
 </aside>

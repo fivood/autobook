@@ -16,16 +16,27 @@ import {
   type ReaderImageGalleryPicture
 } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
 
+export interface FormattedBookHtml {
+  htmlContent: string;
+  /** Object URLs the htmlContent embeds. The caller (typically the
+   * formatted-book cache in `/b`) owns their lifecycle: revoke them only
+   * when the cache entry is evicted, never before. Revoking while the
+   * cache still serves this entry leaves the cached htmlContent pointing
+   * at dead URLs — `<img>` element loads, `complete: true`,
+   * `naturalWidth: 0`, displays as the browser's broken-image icon. */
+  objectUrls: string[];
+}
+
 export default function formatBookDataHtml(
   bookData: BooksDbBookData,
   document: Document,
   isPaginated: boolean,
   blurMode: BlurMode
-) {
+): Observable<FormattedBookHtml> {
   return getHtmlWithImageSource(bookData, isPaginated).pipe(
-    map((elementHtml) => {
+    map(({ html, objectUrls }) => {
       const element = document.createElement('div');
-      element.innerHTML = elementHtml;
+      element.innerHTML = html;
 
       addImageContainerClass(element);
       // combineImagePairs(element);
@@ -33,14 +44,15 @@ export default function formatBookDataHtml(
       addSpoilerTags(element, document, blurMode);
       removeOldBrTagSolution(element);
       stripInlineColor(element);
+      optimizeBookPageImages(element);
 
-      return element.innerHTML;
+      return { htmlContent: element.innerHTML, objectUrls };
     })
   );
 }
 
 function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean) {
-  return new Observable<string>((subscriber) => {
+  return new Observable<{ html: string; objectUrls: string[] }>((subscriber) => {
     const { blobs } = bookData;
     const objectUrls: string[] = [];
     const urlIndexes = new Map<string, number>();
@@ -63,7 +75,7 @@ function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean)
 
       elementHtml = elementHtml.replaceAll(dummyUrl, url).replaceAll(`ttu:${key}`, url);
     });
-    subscriber.next(elementHtml);
+    subscriber.next({ html: elementHtml, objectUrls });
 
     const readerImageGalleryPictures: ReaderImageGalleryPicture[] = objectUrls.map((url) => ({
       url,
@@ -79,9 +91,9 @@ function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean)
 
     readerImageGalleryPictures$.next(readerImageGalleryPictures);
 
-    return () => {
-      objectUrls.forEach((url) => URL.revokeObjectURL(url));
-    };
+    // No teardown — URL lifecycle deliberately handed off to the caller.
+    // See the FormattedBookHtml docstring.
+    subscriber.complete();
   });
 }
 
@@ -153,6 +165,18 @@ function addSpoilerTags(el: HTMLElement, document: Document, blurMode: BlurMode)
     Array.from(childNode.getElementsByTagName('svg'))
       .filter((tag) => tag.getElementsByTagName('image').length)
       .forEach((tag) => createWrapper(tag, childNode));
+  });
+}
+
+// PDF / CBZ page images: huge image-mode books (e.g. 150MB scanned PDFs) blow
+// up memory in scroll mode because every page decodes at once. loading="lazy"
+// + decoding="async" lets the browser keep most off-screen images undecoded.
+// Also tag them with .book-page-image so the zoom control can target them.
+function optimizeBookPageImages(el: HTMLElement) {
+  el.querySelectorAll<HTMLImageElement>('img.pdf-page-img, img.cbz-img').forEach((img) => {
+    if (!img.hasAttribute('loading')) img.setAttribute('loading', 'lazy');
+    if (!img.hasAttribute('decoding')) img.setAttribute('decoding', 'async');
+    img.classList.add('book-page-image');
   });
 }
 

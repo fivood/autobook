@@ -1,22 +1,62 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import Fa from 'svelte-fa';
   import { faPlay, faPause, faForward, faRotateRight, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
-  import type { AutoScroller } from '$lib/components/book-reader/types';
+  import type { AutoScroller, AutoReader } from '$lib/components/book-reader/types';
   import { autoScrollStopAtChapter$, multiplier$ } from '$lib/data/store';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
+  import { t } from '$lib/i18n';
 
   export let autoScroller: AutoScroller | undefined;
+  /** TTS reader, if mounted alongside. Its rate pill overlays this
+   * component's speed pill (same slot under the play button), so while
+   * TTS is active the speed pill must fully yield — no visibility, no
+   * hover preview. TTS enabling also turns the scroller off, so the
+   * pill carries no information in that state anyway. */
+  export let autoReader: AutoReader | undefined = undefined;
 
   let enabled = false;
+  let ttsActive = false;
   let sub: Subscription | undefined;
+  let ttsSub: Subscription | undefined;
+  let recentlyMoved = true;
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let hovered = false;
 
   $: {
     sub?.unsubscribe();
     sub = autoScroller?.wasAutoScrollerEnabled$.subscribe((v) => (enabled = v));
   }
 
-  onDestroy(() => sub?.unsubscribe());
+  $: {
+    ttsSub?.unsubscribe();
+    ttsSub = autoReader?.wasReaderEnabled$.subscribe((v) => (ttsActive = v));
+  }
+
+  // Dim the FAB stack 1.2s after the last mouse move while playback is
+  // active — keeps the controls accessible (state still visible) without
+  // covering the typewriter's active line on the right side.
+  $: faded = enabled && !recentlyMoved && !hovered;
+
+  function nudge() {
+    recentlyMoved = true;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => (recentlyMoved = false), 1200);
+  }
+
+  onMount(() => {
+    if (!browser) return;
+    nudge();
+    window.addEventListener('mousemove', nudge);
+  });
+
+  onDestroy(() => {
+    sub?.unsubscribe();
+    ttsSub?.unsubscribe();
+    if (idleTimer) clearTimeout(idleTimer);
+    if (browser) window.removeEventListener('mousemove', nudge);
+  });
 
   function toggle() {
     autoScroller?.toggle();
@@ -44,12 +84,18 @@
 </script>
 
 {#if autoScroller}
-  <div class="group fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">
+  <div
+    class="group fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2 transition-opacity duration-300"
+    class:opacity-20={faded}
+    on:mouseenter={() => (hovered = true)}
+    on:mouseleave={() => (hovered = false)}
+    role="toolbar"
+  >
     <button
       type="button"
       title={$autoScrollStopAtChapter$
-        ? '播完本章自动停止（点击切换为：跨章继续）'
-        : '跨章连续播放（点击切换为：播完本章停止）'}
+        ? $t('typewriter.chapterStop.tooltipOn')
+        : $t('typewriter.chapterStop.tooltipOff')}
       on:click={toggleStopAtChapter}
       class="flex h-9 items-center gap-1 rounded-full px-3 text-xs shadow backdrop-blur transition-all duration-150"
       class:opacity-0={!enabled}
@@ -59,11 +105,11 @@
       style="background-color: rgba(195, 193, 175, 0.9); color: #405a5c;"
     >
       <Fa icon={$autoScrollStopAtChapter$ ? faRotateRight : faForward} />
-      <span>{$autoScrollStopAtChapter$ ? '章止' : '连播'}</span>
+      <span>{$autoScrollStopAtChapter$ ? $t('typewriter.chapterStop.on') : $t('typewriter.chapterStop.off')}</span>
     </button>
     <button
       type="button"
-      title={enabled ? '暂停打字机 (Space)' : '开始打字机阅读 (Space) · A 加速 / D 减速'}
+      title={enabled ? $t('typewriter.pause') : $t('typewriter.play')}
       on:click={toggle}
       class="relative flex items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-150"
       class:h-12={enabled}
@@ -78,37 +124,29 @@
       style="background-color: rgba(95, 126, 123, 0.92); color: #f0efe6;"
     >
       <Fa icon={enabled ? faPause : faPlay} size="lg" />
-      <span class="sr-only">{enabled ? '暂停' : '开始'}自动阅读</span>
-      {#if enabled}
-        <span
-          class="absolute -top-2 -right-2 min-w-[2rem] rounded-full bg-black/40 px-1 text-[10px] leading-5"
-          title="速度 (A 加速 / D 减速)"
-        >
-          {$multiplier$}字/秒
-        </span>
-      {/if}
+      <span class="sr-only">{enabled ? $t('typewriter.pauseAria') : $t('typewriter.playAria')}</span>
     </button>
 
     <div
       class="flex items-center gap-1 rounded-full px-2 py-1 shadow backdrop-blur transition-all duration-150"
-      class:opacity-0={!enabled}
-      class:pointer-events-none={!enabled}
-      class:group-hover:opacity-100={!enabled}
-      class:group-hover:pointer-events-auto={!enabled}
+      class:opacity-0={!enabled || ttsActive}
+      class:pointer-events-none={!enabled || ttsActive}
+      class:group-hover:opacity-100={!enabled && !ttsActive}
+      class:group-hover:pointer-events-auto={!enabled && !ttsActive}
       style="background-color: rgba(195, 193, 175, 0.9); color: #405a5c;"
     >
       <button
         type="button"
-        title="减速 (D)"
+        title={$t('typewriter.slower')}
         on:click={decreaseSpeed}
         class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
       >
         <Fa icon={faMinus} size="xs" />
       </button>
-      <span class="min-w-[2.5rem] text-center text-[10px]">{$multiplier$} 字/秒</span>
+      <span class="min-w-[2.5rem] text-center text-[10px]">{$t('typewriter.speedUnit', { n: $multiplier$ })}</span>
       <button
         type="button"
-        title="加速 (A)"
+        title={$t('typewriter.faster')}
         on:click={increaseSpeed}
         class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
       >

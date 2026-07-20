@@ -15,12 +15,14 @@ export function isMobile(window: Window) {
   const UA = window.navigator.userAgent;
   const userAgentRegex = /\b(BlackBerry|webOS|iPhone|IEMobile|Android|Windows Phone|iPad|iPod)\b/i;
 
-  if (('maxTouchPoints' in window.navigator) as any) {
+  if ('maxTouchPoints' in window.navigator) {
     return window.navigator.maxTouchPoints > 0;
   }
 
-  if (('msMaxTouchPoints' in window.navigator) as any) {
-    return window.navigator.msMaxTouchPoints > 0;
+  // msMaxTouchPoints is IE-only and absent from the TS DOM lib; cast for legacy detection.
+  const nav = window.navigator as Navigator & { msMaxTouchPoints?: number };
+  if (nav.msMaxTouchPoints !== undefined) {
+    return nav.msMaxTouchPoints > 0;
   }
 
   const mQ = window.matchMedia?.('(pointer:coarse)');

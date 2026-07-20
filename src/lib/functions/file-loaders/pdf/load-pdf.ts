@@ -16,7 +16,11 @@
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
 import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
+import { pagePath } from '$lib/data/env';
 
+// pdfjs-dist's shipped TS types drift from the actual runtime API
+// (TextContent.items shape, PDFDocumentProxy.getOutline/destroy). The
+// `as any` / `as any[]` casts below paper over that drift intentionally.
 type PdfjsBundle = {
   pdfjs: typeof import('pdfjs-dist');
   cmapUrl: string;
@@ -27,17 +31,23 @@ let pdfjsPromise: Promise<PdfjsBundle> | null = null;
 function loadPdfjs(): Promise<PdfjsBundle> {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
-      const [pdfjs, workerModule, cmapModule, fontModule, wasmModule] = await Promise.all([
+      const [pdfjs, workerModule] = await Promise.all([
         import('pdfjs-dist'),
-        import('pdfjs-dist/build/pdf.worker.mjs?url'),
-        import('pdfjs-dist/cmaps/Adobe-GB1-UCS2.bcmap?url'),
-        import('pdfjs-dist/standard_fonts/FoxitFixed.pfb?url'),
-        import('pdfjs-dist/wasm/jbig2.wasm?url')
+        import('pdfjs-dist/build/pdf.worker.mjs?url')
       ]);
       pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
-      const cmapUrl = cmapModule.default.replace(/\/[^/]+$/, '/');
-      const standardFontDataUrl = fontModule.default.replace(/\/[^/]+$/, '/');
-      const wasmUrl = wasmModule.default.replace(/\/[^/]+$/, '/');
+      // Directory URLs must point at static/vendor copies, NOT at
+      // Vite `?url` imports of one representative file: the worker
+      // fetches siblings by ORIGINAL filename (jbig2.wasm, *.bcmap,
+      // *.pfb), which works in dev but 404s in production where the
+      // imported file is hashed and the siblings aren't emitted at
+      // all. Symptom when broken: JBIG2-encoded scans (common for B/W
+      // book scans) render blank in release builds only. Files are
+      // copied by scripts/copy-vendor-assets.js on install.
+      const base = pagePath || location.origin;
+      const cmapUrl = `${base}/vendor/pdfjs/cmaps/`;
+      const standardFontDataUrl = `${base}/vendor/pdfjs/standard_fonts/`;
+      const wasmUrl = `${base}/vendor/pdfjs/wasm/`;
       return { pdfjs, cmapUrl, standardFontDataUrl, wasmUrl };
     })();
   }
@@ -187,6 +197,58 @@ function itemsToParagraphs(items: any[]): string[] {
   return [...buildColumn(left), ...buildColumn(right)];
 }
 
+/**
+ * Build the per-page text-overlay HTML: positioned absolute spans that
+ * sit invisibly on top of the rendered page image so the user can select
+ * text just like in Chrome's PDF viewer.
+ *
+ * Each span carries its left/top in PAGE INTRINSIC pixel coords; the
+ * surrounding `.pdf-page-shell` div is responsible for setting
+ * `--pdf-scale-factor` at runtime (via the action in pdf-page-shell.ts)
+ * which CSS multiplies onto the layer to keep the spans aligned to the
+ * fluid-width image.
+ *
+ * Returns `{ spans, totalChars }` so the caller can count "real text" for
+ * progress / TTS / AI purposes without re-running getTextContent.
+ */
+function buildTextLayer(
+  items: any[],
+  pageHeight: number
+): { spans: string; totalChars: number } {
+  if (!items.length) return { spans: '', totalChars: 0 };
+  const out: string[] = [];
+  let chars = 0;
+  for (const it of items) {
+    const str: string = typeof it.str === 'string' ? it.str : '';
+    if (!str) continue;
+    const t = it.transform;
+    if (!t || t.length < 6) continue;
+    const a = +t[0];
+    const b = +t[1];
+    const e = +t[4];
+    const f = +t[5];
+    const fontSize = Math.hypot(a, b);
+    if (!isFinite(fontSize) || fontSize <= 0) continue;
+    // PDF origin is bottom-left; CSS origin is top-left. Convert and
+    // subtract fontSize so the span's TOP edge aligns with the character
+    // top (PDF.js gives the baseline at (e, f)).
+    const x = e;
+    const y = pageHeight - f - fontSize;
+    // Detect simple text rotation (most pages don't rotate; handle the
+    // common ones — landscape titles, sidebar marginalia — by computing
+    // the rotation matrix's angle from (a, b)). Vertical CJK text is
+    // emitted by some PDFs as rotated spans rather than per-char items.
+    const angle = (Math.atan2(b, a) * 180) / Math.PI;
+    const rotate = Math.abs(angle) > 1 ? ` rotate(${angle.toFixed(2)}deg)` : '';
+    const escaped = escapeHtml(str);
+    out.push(
+      `<span style="left:${x.toFixed(2)}px;top:${y.toFixed(2)}px;font-size:${fontSize.toFixed(2)}px;transform:scaleX(1)${rotate}">${escaped}</span>`
+    );
+    chars += Array.from(str).length;
+  }
+  return { spans: out.join(''), totalChars: chars };
+}
+
 async function renderPageToBlob(
   page: any,
   targetWidth: number,
@@ -206,29 +268,33 @@ async function renderPageToBlob(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport: scaled }).promise;
 
-    // Detect blank canvas: sample several spots across the page. If ALL are
-    // pure white the render likely failed silently.
-    const spots = [
-      [0.5, 0.3], [0.5, 0.5], [0.5, 0.7],
-      [0.3, 0.5], [0.7, 0.5],
-      [0.25, 0.25], [0.75, 0.75]
-    ];
+    // Detect blank canvas (silent render failure, e.g. an image decoder
+    // that bailed). Downscale the whole page into a tiny canvas and scan
+    // every pixel of THAT: averaging drags ink anywhere on the page into
+    // the tiny pixels, so coverage is 100%. The previous approach — 7
+    // fixed 20×20 spots (0.19% coverage) — misdeclared sparse pages
+    // blank: a chapter-opening page of an airy CJK layout can have all
+    // 7 spots land in whitespace (bit a Perec novella with 238×433pt
+    // pages: 72 of 128 rendered pages were thrown away).
+    const probe = document.createElement('canvas');
+    probe.width = 24;
+    probe.height = 32;
+    const probeCtx = probe.getContext('2d');
     let hasContent = false;
-    for (const [fx, fy] of spots) {
-      const sx = Math.floor(canvas.width * fx);
-      const sy = Math.floor(canvas.height * fy);
-      const sw = Math.min(20, canvas.width - sx);
-      const sh = Math.min(20, canvas.height - sy);
-      if (sw <= 0 || sh <= 0) continue;
-      const sample = ctx.getImageData(sx, sy, sw, sh);
-      for (let i = 0; i < sample.data.length; i += 4) {
-        if (sample.data[i] < 250 || sample.data[i + 1] < 250 || sample.data[i + 2] < 250) {
+    if (probeCtx) {
+      probeCtx.fillStyle = '#ffffff';
+      probeCtx.fillRect(0, 0, probe.width, probe.height);
+      probeCtx.drawImage(canvas, 0, 0, probe.width, probe.height);
+      const px = probeCtx.getImageData(0, 0, probe.width, probe.height);
+      for (let i = 0; i < px.data.length; i += 4) {
+        if (px.data[i] < 250 || px.data[i + 1] < 250 || px.data[i + 2] < 250) {
           hasContent = true;
           break;
         }
       }
-      if (hasContent) break;
     }
+    probe.width = 0;
+    probe.height = 0;
     if (!hasContent) return undefined;
 
     const blob = await new Promise<Blob | undefined>((resolve) => {
@@ -250,7 +316,6 @@ async function extractPageImage(page: any): Promise<Blob | undefined> {
     const OPS_PAINT_IMAGE = 85; // OPS.paintImageXObject
 
     let bestObjId: string | null = null;
-    let bestArea = 0;
 
     for (let i = 0; i < ops.fnArray.length; i++) {
       if (ops.fnArray[i] === OPS_PAINT_IMAGE) {
@@ -443,16 +508,47 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
     let sectionChars: number;
 
     if (useTextMode) {
-      // Text mode: extract text only, no image rendering
-      const textContent = await page.getTextContent();
-      const paragraphs = itemsToParagraphs(textContent.items as any[]);
-      const chars = Array.from(paragraphs.join('')).length;
-      bodyHtml = paragraphs.length
-        ? paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('\n')
-        : '<p>&nbsp;</p>';
-      sectionChars = chars;
+      // Text-overlay mode (1.11 default for books with extractable text):
+      // render page to image AND emit a positioned text layer that sits
+      // invisibly on top so the user can select text the way Chrome's
+      // built-in PDF viewer lets you. The image preserves page layout
+      // (figures, columns, tables); the text layer gives you selection,
+      // copy, dictionary, AI input.
+      const viewport = page.getViewport({ scale: 1 });
+      const pageW = Math.round(viewport.width);
+      const pageH = Math.round(viewport.height);
+      const tc = await page.getTextContent();
+      const { spans, totalChars } = buildTextLayer(tc.items as any[], pageH);
+
+      let imgBlob = await renderPageToBlob(page, IMAGE_RENDER_WIDTH, 'image/jpeg', 0.82);
+      if (!imgBlob) {
+        const freshPage = await doc.getPage(pageNum);
+        imgBlob = await extractPageImage(freshPage);
+        freshPage.cleanup();
+      }
+
+      if (imgBlob) {
+        const blobName = `pdf-page-${pageNum}.jpg`;
+        blobs[blobName] = imgBlob;
+        const dummySrc = buildDummyBookImage(blobName);
+        bodyHtml =
+          `<div class="pdf-page-shell" data-page-w="${pageW}" data-page-h="${pageH}" style="aspect-ratio: ${pageW} / ${pageH};">` +
+          `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img book-page-image" data-pdf-page="${pageNum}" loading="lazy" decoding="async" />` +
+          (spans ? `<div class="pdf-text-layer" data-page-w="${pageW}" data-page-h="${pageH}">${spans}</div>` : '') +
+          `</div>`;
+        sectionChars = totalChars || 1;
+        hasAnyImage = true;
+      } else {
+        // Image render failed — degrade to plain text paragraphs.
+        const paragraphs = itemsToParagraphs(tc.items as any[]);
+        bodyHtml = paragraphs.length
+          ? paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('\n')
+          : '<p>&nbsp;</p>';
+        sectionChars = totalChars;
+      }
     } else {
-      // Image mode: render page to image
+      // Scanned / image-only mode: render page to image, no text layer.
+      // OCR (in pdf-ocr-runner) can later inject <p> blocks before the img.
       let imgBlob = await renderPageToBlob(page, IMAGE_RENDER_WIDTH, 'image/jpeg', 0.82);
       if (!imgBlob) {
         const freshPage = await doc.getPage(pageNum);
@@ -463,7 +559,7 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
         const blobName = `pdf-page-${pageNum}.jpg`;
         blobs[blobName] = imgBlob;
         const dummySrc = buildDummyBookImage(blobName);
-        bodyHtml = `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img" data-pdf-page="${pageNum}" style="max-width:100%;height:auto;" />`;
+        bodyHtml = `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img book-page-image" data-pdf-page="${pageNum}" loading="lazy" decoding="async" style="max-width:100%;height:auto;" />`;
         sectionChars = 1;
         hasAnyImage = true;
       } else {
@@ -494,7 +590,17 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
   const textStyle =
     '.pdf-section { margin-bottom: 2em; } .pdf-page-label { opacity: 0.4; font-size: 0.8em; margin: 1.5em 0 0.5em; } .pdf-section p { text-indent: 2em; margin: 0.5em 0; }';
   const imageStyle =
-    '.pdf-section { margin-bottom: 1em; text-align: center; } .pdf-page-label { opacity: 0.4; font-size: 0.8em; margin: 1em 0 0.3em; }';
+    '.pdf-section { margin-bottom: 1em; text-align: center; } ' +
+    '.pdf-page-label { opacity: 0.4; font-size: 0.8em; margin: 1em 0 0.3em; } ' +
+    // Text-overlay rendering: a positioned container holds both the page
+    // image and a transparent text layer. The text layer is sized at the
+    // page's intrinsic pixel dimensions and scaled to match the displayed
+    // image width via --pdf-scale-factor (set by pdf-page-shell action).
+    '.pdf-page-shell { position: relative; width: 100%; max-width: 100%; margin: 0 auto; overflow: hidden; } ' +
+    '.pdf-page-shell > img.pdf-page-img { display: block; width: 100%; height: 100%; } ' +
+    '.pdf-text-layer { position: absolute; inset: 0; transform-origin: 0 0; transform: scale(var(--pdf-scale-factor, 1)); pointer-events: none; line-height: 1; font-family: serif; opacity: 1; }' +
+    '.pdf-text-layer > span { position: absolute; color: transparent; white-space: pre; transform-origin: 0 0; pointer-events: auto; cursor: text; user-select: text; }' +
+    '.pdf-text-layer > span::selection { background: rgba(0, 110, 255, 0.32); color: transparent; }';
 
   return {
     title,

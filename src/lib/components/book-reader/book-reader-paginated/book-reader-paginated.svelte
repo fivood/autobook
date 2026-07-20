@@ -2,6 +2,7 @@
   import { browser } from '$app/environment';
   import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
   import HtmlRenderer from '$lib/components/html-renderer.svelte';
+  import { pdfPageShell } from '$lib/functions/pdf-page-shell';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { SECTION_CHANGE } from '$lib/data/events';
   import { isStoredFont } from '$lib/data/fonts';
@@ -764,7 +765,7 @@
   use:swipe={{ timeframe: 500, minSwipeDistance: $swipeThreshold$, touchAction: 'pan-y' }}
   on:swipe={onSwipe}
 >
-  <div class="book-content-container" id={currentSectionId || null} bind:this={contentEl}>
+  <div class="book-content-container" id={currentSectionId || null} bind:this={contentEl} use:pdfPageShell>
     <HtmlRenderer html={displayedHtml} on:load={onHtmlLoad} />
   </div>
 </div>
@@ -811,7 +812,12 @@
     column-fill: auto;
     height: var(--book-content-child-height, 95vh);
 
-    :global(.ttu-illustration-container) {
+    // PDF page wrappers (`.pdf-page-shell` for HOCR'd pages, `.pdf-section`
+    // for legacy / non-OCR'd ones) carry an `aspect-ratio` that already
+    // sizes them correctly. Capping their max-height here truncates the
+    // image so the transparent OCR text layer no longer aligns with the
+    // visible scan.
+    :global(.ttu-illustration-container:not(.pdf-page-shell):not(.pdf-section)) {
       max-width: var(--book-content-image-max-width, 95vh) !important;
       max-height: var(--book-content-child-height, 95vh) !important;
     }
@@ -819,7 +825,7 @@
 
   .book-content {
     :global(svg),
-    :global(img) {
+    :global(img:not(.pdf-page-img)) {
       max-width: var(--book-content-image-max-width, 100vw);
       max-height: var(--book-content-child-height, 100vh);
     }

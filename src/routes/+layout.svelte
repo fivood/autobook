@@ -51,7 +51,7 @@
     setVar('--menu-background', theme.menuBackgroundColor, '#2b5a69');
     setVar('--menu-foreground', theme.menuFontColor, '#f0efe6');
     setVar('--button-selected', theme.buttonSelectedColor, '#2b5a69');
-    setVar('--button-border', (theme as any).buttonBorderColor, theme.buttonSelectedColor);
+    setVar('--button-border', (theme as any).buttonBorderColor, theme.buttonSelectedColor); // optional/legacy theme key not on the Theme type
     setVar('--button-hover', theme.buttonHoverColor, 'rgba(95,126,123,0.18)');
     setVar('--selection-background', theme.selectionBackgroundColor, '#5f7e7b');
     setVar('--selection-foreground', theme.selectionFontColor, '#f0efe6');
@@ -113,6 +113,14 @@
     zIndex = '';
   }
 
+  // Remove only the dialog that dispatched 'close' (by identity), not the whole
+  // stack. This lets a dialog's resolver push a follow-up dialog before close
+  // fires — closeAllDialogs would wipe that just-pushed dialog (the chaining bug
+  // that kept settings-data-paths' double-confirm on native confirm()).
+  function removeDialog(closing: Dialog) {
+    dialogManager.dialogs$.next(dialogs.filter((d) => d !== closing));
+  }
+
   dialogManager.dialogs$.subscribe((d) => {
     clickOnCloseDisabled = d[0]?.disableCloseOnClick ?? false;
     zIndex = d[0]?.zIndex ?? '';
@@ -149,13 +157,11 @@
       // Apply current shortcut, then keep it in sync with user changes.
       const applyShortcut = (accel: string) =>
         invoke('set_tts_shortcut', { accelerator: accel }).catch((err) =>
-          // eslint-disable-next-line no-console
           console.warn('[tts-shortcut] register failed:', err)
         );
       applyShortcut(ttsShortcut$.getValue());
       ttsShortcut$.subscribe(applyShortcut);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[launch-files] init failed:', err);
     }
 
@@ -168,7 +174,6 @@
       }
     } catch (err) {
       // silent — no banner on check failure
-      // eslint-disable-next-line no-console
       console.warn('[updater] check failed:', err);
     }
   });
@@ -217,7 +222,7 @@
         {#if typeof dialog.component === 'string'}
           {@html dialog.component}
         {:else}
-          <svelte:component this={dialog.component} {...dialog.props} on:close={closeAllDialogs} />
+          <svelte:component this={dialog.component} {...dialog.props} on:close={() => removeDialog(dialog)} />
         {/if}
       {/each}
     </div>

@@ -35,7 +35,9 @@ export interface BookStatistic extends BooksDbStatistic {
 
 export enum StatisticsTab {
   OVERVIEW = '概览',
-  SUMMARY = '汇总'
+  SUMMARY = '汇总',
+  YEAR = '年度',
+  HIGHLIGHTS = '高亮'
 }
 
 export enum StatisticsRangeTemplate {
@@ -83,13 +85,24 @@ export const dateDataSources: StatisticsDataSource[] = [{ key: 'dateKey', label:
 
 export const titleDataSources: StatisticsDataSource[] = [{ key: 'title', label: '标题' }];
 
-export const copyStatisticsData$ = new Subject<keyof BookStatistic>();
-
 export const exportStatisticsData$ = new Subject<boolean>();
 
 export const deleteStatisticsData$ = new Subject<boolean>();
 
 export const setStatisticsDatesToAllTime$ = new Subject<void>();
+
+export const openManualStatisticsEntry$ = new Subject<void>();
+
+export const exportYearReport$ = new Subject<void>();
+
+export interface ManualStatisticEntry {
+  title: string;
+  dateKey: string;
+  readingTimeSeconds: number;
+  charactersRead: number;
+  markCompleted: boolean;
+  conflictStrategy: 'append' | 'overwrite';
+}
 
 export const statisticsActionInProgress$ = writableSubject<boolean>(false);
 

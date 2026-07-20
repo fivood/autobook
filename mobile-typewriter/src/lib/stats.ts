@@ -139,7 +139,6 @@ function schedulePush() {
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushNow().catch((err) => {
-      // eslint-disable-next-line no-console
       console.warn('[sync] push failed', err);
     });
   }, PUSH_DEBOUNCE_MS);

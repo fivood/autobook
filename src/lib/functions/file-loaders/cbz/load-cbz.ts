@@ -121,8 +121,8 @@ export default async function loadCbz(file: File, lastBookModified: number): Pro
       htmlParts.push(
         `<div id="${id}" class="cbz-section pdf-section">` +
           `<h3 class="pdf-page-label">${pageNum}</h3>` +
-          `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img" ` +
-          `data-pdf-page="${pageNum}" style="max-width:100%;height:auto;" /></div>`
+          `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img book-page-image" ` +
+          `data-pdf-page="${pageNum}" loading="lazy" decoding="async" style="max-width:100%;height:auto;" /></div>`
       );
       sections.push({
         reference: id,

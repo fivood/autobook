@@ -48,6 +48,7 @@
     secondsToMinutes
   } from '$lib/functions/statistic-util';
   import { caluclatePercentage, dummyFn, limitToRange, pluralize } from '$lib/functions/utils';
+  import { t, tImmediate } from '$lib/i18n';
   import { debounceTime, fromEvent, tap } from 'rxjs';
   import { onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
@@ -85,9 +86,12 @@
   let selectedStreak = HeatmapStreakType.NONE;
   let selectedStreakDates = new Set<string>();
 
-  $: heatmapLabel = `Reading ${
-    heatmapType === HeatmapType.STATISTICS ? '' : '目标 '
-  }Data for ${heatmapYear}`;
+  $: heatmapLabel = $t(
+    heatmapType === HeatmapType.STATISTICS
+      ? 'stats.heatmap.title.stats'
+      : 'stats.heatmap.title.goals',
+    { year: heatmapYear }
+  );
 
   $: dayLabels = [
     ...daysOfWeekShort.slice($lastStartDayOfWeek$),
@@ -1065,7 +1069,9 @@
     } else {
       statisticsHeatmapDay.dayDetails.push(
         dateString,
-        `${dateString > todayKey ? '本日无数据' : '本日无阅读目标'}`
+        dateString > todayKey
+          ? tImmediate('stats.heatmap.noDataToday')
+          : tImmediate('stats.heatmap.noGoalToday')
       );
     }
 
@@ -1077,14 +1083,14 @@
 <div class="mb-4 flex justify-center">
   {heatmapLabel}
   <button
-    title="返回当前年份"
+    title={$t('stats.heatmap.backToCurrentYear')}
     class="mx-4 hover:text-red-500"
     on:click={() => changeHeatmapYear(today.getFullYear() - heatmapYear)}
   >
     <Fa icon={faRepeat} />
   </button>
   <button
-    title="在累计与今年之间切换连续数据"
+    title={$t('stats.heatmap.toggleAggregation')}
     class="text-lg hover:text-red-500"
     on:click={() =>
       (heatmapAggregration =
@@ -1097,7 +1103,7 @@
 </div>
 <div class="flex justify-between">
   <button
-    title="向后移动"
+    title={$t('stats.heatmap.moveBack')}
     class="hover:text-red-500"
     on:click={() => {
       if (heatmapElement.scrollLeft === 0) {
@@ -1199,7 +1205,7 @@
           class:w-42={heatmapType === HeatmapType.READING_GOALS}
         >
           <button
-            title="关闭详情"
+            title={$t('stats.heatmap.closeDetails')}
             class="flex w-full justify-end absolute right-2"
             on:click={() => (popoverDetails = [])}
           >
@@ -1213,7 +1219,7 @@
     {/if}
   </div>
   <button
-    title="向前移动"
+    title={$t('stats.heatmap.moveForward')}
     class="hover:text-red-500"
     on:click={() => {
       const scrollWidth =
@@ -1234,34 +1240,27 @@
 </div>
 {#if currentHeatmapData}
   {@const isAllTime = heatmapAggregration === HeatmapDataAggregration.ALL_TIME}
-  {@const mapAggregationlabel = `(${isAllTime ? '累计' : heatmapYear})`}
-  {@const typeLabel = `${heatmapType === HeatmapType.STATISTICS ? 'day' : 'goal'}`}
-  {@const daysReadLabel = `Days read ${mapAggregationlabel}:`}
-  {@const readingGoalsCompletedLabel = `100% completed ${mapAggregationlabel}:`}
-  {@const longestStreaksLabel = `Longest ${pluralize(
-    currentHeatmapData.longestStreaks.length,
-    '连续记录',
-    false
-  )} ${mapAggregationlabel}:`}
+  {@const mapAggregationlabel = `(${isAllTime ? $t('stats.heatmap.allTime') : heatmapYear})`}
+  {@const countKey =
+    heatmapType === HeatmapType.STATISTICS ? 'stats.heatmap.dayCount' : 'stats.heatmap.goalCount'}
+  {@const daysReadLabel = $t('stats.heatmap.daysRead', { agg: mapAggregationlabel })}
+  {@const readingGoalsCompletedLabel = $t('stats.heatmap.goalsCompleted', {
+    agg: mapAggregationlabel
+  })}
+  {@const longestStreaksLabel = $t('stats.heatmap.longestStreak', { agg: mapAggregationlabel })}
   {@const longestStreaksDuration = currentHeatmapData.longestStreaks[0]?.duration || 0}
-  {@const longestStreaksCount = `${
-    longestStreaksDuration
-      ? ` (${pluralize(currentHeatmapData.longestStreaks.length, '次')})`
-      : ''
-  }`}
-  {@const longestStreaksDays = `${longestStreaksDuration} ${pluralize(
-    longestStreaksDuration,
-    typeLabel,
-    false
-  )}`}
-  {@const currentStreakLabel = `Current Streak ${mapAggregationlabel}:`}
-  {@const currentStreakDays = pluralize(currentHeatmapData.currentStreak.duration, typeLabel)}
+  {@const longestStreaksCount = longestStreaksDuration
+    ? ` (${$t('stats.heatmap.timesCount', { n: currentHeatmapData.longestStreaks.length })})`
+    : ''}
+  {@const longestStreaksDays = $t(countKey, { n: longestStreaksDuration })}
+  {@const currentStreakLabel = $t('stats.heatmap.currentStreak', { agg: mapAggregationlabel })}
+  {@const currentStreakDays = $t(countKey, { n: currentHeatmapData.currentStreak.duration })}
   <div class="hidden grid-cols-3 justify-center mt-4 text-center text-sm sm:grid">
     {#if checkIsStatisticsHeatmapData(currentHeatmapData)}
       <div>{daysReadLabel}</div>
     {:else}
       <button
-        title="高亮已完成的阅读目标"
+        title={$t('stats.heatmap.highlightGoals')}
         on:click={() =>
           highlightStreaks(currentHeatmapData.streaks, HeatmapStreakType.READING_GOALS_COMPLETED)}
       >
@@ -1270,7 +1269,7 @@
     {/if}
     <div>
       <button
-        title="高亮连续记录"
+        title={$t('stats.heatmap.highlightStreaks')}
         on:click={() =>
           highlightStreaks(currentHeatmapData.longestStreaks, HeatmapStreakType.LONGEST)}
       >
@@ -1279,7 +1278,7 @@
     </div>
     <div>
       <button
-        title="高亮连续记录"
+        title={$t('stats.heatmap.highlightStreaks')}
         on:click={() =>
           highlightStreaks(
             currentHeatmapData.currentStreak.duration ? [currentHeatmapData.currentStreak] : [],
@@ -1293,7 +1292,7 @@
       <div>{currentHeatmapData.daysRead}</div>
     {:else}
       <button
-        title="高亮已完成的阅读目标"
+        title={$t('stats.heatmap.highlightGoals')}
         on:click={() =>
           highlightStreaks(currentHeatmapData.streaks, HeatmapStreakType.READING_GOALS_COMPLETED)}
       >
@@ -1302,7 +1301,7 @@
     {/if}
     <div>
       <button
-        title="高亮连续记录"
+        title={$t('stats.heatmap.highlightStreaks')}
         on:click={() =>
           highlightStreaks(currentHeatmapData.longestStreaks, HeatmapStreakType.LONGEST)}
       >
@@ -1311,7 +1310,7 @@
     </div>
     <div>
       <button
-        title="高亮连续记录"
+        title={$t('stats.heatmap.highlightStreaks')}
         on:click={() =>
           highlightStreaks(
             currentHeatmapData.currentStreak.duration ? [currentHeatmapData.currentStreak] : [],
@@ -1328,7 +1327,7 @@
       <div>{currentHeatmapData.daysRead}</div>
     {:else}
       <button
-        title="高亮已完成的阅读目标"
+        title={$t('stats.heatmap.highlightGoals')}
         class="text-left"
         on:click={() =>
           highlightStreaks(currentHeatmapData.streaks, HeatmapStreakType.READING_GOALS_COMPLETED)}
@@ -1336,7 +1335,7 @@
         {readingGoalsCompletedLabel}
       </button>
       <button
-        title="高亮已完成的阅读目标"
+        title={$t('stats.heatmap.highlightGoals')}
         class="text-left"
         on:click={() =>
           highlightStreaks(currentHeatmapData.streaks, HeatmapStreakType.READING_GOALS_COMPLETED)}
@@ -1345,7 +1344,7 @@
       </button>
     {/if}
     <button
-      title="高亮连续记录"
+      title={$t('stats.heatmap.highlightStreaks')}
       class="text-left"
       on:click={() =>
         highlightStreaks(currentHeatmapData.longestStreaks, HeatmapStreakType.LONGEST)}
@@ -1353,7 +1352,7 @@
       {longestStreaksLabel}
     </button>
     <button
-      title="高亮连续记录"
+      title={$t('stats.heatmap.highlightStreaks')}
       class="text-left"
       on:click={() =>
         highlightStreaks(currentHeatmapData.longestStreaks, HeatmapStreakType.LONGEST)}
@@ -1362,7 +1361,7 @@
     </button>
     <div>
       <button
-        title="高亮连续记录"
+        title={$t('stats.heatmap.highlightStreaks')}
         on:click={() =>
           highlightStreaks(
             currentHeatmapData.currentStreak.duration ? [currentHeatmapData.currentStreak] : [],
@@ -1374,7 +1373,7 @@
     </div>
     <div>
       <button
-        title="高亮连续记录"
+        title={$t('stats.heatmap.highlightStreaks')}
         on:click={() =>
           highlightStreaks(
             currentHeatmapData.currentStreak.duration ? [currentHeatmapData.currentStreak] : [],

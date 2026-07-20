@@ -6,7 +6,6 @@
       try {
         await navigator.serviceWorker.register('/service-worker.js', { type: 'module' });
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[sw] register failed', err);
       }
     }

@@ -13,6 +13,12 @@ export interface AutoScroller {
   toggle: () => void;
   off: () => void;
   revealAll: () => void;
+  /** Wrap content characters now (idempotent). Used by TTS so it can drive
+   * char-by-char reveal via seekToCharIndex without the typewriter's own
+   * interval running. */
+  prepare?: () => void;
+  /** Reveal characters up to the given index (global extractText() index). */
+  seekToCharIndex?: (index: number) => void;
 }
 
 export interface AutoReader {
@@ -28,6 +34,9 @@ export interface AutoReader {
   seekToSelection: () => boolean;
   getPosition: () => { para: number; offset: number };
   setPosition: (para: number, offset: number) => void;
+  /** Globally indexed character range of the sentence currently being
+   * spoken — used by TtsHighlighter to paint a CSS Custom Highlight. */
+  getCurrentSentence?: () => { globalStart: number; globalEnd: number; text: string } | null;
   onBoundary?: (charIndex: number) => void;
   onEnd?: () => void;
   rate: number;

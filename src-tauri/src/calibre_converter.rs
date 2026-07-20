@@ -1,5 +1,12 @@
 use std::path::PathBuf;
-use std::process::Command;
+use std::time::Duration;
+use tokio::process::Command;
+use tokio::time::timeout;
+
+/// Calibre's ebook-convert occasionally hangs on malformed or very large MOBI
+/// files, and running it from a GUI parent creates a visible console window.
+/// Cap the wait and hide the window to keep the experience smooth.
+const CONVERSION_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn find_calibre_convert() -> Option<PathBuf> {
     let candidates = [
@@ -12,7 +19,7 @@ fn find_calibre_convert() -> Option<PathBuf> {
             return Some(p);
         }
     }
-    if let Ok(output) = Command::new("where").arg("ebook-convert").output() {
+    if let Ok(output) = std::process::Command::new("where").arg("ebook-convert").output() {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(line) = stdout.lines().next() {
@@ -49,17 +56,33 @@ pub async fn convert_with_calibre(bytes: Vec<u8>, filename: String) -> Result<Ve
 
     std::fs::write(&input_path, &bytes).map_err(|e| format!("写入临时文件失败: {e}"))?;
 
-    let result = Command::new(&converter)
-        .arg(&input_path)
-        .arg(&output_path)
-        .output()
+    let mut cmd = Command::new(&converter);
+    cmd.arg(&input_path).arg(&output_path);
+
+    // Prevent ebook-convert from flashing a black console window on Windows.
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    // Kill the process if it runs too long — this avoids the UI freezing
+    // indefinitely when ebook-convert hangs on a problematic file.
+    cmd.kill_on_drop(true);
+
+    let result = timeout(CONVERSION_TIMEOUT, cmd.output())
+        .await
+        .map_err(|_| {
+            "Calibre 转换超时（超过 5 分钟），ebook-convert 可能已卡住。".to_string() +
+                "建议先用 Calibre 手动把该书转成 EPUB，再导入 AutoBook。"
+        })?
         .map_err(|e| format!("调用 ebook-convert 失败: {e}"))?;
 
     let _ = std::fs::remove_file(&input_path);
 
     if !result.status.success() {
-        let stderr = String::from_utf8_lossy(&result.stderr);
         let _ = std::fs::remove_file(&output_path);
+        let stderr = String::from_utf8_lossy(&result.stderr);
         return Err(format!("Calibre 转换失败: {stderr}"));
     }
 

@@ -166,6 +166,13 @@
     updateStatistic(sessionStatistics, timeDiff, characterDiff, lastStatisticModified);
     updateStatistic(allTimeStatistics, timeDiff, characterDiff, lastStatisticModified);
 
+    // Mirror into the pause-to-pause session buffer. Positive-only accumulation
+    // so history-reverts don't turn the row negative when it commits.
+    if (activeSessionStartTs) {
+      if (timeDiff > 0) activeSessionDurationSec += timeDiff;
+      if (characterDiff > 0) activeSessionCharsRead += characterDiff;
+    }
+
     for (let index = 0, { length } = trackerHistory; index < length; index += 1) {
       if (historyIndex > 59) {
         historyIndex = 0;
@@ -335,6 +342,47 @@
   let lastTrackerFlushTime = 0;
   let trackerIdleTime = 0;
 
+  // Persistent per-session record (unpause → pause stretch). We commit a row
+  // into the `session` IDB store on each pause / unmount if the stretch is
+  // long enough that it's worth recording. Kept separate from the in-memory
+  // `sessionStatistics` (which is book-open-lifetime cumulative, and can span
+  // many pauses).
+  const MIN_SESSION_SEC = 30;
+  let activeSessionStartTs = 0;
+  let activeSessionDateKey = '';
+  let activeSessionDurationSec = 0;
+  let activeSessionCharsRead = 0;
+
+  function startActiveSession(now: number) {
+    activeSessionStartTs = now;
+    activeSessionDateKey = getDateKey($startDayHoursForTracker$, new Date(now));
+    activeSessionDurationSec = 0;
+    activeSessionCharsRead = 0;
+  }
+
+  async function commitActiveSession() {
+    if (!activeSessionStartTs || activeSessionDurationSec < MIN_SESSION_SEC) {
+      activeSessionStartTs = 0;
+      return;
+    }
+    const endTs = Date.now();
+    const record = {
+      title: bookTitle,
+      startTs: activeSessionStartTs,
+      endTs,
+      durationSec: activeSessionDurationSec,
+      charsRead: activeSessionCharsRead,
+      dateKey: activeSessionDateKey,
+      ...(isPdfBook ? { sectionsRead: pageVisitedToday.size } : {})
+    };
+    activeSessionStartTs = 0;
+    try {
+      await database.appendSession(record);
+    } catch (error: any) {
+      logger.warn(`Failed to persist reading session: ${error?.message ?? error}`);
+    }
+  }
+
   const dispatch = createEventDispatcher<{
     trackerAvailable: void;
     statisticsSaved: void;
@@ -349,6 +397,7 @@
         trackerIdleTime = 0;
 
         flushUpdates();
+        commitActiveSession();
 
         return NEVER;
       }
@@ -357,6 +406,7 @@
 
       lastTrackerFlushTime = now;
       lastTrackerTick = now;
+      startActiveSession(now);
 
       return interval(1000);
     }),
@@ -448,6 +498,9 @@
   onDestroy(() => {
     yomiObserver.disconnect();
     dictionaryObserver.disconnect();
+    // Reader is closing — persist whatever session buffer is still open so a
+    // reader-close during active reading doesn't drop the last stretch.
+    commitActiveSession();
   });
 
   function handleYomiMutation() {

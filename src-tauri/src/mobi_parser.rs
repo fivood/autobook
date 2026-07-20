@@ -12,9 +12,23 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct ParsedMobiImage {
-    /// 1-based index used by `recindex:NNNNN` references in the HTML.
+    /// 1-based index used by `recindex:NNNNN` and `kindle:embed:XXXX`
+    /// references in the HTML.
     pub index: usize,
-    /// File extension we infer from the magic bytes (jpg / png / gif).
+    /// File extension we infer from the magic bytes (jpg / png / gif / svg).
+    pub ext: String,
+    /// base64-encoded raw bytes.
+    pub data: String,
+}
+
+/// Resource extracted from a non-flow-0 FDST flow (typically SVG image
+/// masks or CSS). Referenced by HTML as `kindle:flow:XXXX?mime=...`
+/// where XXXX is the 4-char Kindle-base32 encoding of `flow_index`.
+#[derive(Serialize)]
+pub struct ParsedFlowResource {
+    /// FDST array index (0-based; kindle:flow:0001 → flow_index=1).
+    pub flow_index: u32,
+    /// "svg" or "css".
     pub ext: String,
     /// base64-encoded raw bytes.
     pub data: String,
@@ -29,6 +43,16 @@ pub struct ParsedMobi {
     pub images: Vec<ParsedMobiImage>,
     /// 1-based index into `images` for the cover, or 0 if none.
     pub cover_index: usize,
+    /// True when the returned HTML came from KF8 Phase 3 fragment
+    /// reassembly (byte-accurate to the epub source). Frontend uses this
+    /// to skip DOMParser round-trip since Phase 3 output doesn't have
+    /// the split-tag attribute leaks that MOBI6 needs cleaning for.
+    #[serde(default)]
+    pub well_formed: bool,
+    /// KF8 flow 1+ resources — SVG image masks referenced from HTML via
+    /// `kindle:flow:XXXX?mime=image/svg+xml`. Empty for MOBI6.
+    #[serde(default)]
+    pub flow_resources: Vec<ParsedFlowResource>,
 }
 
 fn replacement_char_ratio(s: &str) -> f32 {
@@ -128,7 +152,7 @@ struct HuffDict1Entry {
     maxcode: u32,
 }
 
-struct HuffCdic {
+pub(crate) struct HuffCdic {
     dict1: Vec<HuffDict1Entry>,
     mincode: Vec<u32>,
     maxcode: Vec<u32>,
@@ -136,7 +160,7 @@ struct HuffCdic {
 }
 
 impl HuffCdic {
-    fn load(huff_record: &[u8], cdic_records: &[&[u8]]) -> Result<Self, String> {
+    pub(crate) fn load(huff_record: &[u8], cdic_records: &[&[u8]]) -> Result<Self, String> {
         if huff_record.len() < 24 || &huff_record[0..8] != b"HUFF\x00\x00\x00\x18" {
             return Err("Invalid HUFF header".into());
         }
@@ -158,7 +182,7 @@ impl HuffCdic {
             let term = (v & 0x80) != 0;
             let maxcode_raw = v >> 8;
             let maxcode = if codelen > 0 {
-                ((maxcode_raw + 1) << (32 - codelen)).wrapping_sub(1)
+                ((maxcode_raw.wrapping_add(1)) << (32 - codelen)).wrapping_sub(1)
             } else {
                 0
             };
@@ -179,7 +203,11 @@ impl HuffCdic {
             ]);
             let cl = i + 1;
             mincode[cl] = min_raw << (32 - cl);
-            maxcode_table[cl] = ((max_raw + 1) << (32 - cl)).wrapping_sub(1);
+            // `max_raw + 1` can overflow u32 at cl=32 (max_raw=0xFFFFFFFF) — wrap,
+            // matching the `.wrapping_sub(1)` already used below (standard HUFF
+            // maxcode modular arithmetic). Without this large manga AZW3 files
+            // panic in debug builds ("attempt to add with overflow").
+            maxcode_table[cl] = ((max_raw.wrapping_add(1)) << (32 - cl)).wrapping_sub(1);
         }
 
         let mut dictionary: Vec<(Vec<u8>, bool)> = Vec::new();
@@ -209,7 +237,7 @@ impl HuffCdic {
         Ok(HuffCdic { dict1, mincode, maxcode: maxcode_table, dictionary })
     }
 
-    fn unpack(&mut self, data: &[u8]) -> Vec<u8> {
+    pub(crate) fn unpack(&mut self, data: &[u8]) -> Vec<u8> {
         let mut bitsleft = (data.len() as i64) * 8;
         let mut padded = data.to_vec();
         padded.extend_from_slice(&[0u8; 8]);
@@ -305,8 +333,7 @@ fn strip_mobi_control_chars(raw: &mut Vec<u8>) {
 /// Extract raw decompressed content bytes by parsing PalmDB directly,
 /// bypassing the mobi crate's record handling and string conversion.
 /// Returns (bytes, declared_encoding).
-/// declared_encoding: 1252 = CP1252, 65001 = UTF-8.
-fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)> {
+pub(crate) fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)> {
     use crate::kf8_parser::{parse_palmdb_records, strip_record_trailers};
 
     let (records, _title) = parse_palmdb_records(file_bytes).ok()?;
@@ -553,17 +580,38 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
         decode_best(&raw_bytes)
     };
 
-    // Detect KF8:joint / pure KF8 and dispatch to dedicated parser
+    // Detect KF8:joint / pure KF8 and dispatch to dedicated parser.
+    // Pure KF8 (record 0 MOBI header format_version == 8) always goes
+    // to try_parse_kf8, even if the MOBI6 codepath above produced text —
+    // MOBI6 misreading a KF8 header often "works" (returns some bytes)
+    // but yields garbled content, especially for Huff/CDIC-compressed
+    // AZW3s where the flow / skeleton structure would otherwise get lost.
     let is_joint = records.iter().any(|r| r.starts_with(b"BOUNDARY"));
+    let is_pure_kf8 = rec0.len() >= 16 + 0x60
+        && &rec0[16..20] == b"MOBI"
+        && u32::from_be_bytes([rec0[16 + 0x58], rec0[16 + 0x59], rec0[16 + 0x5A], rec0[16 + 0x5B]]) == 8;
     let is_kf8_only = strip_tags(&html).trim().chars().count() < 50;
-    if is_joint || is_kf8_only {
+    if is_joint || is_pure_kf8 || is_kf8_only {
         match crate::kf8_parser::try_parse_kf8(bytes) {
             Ok(Some(parsed)) => return Ok(parsed),
             Ok(None) => {
-                return Err("本文件 MOBI6 段为空且未找到 KF8 段，文件可能损坏。".into());
+                // No BOUNDARY and not pure KF8 → genuine MOBI6-only (often
+                // image-heavy / scanned books with little text). Don't error;
+                // fall through to the MOBI6 extraction below so the user gets
+                // the book (text + images) instead of a "文件可能损坏" dead-end.
             }
             Err(e) => {
-                return Err(format!("KF8 解析失败: {e}"));
+                // KF8 parse failed. Only surface the error to the user if
+                // we have no MOBI6 fallback content — the pre-KF8-dispatch
+                // MOBI6 codepath sometimes produces readable output even
+                // for pure KF8 files (garbled but not empty). Preferring
+                // partial content over a dead-end error was the pattern
+                // established in 1.16.3 for image-heavy scanned MOBI6.
+                let mobi6_len = strip_tags(&html).trim().chars().count();
+                if is_joint || mobi6_len < 50 {
+                    return Err(format!("KF8 解析失败: {e}"));
+                }
+                // else: fall through with MOBI6-derived html
             }
         }
     }
@@ -609,5 +657,8 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
         html,
         images,
         cover_index,
+        // MOBI6 path — assume dirty (split-tag attribute leaks).
+        well_formed: false,
+        flow_resources: Vec::new(),
     })
 }

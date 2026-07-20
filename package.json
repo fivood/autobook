@@ -1,6 +1,6 @@
 {
   "name": "ebook-reader-desktop",
-  "version": "1.10.7",
+  "version": "1.18.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -12,7 +12,9 @@
     "check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "postinstall": "node scripts/copy-vendor-assets.js",
+    "lint": "eslint src"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "3.0.10",
@@ -28,6 +30,9 @@
     "@types/webappsec-credential-management": "0.6.9",
     "@types/wicg-file-system-access": "2023.10.7",
     "autoprefixer": "10.5.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-svelte": "^2.46.1",
+    "globals": "^17.7.0",
     "postcss": "8.5.15",
     "sass": "1.100.0",
     "svelte": "4.2.20",
@@ -36,12 +41,14 @@
     "tailwindcss": "3.4.19",
     "tslib": "2.8.1",
     "typescript": "6.0.3",
+    "typescript-eslint": "^8.62.1",
     "vite": "5.4.21"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "7.2.0",
     "@fortawesome/free-regular-svg-icons": "7.2.0",
     "@fortawesome/free-solid-svg-icons": "7.2.0",
+    "@paddleocr/paddleocr-js": "^0.4.2",
     "@popperjs/core": "2.11.8",
     "@tauri-apps/api": "^2.1.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
@@ -56,6 +63,8 @@
     "highlight.js": "^11.11.1",
     "idb": "8.0.3",
     "katex": "^0.17.0",
+    "kokoro-js": "^1.2.1",
+    "libarchive.js": "^2.0.2",
     "marked": "^18.0.5",
     "p-limit": "7.3.0",
     "path-browserify": "1.0.1",
@@ -64,7 +73,6 @@
     "svelte-fa": "4.0.4",
     "svelte-gestures": "5.0.7",
     "svelte-meta-tags": "3.1.4",
-    "tesseract.js": "^7.0.0",
     "ua-parser-js": "2.0.10"
   }
 }

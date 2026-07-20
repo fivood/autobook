@@ -34,6 +34,10 @@
     lastStatisticsRangeTemplate$,
     lastStatisticsStartDate$
   } from '$lib/data/store';
+  import {
+    statisticsTitleFilterEnabled$,
+    statisticsTitleFilterIsOpen$
+  } from '$lib/components/statistics/statistics-types';
   import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -70,6 +74,12 @@
 
     deleteStatisticsData$.next(deleteAllStatisticsData);
   }
+
+  function openTitleFilter() {
+    // Close this drawer first so the filter drawer isn't stacked underneath.
+    dispatch('close');
+    statisticsTitleFilterIsOpen$.next(true);
+  }
 </script>
 
 <div class="flex items-center p-4">
@@ -77,6 +87,15 @@
     <Fa icon={faXmark} />
   </button>
   <div class="flex flex-1 justify-end">
+    <button
+      class="mr-2 sm:mr-4 hover:text-red-500"
+      class:opacity-40={!$statisticsTitleFilterEnabled$}
+      disabled={!$statisticsTitleFilterEnabled$}
+      title={$statisticsTitleFilterEnabled$ ? '按书名筛选' : '当前视图无可筛选内容'}
+      on:click={openTitleFilter}
+    >
+      筛选书籍
+    </button>
     <button class="mr-2 sm:mr-4 hover:text-red-500" on:click={() => exportStatisticsData(false)}>
       导出选中项
     </button>
@@ -92,7 +111,7 @@
 <div class="flex-1 p-4 overflow-auto">
   <div class="flex flex-col mb-6">
     <label for="datesTemplate">模板</label>
-    <select id="datesTemplate" class="text-black" bind:value={$lastStatisticsRangeTemplate$}>
+    <select id="datesTemplate" class="settings-input" bind:value={$lastStatisticsRangeTemplate$}>
       {#each statisticsRangeTemplates as statisticsRangeTemplate (statisticsRangeTemplate)}
         <option value={statisticsRangeTemplate}>
           {statisticsRangeTemplate}
@@ -102,7 +121,7 @@
   </div>
   <div class="flex flex-col mb-4 sm:hidden">
     <label for="weekDay">每周起始日</label>
-    <select id="weekDay" class="text-black" bind:value={$lastStartDayOfWeek$}>
+    <select id="weekDay" class="settings-input" bind:value={$lastStartDayOfWeek$}>
       {#each weekDays as weekDay (weekDay.day)}
         <option value={weekDay.index}>
           {weekDay.day}
@@ -116,7 +135,7 @@
       <input
         id="fromDate"
         type="date"
-        class="text-black"
+        class="settings-input"
         bind:value={selectedStatisticsStartDate}
         on:change={() =>
           dispatch('statisticsDateChange', {
@@ -150,7 +169,7 @@
       <input
         id="toDate"
         type="date"
-        class="text-black"
+        class="settings-input"
         bind:value={selectedStatisticsEndDate}
         on:change={() =>
           dispatch('statisticsDateChange', {
@@ -161,7 +180,7 @@
     </div>
     <div class="flex-col hidden sm:flex">
       <label for="weekDay">每周起始日</label>
-      <select id="weekDay" class="text-black" bind:value={$lastStartDayOfWeek$}>
+      <select id="weekDay" class="settings-input" bind:value={$lastStartDayOfWeek$}>
         {#each weekDays as weekDay (weekDay.day)}
           <option value={weekDay.index}>
             {weekDay.day}
@@ -185,7 +204,7 @@
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
         <label for="timeDataSource">时间数据来源</label>
       </Popover>
-      <select id="timeDataSource" class="text-black" bind:value={$lastReadingTimeDataSource$}>
+      <select id="timeDataSource" class="settings-input" bind:value={$lastReadingTimeDataSource$}>
         {#each readingTimeDataSources as readingTimeDataSource (readingTimeDataSource.key)}
           <option value={readingTimeDataSource.key}>
             {readingTimeDataSource.label}
@@ -201,7 +220,7 @@
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
         <label for="charactersSource">字数数据来源</label>
       </Popover>
-      <select id="charactersSource" class="text-black" bind:value={$lastCharactersDataSource$}>
+      <select id="charactersSource" class="settings-input" bind:value={$lastCharactersDataSource$}>
         {#each charactersDataSources as charactersDataSource (charactersDataSource.key)}
           <option value={charactersDataSource.key}>
             {charactersDataSource.label}
@@ -217,7 +236,7 @@
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
         <label for="speedSource">速度数据来源</label>
       </Popover>
-      <select id="speedSource" class="text-black" bind:value={$lastReadingSpeedDataSource$}>
+      <select id="speedSource" class="settings-input" bind:value={$lastReadingSpeedDataSource$}>
         {#each readingSpeedDataSources as readingSpeedDataSource (readingSpeedDataSource.key)}
           <option value={readingSpeedDataSource.key}>
             {readingSpeedDataSource.label}
@@ -236,7 +255,7 @@
     </Popover>
     <select
       id="primaryAggregration"
-      class="text-black"
+      class="settings-input"
       bind:value={$lastPrimaryReadingDataAggregationMode$}
     >
       {#each statisticsDataAggregrationModes as statisticsDataAggregrationMode (statisticsDataAggregrationMode)}
