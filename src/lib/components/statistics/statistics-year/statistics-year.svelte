@@ -69,7 +69,7 @@
       : 1;
 </script>
 
-<div class="mx-auto max-w-5xl px-4 pb-16">
+<div class="pb-16">
   <header class="flex items-center justify-between py-6">
     <button class="picker-btn" on:click={() => shift(-1)} title="上一年">
       <Fa icon={faChevronLeft} />
@@ -240,13 +240,13 @@
   }
   .hero {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
     margin-bottom: 1rem;
   }
   @media (min-width: 640px) {
     .hero {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
   .hero-cell {
@@ -287,13 +287,13 @@
   }
   .grid-2 {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
     margin-bottom: 1rem;
   }
   @media (min-width: 640px) {
     .grid-2 {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
   .grid-2 .card {
