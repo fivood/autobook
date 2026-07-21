@@ -682,6 +682,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
                 bookCard.characters = m.characters;
                 bookCard.lastBookModified = m.lastBookModified;
                 bookCard.lastBookOpen = m.lastBookOpen;
+                if (m.originalFormat) bookCard.originalFormat = m.originalFormat;
               } else if (file.name.startsWith('progress_')) {
                 const m = BaseStorageHandler.getProgressMetadata(file.name);
                 bookCard.lastBookmarkModified = m.lastBookmarkModified;

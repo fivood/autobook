@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.20.3
+
+修 1.20.2 格式显示在 Tauri 桌面完全没生效（书卡来自 FS 不是 IDB），另加阅读时顶部菜单显示书名。
+
+- **1.20.2 的 originalFormat 只写进了 IDB `data` 表，但 Tauri 桌面默认走 tauri-fs-handler，书卡是从磁盘上 `bookdata_*.zip` 文件名反解出来的**——那个文件名 schema 里根本没这字段，UI 端读到永远 undefined。修法：
+  - `getBookFileName`（base-handler）在文件名末尾拼一个可选 `_{format}` 段：`bookdata_v_v_chars_mod_open_epub.zip`。老书没这段兼容
+  - `getBookMetadata` 从 `parts[6]` 解出 originalFormat（`/^[a-z0-9]{2,10}$/i` 白名单防歧义）
+  - `tauri-fs-handler` 遍历 book 目录时把解出的 originalFormat 塞进 bookCard
+  - `browser-handler` 的两条 addBookCard 路径（初始 getBookList + saveBook 后回填）也补 originalFormat 透传，之前只加了 BookCardProps 类型没接源头
+- **阅读时顶部菜单显示书名**：`BookReaderHeader` 加 `bookTitle` prop，左右图标组之间加居中的 truncate 标签（`md:` 断点以上显示，手机窄屏藏——图标已经占满了）。header 变成 `items-center` 让标签垂直居中；`pointer-events:none + user-select:none` 保证不误触旁边图标。reader `/b` 页把 `$rawBookData$?.title` 传下去
+- 老书要走一次 saveBook 才会补上文件名末尾的格式段（下次打开-关闭就自动写回）
+
 ## 1.20.2
 
 书卡 hover 弹窗和右上角 chip 都能正确显示 EPUB/MOBI 等格式了。之前 title 里没扩展名的书（EPUB/MOBI 导入时元数据自带的干净 title 就是这种）识别不出格式，chip 藏起来、弹窗没「格式」行。

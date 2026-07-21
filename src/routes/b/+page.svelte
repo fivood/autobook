@@ -2278,6 +2278,7 @@
       )}
       showFullscreenButton={fullscreenManager.fullscreenEnabled}
       autoScrollMultiplier={$multiplier$}
+      bookTitle={$rawBookData$?.title ?? ''}
       {hasBookmarkData}
       bind:isBookmarkScreen
       on:tocClick={() => {

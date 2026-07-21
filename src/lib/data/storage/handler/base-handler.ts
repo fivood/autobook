@@ -687,22 +687,39 @@ export abstract class BaseStorageHandler {
       return book.name;
     }
 
+    // 1.20.3: encode originalFormat as an optional 7th trailing segment
+    // (bookdata_v_v_chars_mod_open_FORMAT.zip). Files written before this
+    // change simply lack the segment; getBookMetadata treats parts[6] as
+    // optional so back-compat holds.
+    const fmt = book.originalFormat ? `_${book.originalFormat}` : '';
+
     if (existingFilename) {
-      const { characters, lastBookModified, lastBookOpen } =
-        BaseStorageHandler.getBookMetadata(existingFilename);
+      const {
+        characters,
+        lastBookModified,
+        lastBookOpen,
+        originalFormat: existingFmt
+      } = BaseStorageHandler.getBookMetadata(existingFilename);
+      // Keep existing on-disk format tag if the incoming book doesn't
+      // carry one (e.g. saveBook called after reading a legacy book).
+      const preservedFmt = book.originalFormat
+        ? `_${book.originalFormat}`
+        : existingFmt
+        ? `_${existingFmt}`
+        : '';
 
       return `bookdata_${exporterVersion}_${currentDbVersion}_${
         characters ||
         BaseStorageHandler.getBookCharacters(book.characters || 0, book.sections || [])
       }_${book.lastBookModified || lastBookModified || 0}_${
         book.lastBookOpen || lastBookOpen || 0
-      }.zip`;
+      }${preservedFmt}.zip`;
     }
 
     return `bookdata_${exporterVersion}_${currentDbVersion}_${BaseStorageHandler.getBookCharacters(
       book.characters || 0,
       book.sections || []
-    )}_${book.lastBookModified || 0}_${book.lastBookOpen || 0}.zip`;
+    )}_${book.lastBookModified || 0}_${book.lastBookOpen || 0}${fmt}.zip`;
   }
 
   protected static getProgressFileName(progress: BooksDbBookmarkData | File) {
@@ -743,12 +760,20 @@ export abstract class BaseStorageHandler {
   protected static getBookMetadata(filename: string) {
     const parts = filename.split('_').map((part) => part.replace(/\.zip$/, ''));
 
+    // parts[6] is the optional originalFormat segment (added 1.20.3).
+    // Old bookdata files have length 6; we return undefined so the
+    // caller falls back to title-based detection.
+    const rawFmt = parts[6];
+    const originalFormat =
+      rawFmt && /^[a-z0-9]{2,10}$/i.test(rawFmt) ? rawFmt.toLowerCase() : undefined;
+
     return {
       exporterVersion: +parts[1],
       dbVersion: +parts[2],
       characters: +parts[3],
       lastBookModified: +parts[4],
-      lastBookOpen: +parts[5]
+      lastBookOpen: +parts[5],
+      originalFormat
     };
   }
 

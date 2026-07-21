@@ -36,6 +36,10 @@
   export let showFullscreenButton: boolean;
   export let isBookmarkScreen: boolean;
   export let hasBookmarkData: boolean;
+  /** Current book's title. Shown as a centered label between the left
+   * and right icon groups when the header slides down — reader wanted
+   * to know which book they're reading without going back to library. */
+  export let bookTitle = '';
 
   const dispatch = createEventDispatcher<{
     tocClick: void;
@@ -112,7 +116,7 @@
   }
 </script>
 
-<div class="flex justify-between px-4 md:px-8 {baseHeaderClasses}">
+<div class="flex justify-between items-center px-4 md:px-8 {baseHeaderClasses}">
   <div class="flex transform-gpu {nTranslateXHeaderFa}">
     {#if hasChapterData}
       <div
@@ -177,6 +181,15 @@
       </div>
     {/if}
   </div>
+
+  {#if bookTitle}
+    <div
+      class="book-title-label hidden md:block mx-4 min-w-0 flex-1 truncate text-center opacity-80"
+      title={bookTitle}
+    >
+      {bookTitle}
+    </div>
+  {/if}
 
   <div class="flex transform-gpu {translateXHeaderFa}">
     <div
@@ -249,3 +262,14 @@
     />
   </div>
 </div>
+
+<style>
+  .book-title-label {
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+    /* Keeps title from becoming a click target — icons on either side
+       stay unambiguous. */
+    pointer-events: none;
+    user-select: none;
+  }
+</style>
