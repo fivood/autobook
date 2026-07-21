@@ -2,7 +2,6 @@
   import { goto } from '$app/navigation';
   import {
     faCalendarDays,
-    faChartLine,
     faClock,
     faFileArrowDown,
     faHighlighter,
@@ -69,19 +68,6 @@
         on:keyup={dummyFn}
       >
         <Fa icon={faClock} />
-      </div>
-      <div
-        tabindex="0"
-        role="button"
-        title={$lastStatisticsTab$ === StatisticsTab.YEAR
-          ? $t('stats.header.yearActive')
-          : $t('stats.header.yearSwitch')}
-        class={baseIconClasses}
-        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.YEAR}
-        on:click={() => ($lastStatisticsTab$ = StatisticsTab.YEAR)}
-        on:keyup={dummyFn}
-      >
-        <Fa icon={faChartLine} />
       </div>
       <div
         tabindex="0"

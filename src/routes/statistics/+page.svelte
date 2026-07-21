@@ -119,6 +119,14 @@
         ({ dateString: $lastStatisticsEndDate$ } = advanceDateDays(referenceDate, -1));
         break;
       }
+      case StatisticsRangeTemplate.ALL: {
+        // 「全部」= 从 2000-01-01 到今天。选一个显著早于任何真实数据的起点，
+        // 让过滤器实际上不筛掉任何东西。用户 IDB 里有更早的数据可以走
+        // 自定义范围。
+        $lastStatisticsStartDate$ = '2000-01-01';
+        $lastStatisticsEndDate$ = getDateString(referenceDate);
+        break;
+      }
       default:
         break;
     }

@@ -5,9 +5,9 @@
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import StatisticsMain from '$lib/components/statistics/statistics-main/statistics-main.svelte';
+  import StatisticsPeriodChip from '$lib/components/statistics/statistics-period-chip/statistics-period-chip.svelte';
   import StatisticsSessions from '$lib/components/statistics/statistics-sessions/statistics-sessions.svelte';
   import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary.svelte';
-  import StatisticsYear from '$lib/components/statistics/statistics-year/statistics-year.svelte';
   import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
   import StatisticsHighlights from '$lib/components/statistics/statistics-highlights/statistics-highlights.svelte';
   import type {
@@ -934,6 +934,7 @@
     <Fa icon={faSpinner} spin />
   </div>
 {:else}
+  <StatisticsPeriodChip />
   {#if $lastStatisticsTab$ === StatisticsTab.MAIN}
     <StatisticsMain
       statistics={statisticsData}
@@ -963,9 +964,6 @@
       on:delete={handleDeleteRequest}
       on:edit={handleEditRequest}
     />
-  {/if}
-  {#if $lastStatisticsTab$ === StatisticsTab.YEAR}
-    <StatisticsYear />
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS}
     <StatisticsHighlights

@@ -37,7 +37,6 @@ export enum StatisticsTab {
   MAIN = '主视图',
   SESSIONS = '会话',
   SUMMARY = '汇总',
-  YEAR = '年度',
   HIGHLIGHTS = '高亮'
 }
 
@@ -46,6 +45,7 @@ export enum StatisticsRangeTemplate {
   WEEK = '本周',
   MONTH = '本月',
   YEAR = '今年',
+  ALL = '全部',
   CUSTOM = '自定义'
 }
 
@@ -60,6 +60,7 @@ export const statisticsRangeTemplates = [
   StatisticsRangeTemplate.WEEK,
   StatisticsRangeTemplate.MONTH,
   StatisticsRangeTemplate.YEAR,
+  StatisticsRangeTemplate.ALL,
   StatisticsRangeTemplate.CUSTOM
 ];
 

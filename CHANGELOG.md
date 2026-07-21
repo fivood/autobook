@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.20.1
+
+统计面板重整 Phase D：删年度独立 tab，改成顶部时段 chip 里的「今年」预设。所有 tab 现在共用同一条时段筛选，语义统一。
+
+- **顶部加时段 chip picker**：`statistics-period-chip.svelte` 6 键横排（今天 / 本周 / 本月 / 今年 / **全部** / 自定义），点了就写 `lastStatisticsRangeTemplate$`，`/statistics/+page.svelte` 里的 `setSelectedStatisticsDays` 已有的逻辑负责推起止日期。active 态用 `--accent-color` 高亮，hover title 提示对应时段的解释
+- **新增 ALL 预设**（全部）：起始日期定 `2000-01-01`（早于任何真实数据），结束日期 = 今天。用户 IDB 里有更早的数据可以走「自定义」范围
+- **删 statistics-year tab**：`statistics-year.svelte` (440 行) 删掉；tab enum 去掉 YEAR；statistics-header 去掉「年度」按钮 + 相关 i18n key 引用；statistics-content 去掉 `<StatisticsYear />` 分支和 import
+- **年度回顾内容 → 主视图**：statistics-main 里 hero + longestStreak / bestDay / firstDay 卡片本来就在，等于当用户选「今年」预设时主视图直接展示年度回顾的核心信息。不需要额外迁移代码
+- **`year-summary.ts` 文件保留**：export MD 报告的 handler 还在用 `computeYearSummary`（老 shape），保留这个工具函数直到 export 也换成新聚合器
+- Auto-heal：`lastStatisticsTab$` 里若还存着 YEAR 值，被 1.20.0 加的 valid-set 检查自动兜底到 MAIN
+
 ## 1.20.0
 
 统计面板重整第二刀 + 书卡 hover 显示原格式。删日历 heatmap 独立 tab、加会话 tab。剩下的 BOOKS / AUTHORS 探索 tab 和年度→时段 preset 留 1.20.1/2 继续。
