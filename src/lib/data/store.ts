@@ -14,7 +14,6 @@ import {
   TrackerAutoPause,
   TrackerSkipThresholdAction
 } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
-import { HeatmapDataAggregration } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
 import {
   StatisticsRangeTemplate,
   StatisticsTab,
@@ -578,6 +577,14 @@ export const lastStatisticsTab$ = writableStringLocalStorageSubject<StatisticsTa
   'lastStatisticsTab',
   StatisticsTab.MAIN
 );
+// Auto-heal legacy values: 1.20.0 removed the OVERVIEW (日历) tab.
+// Users upgrading with that value stored would land on an empty view.
+if (typeof window !== 'undefined') {
+  const valid = new Set<string>(Object.values(StatisticsTab));
+  if (!valid.has(lastStatisticsTab$.getValue())) {
+    lastStatisticsTab$.next(StatisticsTab.MAIN);
+  }
+}
 
 export const lastStatisticsRangeTemplate$ =
   writableStringLocalStorageSubject<StatisticsRangeTemplate>()(
@@ -632,18 +639,6 @@ export const lastStatisticsFilterShowSelectedTitlesOnly$ = writableBooleanLocalS
   'lastStatisticsFilterShowSelectedTitlesOnly',
   false
 );
-
-export const lastReadingDataHeatmapAggregationMode$ =
-  writableStringLocalStorageSubject<HeatmapDataAggregration>()(
-    'lastReadingDataHeatmapAggregationMode',
-    HeatmapDataAggregration.ALL_TIME
-  );
-
-export const lastReadingGoalsHeatmapAggregationMode$ =
-  writableStringLocalStorageSubject<HeatmapDataAggregration>()(
-    'lastReadingGoalsHeatmapAggregationMode',
-    HeatmapDataAggregration.ALL_TIME
-  );
 
 export const lastStatisticsSummarySortProperty$ = writableStringLocalStorageSubject<
   keyof BookStatistic

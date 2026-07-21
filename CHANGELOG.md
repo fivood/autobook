@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.20.0
+
+统计面板重整第二刀 + 书卡 hover 显示原格式。删日历 heatmap 独立 tab、加会话 tab。剩下的 BOOKS / AUTHORS 探索 tab 和年度→时段 preset 留 1.20.1/2 继续。
+
+- **书卡 hover 显示原文件格式**：右上角淡入 chip 显示 EPUB/MOBI/AZW3/PDF/TXT/CBZ 等原始扩展（1.17.5 时 detectBookFormat 已经能推断）。有封面图的书才显示（无封面的 placeholder 本身就在中央大字打了 label），透明度 0 → hover/focus 时 0.95 平滑过渡。同时给外层 `.book-card-root` 加 title 属性做备份 tooltip
+- **删日历 heatmap 独立 tab**（Phase B）：`statistics-heatmap/statistics-heatmap.svelte` (1408 行) + `.ts` (123 行) 整个目录移除。tab enum 去掉 `OVERVIEW = '日历'`，`lastStatisticsTab$` 加旧值 auto-heal（升级带 OVERVIEW 的用户回到 MAIN 不至于空白）
+- **新增会话 tab**（Phase C 第一枪）：`statistics-sessions/statistics-sessions.svelte`。5 张 hero 卡（会话数/总时长/中位/p95/最长）+ 会话列表表格（开始时间/星期/时长/字数/书名，默认 100 条一页，「再显示 100 条」按钮扩展）。全部走 `computePeriodSummary` + `resolvePeriod`，跟主视图共享时段筛选和标题过滤
+- **顺带清理**：statistics-content 去掉不再用的 readingGoals 加载 + today/todayKey 变量 + `BooksDbReadingGoal`/`getDateString`/`getStartHoursDate` import；store.ts 删 `HeatmapDataAggregration` import + `lastReadingDataHeatmapAggregationMode$` + `lastReadingGoalsHeatmapAggregationMode$` 两个 store；`statistics-settings.svelte` 里 `daysOfWeek` 从 heatmap 模块 import 改成本地 7 元素常量
+- **保留待处理**：`statistics-heatmap` 相关的 i18n key、`heatmap.*` `readingGoalsHeatmapDataAggregration` 之类 store 引用（`statistics-settings` 抽屉里可能还有 UI 项）会在专门的 i18n / dead-code 清理轮次处理
+
 ## 1.19.4
 
 大书加载优化 + 加载进度真实化。之前打开一本图片多的书（漫画、扫描 PDF）能卡几秒到十几秒，屏幕上只有一个转圈图标不知道卡在哪一步。这一版：blob 替换从 O(blobs × elementHtml) 单遍 → O(elementHtml)；加载 spinner 下多一条带阶段名的进度条。

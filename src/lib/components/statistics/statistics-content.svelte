@@ -4,9 +4,8 @@
   import { getDefaultStatistic } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
-  import { HeatmapType } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
-  import StatisticsHeatmap from '$lib/components/statistics/statistics-heatmap/statistics-heatmap.svelte';
   import StatisticsMain from '$lib/components/statistics/statistics-main/statistics-main.svelte';
+  import StatisticsSessions from '$lib/components/statistics/statistics-sessions/statistics-sessions.svelte';
   import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary.svelte';
   import StatisticsYear from '$lib/components/statistics/statistics-year/statistics-year.svelte';
   import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
@@ -35,10 +34,7 @@
     setStatisticsDatesToAllTime$,
     StatisticsRangeTemplate
   } from '$lib/components/statistics/statistics-types';
-  import type {
-    BooksDbReadingGoal,
-    BooksDbStatistic
-  } from '$lib/data/database/books-db/versions/books-db';
+  import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { logger } from '$lib/data/logger';
   import { getDateRangeLabel } from '$lib/data/reading-goal';
@@ -48,8 +44,6 @@
     confirmStatisticsDeletion$,
     database,
     lastPrimaryReadingDataAggregationMode$,
-    lastReadingDataHeatmapAggregationMode$,
-    lastReadingGoalsHeatmapAggregationMode$,
     lastStatisticsEndDate$,
     lastStatisticsRangeTemplate$,
     lastStatisticsStartDate$,
@@ -59,11 +53,7 @@
     statisticsTabKeybindMap$
   } from '$lib/data/store';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
-  import {
-    getDateString,
-    getStartHoursDate,
-    secondsToMinutes
-  } from '$lib/functions/statistic-util';
+  import { secondsToMinutes } from '$lib/functions/statistic-util';
   import { clickOutside } from '$lib/functions/use-click-outside';
   import { pluralize } from '$lib/functions/utils';
   import pLimit from 'p-limit';
@@ -380,14 +370,11 @@
   );
 
   let isLoading = true;
-  let today = getStartHoursDate($startDayHoursForTracker$);
-  let todayKey = getDateString(today);
   let statisticsTitleFilters = new Map<string, boolean>();
   let titlesInStatisticsDateRange = new Set<string>();
   let statisticsData: BookStatistic[] = [];
   let statisticsForSelection: BookStatistic[] = [];
   let aggregratedStatistics: BookStatistic[] = [];
-  let readingGoals: BooksDbReadingGoal[] = [];
   // Sessions load lazily the first time a session-aware tab (main tab
   // from 1.19.0, year tab pre-existing) is opened. Kept as a snapshot;
   // gets stale if the user reads mid-session but that's fine — the
@@ -407,7 +394,11 @@
     }
   }
 
-  $: if ($lastStatisticsTab$ === StatisticsTab.MAIN && !sessionsLoaded) {
+  $: if (
+    ($lastStatisticsTab$ === StatisticsTab.MAIN ||
+      $lastStatisticsTab$ === StatisticsTab.SESSIONS) &&
+    !sessionsLoaded
+  ) {
     ensureSessionsLoaded();
   }
 
@@ -422,9 +413,6 @@
     $lastStatisticsStartDate$ &&
     $lastStatisticsEndDate$
   ) {
-    today = getStartHoursDate($startDayHoursForTracker$);
-    todayKey = getDateString(today);
-
     updateStatisticsData();
   }
 
@@ -766,11 +754,8 @@
       const db = await database.db;
       const hasPrefilteredTitlesForStatistics = !!$preFilteredTitlesForStatistics$.size;
 
-      [statisticsData, readingGoals] = await Promise.all([
-        db.getAllFromIndex('statistic', 'dateKey'),
-        database.getReadingGoals()
-      ]).then(([statistics, readingGoalData]) => [
-        statistics.map((statistic) => {
+      statisticsData = (await db.getAllFromIndex('statistic', 'dateKey')).map(
+        (statistic) => {
           if (
             statistic.readingTime &&
             (!hasPrefilteredTitlesForStatistics ||
@@ -791,9 +776,8 @@
               averageWeightedReadingSpeed: statistic.lastReadingSpeed
             }
           };
-        }),
-        readingGoalData
-      ]);
+        }
+      );
     } catch ({ message }: any) {
       dialogManager.dialogs$.next([
         {
@@ -961,28 +945,16 @@
       {statisticsDateRangeLabel}
     />
   {/if}
-  {#if $lastStatisticsTab$ === StatisticsTab.OVERVIEW}
-    <StatisticsHeatmap
-      {statisticsData}
-      {readingGoals}
-      {statisticsTitleFilters}
-      {today}
-      {todayKey}
-      bind:heatmapAggregration={$lastReadingDataHeatmapAggregationMode$}
+  {#if $lastStatisticsTab$ === StatisticsTab.SESSIONS}
+    <StatisticsSessions
+      statistics={statisticsData}
+      {sessions}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
+      {statisticsDateRangeLabel}
     />
-    {#if readingGoals.length}
-      <div class="mt-8 sm:mt-16">
-        <StatisticsHeatmap
-          {statisticsData}
-          {readingGoals}
-          {statisticsTitleFilters}
-          {today}
-          {todayKey}
-          heatmapType={HeatmapType.READING_GOALS}
-          bind:heatmapAggregration={$lastReadingGoalsHeatmapAggregationMode$}
-        />
-      </div>
-    {/if}
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.SUMMARY}
     <StatisticsSummary

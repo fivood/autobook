@@ -21,7 +21,9 @@
     deleteStatisticsData$,
     setStatisticsDatesToAllTime$
   } from '$lib/components/statistics/statistics-types';
-  import { daysOfWeek } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
+  // Was imported from the now-deleted statistics-heatmap module — inlined
+  // because the 7-item constant isn't worth its own file.
+  const daysOfWeek = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   import { dialogManager } from '$lib/data/dialog-manager';
   import {
     confirmStatisticsDeletion$,

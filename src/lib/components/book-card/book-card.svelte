@@ -96,7 +96,14 @@
     progress >= 0.995 ? 'done' : progress === 0 && lastBookOpen === 0 ? 'unread' : null;
 </script>
 
-<div tabindex="0" role="button" class="aspect-w-2 aspect-h-3 relative overflow-hidden rounded-lg" on:click on:keyup>
+<div
+  tabindex="0"
+  role="button"
+  title={detectedFormat === 'BOOK' ? cleanTitle : `${cleanTitle} · ${detectedFormat}`}
+  class="book-card-root aspect-w-2 aspect-h-3 relative overflow-hidden rounded-lg"
+  on:click
+  on:keyup
+>
   <div class="inline">
     <div class="h-full w-full text-5xl sm:text-7xl">
       {#if !imagePath}
@@ -150,6 +157,14 @@
       <span class="status-badge unread" title={$t('bookCard.unreadTooltip')}>{$t('bookCard.unread')}</span>
     {/if}
 
+    {#if imagePath && detectedFormat !== 'BOOK'}
+      <span
+        class="format-chip"
+        style="background:{palette.accent}"
+        title="原文件格式：{detectedFormat}"
+      >{detectedFormat}</span>
+    {/if}
+
     <div class="absolute inset-x-0 bottom-0">
       <div
         class="sm:h-21 h-16 bg-menu bg-opacity-85 p-0.5 px-1.5 text-justify text-sm text-menu sm:p-1.5 sm:text-base"
@@ -184,6 +199,29 @@
   .status-badge.unread {
     background: rgba(255, 255, 255, 0.92);
     color: #444;
+  }
+  /* Hover-revealed chip in the top-right showing the original file format.
+     Only shown when the card has a real cover (imagePath) — the placeholder
+     branch already renders the format prominently in its SVG label. */
+  .format-chip {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    z-index: 2;
+    padding: 0.12rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  .book-card-root:hover .format-chip,
+  .book-card-root:focus-within .format-chip {
+    opacity: 0.95;
   }
   .progress-track {
     height: 0.45rem;

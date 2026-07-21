@@ -3,9 +3,9 @@
   import {
     faCalendarDays,
     faChartLine,
+    faClock,
     faFileArrowDown,
     faHighlighter,
-    faMap,
     faPenToSquare,
     faSliders,
     faGaugeHigh
@@ -60,15 +60,15 @@
       <div
         tabindex="0"
         role="button"
-        title={$lastStatisticsTab$ === StatisticsTab.OVERVIEW
-          ? $t('stats.header.heatmapActive')
-          : $t('stats.header.heatmapSwitch')}
+        title={$lastStatisticsTab$ === StatisticsTab.SESSIONS
+          ? '已在会话标签页'
+          : '切换到会话（阅读时段与分位）'}
         class={baseIconClasses}
-        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.OVERVIEW}
-        on:click={() => ($lastStatisticsTab$ = StatisticsTab.OVERVIEW)}
+        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.SESSIONS}
+        on:click={() => ($lastStatisticsTab$ = StatisticsTab.SESSIONS)}
         on:keyup={dummyFn}
       >
-        <Fa icon={faMap} />
+        <Fa icon={faClock} />
       </div>
       <div
         tabindex="0"
