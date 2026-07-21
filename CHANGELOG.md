@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.19.2
+
+书库存储源选择从书库 header 挪到「设置 → 存储与备份」，并只在 Tauri 桌面上显示。1.17.0 移除多源同步后这个 popover 在 PWA 上只剩 1 项（点了没用）、Tauri 上大部分用户永远只用 TAURI_FS——占 header 位置不划算。
+
+- **book-manager-header 里删掉 storage source Popover**：连带 `storageSourceMenuItems` / `storageSourceElm` / `isStorageSourceAvailable` / `getStorageHandler` / `storageIcon$` / `isOnline$` / `cacheStorageData$` 等只这一处用的 import 一起清掉
+- **settings-content 里加「书库存储源」小节（仅 isTauri()）**：ButtonToggleGroup 双选「文件系统（默认） / 浏览器 IDB（旧数据）」，绑 `storageSource$` store。tooltip 说明什么时候会用到旧 BROWSER 源
+- **i18n keys 保留不删**：`manager.storage.browser` / `manager.storage.tauriFs` / `manager.storageSource` 目前 dead，等专门的 i18n 清理轮次一起扫
+
 ## 1.19.1
 
 手动录入丰富化 + 年度回顾宽度自适应修复。

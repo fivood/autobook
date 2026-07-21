@@ -21,19 +21,12 @@
     translateXHeaderFa
   } from '$lib/css-classes';
   import { SortDirection } from '$lib/data/sort-types';
-  import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageKey } from '$lib/data/storage/storage-types';
-  import {
-    isStorageSourceAvailable,
-    storageIcon$,
-    storageSource$
-  } from '$lib/data/storage/storage-view';
+  import { storageSource$ } from '$lib/data/storage/storage-view';
   import {
     bookCoverMinWidth$,
     booklistSortOptions$,
-    cacheStorageData$,
     fileCountData$,
-    isOnline$,
     libraryFilter$
   } from '$lib/data/store';
   import { BOOK_FORMAT_LABELS, type BookFormat } from '$lib/functions/book-format';
@@ -111,17 +104,11 @@
   };
 
   const importMenuItems = [mergeEntries.FILE_IMPORT];
-  const storageSourceMenuItems: {
-    labelKey: string;
-    key: StorageKey;
-    requiresConnectivity: boolean;
-  }[] = [{ labelKey: 'manager.storage.browser', key: StorageKey.BROWSER, requiresConnectivity: false }];
 
   let fileImportElm: HTMLElement;
   let folderImportElm: HTMLElement;
   let backupImportElm: HTMLElement;
   let countImportElm: HTMLInputElement;
-  let storageSourceElm: Popover;
   let sortOptionsElm: Popover;
   let isOldUrl = false;
   let showLoadCount = false;
@@ -134,18 +121,6 @@
       ...($isMobile$
         ? [mergeEntries.BACKUP_IMPORT]
         : [mergeEntries.FOLDER_IMPORT, mergeEntries.BACKUP_IMPORT])
-    );
-
-    storageSourceMenuItems.push(
-      ...(isStorageSourceAvailable(StorageKey.TAURI_FS, '', window)
-        ? [
-            {
-              labelKey: 'manager.storage.tauriFs',
-              key: StorageKey.TAURI_FS,
-              requiresConnectivity: false
-            }
-          ]
-        : [])
     );
   }
 
@@ -383,60 +358,9 @@
               on:action={triggerInput}
             />
           </div>
-          <div
-            title={$t('manager.storageSource')}
-            class="relative transform-gpu"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}
-          >
-            <Popover
-              placement="bottom"
-              fallbackPlacements={['bottom-end', 'bottom-start']}
-              yOffset={0}
-              bind:this={storageSourceElm}
-            >
-              <div slot="icon">
-                {#key $storageIcon$}
-                  <svg
-                    class={baseIconClasses}
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox={$storageIcon$.viewBox}
-                  >
-                    <path class="fill-current" d={$storageIcon$.d} />
-                  </svg>
-                {/key}
-              </div>
-              <div class="w-28 bg-menu text-menu" slot="content">
-                {#each storageSourceMenuItems as sourceMenuItem (sourceMenuItem.key)}
-                  <div
-                    tabindex="0"
-                    role="button"
-                    class="cursor-pointer px-4 py-2 text-sm hover-menu-inverted"
-                    class:cursor-not-allowed={sourceMenuItem.requiresConnectivity && !$isOnline$}
-                    class:opacity-50={sourceMenuItem.requiresConnectivity && !$isOnline$}
-                    on:click={async () => {
-                      if (sourceMenuItem.requiresConnectivity && !$isOnline$) {
-                        return;
-                      }
+          <!-- 存储源 picker 从 header 移到「设置 → 存储与备份 → 书库存储源」
+               （1.19.2）。日常几乎不切换，占位不值。 -->
 
-                      if (sourceMenuItem.key !== $storageSource$) {
-                        if (!$cacheStorageData$) {
-                          getStorageHandler(window, sourceMenuItem.key).clearData();
-                        }
-
-                        storageSource$.next(sourceMenuItem.key);
-                      }
-
-                      storageSourceElm.toggleOpen();
-                    }}
-                    on:keyup={dummyFn}
-                  >
-                    {$t(sourceMenuItem.labelKey)}
-                  </div>
-                {/each}
-              </div>
-            </Popover>
-          </div>
           <div
             class="relative transform-gpu"
             in:scale={inAnimationParams}

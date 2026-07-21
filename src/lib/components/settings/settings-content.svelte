@@ -67,6 +67,8 @@
     verticalCustomReadingPosition$
   } from '$lib/data/store';
   import { isTauri } from '$lib/data/env';
+  import { StorageKey } from '$lib/data/storage/storage-types';
+  import { storageSource$ } from '$lib/data/storage/storage-view';
   import type { TextMarginMode } from '$lib/data/text-margin-mode';
   import {
     availableThemes as availableThemesMap,
@@ -1095,6 +1097,17 @@
       text: '不模糊'
     }
   ];
+
+  // 书库存储源 toggle。Tauri 桌面上才显示：TAURI_FS 是默认真书库，
+  // BROWSER 只留给从更早浏览器 IDB 升级过来的用户翻旧数据。
+  const storageSourceOptions: ToggleOption<StorageKey>[] = [
+    { id: StorageKey.TAURI_FS, text: '文件系统（默认）' },
+    { id: StorageKey.BROWSER, text: '浏览器 IDB（旧数据）' }
+  ];
+  let selectedStorageSource: StorageKey = $storageSource$;
+  $: if (selectedStorageSource !== $storageSource$) {
+    storageSource$.next(selectedStorageSource);
+  }
 
   const optionsForImportHTMLFixes: ToggleOption<ImportHTMLFixMode>[] = [
     {
@@ -2825,6 +2838,14 @@
         <SettingsDataPaths />
       </SettingsItemGroup>
     </div>
+    {#if isTauri()}
+      <SettingsItemGroup title="书库存储源" tooltip="日常读书选「文件系统」即可（默认）。「浏览器 IDB」只用于查看从更早版本残留在浏览器数据库里的旧书；如果新装或已经全部迁到文件系统，这一项永远是空的，也无需切换。">
+        <ButtonToggleGroup
+          options={storageSourceOptions}
+          bind:selectedOptionId={selectedStorageSource}
+        />
+      </SettingsItemGroup>
+    {/if}
     <SettingsItemGroup title={$t('settings.item.persistentStorage')} tooltip={persistentStorageTooltip}>
       <div class="flex items-center">
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={persistentStorage} />
