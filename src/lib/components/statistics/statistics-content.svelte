@@ -6,6 +6,7 @@
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { HeatmapType } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
   import StatisticsHeatmap from '$lib/components/statistics/statistics-heatmap/statistics-heatmap.svelte';
+  import StatisticsMain from '$lib/components/statistics/statistics-main/statistics-main.svelte';
   import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary.svelte';
   import StatisticsYear from '$lib/components/statistics/statistics-year/statistics-year.svelte';
   import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
@@ -381,6 +382,28 @@
   let statisticsForSelection: BookStatistic[] = [];
   let aggregratedStatistics: BookStatistic[] = [];
   let readingGoals: BooksDbReadingGoal[] = [];
+  // Sessions load lazily the first time a session-aware tab (main tab
+  // from 1.19.0, year tab pre-existing) is opened. Kept as a snapshot;
+  // gets stale if the user reads mid-session but that's fine — the
+  // panel is re-entered on every open so a fresh load happens then.
+  let sessions: import('$lib/data/database/books-db/versions/books-db').BooksDbSession[] = [];
+  let sessionsLoaded = false;
+  let sessionsLoading = false;
+
+  async function ensureSessionsLoaded() {
+    if (sessionsLoaded || sessionsLoading) return;
+    sessionsLoading = true;
+    try {
+      sessions = await database.getAllSessions();
+      sessionsLoaded = true;
+    } finally {
+      sessionsLoading = false;
+    }
+  }
+
+  $: if ($lastStatisticsTab$ === StatisticsTab.MAIN && !sessionsLoaded) {
+    ensureSessionsLoaded();
+  }
 
   $: statisticsDateRangeLabel = getDateRangeLabel(
     $lastStatisticsStartDate$,
@@ -921,6 +944,17 @@
     <Fa icon={faSpinner} spin />
   </div>
 {:else}
+  {#if $lastStatisticsTab$ === StatisticsTab.MAIN}
+    <StatisticsMain
+      statistics={statisticsData}
+      {sessions}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
+      {statisticsDateRangeLabel}
+    />
+  {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.OVERVIEW}
     <StatisticsHeatmap
       {statisticsData}

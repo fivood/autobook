@@ -576,7 +576,7 @@ export const lastReadingGoalsModified$ = writableNumberLocalStorageSubject()(
 
 export const lastStatisticsTab$ = writableStringLocalStorageSubject<StatisticsTab>()(
   'lastStatisticsTab',
-  StatisticsTab.OVERVIEW
+  StatisticsTab.MAIN
 );
 
 export const lastStatisticsRangeTemplate$ =

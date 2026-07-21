@@ -7,7 +7,8 @@
     faHighlighter,
     faMap,
     faPenToSquare,
-    faSliders
+    faSliders,
+    faGaugeHigh
   } from '@fortawesome/free-solid-svg-icons';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
@@ -30,6 +31,19 @@
 <div class="elevation-4 fixed inset-x-0 top-0 z-10">
   <div class={baseHeaderClasses}>
     <div class="{pxScreen} flex justify-end px-0 md:px-5">
+      <div
+        tabindex="0"
+        role="button"
+        title={$lastStatisticsTab$ === StatisticsTab.MAIN
+          ? $t('stats.header.mainActive')
+          : $t('stats.header.mainSwitch')}
+        class={baseIconClasses}
+        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.MAIN}
+        on:click={() => ($lastStatisticsTab$ = StatisticsTab.MAIN)}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faGaugeHigh} />
+      </div>
       <div
         tabindex="0"
         role="button"

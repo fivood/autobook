@@ -285,6 +285,8 @@ export default {
   'settings.section.statsTrackingHint': '启用统计后才会出现下方的细化设置',
 
   // Statistics page header
+  'stats.header.mainActive': '已在主视图标签页',
+  'stats.header.mainSwitch': '切换到主视图',
   'stats.header.summaryActive': '已在汇总标签页',
   'stats.header.summarySwitch': '切换到汇总标签页',
   'stats.header.heatmapActive': '已在热力图标签页',

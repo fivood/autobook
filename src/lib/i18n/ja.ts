@@ -215,6 +215,8 @@ export default {
   'settings.section.statsTracking': 'トラッキング切替',
   'settings.section.statsTrackingHint': '有効にすると下に詳細設定が表示されます',
 
+  'stats.header.mainActive': 'メインダッシュボード表示中',
+  'stats.header.mainSwitch': 'メインダッシュボードへ切替',
   'stats.header.summaryActive': 'サマリータブ表示中',
   'stats.header.summarySwitch': 'サマリータブに切替',
   'stats.header.heatmapActive': 'ヒートマップタブ表示中',

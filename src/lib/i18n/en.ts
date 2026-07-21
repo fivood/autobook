@@ -210,6 +210,8 @@ export default {
   'settings.section.statsTracking': 'Tracking toggle',
   'settings.section.statsTrackingHint': 'The detailed settings below appear once tracking is on',
 
+  'stats.header.mainActive': 'Already on the main dashboard',
+  'stats.header.mainSwitch': 'Switch to main dashboard',
   'stats.header.summaryActive': 'Already on the summary tab',
   'stats.header.summarySwitch': 'Switch to summary',
   'stats.header.heatmapActive': 'Already on the heatmap tab',

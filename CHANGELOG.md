@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.19.0
+
+统计面板重整第一刀：新「主视图」tab 上线并设为默认。基于 v10 session 数据的 hero 卡 + 星期×小时热力图 + 月柱 + Top 书。老的日历 heatmap / 汇总 / 年度 tab 全部保留可切回；下次会连年度 tab 一起删（转为「时段=当年」预设入口），届时探索区（书籍 / 作者 / 会话）也加进来。
+
+- **新增 `session-summary.ts` 通用聚合器**：抽自 year-summary 的 pure fn，参数化为任意日期范围。输出 hero 数字（总时长/阅读天数/字数/完成书数）+ MonthlyBar[] + TopBook[] + longestStreak/bestDay/firstDay/lastDay + SessionStats（含 24 小时时段直方图 + **7×24 DOW×hour 矩阵**）。sessions 输入按 `[startTs, endTs)` 过滤，尊重 titleFilter
+- **新增 `statistics-period.ts`**：`resolvePeriod(startKey, endKey, startDayHours)` 把 dateKey range 桥接成 session ts 范围（startTs 起，endTs 到次日同 hour 的 exclusive）。以后加 chip preset 时可复用
+- **新增 `statistics-main.svelte`**：4 hero + DOW×hour 热力图（无 session 数据时显示提示）+ 月柱（跨月才显示）+ Top 10 书 + 最长连续/最强单日/首次阅读三卡。CSS var `--accent-color` 保持主题化
+- **StatisticsTab enum 新增 MAIN，`lastStatisticsTab$` 默认改为 MAIN**：升级后打开统计直接看到新视图；不喜欢可切回老 tab
+- **statistics-content lazy-load sessions**：只在 MAIN tab 首次显示时才 `database.getAllSessions()`，避免影响其他 tab 打开速度
+- **保留但计划移除**：`statistics-heatmap`（日历式）/ `statistics-year`（独立年度 tab）/ `statistics-summary`（汇总表）下个版本一并清理
+
 ## 1.18.0
 
 统计模块四件小事：手动录入纸质书 / 高亮统计 tab / 桌面侧字数跨设备同步 / 一键导出 Markdown 报告。附带一个"年度回顾" tab 的隐性数据 bug 修复。

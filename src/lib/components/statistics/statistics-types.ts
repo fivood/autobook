@@ -34,7 +34,8 @@ export interface BookStatistic extends BooksDbStatistic {
 }
 
 export enum StatisticsTab {
-  OVERVIEW = '概览',
+  MAIN = '主视图',
+  OVERVIEW = '日历',
   SUMMARY = '汇总',
   YEAR = '年度',
   HIGHLIGHTS = '高亮'
