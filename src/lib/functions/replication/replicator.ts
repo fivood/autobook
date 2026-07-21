@@ -28,6 +28,7 @@ if (typeof window !== 'undefined') {
 }
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
 import type { LoadData } from '$lib/functions/file-loaders/types';
+import { detectBookFormat } from '$lib/functions/book-format';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import {
@@ -135,6 +136,12 @@ export async function importData(
           }
 
           checkCancelAndProgress(cancelSignal, true, true);
+
+          // 1.20.2: remember the source format so the hover popover +
+          // card corner chip can display it even after loaders strip the
+          // extension from the title (EPUB/MOBI extract clean titles
+          // from EXTH; only TXT/MD/CBZ tend to keep the extension).
+          bookContent.originalFormat = detectBookFormat(file.name);
 
           currentTitle = bookContent.title;
 

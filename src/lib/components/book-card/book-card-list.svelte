@@ -39,6 +39,18 @@
 
   $: detailCard = detailId != null ? bookCards.find((c) => c.id === detailId) : undefined;
 
+  // Format label for the hover popover: prefer originalFormat (set at
+  // import time from 1.20.2), else sniff the filename extension from the
+  // title (works for TXT/MD/CBZ imports that keep the extension).
+  $: detailFormat = (() => {
+    if (!detailCard) return '';
+    const raw = detailCard.originalFormat
+      || detailCard.title.match(/\.(epub|txt|htmlz|mobi|azw3?|pdf|cbz|cbr|cb7|cbt|markdown|md)$/i)?.[1]
+      || '';
+    const up = raw.toUpperCase();
+    return up === 'MARKDOWN' ? 'MD' : up;
+  })();
+
   function onCardEnter(card: BookCardProps, ev: MouseEvent) {
     if (selectedBookIds.size) return;
     hoveringBookId = card.id;
@@ -191,6 +203,9 @@
   >
     <div class="detail-title" title={detailCard.title}>{detailCard.title}</div>
     <div class="detail-grid">
+      {#if detailFormat}
+        <span>格式</span><span>{detailFormat}</span>
+      {/if}
       <span>字数</span><span>{formatChars(detailCard.characters)}</span>
       <span>进度</span><span>
         {Math.round((detailCard.progress || 0) * 100)}%

@@ -14,4 +14,8 @@ export interface BookCardProps {
   progress: number;
   lastBookmarkModified: number;
   isPlaceholder: boolean;
+  /** Original file format from import time (epub/mobi/pdf/…). May be
+   * undefined for books imported before 1.20.2 — the detail popover
+   * falls back to detecting from the title's extension. */
+  originalFormat?: string;
 }

@@ -45,6 +45,12 @@ interface BooksDbV6BookData {
   lastBookOpen: number;
   storageSource?: string;
   htmlBackup?: string;
+  /** Original file extension at import time (epub/mobi/pdf/txt/…). Added
+   * 1.20.2 as an optional field — old rows have undefined, back-compat via
+   * IDB schemalessness (no migration needed). Used by the hover popover
+   * and the book-card corner chip to show the true source format even
+   * after the title has been stripped of its filename extension. */
+  originalFormat?: string;
 }
 
 interface BooksDbV6BookmarkData {

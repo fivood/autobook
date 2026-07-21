@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.20.2
+
+书卡 hover 弹窗和右上角 chip 都能正确显示 EPUB/MOBI 等格式了。之前 title 里没扩展名的书（EPUB/MOBI 导入时元数据自带的干净 title 就是这种）识别不出格式，chip 藏起来、弹窗没「格式」行。
+
+- **`BooksDbBookData` 加 `originalFormat?: string` 字段**：v6 schema 追加可选字段。IDB 是 schemaless 存 JSON，加字段不需要版本迁移；老书行读出来这个字段就是 undefined，UI 侧走 fallback
+- **`replicator.ts` 导入时写入 originalFormat**：`bookContent.originalFormat = detectBookFormat(file.name)`——从原文件名扩展名推断，比 title 可靠得多（loader 会把 title 元数据抽出来剥了扩展名）。写在 saveBook 之前
+- **`BookCardProps` 加 originalFormat**：manage 页的 `bookCards$` 用 spread `{...d}` 从 data table 装配 card，字段自动流过来
+- **hover 详情弹窗加「格式」行**：`detailFormat` computed 优先用 `detailCard.originalFormat`，无值回退到 title 扩展正则。展示 EPUB/MOBI/AZW3/PDF/TXT/MD/CBZ 等大写标签
+- **book-card 右上角 chip 也用同一 fallback**：老书没 originalFormat 就走 title 检测，跟原来一致；新书走 originalFormat 显示更准
+
+老书要显示格式，得触发一次「打开+关闭」让下次 saveBook 写回，或等自动 replication 覆盖。也可以专门做一轮回填但目前没这个必要。
+
 ## 1.20.1
 
 统计面板重整 Phase D：删年度独立 tab，改成顶部时段 chip 里的「今年」预设。所有 tab 现在共用同一条时段筛选，语义统一。

@@ -8,6 +8,9 @@
   export let title: string;
   export let progress: number;
   export let lastBookOpen = 0;
+  /** Set by imports from 1.20.2 onward. Older books fall back to
+   * extension-in-title detection. */
+  export let originalFormat: string | undefined = undefined;
 
   let objectUrl = '';
 
@@ -66,8 +69,14 @@
   $: imageLoadComplete = imgEl?.complete && !imageLoading;
   $: alt = `${title}_cover`;
 
-  /** Detect a book file extension hidden in the title, fall back to BOOK. */
+  /** Prefer the import-time originalFormat (added 1.20.2); fall back to
+   * extension-in-title detection for older imports whose data row was
+   * saved before the field existed. */
   $: detectedFormat = (() => {
+    if (originalFormat) {
+      const up = originalFormat.toUpperCase();
+      return up === 'MARKDOWN' ? 'MD' : up;
+    }
     const match = title.match(/\.(epub|txt|htmlz|mobi|azw3?|pdf|markdown|md)$/i);
     if (!match) return 'BOOK';
     const ext = match[1].toUpperCase();
