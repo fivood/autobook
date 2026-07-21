@@ -305,6 +305,41 @@
         existingKeys.push(`${s.title}__${s.dateKey}`);
       }
 
+      // Extracted so both "添加" (final close) and "保存并继续" can share
+      // the same upsert + local table refresh + title-filter update.
+      const applyEntry = async (entry: ManualStatisticEntry) => {
+        const { statistic } = await database.upsertManualStatistic(entry);
+        const nextRow: BookStatistic = {
+          ...statistic,
+          id: `${statistic.title}_${statistic.dateKey}`,
+          averageReadingTime: statistic.readingTime,
+          averageWeightedReadingTime: statistic.readingTime,
+          averageCharactersRead: statistic.charactersRead,
+          averageWeightedCharactersRead: statistic.charactersRead,
+          averageReadingSpeed: statistic.lastReadingSpeed,
+          averageWeightedReadingSpeed: statistic.lastReadingSpeed
+        };
+        const existingIndex = statisticsData.findIndex(
+          (s) => s.title === statistic.title && s.dateKey === statistic.dateKey
+        );
+        if (existingIndex >= 0) {
+          statisticsData[existingIndex] = nextRow;
+        } else {
+          statisticsData = [...statisticsData, nextRow].sort((a, b) =>
+            a.dateKey > b.dateKey ? 1 : -1
+          );
+        }
+        if (!statisticsTitleFilters.has(statistic.title)) {
+          statisticsTitleFilters.set(statistic.title, true);
+          statisticsTitleFilters = statisticsTitleFilters;
+        }
+        // Also refresh existingKeys so the conflict banner stays
+        // accurate across successive "保存并继续" clicks.
+        const dupKey = `${statistic.title}__${statistic.dateKey}`;
+        if (!existingKeys.includes(dupKey)) existingKeys.push(dupKey);
+        updateStatisticsData();
+      };
+
       const result = await new Promise<ManualStatisticEntry | undefined>((resolver) => {
         dialogManager.dialogs$.next([
           {
@@ -312,7 +347,8 @@
             props: {
               existingTitles: existingKeys,
               startDayHoursForTracker: $startDayHoursForTracker$,
-              resolver
+              resolver,
+              onSaveAndContinue: applyEntry
             },
             disableCloseOnClick: true,
             zIndex: '70'
@@ -325,37 +361,7 @@
       $statisticsActionInProgress$ = true;
 
       try {
-        const { statistic } = await database.upsertManualStatistic(result);
-
-        const nextRow: BookStatistic = {
-          ...statistic,
-          id: `${statistic.title}_${statistic.dateKey}`,
-          averageReadingTime: statistic.readingTime,
-          averageWeightedReadingTime: statistic.readingTime,
-          averageCharactersRead: statistic.charactersRead,
-          averageWeightedCharactersRead: statistic.charactersRead,
-          averageReadingSpeed: statistic.lastReadingSpeed,
-          averageWeightedReadingSpeed: statistic.lastReadingSpeed
-        };
-
-        const existingIndex = statisticsData.findIndex(
-          (s) => s.title === statistic.title && s.dateKey === statistic.dateKey
-        );
-
-        if (existingIndex >= 0) {
-          statisticsData[existingIndex] = nextRow;
-        } else {
-          statisticsData = [...statisticsData, nextRow].sort((a, b) =>
-            a.dateKey > b.dateKey ? 1 : -1
-          );
-        }
-
-        if (!statisticsTitleFilters.has(statistic.title)) {
-          statisticsTitleFilters.set(statistic.title, true);
-          statisticsTitleFilters = statisticsTitleFilters;
-        }
-
-        updateStatisticsData();
+        await applyEntry(result);
       } catch (error: any) {
         dialogManager.dialogs$.next([
           {

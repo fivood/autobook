@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.19.3
+
+手动录入三项减少重复操作。跑同一本书连续几天补记录、想按进度%填字数、已经有电子版的书想省作者/总字数——这一波都省事。
+
+- **「保存并继续」按钮**：dialog 输完点它 → 后台 upsert 一次记录、清空时长/字数/完成勾、日期前进一天（不超今天），焦点回到时长框，书名 + 所有元数据保留。footer 显示「已保存 X 条」计数；点右下「添加」还是老逻辑一次保存关闭；取消按钮在有保存过后改成「完成」暗示已经存了东西
+- **进度% 滑块推算字数**：填了「总字数（万）」之后本回合区多出一条 `0-100%` 滑块，滑动直接算 `chars = totalChars × pct` 灌进字数字段。旁边显示「约 X.X 万字（总 Y.Y 万）」。用户手动改字数框会解除联动（`charsFieldTouched` flag），下次滑还能重新绑
+- **同名已导入书自动预填总字数**：dialog 输了书名 → 老逻辑先查 manualBook 表；没找到就从 `data` 表（已导入 EPUB/MOBI）按 title 查，如果有 `characters` 字段就当默认总字数灌进去，让进度% 滑块立刻能用（作者字段 fallback 要 schema 改动 data 表加 author，暂缓）
+- **statistics-content 里抽出 `applyEntry` 复用**：「添加」和「保存并继续」都走同一个 upsert + 本地表刷新 + title filter 更新逻辑，避免行为漂移
+- **修：extractTauriError 在 dialog 里的 as HTMLInputElement 内联 cast 触发 Svelte parser 报错** — 把 event handler 抽成 top-level fn（跟 1.17.5 里 onTotalCharsInput 一样的模式）
+
 ## 1.19.2
 
 书库存储源选择从书库 header 挪到「设置 → 存储与备份」，并只在 Tauri 桌面上显示。1.17.0 移除多源同步后这个 popover 在 PWA 上只剩 1 项（点了没用）、Tauri 上大部分用户永远只用 TAURI_FS——占 header 位置不划算。

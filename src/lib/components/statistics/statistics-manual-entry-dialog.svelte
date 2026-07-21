@@ -12,7 +12,14 @@
 
   export let existingTitles: string[] = [];
   export let startDayHoursForTracker = 0;
+  /** Called once, with the final entry when the user clicks 「添加」,
+   * or with undefined when they cancel. Closes the dialog. */
   export let resolver: (value: ManualStatisticEntry | undefined) => void;
+  /** Optional: called for each entry when the user clicks 「保存并继续」.
+   * Dialog stays open, clears only the reading-entry numeric fields,
+   * keeps title + metadata + date so repeat sessions of the same book
+   * are one-click away. When null, the button is hidden. */
+  export let onSaveAndContinue: ((value: ManualStatisticEntry) => Promise<void>) | null = null;
 
   const dispatch = createEventDispatcher<{ close: void }>();
 
@@ -44,7 +51,20 @@
   let showBookMeta = false;
   let error = '';
   let titleInputEl: HTMLInputElement | undefined;
+  let minutesInputEl: HTMLInputElement | undefined;
   let noteCount = 0;
+  let continuing = false;
+  let savedCount = 0;
+  // Progress % → derives charactersRead from totalCharacters. When user
+  // types characters directly the slider un-links (progressPct set to
+  // null so it doesn't overwrite). Common flow for physical books where
+  // the reader knows "读到 30%" but not the exact character count.
+  let progressPct: number | null = null;
+  let charsFieldTouched = false;
+
+  $: if (progressPct !== null && totalCharacters && !charsFieldTouched) {
+    characters = Math.round((totalCharacters * progressPct) / 100);
+  }
 
   $: trimmedTitle = title.trim();
   $: hasConflict = !!trimmedTitle && existingTitles.includes(`${trimmedTitle}__${dateKey}`);
@@ -73,21 +93,39 @@
   async function loadExistingMeta(t: string) {
     try {
       const meta = await database.getManualBook(t);
-      if (!meta || trimmedTitle !== t) return;
-      loadedMeta = meta;
-      author = meta.author ?? '';
-      translator = meta.translator ?? '';
-      publisher = meta.publisher ?? '';
-      publishedYear = meta.publishedYear ?? null;
-      isbn = meta.isbn ?? '';
-      totalCharacters = meta.totalCharacters ?? null;
-      tagsInput = (meta.tags ?? []).join(', ');
-      bookNotes = meta.notes ?? '';
-      if (existingCoverUrl) URL.revokeObjectURL(existingCoverUrl);
-      existingCoverUrl = meta.coverBlob ? URL.createObjectURL(meta.coverBlob) : null;
-      clearCover = false;
-      // If we prefilled anything, open the panel so the user can see.
-      if (author || publisher || meta.coverBlob) showBookMeta = true;
+      if (trimmedTitle !== t) return;
+      if (meta) {
+        loadedMeta = meta;
+        author = meta.author ?? '';
+        translator = meta.translator ?? '';
+        publisher = meta.publisher ?? '';
+        publishedYear = meta.publishedYear ?? null;
+        isbn = meta.isbn ?? '';
+        totalCharacters = meta.totalCharacters ?? null;
+        tagsInput = (meta.tags ?? []).join(', ');
+        bookNotes = meta.notes ?? '';
+        if (existingCoverUrl) URL.revokeObjectURL(existingCoverUrl);
+        existingCoverUrl = meta.coverBlob ? URL.createObjectURL(meta.coverBlob) : null;
+        clearCover = false;
+        if (author || publisher || meta.coverBlob) showBookMeta = true;
+      } else {
+        // No manualBook row yet — fall back to any imported book (EPUB/
+        // MOBI) with the same title. `data.characters` gets populated
+        // during import; use it as the totalCharacters default so the
+        // progress-% slider works on first entry. Author fallback would
+        // need a schema change (data table has no author field) — defer.
+        const db = await database.db;
+        const dataRows = await db.getAllFromIndex('data', 'title');
+        if (trimmedTitle !== t) return;
+        const dataMatch = dataRows.find((b) => b.title === t);
+        if (dataMatch) {
+          loadedMeta = null;
+          if (dataMatch.characters && !totalCharacters) {
+            totalCharacters = dataMatch.characters;
+            showBookMeta = true;
+          }
+        }
+      }
     } catch (e) {
       loadedMeta = null;
     }
@@ -102,6 +140,12 @@
     } catch {
       noteCount = 0;
     }
+  }
+
+  function onProgressPctInput(ev: Event) {
+    const v = parseInt((ev.currentTarget as HTMLInputElement).value, 10);
+    progressPct = Number.isFinite(v) ? v : null;
+    charsFieldTouched = false;
   }
 
   function onTotalCharsInput(ev: Event) {
@@ -187,41 +231,80 @@
     });
   }
 
-  async function submit() {
+  function buildEntry(): ManualStatisticEntry | null {
     if (!trimmedTitle) {
       error = '请输入书名';
-      return;
+      return null;
     }
     if (!dateKey) {
       error = '请选择日期';
-      return;
+      return null;
     }
     if (dateKey > todayKey) {
       error = '日期不能晚于今天';
-      return;
+      return null;
     }
     const readingTimeSeconds = Math.max(0, Math.round(((minutes ?? 0) as number) * 60));
     if (readingTimeSeconds <= 0) {
       error = '请输入阅读时长（分钟）';
-      return;
+      return null;
     }
     const charactersRead = Math.max(0, Math.floor((characters ?? 0) as number));
-
-    try {
-      await persistBookMeta();
-    } catch (e: any) {
-      error = `保存书籍信息失败：${e?.message ?? e}`;
-      return;
-    }
-
-    close({
+    return {
       title: trimmedTitle,
       dateKey,
       readingTimeSeconds,
       charactersRead,
       markCompleted,
       conflictStrategy
-    });
+    };
+  }
+
+  async function submit() {
+    const entry = buildEntry();
+    if (!entry) return;
+    try {
+      await persistBookMeta();
+    } catch (e: any) {
+      error = `保存书籍信息失败：${e?.message ?? e}`;
+      return;
+    }
+    close(entry);
+  }
+
+  async function submitAndContinue() {
+    if (!onSaveAndContinue) return;
+    const entry = buildEntry();
+    if (!entry) return;
+    continuing = true;
+    try {
+      await persistBookMeta();
+      await onSaveAndContinue(entry);
+      savedCount += 1;
+      // Clear numeric fields + advance date to tomorrow (if not already
+      // today) so a "read 30min every day" logging flow is one click.
+      // Keep title / metadata / all book-info fields.
+      minutes = null;
+      characters = null;
+      markCompleted = false;
+      progressPct = null;
+      charsFieldTouched = false;
+      error = '';
+      // Advance dateKey by 1 day, capped at today.
+      const [y, m, d] = dateKey.split('-').map(Number);
+      const next = new Date(y, m - 1, d + 1);
+      const yy = next.getFullYear();
+      const mm = `${next.getMonth() + 1}`.padStart(2, '0');
+      const dd = `${next.getDate()}`.padStart(2, '0');
+      const nextKey = `${yy}-${mm}-${dd}`;
+      if (nextKey <= todayKey) dateKey = nextKey;
+      await tick();
+      minutesInputEl?.focus();
+    } catch (e: any) {
+      error = `保存失败：${e?.message ?? e}`;
+    } finally {
+      continuing = false;
+    }
   }
 </script>
 
@@ -259,6 +342,7 @@
           step="1"
           class={inputClasses}
           bind:value={minutes}
+          bind:this={minutesInputEl}
           placeholder="30"
         />
       </label>
@@ -270,10 +354,31 @@
           step="1"
           class={inputClasses}
           bind:value={characters}
+          on:input={() => (charsFieldTouched = true)}
           placeholder="0"
         />
       </label>
     </div>
+
+    {#if totalCharacters}
+      <label class="flex flex-col gap-1">
+        <div class="flex items-baseline justify-between">
+          <span class="text-xs opacity-70">读到 {progressPct ?? 0}%</span>
+          <span class="text-[11px] opacity-50">
+            约 {(((progressPct ?? 0) * totalCharacters) / 100 / 10000).toFixed(1)} 万字（总
+            {(totalCharacters / 10000).toFixed(1)} 万）
+          </span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={progressPct ?? 0}
+          on:input={onProgressPctInput}
+        />
+      </label>
+    {/if}
 
     <label class="flex items-center gap-2 mt-1">
       <input type="checkbox" bind:checked={markCompleted} />
@@ -417,14 +522,30 @@
       <div class="text-red-500 text-xs">{error}</div>
     {/if}
   </div>
-  <div class="flex grow justify-between" slot="footer">
-    <button class={buttonClasses} on:click={() => close(undefined)}>
-      取消
+  <div class="flex grow justify-between items-center gap-2" slot="footer">
+    <button class={buttonClasses} on:click={() => close(undefined)} disabled={continuing}>
+      {savedCount > 0 ? '完成' : '取消'}
       <Ripple />
     </button>
-    <button class={buttonClasses} on:click={submit}>
-      添加
-      <Ripple />
-    </button>
+    <div class="flex-1 text-center text-[11px] opacity-60">
+      {#if savedCount > 0}已保存 {savedCount} 条{/if}
+    </div>
+    <div class="flex gap-2">
+      {#if onSaveAndContinue}
+        <button
+          class={buttonClasses}
+          on:click={submitAndContinue}
+          disabled={continuing}
+          title="保存后清空时长/字数并前进一天，方便连续录入同一本书的多天记录"
+        >
+          {continuing ? '保存中…' : '保存并继续'}
+          <Ripple />
+        </button>
+      {/if}
+      <button class={buttonClasses} on:click={submit} disabled={continuing}>
+        添加
+        <Ripple />
+      </button>
+    </div>
   </div>
 </DialogTemplate>
