@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.19.4
+
+大书加载优化 + 加载进度真实化。之前打开一本图片多的书（漫画、扫描 PDF）能卡几秒到十几秒，屏幕上只有一个转圈图标不知道卡在哪一步。这一版：blob 替换从 O(blobs × elementHtml) 单遍 → O(elementHtml)；加载 spinner 下多一条带阶段名的进度条。
+
+- **format-book-data-html 的 blob URL 替换换单遍 regex**：老代码 `Object.entries(blobs).forEach` 里对每个 blob 跑两次 `elementHtml.replaceAll(...)`，一本 500 图 50MB 的漫画 = 50GB 字符串扫描，浏览器主线程锁死几秒。新版先建 `key → url` map，然后一条正则 `data:image/gif;ttu:(K1|K2|…);base64,R0lGOD…==|ttu:(K1|K2|…)` 走一遍 elementHtml，全 blob 一次搞定。key 按长度倒序 + 转义正则元字符防碰撞
+- **新增 LoadProgress observable**：`load-progress.ts` 定义 8 个阶段（db-fetch / storage-pull / blob-register / format-parse / format-clean / stylesheet / render / done）+ 中文 label + 0-100 pct。`loadBookData` 和 `formatBookDataHtml` 加可选 `progress$` 参数在关键位置 `next(progress(stage, pct))`。blob-register 阶段每 128 个 blob 汇报一次进度，避免频繁 tick
+- **reader `/b` 页 spinner 加进度条**：`showSpinner` 展开成 spinner + 当前阶段 label（例如「解析 HTML… 45%」）+ 带 `--accent-color` 的进度条，`transition: width 150ms` 平滑推进。老 spinner 仍在正上方保持视觉连续
+- 不动 formattedBookCache（LRU size 1，view mode / spoiler mode 切换仍全书重建）— 下一轮再看内存权衡
+
 ## 1.19.3
 
 手动录入三项减少重复操作。跑同一本书连续几天补记录、想按进度%填字数、已经有电子版的书想省作者/总字数——这一波都省事。

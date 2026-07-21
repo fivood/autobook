@@ -247,6 +247,11 @@
   import { availableThemes } from '$lib/data/theme-option';
   import { ViewMode } from '$lib/data/view-mode';
   import loadBookData from '$lib/functions/book-data-loader/load-book-data';
+  import {
+    STAGE_LABELS,
+    type LoadProgress
+  } from '$lib/functions/book-data-loader/load-progress';
+  import { Subject } from 'rxjs';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
   import {
@@ -285,6 +290,9 @@
   import { t, tImmediate } from '$lib/i18n';
 
   let showSpinner = true;
+  let loadProgress: LoadProgress = { stage: 'idle', pct: 0, label: '' };
+  const loadProgress$ = new Subject<LoadProgress>();
+  loadProgress$.subscribe((p) => (loadProgress = p));
   let showHeader = false;
   let headerEnterTimer: ReturnType<typeof setTimeout> | undefined;
   let isBookmarkScreen = false;
@@ -369,6 +377,7 @@
 
   const rawBookData$ = bookId$.pipe(
     switchMap((id) => {
+      loadProgress$.next({ stage: 'db-fetch', pct: 5, label: STAGE_LABELS['db-fetch'] });
       const loadPromise = (async () => {
         let bookData: BooksDbBookData | undefined;
 
@@ -390,6 +399,7 @@
         if (!bookData) {
           return bookData;
         }
+        loadProgress$.next({ stage: 'storage-pull', pct: 10, label: STAGE_LABELS['storage-pull'] });
 
         const currentContext = {
           id: bookData.id,
@@ -528,7 +538,8 @@
         '.book-content',
         document,
         isPaginated,
-        $hideSpoilerImageMode$
+        $hideSpoilerImageMode$,
+        loadProgress$
       ).pipe(
         tap((data) => {
           // Only keep the latest entry. evictFormattedBookCache revokes
@@ -2582,8 +2593,22 @@
 {/if}
 
 {#if showSpinner}
-  <div class="fixed inset-0 flex h-full w-full items-center justify-center text-7xl">
-    <Fa icon={faSpinner} spin />
+  <div class="fixed inset-0 flex flex-col h-full w-full items-center justify-center gap-6">
+    <Fa icon={faSpinner} spin class="text-7xl" />
+    {#if loadProgress.stage !== 'idle' && loadProgress.stage !== 'done'}
+      <div class="w-72 flex flex-col gap-2 items-center">
+        <div class="text-sm opacity-75 tabular-nums">
+          {loadProgress.label || STAGE_LABELS[loadProgress.stage]}
+          <span class="opacity-60">· {loadProgress.pct}%</span>
+        </div>
+        <div class="w-full h-1.5 rounded bg-gray-500/20 overflow-hidden">
+          <div
+            class="h-full rounded transition-[width] duration-150"
+            style="width:{loadProgress.pct}%;background:var(--accent-color, #5f7e7b)"
+          ></div>
+        </div>
+      </div>
+    {/if}
   </div>
 {/if}
 

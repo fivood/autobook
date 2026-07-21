@@ -6,11 +6,12 @@
 
 import { BlurMode } from '$lib/data/blur-mode';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import { Observable } from 'rxjs';
+import { Observable, type Subject } from 'rxjs';
 import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
-import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
 import { isElementGaiji } from '$lib/functions/is-element-gaiji';
 import { map } from 'rxjs/operators';
+import type { LoadProgress } from './load-progress';
+import { progress } from './load-progress';
 import {
   readerImageGalleryPictures$,
   type ReaderImageGalleryPicture
@@ -31,13 +32,16 @@ export default function formatBookDataHtml(
   bookData: BooksDbBookData,
   document: Document,
   isPaginated: boolean,
-  blurMode: BlurMode
+  blurMode: BlurMode,
+  progress$?: Subject<LoadProgress>
 ): Observable<FormattedBookHtml> {
-  return getHtmlWithImageSource(bookData, isPaginated).pipe(
+  return getHtmlWithImageSource(bookData, isPaginated, progress$).pipe(
     map(({ html, objectUrls }) => {
+      progress$?.next(progress('format-parse', 50));
       const element = document.createElement('div');
       element.innerHTML = html;
 
+      progress$?.next(progress('format-clean', 65));
       addImageContainerClass(element);
       // combineImagePairs(element);
       removeSvgDimensions(element);
@@ -46,35 +50,90 @@ export default function formatBookDataHtml(
       stripInlineColor(element);
       optimizeBookPageImages(element);
 
+      progress$?.next(progress('format-clean', 85));
       return { htmlContent: element.innerHTML, objectUrls };
     })
   );
 }
 
-function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean) {
+// Escape regex metacharacters in a literal string. Book blob keys are
+// usually plain filenames but can contain periods, hyphens, brackets.
+function reEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getHtmlWithImageSource(
+  bookData: BooksDbBookData,
+  isPaginated: boolean,
+  progress$?: Subject<LoadProgress>
+) {
   return new Observable<{ html: string; objectUrls: string[] }>((subscriber) => {
     const { blobs } = bookData;
     const objectUrls: string[] = [];
     const urlIndexes = new Map<string, number>();
-
-    let { elementHtml } = bookData;
-
+    const urlByKey = new Map<string, string>();
     const pdfPageUrls = new Set<string>();
 
-    Object.entries(blobs).forEach(([key, value]) => {
+    // Pass 1: register blob URLs + build key→url map. This is O(blobs)
+    // and cheap. Pre-1.19.4 also did a `replaceAll` per blob here, which
+    // walked the whole (potentially 50MB+) elementHtml twice per blob →
+    // quadratic on image-heavy books.
+    progress$?.next(progress('blob-register', 15));
+    const blobEntries = Object.entries(blobs);
+    const total = blobEntries.length || 1;
+    blobEntries.forEach(([key, value], i) => {
       const url = URL.createObjectURL(
         value.type
           ? value
           : new Blob([value], { type: BaseStorageHandler.getImageMimeTypeFromExtension(key) })
       );
-      const dummyUrl = buildDummyBookImage(key);
-
       objectUrls.push(url);
-      urlIndexes.set(url, elementHtml.indexOf(dummyUrl));
+      urlByKey.set(key, url);
       if (/^pdf-page-\d+\.jpg$/.test(key)) pdfPageUrls.add(url);
-
-      elementHtml = elementHtml.replaceAll(dummyUrl, url).replaceAll(`ttu:${key}`, url);
+      if (i % 128 === 0) {
+        // 15% → 30% range for blob registration
+        progress$?.next(progress('blob-register', 15 + (i / total) * 15));
+      }
     });
+
+    // Pass 2: single-pass regex over the whole elementHtml. Matches both
+    // the dummy data URL (`data:image/gif;ttu:{key};base64,R0lGOD…==`)
+    // and the bare `ttu:{key}` markers, replaces via the map. One string
+    // walk instead of `blobs × 2` walks.
+    progress$?.next(progress('blob-register', 32));
+    const keys = [...urlByKey.keys()].sort((a, b) => b.length - a.length);
+    let elementHtml = bookData.elementHtml;
+    if (keys.length > 0) {
+      const alt = keys.map(reEscape).join('|');
+      const dummyPrefix = 'data:image/gif;ttu:';
+      const dummySuffix = ';base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+      // Non-greedy: dummy data URL branch first, then bare `ttu:{key}`.
+      const dummyRe = new RegExp(
+        `${reEscape(dummyPrefix)}(?:${alt})${reEscape(dummySuffix)}|ttu:(?:${alt})`,
+        'g'
+      );
+      elementHtml = elementHtml.replace(dummyRe, (match) => {
+        // Extract the key from either branch by trimming known prefixes/suffixes.
+        let key: string | undefined;
+        if (match.startsWith(dummyPrefix)) {
+          key = match.slice(dummyPrefix.length, match.length - dummySuffix.length);
+        } else {
+          key = match.slice(4); // "ttu:".length
+        }
+        const url = urlByKey.get(key);
+        return url ?? match;
+      });
+    }
+
+    // Populate urlIndexes for gallery ordering. Cheap post-hoc scan.
+    for (const [key, url] of urlByKey) {
+      urlIndexes.set(url, elementHtml.indexOf(url));
+      // Keys with duplicate blob names could collide; treat -1 as end-of-doc
+      // so the gallery order still merges deterministically.
+      void key;
+    }
+
+    progress$?.next(progress('format-parse', 45));
     subscriber.next({ html: elementHtml, objectUrls });
 
     const readerImageGalleryPictures: ReaderImageGalleryPicture[] = objectUrls.map((url) => ({
