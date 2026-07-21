@@ -10,6 +10,7 @@ import type {
   BooksDbBookmarkData,
   BooksDbHighlight,
   BooksDbHighlightFolder,
+  BooksDbManualBook,
   BooksDbReadingGoal,
   BooksDbSession,
   BooksDbStatistic,
@@ -125,6 +126,8 @@ export class DatabaseService {
 
   /** Fires after appendSession succeeds, so the year tab knows to refresh. */
   sessionsChanged$ = new Subject<void>();
+
+  manualBooksChanged$ = new Subject<void>();
 
   bookmarksChanged$ = new Subject<void>();
 
@@ -600,6 +603,44 @@ export class DatabaseService {
   async getAllSessions() {
     const db = await this.db;
     return db.getAll('session');
+  }
+
+  // ── manualBook (v11): metadata for manually-entered books ────────────
+  //
+  // Keyed by `title` — same key space as `statistic.title`, so upsert /
+  // lookup is a single get on the title string. Cover images are stored
+  // as raw Blobs; callers should `URL.createObjectURL` for display and
+  // revoke on unmount.
+
+  async getManualBook(title: string) {
+    const db = await this.db;
+    return db.get('manualBook', title);
+  }
+
+  async getAllManualBooks() {
+    const db = await this.db;
+    return db.getAll('manualBook');
+  }
+
+  async upsertManualBook(entry: Omit<BooksDbManualBook, 'createdAt' | 'updatedAt'>) {
+    const db = await this.db;
+    const now = Date.now();
+    const existing = await db.get('manualBook', entry.title);
+    const row: BooksDbManualBook = {
+      ...(existing ?? {}),
+      ...entry,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    await db.put('manualBook', row);
+    this.manualBooksChanged$.next();
+    return row;
+  }
+
+  async deleteManualBook(title: string) {
+    const db = await this.db;
+    await db.delete('manualBook', title);
+    this.manualBooksChanged$.next();
   }
 
   async getStatisticsUntilDate(bookTitle: string, maxDate: string) {

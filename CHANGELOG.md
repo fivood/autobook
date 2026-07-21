@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.19.1
+
+手动录入丰富化 + 年度回顾宽度自适应修复。
+
+- **手动录入 dialog 加书籍元数据 + 封面**：新增可折叠「书籍信息」区，含作者 / 译者 / 出版社 / 出版年 / ISBN / 总字数（万）/ 标签 / 备注 / 封面图上传。总字数用于将来的完成率进度条；标签为将来 books/authors 探索 tab 铺路。封面用 File input，最大 5MB，Blob 存 IDB 原样（渲染时 `URL.createObjectURL`，dialog unmount 时 revoke）。已存在同书名的元数据会自动预填并展开
+- **IDB v11 加 `manualBook` 表**：`title` 主键（与 `statistic.title` 同 key 空间，join 是一次 get），字段全可选除时间戳。索引 `author` / `updatedAt` 备用。fresh install 建表 + case 10 上迁移分支
+- **database.service 加 manualBook CRUD**：`getManualBook(title)` / `getAllManualBooks()` / `upsertManualBook()` / `deleteManualBook()` + `manualBooksChanged$` Subject。upsert 会保留原 `createdAt`，只更新 `updatedAt`
+- **「在笔记本打开」按钮**：dialog 输完书名后出现，显示该 title 现有高亮/笔记条数，点击 goto `/notebook?q=book:{title}`。notebook 页支持 `?q=` URL 参数预填搜索框，用 1.16.0 已有的 `book:xxx` DSL 直接过滤到该书
+- **修年度回顾宽度自适应**：`.hero` / `.grid-2` 从裸 `1fr` 改 `minmax(0, 1fr)` 让 grid 子元素能收缩到 `white-space:nowrap + overflow:hidden` 的 truncate 生效。之前「最近一次」/「开卷第一天」卡片里超长中文书名撑爆布局导致水平条溢出、内容左侧被截。同时移除内层多余的 `mx-auto max-w-5xl px-4`（外层 pxScreen 已经约束过一次宽度）
+
 ## 1.19.0
 
 统计面板重整第一刀：新「主视图」tab 上线并设为默认。基于 v10 session 数据的 hero 卡 + 星期×小时热力图 + 月柱 + Top 书。老的日历 heatmap / 汇总 / 年度 tab 全部保留可切回；下次会连年度 tab 一起删（转为「时段=当年」预设入口），届时探索区（书籍 / 作者 / 会话）也加进来。

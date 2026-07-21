@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { afterNavigate, goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import Fa from 'svelte-fa';
   import {
     faTrash,
@@ -116,6 +117,14 @@
 
   onMount(async () => {
     if (!browser) return;
+    // Pre-fill the search box from ?q=… so external links (e.g. the
+    // manual-entry dialog's "在笔记本打开" button) can scope the notebook
+    // to a specific book without the user retyping.
+    const initialQuery = $page.url.searchParams.get('q');
+    if (initialQuery) {
+      query = initialQuery;
+      debouncedQuery = initialQuery;
+    }
     await refresh();
     loaded = true;
   });

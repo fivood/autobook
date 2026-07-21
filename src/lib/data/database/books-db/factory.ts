@@ -9,7 +9,7 @@ import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 10, {
+  return openDB<BooksDb>(name, 11, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -85,6 +85,15 @@ export function createBooksDb(name = 'books') {
           freshSessionStore.createIndex('dateKey', 'dateKey');
           freshSessionStore.createIndex('title', 'title');
           freshSessionStore.createIndex('startTs', 'startTs');
+
+          // v11: manual book metadata (author / translator / publisher /
+          // cover) — one row per title, shared across the daily statistic
+          // rows of the same title.
+          const freshManualBookStore = oldDb.createObjectStore('manualBook', {
+            keyPath: 'title'
+          });
+          freshManualBookStore.createIndex('author', 'author');
+          freshManualBookStore.createIndex('updatedAt', 'updatedAt');
 
           break;
         }
@@ -182,6 +191,16 @@ export function createBooksDb(name = 'books') {
             sessionStore.createIndex('dateKey', 'dateKey');
             sessionStore.createIndex('title', 'title');
             sessionStore.createIndex('startTs', 'startTs');
+          }
+          // fall through to v10 → v11 upgrade.
+        }
+        case 10: {
+          if (!oldDb.objectStoreNames.contains('manualBook')) {
+            const manualBookStore = oldDb.createObjectStore('manualBook', {
+              keyPath: 'title'
+            });
+            manualBookStore.createIndex('author', 'author');
+            manualBookStore.createIndex('updatedAt', 'updatedAt');
           }
           break;
         }
