@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.20.5
+
+新汇总表：删掉 681 行的老分页表 + StatisticsSummaryHeader，换成按日 hero + 展开式日细目。每日一行显示时长/字数/加权速度/涉及书数/完成书数，点箭头展开显示当天每本书的分细目（时长/字数/速度）+ 每行的 inline 编辑（分钟/字数/重置极值）和删除按钮。整表复用现有的 delete/edit dispatch，不动 handler。
+
+- **`daily-summary.ts` 新增聚合器**：`computeDailySummary` 按时段+标题过滤后按 dateKey 分桶，每日聚合 titles / 加权速度（char-weighted 平均，无字数的日子显示 —）/ 完成书数。行按日期倒序，titles 里按时长倒序
+- **`statistics-summary-new.svelte`**：4 hero 卡（阅读天数/总时长/总字数/完成书数）+ CSS grid 表格（1.25rem / 6rem / 1.5rem / 5×1fr / 2rem），点箭头 toggleExpanded 显示当日的书分细目 + 每行 pen/trash 按钮；inline 编辑用两个 number input（分钟/字数）+ 重置极值 checkbox，保存直接 dispatch 到 `handleEditRequest`
+- **删旧 statistics-summary.svelte + statistics-summary-header.svelte**（681 + 102 行）：换新文件后完全没引用。相关的老 aggregration modes / getAggregatedStatistics 函数在 statistics-content 也顺手清了（getDefaultStatistic / StatisticsReadingDataAggregationMode 已 dead import 删除）
+- **保留 `lastPrimaryReadingDataAggregationMode$` + `statisticsDataAggregrationModes`**：老 tab keybind cycle 还引用，删要动键盘快捷键板，留到统一 dead-code 轮次
+
+统计重整（1.19.0 → 1.20.5）到这里全部落地。
+
 ## 1.20.4
 
 统计面板 Phase C 完成：书籍 + 作者两个探索 tab 上线。至此统计重整（1.19.0 起）5 阶段全部落地——MAIN 主视图 / BOOKS / AUTHORS / SESSIONS / SUMMARY / HIGHLIGHTS 6 个 tab + 顶部时段 chip，所有 tab 共享同一时段筛选和标题过滤。

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onKeyUpStatisticsTab } from '../../../routes/b/on-keydown-reader';
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
-  import { getDefaultStatistic } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import StatisticsAuthors from '$lib/components/statistics/statistics-authors/statistics-authors.svelte';
@@ -9,7 +8,7 @@
   import StatisticsMain from '$lib/components/statistics/statistics-main/statistics-main.svelte';
   import StatisticsPeriodChip from '$lib/components/statistics/statistics-period-chip/statistics-period-chip.svelte';
   import StatisticsSessions from '$lib/components/statistics/statistics-sessions/statistics-sessions.svelte';
-  import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary.svelte';
+  import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary-new.svelte';
   import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
   import StatisticsHighlights from '$lib/components/statistics/statistics-highlights/statistics-highlights.svelte';
   import type {
@@ -21,7 +20,6 @@
     type BookStatistic,
     type ManualStatisticEntry,
     StatisticsTab,
-    StatisticsReadingDataAggregationMode,
     statisticsRangeTemplates,
     statisticsTitleFilterEnabled$,
     statisticsTitleFilterIsOpen$,
@@ -376,7 +374,6 @@
   let titlesInStatisticsDateRange = new Set<string>();
   let statisticsData: BookStatistic[] = [];
   let statisticsForSelection: BookStatistic[] = [];
-  let aggregratedStatistics: BookStatistic[] = [];
   // Sessions load lazily the first time a session-aware tab (main tab
   // from 1.19.0, year tab pre-existing) is opened. Kept as a snapshot;
   // gets stale if the user reads mid-session but that's fine — the
@@ -839,109 +836,6 @@
       filterStatisticsForSelection(statistic, newTitleFilterForStatisticsSet)
     );
     titlesInStatisticsDateRange = newTitleFilterForStatisticsSet;
-
-    aggregratedStatistics = [...getAggregatedStatistics($lastPrimaryReadingDataAggregationMode$)];
-  }
-
-  function getAggregatedStatistics(
-    statisticsDataAggegrationMode: StatisticsReadingDataAggregationMode
-  ) {
-    let aggregatedStatisticsData: BookStatistic[] = [];
-
-    if (statisticsDataAggegrationMode === StatisticsReadingDataAggregationMode.NONE) {
-      aggregatedStatisticsData = statisticsForSelection;
-    } else {
-      const aggregationKey =
-        statisticsDataAggegrationMode === StatisticsReadingDataAggregationMode.DATE
-          ? 'dateKey'
-          : 'title';
-      const aggregrationMap = new Map<string, BookStatistic[]>();
-
-      for (let index = 0, { length } = statisticsForSelection; index < length; index += 1) {
-        const entry = statisticsForSelection[index];
-        const keyValue = entry[aggregationKey];
-        const entries = aggregrationMap.get(keyValue) || [];
-
-        entries.push(entry);
-        aggregrationMap.set(keyValue, entries);
-      }
-
-      const aggregationKeys = [...aggregrationMap.keys()];
-
-      for (let index = 0, { length } = aggregationKeys; index < length; index += 1) {
-        const key = aggregationKeys[index];
-        const entries = aggregrationMap.get(key) || [];
-        const statistic: BookStatistic = {
-          ...getDefaultStatistic('-', '-'),
-          ...{
-            id: `${key}`,
-            averageReadingTime: 0,
-            averageWeightedReadingTime: 0,
-            averageCharactersRead: 0,
-            averageWeightedCharactersRead: 0,
-            averageReadingSpeed: 0,
-            averageWeightedReadingSpeed: 0
-          }
-        };
-
-        let weightedSum = 0;
-        let validReadingDays = 0;
-
-        for (let index2 = 0, { length: length2 } = entries; index2 < length2; index2 += 1) {
-          const entry = entries[index2];
-
-          if (aggregationKey === 'title') {
-            statistic.title = key;
-          } else {
-            statistic.dateKey = key;
-          }
-
-          statistic.readingTime += entry.readingTime;
-          statistic.charactersRead += entry.charactersRead;
-          statistic.minReadingSpeed = statistic.minReadingSpeed
-            ? Math.min(statistic.minReadingSpeed, entry.minReadingSpeed)
-            : entry.minReadingSpeed;
-          statistic.altMinReadingSpeed = statistic.altMinReadingSpeed
-            ? Math.min(statistic.altMinReadingSpeed, entry.altMinReadingSpeed)
-            : statistic.altMinReadingSpeed;
-          statistic.maxReadingSpeed = Math.max(statistic.maxReadingSpeed, entry.lastReadingSpeed);
-          weightedSum += entry.readingTime * entry.charactersRead;
-
-          if (statistic.readingTime) {
-            validReadingDays += 1;
-          }
-        }
-
-        statistic.lastReadingSpeed = statistic.readingTime
-          ? Math.ceil((3600 * statistic.charactersRead) / statistic.readingTime)
-          : 0;
-        statistic.averageReadingTime = validReadingDays
-          ? Math.ceil(statistic.readingTime / validReadingDays)
-          : 0;
-        statistic.averageWeightedReadingTime = statistic.charactersRead
-          ? Math.ceil(weightedSum / statistic.charactersRead)
-          : 0;
-        statistic.averageCharactersRead = validReadingDays
-          ? Math.ceil(statistic.charactersRead / validReadingDays)
-          : 0;
-        statistic.averageWeightedCharactersRead = statistic.readingTime
-          ? Math.ceil(weightedSum / statistic.readingTime)
-          : 0;
-        statistic.averageReadingSpeed = statistic.averageReadingTime
-          ? Math.ceil((3600 * statistic.averageCharactersRead) / statistic.averageReadingTime)
-          : 0;
-        statistic.averageWeightedReadingSpeed = statistic.averageWeightedReadingTime
-          ? Math.ceil(
-              (3600 * statistic.averageWeightedCharactersRead) /
-                statistic.averageWeightedReadingTime
-            )
-          : 0;
-
-        aggregatedStatisticsData.push(statistic);
-      }
-    }
-
-    return aggregatedStatisticsData;
   }
 
   function filterStatisticsForSelection(
@@ -1021,7 +915,11 @@
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.SUMMARY}
     <StatisticsSummary
-      {aggregratedStatistics}
+      statistics={statisticsData}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
       {statisticsDateRangeLabel}
       on:delete={handleDeleteRequest}
       on:edit={handleEditRequest}
