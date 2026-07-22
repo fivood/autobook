@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.20.6
+
+修书库筛选 popover 两个小问题：容器高度包不住 Status 底部一半 + 「漫画」「其他」两个格式标签只有中文。
+
+- **筛选容器宽度不够 Status 4 键放一行**：老版 `w-64`（256px），去掉 24px padding 后只剩 232px 内容宽，4 个 `flex-1` 的 chip 加 gap 需要 ~278px，导致横向溢出。溢出后布局把它们撑成不同视觉高度，看起来像 popover 底部被切。改成 `w-72` (288px) + Status 行加 `flex-wrap` + chip 加 `min-w-[3.5rem]`，装得下且能自然换行
+- **`bookFormat.cbz` / `bookFormat.other` i18n**：BOOK_FORMAT_LABELS 是常量映射，`cbz → 漫画` / `other → 其他` 硬编码中文。加 `bookFormat.cbz` / `bookFormat.other` 三语 key（zh: 漫画/其他 · en: Comic/Other · ja: コミック/その他）+ `formatLabel(fmt)` helper 只对这两种 locale-specific 标签走 `tImmediate`，其他缩写（PDF/EPUB/MOBI/TXT/Markdown/HTMLZ）用作 label 不变
+- **验证**：跑 Vite dev 起来切 zh/en，DOM 查证 chip 数=12 无溢出，切 en locale 后 Comic/Other 正确
+
 ## 1.20.5
 
 新汇总表：删掉 681 行的老分页表 + StatisticsSummaryHeader，换成按日 hero + 展开式日细目。每日一行显示时长/字数/加权速度/涉及书数/完成书数，点箭头展开显示当天每本书的分细目（时长/字数/速度）+ 每行的 inline 编辑（分钟/字数/重置极值）和删除按钮。整表复用现有的 delete/edit dispatch，不动 handler。

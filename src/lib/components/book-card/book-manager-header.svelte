@@ -30,6 +30,15 @@
     libraryFilter$
   } from '$lib/data/store';
   import { BOOK_FORMAT_LABELS, type BookFormat } from '$lib/functions/book-format';
+
+  // Most format labels are universal abbreviations (PDF/EPUB/MOBI/TXT/
+  // Markdown/HTMLZ) — display as-is. Only `cbz`(漫画) and `other`(其他)
+  // are locale-specific words, so those two go through i18n.
+  function formatLabel(fmt: BookFormat): string {
+    if (fmt === 'cbz') return tImmediate('bookFormat.cbz');
+    if (fmt === 'other') return tImmediate('bookFormat.other');
+    return BOOK_FORMAT_LABELS[fmt];
+  }
   import { t, tImmediate } from '$lib/i18n';
   import LocalePicker from '$lib/components/locale-picker/locale-picker.svelte';
 
@@ -442,7 +451,7 @@
                   <span class="filter-badge"></span>
                 {/if}
               </div>
-              <div class="w-64 bg-menu text-menu p-3" slot="content">
+              <div class="filter-panel w-72 bg-menu text-menu p-3 rounded" slot="content">
                 <div class="text-xs opacity-70 mb-1">{$t('manager.filter.format')}</div>
                 <div class="flex flex-wrap gap-1.5 mb-3">
                   {#each BOOK_FORMAT_KEYS as fmt (fmt)}
@@ -457,15 +466,15 @@
                           : [...$libraryFilter$.formats, fmt];
                         $libraryFilter$ = { ...$libraryFilter$, formats };
                       }}
-                    >{BOOK_FORMAT_LABELS[fmt]}</button>
+                    >{formatLabel(fmt)}</button>
                   {/each}
                 </div>
                 <div class="text-xs opacity-70 mb-1">{$t('manager.filter.completion')}</div>
-                <div class="flex gap-1.5 mb-2">
+                <div class="flex flex-wrap gap-1.5 mb-2">
                   {#each COMPLETION_OPTIONS as opt (opt.id)}
                     <button
                       type="button"
-                      class="chip flex-1"
+                      class="chip flex-1 min-w-[3.5rem]"
                       class:chip-on={$libraryFilter$.completion === opt.id}
                       on:click={() => ($libraryFilter$ = { ...$libraryFilter$, completion: opt.id })}
                     >{$t(opt.labelKey)}</button>

@@ -30,6 +30,8 @@ export default {
   'manager.filter.format': '格式',
   'manager.filter.completion': '完成状态',
   'manager.filter.clearAll': '清除全部筛选',
+  'bookFormat.cbz': '漫画',
+  'bookFormat.other': '其他',
   'manager.completion.all': '全部',
   'manager.completion.unread': '未读',
   'manager.completion.reading': '在读',

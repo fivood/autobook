@@ -24,6 +24,8 @@ export default {
   'manager.filter.format': 'Format',
   'manager.filter.completion': 'Status',
   'manager.filter.clearAll': 'Clear all filters',
+  'bookFormat.cbz': 'Comic',
+  'bookFormat.other': 'Other',
   'manager.completion.all': 'All',
   'manager.completion.unread': 'Unread',
   'manager.completion.reading': 'Reading',

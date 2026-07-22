@@ -29,6 +29,8 @@ export default {
   'manager.filter.format': '形式',
   'manager.filter.completion': 'ステータス',
   'manager.filter.clearAll': '絞り込みをクリア',
+  'bookFormat.cbz': 'コミック',
+  'bookFormat.other': 'その他',
   'manager.completion.all': 'すべて',
   'manager.completion.unread': '未読',
   'manager.completion.reading': '読書中',
