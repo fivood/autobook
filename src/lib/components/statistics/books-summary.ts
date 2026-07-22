@@ -64,7 +64,8 @@ export interface BooksAuthorsInput {
   titleFilter?: Map<string, boolean>;
 }
 
-const UNKNOWN_AUTHOR = '未知作者';
+/** Internal sentinel — render-side turns this into i18n label. */
+export const UNKNOWN_AUTHOR_KEY = '__unknown_author__';
 
 export function computeBooksList(input: BooksAuthorsInput): BookRow[] {
   const { period, statistics, manualBooks, dataMetas, titleFilter } = input;
@@ -146,7 +147,7 @@ export function computeAuthorsList(input: BooksAuthorsInput): AuthorRow[] {
   >();
 
   for (const book of books) {
-    const key = book.author?.trim() || UNKNOWN_AUTHOR;
+    const key = book.author?.trim() || UNKNOWN_AUTHOR_KEY;
     let bucket = buckets.get(key);
     if (!bucket) {
       bucket = { books: new Set(), seconds: 0, chars: 0, days: new Set(), completed: 0 };

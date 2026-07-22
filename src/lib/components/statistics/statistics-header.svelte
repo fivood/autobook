@@ -62,8 +62,8 @@
         tabindex="0"
         role="button"
         title={$lastStatisticsTab$ === StatisticsTab.BOOKS
-          ? '已在书籍标签页'
-          : '切换到书籍（每本时长/字数/进度）'}
+          ? $t('stats.header.booksActive')
+          : $t('stats.header.booksSwitch')}
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.BOOKS}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.BOOKS)}
@@ -75,8 +75,8 @@
         tabindex="0"
         role="button"
         title={$lastStatisticsTab$ === StatisticsTab.AUTHORS
-          ? '已在作者标签页'
-          : '切换到作者（按 manualBook.author 聚合）'}
+          ? $t('stats.header.authorsActive')
+          : $t('stats.header.authorsSwitch')}
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.AUTHORS}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.AUTHORS)}
@@ -88,8 +88,8 @@
         tabindex="0"
         role="button"
         title={$lastStatisticsTab$ === StatisticsTab.SESSIONS
-          ? '已在会话标签页'
-          : '切换到会话（阅读时段与分位）'}
+          ? $t('stats.header.sessionsActive')
+          : $t('stats.header.sessionsSwitch')}
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.SESSIONS}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.SESSIONS)}

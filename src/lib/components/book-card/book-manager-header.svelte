@@ -474,7 +474,7 @@
                   {#each COMPLETION_OPTIONS as opt (opt.id)}
                     <button
                       type="button"
-                      class="chip flex-1 min-w-[3.5rem]"
+                      class="chip"
                       class:chip-on={$libraryFilter$.completion === opt.id}
                       on:click={() => ($libraryFilter$ = { ...$libraryFilter$, completion: opt.id })}
                     >{$t(opt.labelKey)}</button>
@@ -657,12 +657,13 @@
 
 <style>
   .chip {
-    padding: 0.2rem 0.6rem;
+    padding: 0.2rem 0.7rem;
     border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
     border-radius: 999px;
     background: transparent;
     color: inherit;
     font-size: 0.72rem;
+    white-space: nowrap;
     cursor: pointer;
     transition: background 0.12s ease, border-color 0.12s ease;
   }

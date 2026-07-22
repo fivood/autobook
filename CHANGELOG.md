@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.7
+
+- 统计面板多语言：主视图 / 书籍 / 作者 / 会话 / 汇总 / 时段 chip / 标签切换 tooltip 全部接入 zh/en/ja
+- 筛选面板 chip 长英文（Reading/Finished）不再挤成 3 行，改 `white-space:nowrap` 让 chip 按内容宽度撑开
+
 ## 1.20.6
 
 修书库筛选 popover 两个小问题：容器高度包不住 Status 底部一半 + 「漫画」「其他」两个格式标签只有中文。

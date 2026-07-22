@@ -9,6 +9,7 @@
     type BookRow
   } from '$lib/components/statistics/books-summary';
   import { resolvePeriod } from '$lib/components/statistics/statistics-period';
+  import { t, tImmediate } from '$lib/i18n';
   import { onDestroy } from 'svelte';
 
   export let statistics: BooksDbStatistic[] = [];
@@ -101,10 +102,12 @@
   }
 </script>
 
-<div class="my-4 opacity-80">书籍 · {statisticsDateRangeLabel} · 共 {rows.length} 本</div>
+<div class="my-4 opacity-80">
+  {$t('stats.books.header', { range: statisticsDateRangeLabel, n: rows.length })}
+</div>
 
 {#if rows.length === 0}
-  <div class="opacity-60 text-sm py-6">此时段没有阅读记录</div>
+  <div class="opacity-60 text-sm py-6">{$t('stats.empty.period')}</div>
 {:else}
   <div class="overflow-x-auto">
     <table class="w-full text-sm border-collapse">
@@ -115,38 +118,38 @@
             class="py-1.5 pr-3 cursor-pointer select-none hover:opacity-100"
             on:click={() => toggleSort('title')}
           >
-            书名{arrow('title')}
+            {$t('stats.books.colTitle')}{arrow('title')}
           </th>
-          <th class="py-1.5 pr-3">作者 / 出版</th>
+          <th class="py-1.5 pr-3">{$t('stats.books.colMeta')}</th>
           <th
             class="py-1.5 pr-3 tabular-nums text-right cursor-pointer select-none hover:opacity-100"
             on:click={() => toggleSort('seconds')}
           >
-            时长{arrow('seconds')}
+            {$t('stats.books.colTime')}{arrow('seconds')}
           </th>
           <th
             class="py-1.5 pr-3 tabular-nums text-right cursor-pointer select-none hover:opacity-100"
             on:click={() => toggleSort('chars')}
           >
-            字数{arrow('chars')}
+            {$t('stats.books.colChars')}{arrow('chars')}
           </th>
           <th
             class="py-1.5 pr-3 tabular-nums text-right cursor-pointer select-none hover:opacity-100"
             on:click={() => toggleSort('days')}
           >
-            天数{arrow('days')}
+            {$t('stats.books.colDays')}{arrow('days')}
           </th>
           <th
             class="py-1.5 pr-3 tabular-nums text-right cursor-pointer select-none hover:opacity-100 w-28"
             on:click={() => toggleSort('progress')}
           >
-            进度{arrow('progress')}
+            {$t('stats.books.colProgress')}{arrow('progress')}
           </th>
           <th
             class="py-1.5 pl-3 whitespace-nowrap cursor-pointer select-none hover:opacity-100"
             on:click={() => toggleSort('lastDateKey')}
           >
-            最近{arrow('lastDateKey')}
+            {$t('stats.books.colRecent')}{arrow('lastDateKey')}
           </th>
         </tr>
       </thead>
@@ -173,7 +176,7 @@
               <div class="truncate max-w-[22rem]" title={row.title}>
                 {row.title}
                 {#if row.completed > 0}
-                  <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-green-600/25 text-green-700 dark:text-green-300">✓ 完成</span>
+                  <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-green-600/25 text-green-700 dark:text-green-300">{$t('stats.books.doneTag')}</span>
                 {/if}
               </div>
               {#if row.tags && row.tags.length}
@@ -184,7 +187,7 @@
             </td>
             <td class="py-1.5 pr-3 text-xs opacity-80">
               {#if row.author || row.publisher}
-                <div class="truncate max-w-[10rem]" title={[row.author, row.translator ? `译 ${row.translator}` : '', row.publisher].filter(Boolean).join(' · ')}>
+                <div class="truncate max-w-[10rem]" title={[row.author, row.translator ? `${tImmediate('stats.books.translatorPrefix')} ${row.translator}` : '', row.publisher].filter(Boolean).join(' · ')}>
                   {row.author ?? ''}
                 </div>
                 {#if row.publisher || row.publishedYear}

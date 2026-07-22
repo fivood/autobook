@@ -1,29 +1,26 @@
 <script lang="ts">
-  /**
-   * Period preset chip row (Phase D, 1.20.1). Sits at the top of the
-   * statistics panel and drives `lastStatisticsRangeTemplate$` — the
-   * existing `setSelectedStatisticsDays` in /statistics/+page.svelte
-   * reacts to that store to update start/end dates. So this is pure UI:
-   * user picks a chip → store changes → dates recompute → all tabs
-   * re-render off the new period.
-   *
-   * "今年" replaces the standalone 年度 tab (removed in 1.20.1): the
-   * narrative-回顾 cards on main view already cover most of what the
-   * old year tab showed.
-   */
   import {
     StatisticsRangeTemplate,
     statisticsRangeTemplates
   } from '$lib/components/statistics/statistics-types';
   import { lastStatisticsRangeTemplate$ } from '$lib/data/store';
+  import { t } from '$lib/i18n';
 
-  const CHIP_HINTS: Partial<Record<StatisticsRangeTemplate, string>> = {
-    [StatisticsRangeTemplate.TODAY]: '今天',
-    [StatisticsRangeTemplate.WEEK]: '本周 7 天',
-    [StatisticsRangeTemplate.MONTH]: '本月 1 日至今',
-    [StatisticsRangeTemplate.YEAR]: '今年 1 月 1 日至 12 月 31 日',
-    [StatisticsRangeTemplate.ALL]: '从 2000-01-01 到今天',
-    [StatisticsRangeTemplate.CUSTOM]: '在右上设置抽屉里选起止日期'
+  const LABEL_KEY: Record<StatisticsRangeTemplate, string> = {
+    [StatisticsRangeTemplate.TODAY]: 'stats.period.today',
+    [StatisticsRangeTemplate.WEEK]: 'stats.period.week',
+    [StatisticsRangeTemplate.MONTH]: 'stats.period.month',
+    [StatisticsRangeTemplate.YEAR]: 'stats.period.year',
+    [StatisticsRangeTemplate.ALL]: 'stats.period.all',
+    [StatisticsRangeTemplate.CUSTOM]: 'stats.period.custom'
+  };
+  const HINT_KEY: Record<StatisticsRangeTemplate, string> = {
+    [StatisticsRangeTemplate.TODAY]: 'stats.period.hint.today',
+    [StatisticsRangeTemplate.WEEK]: 'stats.period.hint.week',
+    [StatisticsRangeTemplate.MONTH]: 'stats.period.hint.month',
+    [StatisticsRangeTemplate.YEAR]: 'stats.period.hint.year',
+    [StatisticsRangeTemplate.ALL]: 'stats.period.hint.all',
+    [StatisticsRangeTemplate.CUSTOM]: 'stats.period.hint.custom'
   };
 
   function pick(t: StatisticsRangeTemplate) {
@@ -32,17 +29,17 @@
 </script>
 
 <div class="flex flex-wrap gap-1.5 py-2 items-center">
-  <span class="text-xs opacity-60 mr-1">时段</span>
-  {#each statisticsRangeTemplates as t (t)}
-    {@const active = $lastStatisticsRangeTemplate$ === t}
+  <span class="text-xs opacity-60 mr-1">{$t('stats.period.label')}</span>
+  {#each statisticsRangeTemplates as tpl (tpl)}
+    {@const active = $lastStatisticsRangeTemplate$ === tpl}
     <button
       type="button"
       class="chip"
       class:active
-      title={CHIP_HINTS[t]}
-      on:click={() => pick(t)}
+      title={$t(HINT_KEY[tpl])}
+      on:click={() => pick(tpl)}
     >
-      {t}
+      {$t(LABEL_KEY[tpl])}
     </button>
   {/each}
 </div>

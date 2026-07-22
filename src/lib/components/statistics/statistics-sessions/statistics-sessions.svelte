@@ -10,6 +10,7 @@
   } from '$lib/data/database/books-db/versions/books-db';
   import { computePeriodSummary } from '$lib/components/statistics/session-summary';
   import { resolvePeriod } from '$lib/components/statistics/statistics-period';
+  import { t } from '$lib/i18n';
 
   export let statistics: BooksDbStatistic[] = [];
   export let sessions: BooksDbSession[] = [];
@@ -63,39 +64,50 @@
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
+  $: DOW = [
+    $t('stats.dow.sun'),
+    $t('stats.dow.mon'),
+    $t('stats.dow.tue'),
+    $t('stats.dow.wed'),
+    $t('stats.dow.thu'),
+    $t('stats.dow.fri'),
+    $t('stats.dow.sat')
+  ];
   function weekdayLabel(ts: number): string {
-    return ['日', '一', '二', '三', '四', '五', '六'][new Date(ts).getDay()];
+    return DOW[new Date(ts).getDay()];
   }
 </script>
 
-<div class="my-4 opacity-80">阅读会话 · {statisticsDateRangeLabel}</div>
+<div class="my-4 opacity-80">
+  {$t('stats.sessions.header', { range: statisticsDateRangeLabel })}
+</div>
 
 {#if summary?.sessionStats}
   <div class="grid grid-cols-2 md:grid-cols-5 gap-3 my-4">
     <div class="rounded border border-gray-500/30 p-3">
-      <div class="text-xs opacity-70">会话数</div>
+      <div class="text-xs opacity-70">{$t('stats.sessions.count')}</div>
       <div class="text-xl font-medium tabular-nums">{summary.sessionStats.count}</div>
     </div>
     <div class="rounded border border-gray-500/30 p-3">
-      <div class="text-xs opacity-70">总时长</div>
+      <div class="text-xs opacity-70">{$t('stats.sessions.totalTime')}</div>
       <div class="text-xl font-medium tabular-nums">
         {formatDuration(summary.sessionStats.totalSeconds)}
       </div>
     </div>
     <div class="rounded border border-gray-500/30 p-3">
-      <div class="text-xs opacity-70">中位</div>
+      <div class="text-xs opacity-70">{$t('stats.sessions.median')}</div>
       <div class="text-xl font-medium tabular-nums">
         {formatDuration(summary.sessionStats.medianSeconds)}
       </div>
     </div>
     <div class="rounded border border-gray-500/30 p-3">
-      <div class="text-xs opacity-70">p95</div>
+      <div class="text-xs opacity-70">{$t('stats.sessions.p95')}</div>
       <div class="text-xl font-medium tabular-nums">
         {formatDuration(summary.sessionStats.p95Seconds)}
       </div>
     </div>
     <div class="rounded border border-gray-500/30 p-3">
-      <div class="text-xs opacity-70">最长</div>
+      <div class="text-xs opacity-70">{$t('stats.sessions.longest')}</div>
       <div class="text-xl font-medium tabular-nums">
         {formatDuration(summary.sessionStats.longestSeconds)}
       </div>
@@ -103,36 +115,40 @@
   </div>
 {:else}
   <div class="opacity-60 text-sm py-6">
-    此时段没有会话记录（会话数据从 v10 起可用，早期年份为空）
+    {$t('stats.sessions.emptyPeriod')}
   </div>
 {/if}
 
 {#if inRangeSessions.length}
   <section class="my-6">
     <div class="flex items-baseline justify-between mb-2">
-      <h3 class="text-lg">会话列表</h3>
+      <h3 class="text-lg">{$t('stats.sessions.list')}</h3>
       <span class="text-[11px] opacity-60">
-        共 {inRangeSessions.length} 条{inRangeSessions.length > visible
-          ? `，已显示 ${visible}`
-          : ''}
+        {$t('stats.sessions.listTotal', {
+          total: inRangeSessions.length,
+          shown:
+            inRangeSessions.length > visible
+              ? $t('stats.sessions.listShownTail', { n: visible })
+              : ''
+        })}
       </span>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm tabular-nums border-collapse">
         <thead>
           <tr class="text-left opacity-60 text-xs border-b border-gray-500/25">
-            <th class="py-1.5 pr-3">开始</th>
-            <th class="py-1.5 pr-3">周</th>
-            <th class="py-1.5 pr-3">时长</th>
-            <th class="py-1.5 pr-3 text-right">字数</th>
-            <th class="py-1.5 pl-3">书</th>
+            <th class="py-1.5 pr-3">{$t('stats.sessions.colStart')}</th>
+            <th class="py-1.5 pr-3">{$t('stats.sessions.colWeek')}</th>
+            <th class="py-1.5 pr-3">{$t('stats.sessions.colDur')}</th>
+            <th class="py-1.5 pr-3 text-right">{$t('stats.sessions.colChars')}</th>
+            <th class="py-1.5 pl-3">{$t('stats.sessions.colTitle')}</th>
           </tr>
         </thead>
         <tbody>
           {#each inRangeSessions.slice(0, visible) as s (s.id)}
             <tr class="border-b border-gray-500/15 hover:bg-gray-500/5">
               <td class="py-1 pr-3 whitespace-nowrap">{formatDateTime(s.startTs)}</td>
-              <td class="py-1 pr-3 opacity-70">周{weekdayLabel(s.startTs)}</td>
+              <td class="py-1 pr-3 opacity-70">{weekdayLabel(s.startTs)}</td>
               <td class="py-1 pr-3">{formatDuration(s.durationSec)}</td>
               <td class="py-1 pr-3 text-right">{s.charsRead || ''}</td>
               <td class="py-1 pl-3 truncate max-w-[24rem]" title={s.title}>{s.title}</td>
@@ -147,7 +163,9 @@
           class="text-sm px-4 py-1.5 rounded border border-gray-500/40 hover:bg-gray-500/10"
           on:click={() => (visible = Math.min(inRangeSessions.length, visible + PAGE_SIZE))}
         >
-          再显示 {Math.min(PAGE_SIZE, inRangeSessions.length - visible)} 条
+          {$t('stats.sessions.more', {
+            n: Math.min(PAGE_SIZE, inRangeSessions.length - visible)
+          })}
         </button>
       </div>
     {/if}

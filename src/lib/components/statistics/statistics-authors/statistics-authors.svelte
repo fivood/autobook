@@ -6,9 +6,11 @@
   } from '$lib/data/database/books-db/versions/books-db';
   import {
     computeAuthorsList,
-    computeBooksList
+    computeBooksList,
+    UNKNOWN_AUTHOR_KEY
   } from '$lib/components/statistics/books-summary';
   import { resolvePeriod } from '$lib/components/statistics/statistics-period';
+  import { t } from '$lib/i18n';
 
   export let statistics: BooksDbStatistic[] = [];
   export let manualBooks: BooksDbManualBook[] = [];
@@ -65,34 +67,40 @@
   }
 </script>
 
-<div class="my-4 opacity-80">作者 · {statisticsDateRangeLabel} · 共 {authors.length} 位</div>
+<div class="my-4 opacity-80">
+  {$t('stats.authors.header', { range: statisticsDateRangeLabel, n: authors.length })}
+</div>
 
 {#if booksWithoutAuthor > 0}
   <div
     class="my-3 text-xs opacity-70 rounded border-l-2 pl-3 py-2"
     style="border-color: var(--accent-color, #5f7e7b);"
   >
-    有 <b>{booksWithoutAuthor}</b> 本书没填作者，都归到「未知作者」。想改的话打开手动录入 dialog（右上 ✏️）录入或编辑该书的元数据。
+    {$t('stats.authors.unknownWarn', { n: booksWithoutAuthor })}
   </div>
 {/if}
 
 {#if authors.length === 0}
-  <div class="opacity-60 text-sm py-6">此时段没有阅读记录</div>
+  <div class="opacity-60 text-sm py-6">{$t('stats.empty.period')}</div>
 {:else}
   <div class="flex flex-col gap-2">
     {#each authors as row (row.author)}
       <div class="rounded border border-gray-500/25 p-3">
         <div class="flex items-baseline justify-between gap-3">
-          <div class="text-base font-medium truncate">{row.author}</div>
+          <div class="text-base font-medium truncate">
+            {row.author === UNKNOWN_AUTHOR_KEY ? $t('stats.authors.unknown') : row.author}
+          </div>
           <div class="tabular-nums text-sm opacity-80 shrink-0">
             {formatDuration(row.seconds)}
             <span class="opacity-60 text-[11px]">· {percent(row.seconds)}%</span>
           </div>
         </div>
         <div class="text-[11px] opacity-60 mt-1">
-          {row.books.length} 本书 · {formatChars(row.chars)} 字 · {row.days} 天{row.completed
-            ? ` · 完成 ${row.completed}`
-            : ''}
+          {$t('stats.authors.stats', {
+            books: $t('stats.authors.bookCount', { n: row.books.length }),
+            chars: formatChars(row.chars),
+            days: row.days
+          })}{row.completed ? $t('stats.authors.completedTail', { n: row.completed }) : ''}
         </div>
         <div class="flex flex-wrap gap-1 mt-2">
           {#each row.books as title (title)}
