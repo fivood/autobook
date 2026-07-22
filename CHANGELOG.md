@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.8
+
+- 设置面板多语言：Reader / TTS / Appearance / Data / Stats 各分区的标题、toggle 选项、按钮、tooltip 全部接入 zh/en/ja
+- 设置面板多语言 · 补：ViewMode（滚动/分页）、Furigana（隐藏/部分/点击切换/完整）、竖排方向、自动同步/自动暂停/跳过阈值 toggle，以及 TTS 面板全部 UI（引擎/起点/快捷键/预览按钮/Kokoro 下载+音色分组/Web Speech/SAPI/自定义 HTTP TTS 面板）都接入 zh/en/ja
+
 ## 1.20.7
 
 - 统计面板多语言：主视图 / 书籍 / 作者 / 会话 / 汇总 / 时段 chip / 标签切换 tooltip 全部接入 zh/en/ja

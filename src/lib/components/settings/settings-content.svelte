@@ -76,7 +76,7 @@
   } from '$lib/data/theme-option';
   import type { VerticalTextOrientation } from '$lib/data/vertical-text-orientation';
   import { ViewMode } from '$lib/data/view-mode';
-  import { t } from '$lib/i18n';
+  import { t, tImmediate } from '$lib/i18n';
   import type { WritingMode } from '$lib/data/writing-mode';
   import { secondsToMinutes } from '$lib/functions/statistic-util';
   import { dummyFn } from '$lib/functions/utils';
@@ -809,7 +809,7 @@
   let previewState: 'idle' | 'loading' | 'playing' | 'error' = 'idle';
   let previewMessage = '';
   let previewAudio: HTMLAudioElement | undefined;
-  const previewText = '这是语音测试。床前明月光，疑是地上霜。';
+  $: previewText = $t('settings.tts.previewText');
 
   async function kokoroEnsureLoad() {
     try {
@@ -836,7 +836,7 @@
       utt.onend = () => (previewState = 'idle');
       utt.onerror = () => {
         previewState = 'error';
-        previewMessage = 'Web Speech 播放失败';
+        previewMessage = tImmediate('settings.tts.webSpeechFailed');
       };
       window.speechSynthesis.speak(utt);
       return;
@@ -845,7 +845,7 @@
     if ($ttsEngine$ === 'kokoro') {
       if (!$kokoroAccepted$) {
         previewState = 'error';
-        previewMessage = '请先点「下载并启用」拉取 Kokoro 模型';
+        previewMessage = tImmediate('settings.tts.kokoroDownloadFirst');
         return;
       }
       previewState = 'loading';
@@ -870,14 +870,14 @@
         };
         previewAudio.onerror = () => {
           previewState = 'error';
-          previewMessage = '音频播放失败';
+          previewMessage = tImmediate('settings.tts.audioPlayFailed');
           URL.revokeObjectURL(url);
         };
         previewState = 'playing';
         await previewAudio.play();
       } catch (err: any) {
         previewState = 'error';
-        previewMessage = `Kokoro 合成失败: ${err?.message || err}`;
+        previewMessage = `${tImmediate('settings.tts.kokoroSynthFailed')}: ${err?.message || err}`;
       }
       return;
     }
@@ -903,7 +903,7 @@
         };
         previewAudio.onerror = () => {
           previewState = 'error';
-          previewMessage = '音频播放失败';
+          previewMessage = tImmediate('settings.tts.audioPlayFailed');
           URL.revokeObjectURL(url);
         };
         previewState = 'playing';
@@ -919,7 +919,7 @@
           }
         } catch (err: any) {
           previewState = 'error';
-          previewMessage = `请求头不是合法 JSON: ${err.message}`;
+          previewMessage = `${tImmediate('settings.tts.headersInvalid')}: ${err.message}`;
           return;
         }
         const b64 = await invoke<string>('custom_tts_synthesize', {
@@ -942,7 +942,7 @@
         };
         previewAudio.onerror = () => {
           previewState = 'error';
-          previewMessage = '音频播放失败';
+          previewMessage = tImmediate('settings.tts.audioPlayFailed');
           URL.revokeObjectURL(url);
         };
         previewState = 'playing';
@@ -1020,176 +1020,83 @@
     }
   }
 
-  const optionsForFuriganaStyle: ToggleOption<FuriganaStyle>[] = [
-    {
-      id: FuriganaStyle.Hide,
-      text: '隐藏'
-    },
-    {
-      id: FuriganaStyle.Partial,
-      text: '部分'
-    },
-    {
-      id: FuriganaStyle.Toggle,
-      text: '点击切换'
-    },
-    {
-      id: FuriganaStyle.Full,
-      text: '完整'
-    }
-  ];
+  $: optionsForFuriganaStyle = [
+    { id: FuriganaStyle.Hide, text: $t('settings.value.furigana.hide') },
+    { id: FuriganaStyle.Partial, text: $t('settings.value.furigana.partial') },
+    { id: FuriganaStyle.Toggle, text: $t('settings.value.furigana.toggle') },
+    { id: FuriganaStyle.Full, text: $t('settings.value.furigana.full') }
+  ] as ToggleOption<FuriganaStyle>[];
 
-  const optionsForWritingMode: ToggleOption<WritingMode>[] = [
-    {
-      id: 'horizontal-tb',
-      text: '横排'
-    },
-    {
-      id: 'vertical-rl',
-      text: '竖排'
-    }
-  ];
+  $: optionsForWritingMode = [
+    { id: 'horizontal-tb', text: $t('settings.value.wm.horizontal') },
+    { id: 'vertical-rl', text: $t('settings.value.wm.vertical') }
+  ] as ToggleOption<WritingMode>[];
 
-  const optionsForVerticalTextOrientation: ToggleOption<VerticalTextOrientation>[] = [
-    {
-      id: 'mixed',
-      text: '混合'
-    },
-    {
-      id: 'upright',
-      text: '正立'
-    }
-  ];
+  $: optionsForVerticalTextOrientation = [
+    { id: 'mixed', text: $t('settings.value.vto.mixed') },
+    { id: 'upright', text: $t('settings.value.vto.upright') }
+  ] as ToggleOption<VerticalTextOrientation>[];
 
-  const optionsForTextMarginMode: ToggleOption<TextMarginMode>[] = [
-    {
-      id: 'auto',
-      text: '自动'
-    },
-    {
-      id: 'manual',
-      text: '手动'
-    }
-  ];
+  $: optionsForTextMarginMode = [
+    { id: 'auto', text: $t('settings.value.textMargin.auto') },
+    { id: 'manual', text: $t('settings.value.textMargin.manual') }
+  ] as ToggleOption<TextMarginMode>[];
 
-  const optionsForViewMode: ToggleOption<ViewMode>[] = [
-    {
-      id: ViewMode.Continuous,
-      text: '滚动'
-    },
-    {
-      id: ViewMode.Paginated,
-      text: '分页'
-    }
-  ];
+  $: optionsForViewMode = [
+    { id: ViewMode.Continuous, text: $t('settings.value.viewMode.continuous') },
+    { id: ViewMode.Paginated, text: $t('settings.value.viewMode.paginated') }
+  ] as ToggleOption<ViewMode>[];
 
-  const optionsForBlurMode: ToggleOption<BlurMode>[] = [
-    {
-      id: BlurMode.ALL,
-      text: '全部'
-    },
-    {
-      id: BlurMode.AFTER_TOC,
-      text: '封面外'
-    },
-    {
-      id: BlurMode.NONE,
-      text: '不模糊'
-    }
-  ];
+  $: optionsForBlurMode = [
+    { id: BlurMode.ALL, text: $t('settings.value.blur.all') },
+    { id: BlurMode.AFTER_TOC, text: $t('settings.value.blur.cover') },
+    { id: BlurMode.NONE, text: $t('settings.value.blur.none') }
+  ] as ToggleOption<BlurMode>[];
 
   // 书库存储源 toggle。Tauri 桌面上才显示：TAURI_FS 是默认真书库，
   // BROWSER 只留给从更早浏览器 IDB 升级过来的用户翻旧数据。
-  const storageSourceOptions: ToggleOption<StorageKey>[] = [
-    { id: StorageKey.TAURI_FS, text: '文件系统（默认）' },
-    { id: StorageKey.BROWSER, text: '浏览器 IDB（旧数据）' }
-  ];
+  $: storageSourceOptions = [
+    { id: StorageKey.TAURI_FS, text: $t('settings.value.storageSource.fs') },
+    { id: StorageKey.BROWSER, text: $t('settings.value.storageSource.browser') }
+  ] as ToggleOption<StorageKey>[];
   let selectedStorageSource: StorageKey = $storageSource$;
   $: if (selectedStorageSource !== $storageSource$) {
     storageSource$.next(selectedStorageSource);
   }
 
-  const optionsForImportHTMLFixes: ToggleOption<ImportHTMLFixMode>[] = [
-    {
-      id: ImportHTMLFixMode.OFF,
-      text: 'Off'
-    },
-    {
-      id: ImportHTMLFixMode.STANDARD,
-      text: '标准'
-    },
-    {
-      id: ImportHTMLFixMode.EXTENDED,
-      text: '扩展'
-    }
-  ];
+  $: optionsForImportHTMLFixes = [
+    { id: ImportHTMLFixMode.OFF, text: $t('settings.value.epubFix.off') },
+    { id: ImportHTMLFixMode.STANDARD, text: $t('settings.value.epubFix.standard') },
+    { id: ImportHTMLFixMode.EXTENDED, text: $t('settings.value.epubFix.extended') }
+  ] as ToggleOption<ImportHTMLFixMode>[];
 
-  const optionsForAutoReplicationType: ToggleOption<AutoReplicationType>[] = [
-    {
-      id: AutoReplicationType.Off,
-      text: 'Off'
-    },
-    {
-      id: AutoReplicationType.Up,
-      text: '上传'
-    },
-    {
-      id: AutoReplicationType.Down,
-      text: '下载'
-    },
-    {
-      id: AutoReplicationType.All,
-      text: '双向'
-    }
-  ];
+  $: optionsForAutoReplicationType = [
+    { id: AutoReplicationType.Off, text: 'Off' },
+    { id: AutoReplicationType.Up, text: $t('settings.value.autoRepl.up') },
+    { id: AutoReplicationType.Down, text: $t('settings.value.autoRepl.down') },
+    { id: AutoReplicationType.All, text: $t('settings.value.autoRepl.all') }
+  ] as ToggleOption<AutoReplicationType>[];
 
-  const optionsForReplicationSaveBehavior: ToggleOption<ReplicationSaveBehavior>[] = [
-    {
-      id: ReplicationSaveBehavior.NewOnly,
-      text: '仅新增'
-    },
-    {
-      id: ReplicationSaveBehavior.Overwrite,
-      text: '覆盖'
-    }
-  ];
+  $: optionsForReplicationSaveBehavior = [
+    { id: ReplicationSaveBehavior.NewOnly, text: $t('settings.value.mergeOnly') },
+    { id: ReplicationSaveBehavior.Overwrite, text: $t('settings.value.overwrite') }
+  ] as ToggleOption<ReplicationSaveBehavior>[];
 
-  const optionsForTrackerAutoPause: ToggleOption<TrackerAutoPause>[] = [
-    {
-      id: TrackerAutoPause.OFF,
-      text: 'Off'
-    },
-    {
-      id: TrackerAutoPause.MODERATE,
-      text: '适度'
-    },
-    {
-      id: TrackerAutoPause.STRICT,
-      text: '严格'
-    }
-  ];
+  $: optionsForTrackerAutoPause = [
+    { id: TrackerAutoPause.OFF, text: 'Off' },
+    { id: TrackerAutoPause.MODERATE, text: $t('settings.value.autoPause.moderate') },
+    { id: TrackerAutoPause.STRICT, text: $t('settings.value.autoPause.strict') }
+  ] as ToggleOption<TrackerAutoPause>[];
 
-  const optionsForTrackerSkipThresholdAction: ToggleOption<TrackerSkipThresholdAction>[] = [
-    {
-      id: TrackerSkipThresholdAction.IGNORE,
-      text: '忽略'
-    },
-    {
-      id: TrackerSkipThresholdAction.PAUSE,
-      text: '暂停统计'
-    }
-  ];
+  $: optionsForTrackerSkipThresholdAction = [
+    { id: TrackerSkipThresholdAction.IGNORE, text: $t('settings.value.skipAction.ignore') },
+    { id: TrackerSkipThresholdAction.PAUSE, text: $t('settings.value.skipAction.pause') }
+  ] as ToggleOption<TrackerSkipThresholdAction>[];
 
-  const optionsForMergeMode: ToggleOption<MergeMode>[] = [
-    {
-      id: MergeMode.MERGE,
-      text: '合并'
-    },
-    {
-      id: MergeMode.REPLACE,
-      text: '覆盖'
-    }
-  ];
+  $: optionsForMergeMode = [
+    { id: MergeMode.MERGE, text: $t('settings.value.merge') },
+    { id: MergeMode.REPLACE, text: $t('settings.value.overwrite') }
+  ] as ToggleOption<MergeMode>[];
 
   let showSpinner = false;
   let furiganaStyleTooltip = '';
@@ -1203,67 +1110,67 @@
 
   $: verticalTextOrientationTooltip =
     verticalTextOrientation === 'mixed'
-      ? '横向文字字符顺时针旋转 90°'
-      : '横向文字字符正立排版，竖向字符也正立显示。';
-  $: autoBookmarkTooltip = `开启后，超过 ${autoBookmarkTime} 秒未滚动/翻页将自动加书签`;
+      ? $t('settings.tip.vto.mixed')
+      : $t('settings.tip.vto.upright');
+  $: autoBookmarkTooltip = $t('settings.tip.autoBookmark', { n: autoBookmarkTime });
   $: wakeLockSupported = browser && 'wakeLock' in navigator;
   $: verticalMode = writingMode === 'vertical-rl';
   $: fontCacheSupported = browser && 'caches' in window;
   $: switch (furiganaStyle) {
     case FuriganaStyle.Hide:
-      furiganaStyleTooltip = '始终隐藏';
+      furiganaStyleTooltip = $t('settings.tip.furigana.hide');
       break;
     case FuriganaStyle.Toggle:
-      furiganaStyleTooltip = '默认隐藏，点击可切换显示';
+      furiganaStyleTooltip = $t('settings.tip.furigana.toggle');
       break;
     case FuriganaStyle.Full:
-      furiganaStyleTooltip = '默认隐藏，悬停或点击时显示';
+      furiganaStyleTooltip = $t('settings.tip.furigana.full');
       break;
     default:
-      furiganaStyleTooltip = '以灰色显示振假名';
+      furiganaStyleTooltip = $t('settings.tip.furigana.partial');
       break;
   }
   $: avoidPageBreakTooltip = avoidPageBreak
-    ? '避免单词/句子被拆分到不同页面'
-    : '允许单词/句子在分页处被拆分';
+    ? $t('settings.tip.avoidBreak.on')
+    : $t('settings.tip.avoidBreak.off');
   $: persistentStorageTooltip = persistentStorage
-    ? '阅读器使用更高的本地存储配额'
-    : '使用较低的临时存储配额。\n启用可能需要书签或通知权限';
+    ? $t('settings.tip.persistent.on')
+    : $t('settings.tip.persistent.off');
   $: switch (importHTMLFixMode) {
     case ImportHTMLFixMode.OFF:
-      importHTMLFixModeTooltip = '原样导入 EPUB 文件';
+      importHTMLFixModeTooltip = $t('settings.tip.epubFix.off');
       break;
     case ImportHTMLFixMode.EXTENDED:
-      importHTMLFixModeTooltip = '对 EPUB 导入应用更多修正：去除控制字符、替换 HTML 实体等';
+      importHTMLFixModeTooltip = $t('settings.tip.epubFix.extended');
       break;
     default:
-      importHTMLFixModeTooltip = '对 EPUB 导入做基础修正：错误的自闭合标签等';
+      importHTMLFixModeTooltip = $t('settings.tip.epubFix.standard');
       break;
   }
   $: cacheStorageDataTooltip = cacheStorageData
-    ? '缓存存储数据。可省网络流量与延迟，但读取最新数据需刷新或新开标签'
-    : '每次操作都重新拉取数据。流量与延迟较高，但保证数据最新';
+    ? $t('settings.tip.cacheData.on')
+    : $t('settings.tip.cacheData.off');
   $: replicationSaveBehaviorTooltip =
     replicationSaveBehavior === ReplicationSaveBehavior.Overwrite
-      ? '总是覆盖目标数据'
-      : '仅当目标无数据、无时间戳或目标数据更旧时才写入';
+      ? $t('settings.tip.replBehavior.overwrite')
+      : $t('settings.tip.replBehavior.newOnly');
   $: switch (autoReplication) {
     case AutoReplicationType.Up:
-      autoReplicationTypeTooltip = '阅读时每分钟将更新数据导出到同步目标';
+      autoReplicationTypeTooltip = $t('settings.tip.autoRepl.up');
       break;
     case AutoReplicationType.Down:
-      autoReplicationTypeTooltip = '打开书时从同步目标导入数据';
+      autoReplicationTypeTooltip = $t('settings.tip.autoRepl.down');
       break;
     case AutoReplicationType.All:
-      autoReplicationTypeTooltip = '双向同步';
+      autoReplicationTypeTooltip = $t('settings.tip.autoRepl.all');
       break;
     default:
-      autoReplicationTypeTooltip = '关闭自动导入/导出';
+      autoReplicationTypeTooltip = $t('settings.tip.autoRepl.off');
       break;
   }
   $: showExternalPlaceholderToolTip = showExternalPlaceholder
-    ? '在浏览器源管理器中显示外部书籍的占位数据'
-    : '隐藏外部书籍的占位数据';
+    ? $t('settings.tip.showPlaceholder.on')
+    : $t('settings.tip.showPlaceholder.off');
 
   $: startOfDayHours = `${`${startDayHoursForTracker}`.padStart(2, '0')}:00`;
 
@@ -1271,13 +1178,13 @@
 
   $: switch (trackerAutoPause) {
     case TrackerAutoPause.OFF:
-      trackerAutoPauseTooltip = '除特定阅读事件外，统计不会自动暂停';
+      trackerAutoPauseTooltip = $t('settings.tip.autoPause.off');
       break;
     case TrackerAutoPause.STRICT:
-      trackerAutoPauseTooltip = '阅读事件或任何站点失焦（如词典弹窗）时统计都会自动暂停';
+      trackerAutoPauseTooltip = $t('settings.tip.autoPause.strict');
       break;
     default:
-      trackerAutoPauseTooltip = '阅读事件或阅读标签失焦时统计自动暂停';
+      trackerAutoPauseTooltip = $t('settings.tip.autoPause.moderate');
       break;
   }
 
@@ -1731,13 +1638,13 @@
             {#if sapiVoicesError}
               <p class="text-red-500 text-sm">{sapiVoicesError}</p>
             {:else if !sapiVoices.length}
-              <p class="text-sm opacity-60">未检测到可用语音</p>
+              <p class="text-sm opacity-60">{$t('settings.tts.noVoices')}</p>
             {:else}
               <select
                 class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
                 bind:value={$ttsSapiVoiceId$}
               >
-                <option value="">系统默认</option>
+                <option value="">{$t('settings.tts.sysDefault')}</option>
                 {#each sapiVoices as voice (voice.id)}
                   <option value={voice.id}>{voice.name} ({voice.language})</option>
                 {/each}
@@ -1754,13 +1661,13 @@
             tooltip="WebView2 (Edge) 暴露的浏览器语音。中文 / 日语音色排在最前。"
           >
             {#if !webVoices.length}
-              <p class="text-sm opacity-60">未检测到可用语音</p>
+              <p class="text-sm opacity-60">{$t('settings.tts.noVoices')}</p>
             {:else}
               <select
                 class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
                 bind:value={$readerVoiceUri$}
               >
-                <option value="">系统默认（按书籍语言自动选择）</option>
+                <option value="">{$t('settings.value.systemDefault')}</option>
                 {#each webVoices as voice (voice.voiceURI)}
                   <option value={voice.voiceURI}>{voice.name} ({voice.lang})</option>
                 {/each}
@@ -1958,7 +1865,7 @@
     {/if}
 
     <SettingsSectionHeader title={$t('settings.section.readerArea')} hint={$t('settings.section.readerAreaHint')} />
-    <SettingsItemGroup title={verticalMode ? '阅读区左右边距' : '阅读区上下边距'}>
+    <SettingsItemGroup title={verticalMode ? $t('settings.item.readerPaddingH') : $t('settings.item.readerPaddingV')}>
       <SettingsDimensionPopover
         slot="header"
         isFirstDimension
@@ -1973,7 +1880,7 @@
         bind:value={firstDimensionMargin}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={verticalMode ? '阅读区最大高度' : '阅读区最大宽度'}>
+    <SettingsItemGroup title={verticalMode ? $t('settings.item.readerMaxHeight') : $t('settings.item.readerMaxWidth')}>
       <SettingsDimensionPopover
         slot="header"
         isVertical={verticalMode}
@@ -2007,8 +1914,8 @@
       </SettingsItemGroup>
     {/if}
     <SettingsItemGroup
-      title="仅手动书签"
-      tooltip={'开启后，通过菜单离开阅读器时不会将当前位置加为书签'}
+      title={$t('settings.item.manualOnlyBookmark')}
+      tooltip={$t('settings.tip.manualOnlyBookmark')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
     </SettingsItemGroup>
@@ -2036,21 +1943,21 @@
     <SettingsSectionHeader title={$t('settings.section.imagesReadingPoint')} hint={$t('settings.section.imagesReadingPointHint')} />
     {#if $lastBookHasImages$}
       <SettingsItemGroup
-        title="图片模糊"
-        tooltip="对包含插图的电子书（如轻小说）有效，可避免剧透图直接显示"
+        title={$t('settings.item.blurImages')}
+        tooltip={$t('settings.tip.blurImages')}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
       </SettingsItemGroup>
       {#if blurImage}
-        <SettingsItemGroup title={$t('settings.item.blurScope')} tooltip="模糊范围：全部 / 仅封面外（保留封面，封底+正文图片都模糊）/ 不模糊">
+        <SettingsItemGroup title={$t('settings.item.blurScope')} tooltip={$t('settings.tip.blurScope')}>
           <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
         </SettingsItemGroup>
       {/if}
     {/if}
     {#if statisticsEnabled}
       <SettingsItemGroup
-        title="自定义阅读点暂停统计"
-        tooltip={'开启后，设置自定义阅读点时统计会自动暂停/恢复'}
+        title={$t('settings.item.customReadingPointPause')}
+        tooltip={$t('settings.tip.customReadingPointPause')}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -2062,21 +1969,21 @@
     <SettingsSectionHeader title={$t('settings.section.miscReader')} hint={$t('settings.section.miscReaderHint')} />
     {#if wakeLockSupported}
       <SettingsItemGroup
-        title="屏幕常亮"
-        tooltip={'开启后请求屏幕常亮（WakeLock），防止屏幕变暗或锁屏'}
+        title={$t('settings.item.keepAwake')}
+        tooltip={$t('settings.tip.keepAwake')}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableReaderWakeLock} />
       </SettingsItemGroup>
     {/if}
     <SettingsItemGroup
-      title="关闭确认"
-      tooltip={'开启后，存在未保存改动时关闭/刷新阅读器标签前会确认'}
+      title={$t('settings.item.confirmClose')}
+      tooltip={$t('settings.tip.confirmClose')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={confirmClose} />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="优先阅读器样式"
-      tooltip={'开启后，对边距/对齐等规则添加 !important，与书内样式冲突时更易生效'}
+      title={$t('settings.item.preferReaderStyle')}
+      tooltip={$t('settings.tip.preferReaderStyle')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={prioritizeReaderStyles} />
     </SettingsItemGroup>
@@ -2229,7 +2136,7 @@
       </SettingsItemGroup>
     {/if}
     <SettingsItemGroup
-      title={verticalMode ? '阅读区左右边距' : '阅读区上下边距'}
+      title={verticalMode ? $t('settings.item.readerPaddingH') : $t('settings.item.readerPaddingV')}
     >
       <SettingsDimensionPopover
         slot="header"
@@ -2245,7 +2152,7 @@
         bind:value={firstDimensionMargin}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={verticalMode ? '阅读区最大高度' : '阅读区最大宽度'}>
+    <SettingsItemGroup title={verticalMode ? $t('settings.item.readerMaxHeight') : $t('settings.item.readerMaxWidth')}>
       <SettingsDimensionPopover
         slot="header"
         isVertical={verticalMode}
@@ -2316,8 +2223,8 @@
       </SettingsItemGroup>
     {/if}
     <SettingsItemGroup
-      title="优先阅读器样式"
-      tooltip={'开启后，对边距/对齐等规则添加 !important，与书内样式冲突时更易生效'}
+      title={$t('settings.item.preferReaderStyle')}
+      tooltip={$t('settings.tip.preferReaderStyle')}
     >
       <ButtonToggleGroup
         options={optionsForToggle}
@@ -2350,8 +2257,8 @@
     </SettingsItemGroup>
     {#if wakeLockSupported}
       <SettingsItemGroup
-        title="屏幕常亮"
-        tooltip={'开启后请求屏幕常亮（WakeLock），防止屏幕变暗或锁屏'}
+        title={$t('settings.item.keepAwake')}
+        tooltip={$t('settings.tip.keepAwake')}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -2384,14 +2291,14 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="关闭确认"
-      tooltip={'开启后，存在未保存改动时关闭/刷新阅读器标签前会确认'}
+      title={$t('settings.item.confirmClose')}
+      tooltip={$t('settings.tip.confirmClose')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={confirmClose} />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="仅手动书签"
-      tooltip={'开启后，通过菜单离开阅读器时不会将当前位置加为书签'}
+      title={$t('settings.item.manualOnlyBookmark')}
+      tooltip={$t('settings.tip.manualOnlyBookmark')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
     </SettingsItemGroup>
@@ -2400,8 +2307,8 @@
     </SettingsItemGroup>
     {#if $lastBookHasImages$}
       <SettingsItemGroup
-        title="图片模糊"
-        tooltip="对包含插图的电子书（如轻小说）有效，可避免剧透图直接显示"
+        title={$t('settings.item.blurImages')}
+        tooltip={$t('settings.tip.blurImages')}
       >
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
       </SettingsItemGroup>
@@ -2427,8 +2334,8 @@
     {/if}
     {#if statisticsEnabled}
       <SettingsItemGroup
-        title="自定义阅读点暂停统计"
-        tooltip={'开启后，设置自定义阅读点时统计会自动暂停/恢复'}
+        title={$t('settings.item.customReadingPointPause')}
+        tooltip={$t('settings.tip.customReadingPointPause')}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -2498,8 +2405,8 @@
   {:else if activeSettings === 'TTS'}
     <SettingsSectionHeader title={$t('settings.section.tts')} hint={$t('settings.section.ttsHint')} />
     <SettingsItemGroup
-      title="朗读引擎"
-      tooltip="Web Speech：浏览器内建，作兜底；SAPI：系统 TTS（仅桌面端 Windows）；Kokoro-82M：内置离线神经网络 TTS（v1.0 ONNX 当前只有英语），需首次下载约 80MB；自定义 HTTP TTS 可接 OpenAI / Gemini / Google Cloud / 自部署 Qwen3-TTS / CosyVoice 2 等任意服务。切换后请重开书生效。"
+      title={$t('settings.item.ttsEngine')}
+      tooltip={$t('settings.tip.ttsEngine')}
     >
       <div class="flex flex-col gap-2">
         <div class="flex items-center gap-2 flex-wrap">
@@ -2507,10 +2414,10 @@
             class="settings-input px-2 py-1 text-sm max-w-[14rem] truncate"
             bind:value={$ttsEngine$}
           >
-            <option value="web">Web Speech（浏览器）</option>
-            <option value="sapi">系统 TTS（SAPI）</option>
-            <option value="kokoro">Kokoro-82M（内置离线）</option>
-            <option value="custom">自定义 HTTP TTS</option>
+            <option value="web">{$t('settings.value.ttsEngine.web')}</option>
+            <option value="sapi">{$t('settings.value.ttsEngine.sapi')}</option>
+            <option value="kokoro">{$t('settings.value.ttsEngine.kokoro')}</option>
+            <option value="custom">{$t('settings.value.ttsEngine.custom')}</option>
           </select>
           <button
             class="settings-input px-3 py-1 text-sm disabled:opacity-40"
@@ -2518,10 +2425,10 @@
             on:click={previewVoice}
           >
             {previewState === 'loading'
-              ? '加载中…'
+              ? $t('settings.tts.loading')
               : previewState === 'playing'
-                ? '播放中…'
-                : '试听'}
+                ? $t('settings.tts.playing')
+                : $t('settings.tts.preview')}
             <Ripple />
           </button>
         </div>
@@ -2532,29 +2439,29 @@
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      title="朗读起点"
-      tooltip="按播放按钮（或 V 快捷键）时从哪里开始读。选区：用当前选中文字或光标位置（无选区时降级到上次保存位置）；上次位置：从上次暂停的字位置续读；章节开头：从当前章节第一段开始。"
+      title={$t('settings.item.readingStart')}
+      tooltip={$t('settings.tip.readingStart')}
     >
       <select
         class="settings-input px-2 py-1 text-sm max-w-[12rem]"
         bind:value={$ttsStartStrategy$}
       >
-        <option value="selection">选区 / 光标位置（默认）</option>
-        <option value="resume">上次保存位置</option>
-        <option value="section-start">章节开头</option>
+        <option value="selection">{$t('settings.value.ttsStart.selection')}</option>
+        <option value="resume">{$t('settings.value.ttsStart.resume')}</option>
+        <option value="section-start">{$t('settings.value.ttsStart.sectionStart')}</option>
       </select>
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      title="章末自动续读"
-      tooltip="读到本章最后一段时，是否自动翻到下一章继续。关闭则停在章末。"
+      title={$t('settings.item.autoContinue')}
+      tooltip={$t('settings.tip.autoContinue')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$ttsAutoAdvanceSection$} />
     </SettingsItemGroup>
 
     <SettingsItemGroup
-      title="朗读全局快捷键"
-      tooltip="任意窗口前台时按下都能切换朗读。点「录制」然后按下你想要的组合键（如 Ctrl+Alt+P）即可；注册冲突时不报错只是按下无反应。"
+      title={$t('settings.item.ttsShortcut')}
+      tooltip={$t('settings.tip.ttsShortcut')}
     >
       <div class="flex items-center gap-2 flex-wrap">
         <button
@@ -2565,7 +2472,7 @@
           on:click={startRecordShortcut}
           on:keydown={onShortcutKeydown}
         >
-          {recordingShortcut ? '按下按键…' : $ttsShortcut$ || '(已禁用)'}
+          {recordingShortcut ? $t('settings.tts.pressKey') : $ttsShortcut$ || $t('settings.tts.disabledLabel')}
           <Ripple />
         </button>
         <button
@@ -2574,35 +2481,35 @@
             recordingShortcut = false;
             ttsShortcut$.next('ctrl+alt+p');
           }}
-        >重置<Ripple /></button>
+        >{$t('common.reset')}<Ripple /></button>
         <button
           class="settings-input px-3 py-1 text-sm"
           on:click={() => {
             recordingShortcut = false;
             ttsShortcut$.next('');
           }}
-        >禁用<Ripple /></button>
+        >{$t('common.disable')}<Ripple /></button>
       </div>
     </SettingsItemGroup>
 
     {#if $ttsEngine$ === 'kokoro'}
       <div class="lg:col-span-3">
         <SettingsItemGroup
-          title="Kokoro-82M 离线 TTS"
-          tooltip="开源神经网络 TTS，82M 参数，ONNX 模型约 80MB。首次启用会从 Hugging Face 下载到本机缓存（IndexedDB），之后完全离线。v1.0 ONNX 当前只打包了英语音色。"
+          title={$t('settings.tts.kokoro.title')}
+          tooltip={$t('settings.tts.kokoro.tooltip')}
         >
           <div class="space-y-3 text-sm">
             {#if !$kokoroAccepted$}
               <div class="rounded-md border border-current/20 p-3 text-xs leading-relaxed">
-                <p>启用 Kokoro 需要下载约 <strong>80 MB</strong> 模型文件（首次启用，之后离线）。</p>
-                <p class="mt-1 opacity-70">模型来自 Hugging Face <code>onnx-community/Kokoro-82M-v1.0-ONNX</code>。下载后用 IndexedDB 缓存，不上传任何阅读内容。</p>
+                <p>{@html $t('settings.tts.kokoro.consent')}</p>
+                <p class="mt-1 opacity-70">{@html $t('settings.tts.kokoro.privacy')}</p>
                 <button
                   class="settings-input mt-2 inline-flex items-center gap-1 px-3 py-1 text-sm"
                   on:click={() => {
                     $kokoroAccepted$ = true;
                     kokoroEnsureLoad();
                   }}
-                >下载并启用</button>
+                >{$t('settings.tts.kokoro.downloadEnable')}</button>
               </div>
             {:else if $kokoroLoadStatus$.phase === 'loading'}
               <div class="text-xs">
@@ -2614,15 +2521,15 @@
                 {/if}
               </div>
             {:else if $kokoroLoadStatus$.phase === 'errored'}
-              <p class="text-red-500 text-xs">下载失败：{$kokoroLoadStatus$.message}</p>
-              <button class="settings-input px-3 py-1 text-sm" on:click={() => kokoroEnsureLoad()}>重试</button>
+              <p class="text-red-500 text-xs">{$t('settings.tts.kokoro.downloadFailed')}：{$kokoroLoadStatus$.message}</p>
+              <button class="settings-input px-3 py-1 text-sm" on:click={() => kokoroEnsureLoad()}>{$t('common.retry')}</button>
             {/if}
 
             {#if $kokoroAccepted$}
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-xs opacity-70">音色</span>
+                <span class="text-xs opacity-70">{$t('settings.tts.voice')}</span>
                 <select class="settings-input px-2 py-1 text-sm max-w-xs" bind:value={$kokoroVoiceId$}>
-                  <optgroup label="英语 美式 女声">
+                  <optgroup label={tImmediate('settings.tts.kokoro.grp.enUsF')}>
                     <option value="af_heart">af_heart</option>
                     <option value="af_alloy">af_alloy</option>
                     <option value="af_aoede">af_aoede</option>
@@ -2635,7 +2542,7 @@
                     <option value="af_sarah">af_sarah</option>
                     <option value="af_sky">af_sky</option>
                   </optgroup>
-                  <optgroup label="英语 美式 男声">
+                  <optgroup label={tImmediate('settings.tts.kokoro.grp.enUsM')}>
                     <option value="am_adam">am_adam</option>
                     <option value="am_echo">am_echo</option>
                     <option value="am_eric">am_eric</option>
@@ -2646,13 +2553,13 @@
                     <option value="am_puck">am_puck</option>
                     <option value="am_santa">am_santa</option>
                   </optgroup>
-                  <optgroup label="英语 英式 女声">
+                  <optgroup label={tImmediate('settings.tts.kokoro.grp.enGbF')}>
                     <option value="bf_emma">bf_emma</option>
                     <option value="bf_isabella">bf_isabella</option>
                     <option value="bf_alice">bf_alice</option>
                     <option value="bf_lily">bf_lily</option>
                   </optgroup>
-                  <optgroup label="英语 英式 男声">
+                  <optgroup label={tImmediate('settings.tts.kokoro.grp.enGbM')}>
                     <option value="bm_george">bm_george</option>
                     <option value="bm_lewis">bm_lewis</option>
                     <option value="bm_daniel">bm_daniel</option>
@@ -2661,9 +2568,9 @@
                 </select>
               </div>
               <p class="text-xs opacity-60">
-                注：kokoro-js v1.0 ONNX 当前只打包了**英语**音色，中文 / 日语需等上游更新或换用「自定义 HTTP TTS」接 Qwen3-TTS / CosyVoice 2。
+                {$t('settings.tts.kokoro.enOnlyNote')}
               </p>
-              <p class="text-xs opacity-60">缓存在 WebView2 IndexedDB；要清除模型走「设置 → 数据 → 清除全部本地数据」</p>
+              <p class="text-xs opacity-60">{$t('settings.tts.kokoro.cacheNote')}</p>
             {/if}
           </div>
         </SettingsItemGroup>
@@ -2673,16 +2580,16 @@
     {#if $ttsEngine$ === 'sapi'}
       <div class="lg:col-span-3">
         <SettingsItemGroup
-          title="系统 TTS 语音"
-          tooltip="注：Windows 11 设置里的「Natural 自然语音」是 Narrator 专属，应用层（包括本 app）调不到。下面是系统暴露给应用的 SAPI 5 老音色，质量基础。"
+          title={$t('settings.item.systemTtsVoice')}
+          tooltip={$t('settings.tip.systemTtsVoice')}
         >
           {#if sapiVoicesError}
             <p class="text-red-500 text-sm">{sapiVoicesError}</p>
           {:else if !sapiVoices.length}
-            <p class="text-sm opacity-60">未检测到可用语音</p>
+            <p class="text-sm opacity-60">{$t('settings.tts.noVoices')}</p>
           {:else}
             <select class="settings-input px-2 py-1 text-sm max-w-xs" bind:value={$ttsSapiVoiceId$}>
-              <option value="">系统默认</option>
+              <option value="">{$t('settings.tts.sysDefault')}</option>
               {#each sapiVoices as voice (voice.id)}
                 <option value={voice.id}>{voice.name} ({voice.language})</option>
               {/each}
@@ -2695,14 +2602,14 @@
     {#if $ttsEngine$ === 'web'}
       <div class="lg:col-span-3">
         <SettingsItemGroup
-          title="Web Speech 语音"
-          tooltip="WebView2 (Edge) 暴露的浏览器语音。中文 / 日语音色排在最前。"
+          title={$t('settings.tts.webVoices.title')}
+          tooltip={$t('settings.tts.webVoices.tooltip')}
         >
           {#if !webVoices.length}
-            <p class="text-sm opacity-60">未检测到可用语音</p>
+            <p class="text-sm opacity-60">{$t('settings.tts.noVoices')}</p>
           {:else}
             <select class="settings-input px-2 py-1 text-sm max-w-xs" bind:value={$readerVoiceUri$}>
-              <option value="">系统默认（按书籍语言自动选择）</option>
+              <option value="">{$t('settings.value.systemDefault')}</option>
               {#each webVoices as voice (voice.voiceURI)}
                 <option value={voice.voiceURI}>{voice.name} ({voice.lang})</option>
               {/each}
@@ -2715,17 +2622,15 @@
     {#if $ttsEngine$ === 'custom'}
       <div class="lg:col-span-3">
         <SettingsItemGroup
-          title="自定义 HTTP TTS"
-          tooltip={'把任意 TTS API 接进来。{text} 会被替换为当前句子并 JSON 转义。响应是音频字节（OpenAI/ElevenLabs/Azure）「音频路径」留空；响应是 JSON 包 base64 音频（MiMo / Google Cloud / Gemini 等）则填出 base64 字段的 dot-path，如 choices.0.message.audio.data。'}
+          title={$t('settings.item.customHttpTts')}
+          tooltip={$t('settings.tip.customHttpTtsFull')}
         >
           <p class="text-xs opacity-70 mb-2">
-            提示：Google Cloud TTS（含 Chirp3-HD）每月前 100 万字符免费；Gemini TTS 按 token 计费、无免费额度。Chirp3-HD
-            不支持 speakingRate / pitch / SSML，需要这些参数请切回 WaveNet / Neural2。代理 URL 仅影响本应用的 TTS
-            请求。
+            {$t('settings.ttsCustom.hint')}
           </p>
           {@const activePreset = CUSTOM_PRESETS[$ttsCustomActivePreset$] ?? CUSTOM_PRESETS.manual}
           <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
-            <span class="text-xs opacity-80 pt-2">服务预设</span>
+            <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.preset')}</span>
             <div class="flex flex-col gap-1.5">
               <div class="flex items-center gap-2 flex-wrap">
                 <select
@@ -2739,19 +2644,19 @@
                 </select>
                 <button
                   class="settings-input px-2 py-1 text-xs"
-                  title="把当前预设的字段重置为默认模板（不影响其他预设保存的 key）"
+                  title={$t('settings.ttsCustom.restoreTemplateTip')}
                   on:click={resetActivePresetToDefaults}
-                >恢复模板<Ripple /></button>
+                >{$t('settings.ttsCustom.restoreTemplate')}<Ripple /></button>
                 <button
                   class="settings-input px-2 py-1 text-xs"
                   on:click={() => (revealCustomSecrets = !revealCustomSecrets)}
-                >{revealCustomSecrets ? '隐藏内容' : '显示内容'}<Ripple /></button>
+                >{revealCustomSecrets ? $t('settings.ttsCustom.hideContent') : $t('settings.ttsCustom.showContent')}<Ripple /></button>
                 {#if activePreset.helpUrl}
                   <button
                     type="button"
                     class="settings-input px-2 py-1 text-xs"
                     on:click={() => openExternal(activePreset.helpUrl || '')}
-                  >获取 API key ↗</button>
+                  >{$t('settings.ttsCustom.getApiKey')}</button>
                 {/if}
               </div>
               {#if activePreset.helpHint}
@@ -2760,27 +2665,27 @@
             </div>
 
             {#if presetVoices.length}
-              <span class="text-xs opacity-80 pt-2">音色</span>
+              <span class="text-xs opacity-80 pt-2">{$t('settings.tts.voice')}</span>
               <select
                 class="settings-input px-2 py-1 text-sm"
                 value={currentVoice}
                 on:change={(e) => onVoiceChange(e.currentTarget.value)}
               >
-                <option value="">-- 请选择音色 --</option>
+                <option value="">-- {$t('settings.ttsCustom.pickVoice')} --</option>
                 {#each presetVoices as voice (voice.value)}
                   <option value={voice.value}>{voice.label}</option>
                 {/each}
               </select>
             {/if}
 
-            <span class="text-xs opacity-80 pt-2">请求方法</span>
+            <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.method')}</span>
             <select class="settings-input px-2 py-1 text-sm w-24" bind:value={$ttsCustomMethod$}>
               <option value="POST">POST</option>
               <option value="PUT">PUT</option>
               <option value="GET">GET</option>
             </select>
 
-            <span class="text-xs opacity-80 pt-2">端点 URL</span>
+            <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.endpoint')}</span>
             <input
               type="text"
               class="settings-input px-2 py-1 text-sm"
@@ -2789,7 +2694,7 @@
               bind:value={$ttsCustomEndpoint$}
             />
 
-            <span class="text-xs opacity-80 pt-2">请求头（JSON）</span>
+            <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.headers')}</span>
             <textarea
               class="settings-input px-2 py-1 text-xs font-mono"
               class:secret-masked={!revealCustomSecrets}
@@ -2797,7 +2702,7 @@
               bind:value={$ttsCustomHeaders$}
             ></textarea>
 
-            <span class="text-xs opacity-80 pt-2">请求体模板</span>
+            <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.body')}</span>
             <textarea
               class="settings-input px-2 py-1 text-xs font-mono"
               class:secret-masked={!revealCustomSecrets}
@@ -2805,20 +2710,20 @@
               bind:value={$ttsCustomBody$}
             ></textarea>
 
-            <span class="text-xs opacity-80 pt-2">音频路径</span>
+            <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.audioPath')}</span>
             <input
               type="text"
               class="settings-input px-2 py-1 text-sm font-mono"
-              placeholder="留空 = 响应是裸音频字节；JSON 里 base64 字段填 dot-path；JSON 里是音频 URL 填 url:dot-path"
+              placeholder={$t('settings.ttsCustom.audioPathPh')}
               bind:value={$ttsCustomAudioPath$}
             />
 
-            <span class="text-xs opacity-80 pt-2">代理 URL</span>
+            <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.proxy')}</span>
             <input
               type="text"
               class="settings-input px-2 py-1 text-sm font-mono"
               class:secret-masked={!revealCustomSecrets}
-              placeholder="留空 = 不走代理；例 http://127.0.0.1:7890 或 socks5://127.0.0.1:7891"
+              placeholder={$t('settings.ttsCustom.proxyPh')}
               bind:value={$ttsCustomProxyUrl$}
             />
           </div>
@@ -2839,7 +2744,7 @@
       </SettingsItemGroup>
     </div>
     {#if isTauri()}
-      <SettingsItemGroup title="书库存储源" tooltip="日常读书选「文件系统」即可（默认）。「浏览器 IDB」只用于查看从更早版本残留在浏览器数据库里的旧书；如果新装或已经全部迁到文件系统，这一项永远是空的，也无需切换。">
+      <SettingsItemGroup title={$t('settings.item.storageSource')} tooltip={$t('settings.tip.storageSource')}>
         <ButtonToggleGroup
           options={storageSourceOptions}
           bind:selectedOptionId={selectedStorageSource}
@@ -2855,20 +2760,20 @@
       </div>
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="重置 UI 设置"
-      tooltip="清除本地保存的所有界面设置（主题、字体、TTS 引擎、快捷键、自定义主题等），书库和阅读统计保留。从更早版本升级后界面表现异常时用这个，比手动卸载重装快。"
+      title={$t('settings.item.resetUi')}
+      tooltip={$t('settings.tip.resetUi')}
     >
       <button
         class="m-1 rounded-md border-2 border-gray-400 p-2 text-red-600"
         on:click={resetUiSettings}
       >
-        重置并刷新
+        {$t('settings.button.resetAndReload')}
         <Ripple />
       </button>
     </SettingsItemGroup>
 
     <SettingsSectionHeader title={$t('settings.section.importExport')} hint={$t('settings.section.importExportHint')} />
-    <SettingsItemGroup title="EPUB 导入修正" tooltip={importHTMLFixModeTooltip}>
+    <SettingsItemGroup title={$t('settings.item.epubFix')} tooltip={importHTMLFixModeTooltip}>
       <ButtonToggleGroup
         options={optionsForImportHTMLFixes}
         bind:selectedOptionId={importHTMLFixMode}
@@ -2876,8 +2781,8 @@
     </SettingsItemGroup>
     {#if importHTMLFixMode !== ImportHTMLFixMode.OFF}
       <SettingsItemGroup
-        title="仅限制链接"
-        tooltip="仅对链接标签做自闭合修正"
+        title={$t('settings.item.linkOnly')}
+        tooltip={$t('settings.tip.linkOnly')}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -2903,8 +2808,8 @@
 
     <SettingsSectionHeader title={$t('settings.section.readerBehaviorData')} hint={$t('settings.section.readerBehaviorDataHint')} />
     <SettingsItemGroup
-      title="隐藏来源提示"
-      tooltip="打开外部存储源中的书时隐藏警告提示"
+      title={$t('settings.item.hideExternalHint')}
+      tooltip={$t('settings.item.hideExternalHint')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideExternalReadHint} />
     </SettingsItemGroup>
@@ -2915,21 +2820,21 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="扫描版 PDF 自动提示 OCR"
-      tooltip="关闭后，所有扫描版 PDF 都只显示原图，顶部不再弹 OCR 提示条；想恢复对某本书的提示，点下面的「清空仅看原图记忆」"
+      title={$t('settings.item.pdfOcrHint')}
+      tooltip={$t('settings.tip.pdfOcrHint')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={ocrPromptEnabled} />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="清空仅看原图记忆"
-      tooltip="撤销在阅读器顶部 OCR 提示条上点过的「仅看原图」选择，让这些书重新弹出 OCR 提示"
+      title={$t('settings.item.clearOcrMemory')}
+      tooltip={$t('settings.tip.clearOcrMemory')}
     >
       <button
         class="m-1 rounded-md border-2 border-gray-400 p-2"
         on:click={() => (ocrSkippedBooks = '')}
         disabled={!ocrSkippedBooks}
       >
-        清空（当前 {ocrSkippedBooks ? ocrSkippedBooks.split(',').filter(Boolean).length : 0} 本）
+        {$t('settings.button.clearOcrMemory', { n: ocrSkippedBooks ? ocrSkippedBooks.split(',').filter(Boolean).length : 0 })}
         <Ripple />
       </button>
     </SettingsItemGroup>
@@ -2943,21 +2848,21 @@
             {
               component: LogReportDialog,
               props: {
-                title: '诊断日志',
-                message: '导出当前会话的设置与运行日志（JSON 文件）。'
+                title: tImmediate('settings.button.exportDiagnostics'),
+                message: tImmediate('settings.tip.exportDiagnosticsMsg')
               }
             }
           ])}
       >
-        导出诊断日志
+        {$t('settings.button.exportDiagnostics')}
         <Ripple />
       </button>
     </SettingsItemGroup>
   {:else}
     <SettingsSectionHeader title={$t('settings.section.statsBasics')} hint={$t('settings.section.statsBasicsHint')} />
     <SettingsItemGroup
-      title="删除时保留本地数据"
-      tooltip={'删除本地书籍副本时是否同时删除本地统计'}
+      title={$t('settings.item.keepDataOnDelete')}
+      tooltip={$t('settings.tip.keepDataOnDelete')}
     >
       <div class="flex items-center">
         <ButtonToggleGroup
@@ -2977,8 +2882,8 @@
                   {
                     component: MessageDialog,
                     props: {
-                      title: '错误',
-                      message: `清除僵尸统计数据出错: ${message}`
+                      title: tImmediate('common.error'),
+                      message: `${tImmediate('settings.tip.clearZombieError')}: ${message}`
                     }
                   }
                 ])
@@ -2987,13 +2892,13 @@
           }}
           on:keyup={() => {}}
         >
-          清除僵尸统计
+          {$t('settings.button.clearZombieStats')}
         </div>
       </div>
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="覆盖书籍完成状态"
-      tooltip={'是只记录首次完成，还是始终更新为最新一次完成'}
+      title={$t('settings.item.overwriteBookCompletion')}
+      tooltip={$t('settings.tip.overwriteBookCompletion')}
     >
       <ButtonToggleGroup
         options={optionsForToggle}
@@ -3001,8 +2906,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title={`每日起始小时: ${startOfDayHours}`}
-      tooltip={'设定新一天的开始时间，此时刻之前的数据计入前一天'}
+      title={$t('settings.item.startOfDayHour', { n: startOfDayHours })}
+      tooltip={$t('settings.tip.startOfDayHour')}
     >
       <input
         type="range"
@@ -3015,8 +2920,8 @@
     </SettingsItemGroup>
     <SettingsSectionHeader title={$t('settings.section.statsSync')} hint={$t('settings.section.statsSyncHint')} />
     <SettingsItemGroup
-      title="统计合并方式"
-      tooltip={'同步时统计按条目合并还是整体覆盖'}
+      title={$t('settings.item.statsMergeMode')}
+      tooltip={$t('settings.tip.statsMergeMode')}
     >
       <ButtonToggleGroup
         options={optionsForMergeMode}
@@ -3024,8 +2929,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="阅读目标合并方式"
-      tooltip={'同步时阅读目标按条目合并还是整体覆盖'}
+      title={$t('settings.item.readingGoalMergeMode')}
+      tooltip={$t('settings.tip.readingGoalMergeMode')}
     >
       <ButtonToggleGroup
         options={optionsForMergeMode}
@@ -3034,13 +2939,13 @@
     </SettingsItemGroup>
     <SettingsSectionHeader title={$t('settings.section.statsTracking')} hint={$t('settings.section.statsTrackingHint')} />
     <SettingsItemGroup
-      title="启用统计"
-      tooltip="在阅读器左下角显示统计追踪图标，需手动点击开始记录会话"
+      title={$t('settings.item.enableStats')}
+      tooltip={$t('settings.tip.enableStats')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={statisticsEnabled} />
     </SettingsItemGroup>
     {#if statisticsEnabled}
-      <SettingsSectionHeader title="追踪行为" hint="自动暂停、完成判定与字符差额处理" />
+      <SettingsSectionHeader title={$t('settings.section.trackerBehavior')} hint={$t('settings.section.trackerBehaviorHint')} />
       <SettingsItemGroup title={$t('settings.item.statsAutoPause')} tooltip={trackerAutoPauseTooltip}>
         <ButtonToggleGroup
           options={optionsForTrackerAutoPause}
@@ -3054,18 +2959,18 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="完成时更新"
-        tooltip={'当前位置与全书总字数之间的差额是否计入统计'}
+        title={$t('settings.item.updateOnComplete')}
+        tooltip={$t('settings.tip.updateOnComplete')}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={addCharactersOnCompletion}
         />
       </SettingsItemGroup>
-      <SettingsSectionHeader title="自动启停阈值" hint="字数 / 空闲时间触发自动启动与暂停" />
+      <SettingsSectionHeader title={$t('settings.section.autoThreshold')} hint={$t('settings.section.autoThresholdHint')} />
       <SettingsItemGroup
-        title="自动启动统计 (秒)"
-        tooltip={'字数无变化达到此秒数后统计将自动启动（0 = 关闭，建议设大些避免误触发）'}
+        title={$t('settings.item.autoStartSec')}
+        tooltip={$t('settings.tip.autoStartSec')}
       >
         <input
           type="number"
