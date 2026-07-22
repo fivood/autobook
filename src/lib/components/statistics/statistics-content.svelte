@@ -4,6 +4,8 @@
   import { getDefaultStatistic } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
+  import StatisticsAuthors from '$lib/components/statistics/statistics-authors/statistics-authors.svelte';
+  import StatisticsBooks from '$lib/components/statistics/statistics-books/statistics-books.svelte';
   import StatisticsMain from '$lib/components/statistics/statistics-main/statistics-main.svelte';
   import StatisticsPeriodChip from '$lib/components/statistics/statistics-period-chip/statistics-period-chip.svelte';
   import StatisticsSessions from '$lib/components/statistics/statistics-sessions/statistics-sessions.svelte';
@@ -400,6 +402,42 @@
     !sessionsLoaded
   ) {
     ensureSessionsLoaded();
+  }
+
+  // manualBooks + data metadata for the BOOKS / AUTHORS explorer tabs
+  // (Phase C, 1.20.4). Same lazy pattern as sessions — cheap in-memory
+  // snapshot, refreshed on next panel entry.
+  let manualBooks: import('$lib/data/database/books-db/versions/books-db').BooksDbManualBook[] = [];
+  let dataMetas: Pick<
+    import('$lib/data/database/books-db/versions/books-db').BooksDbBookData,
+    'title' | 'characters'
+  >[] = [];
+  let bookMetaLoaded = false;
+  let bookMetaLoading = false;
+
+  async function ensureBookMetaLoaded() {
+    if (bookMetaLoaded || bookMetaLoading) return;
+    bookMetaLoading = true;
+    try {
+      const db = await database.db;
+      const [mBooks, data] = await Promise.all([
+        database.getAllManualBooks(),
+        db.getAll('data')
+      ]);
+      manualBooks = mBooks;
+      dataMetas = data.map((d) => ({ title: d.title, characters: d.characters || 0 }));
+      bookMetaLoaded = true;
+    } finally {
+      bookMetaLoading = false;
+    }
+  }
+
+  $: if (
+    ($lastStatisticsTab$ === StatisticsTab.BOOKS ||
+      $lastStatisticsTab$ === StatisticsTab.AUTHORS) &&
+    !bookMetaLoaded
+  ) {
+    ensureBookMetaLoaded();
   }
 
   $: statisticsDateRangeLabel = getDateRangeLabel(
@@ -939,6 +977,30 @@
     <StatisticsMain
       statistics={statisticsData}
       {sessions}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
+      {statisticsDateRangeLabel}
+    />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.BOOKS}
+    <StatisticsBooks
+      statistics={statisticsData}
+      {manualBooks}
+      {dataMetas}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
+      {statisticsDateRangeLabel}
+    />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.AUTHORS}
+    <StatisticsAuthors
+      statistics={statisticsData}
+      {manualBooks}
+      {dataMetas}
       startDate={$lastStatisticsStartDate$}
       endDate={$lastStatisticsEndDate$}
       startDayHours={$startDayHoursForTracker$}

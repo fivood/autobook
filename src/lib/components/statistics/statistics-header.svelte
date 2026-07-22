@@ -1,12 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import {
+    faBook,
     faCalendarDays,
     faClock,
     faFileArrowDown,
     faHighlighter,
     faPenToSquare,
     faSliders,
+    faUserPen,
     faGaugeHigh
   } from '@fortawesome/free-solid-svg-icons';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
@@ -55,6 +57,32 @@
         on:keyup={dummyFn}
       >
         <Fa icon={faCalendarDays} />
+      </div>
+      <div
+        tabindex="0"
+        role="button"
+        title={$lastStatisticsTab$ === StatisticsTab.BOOKS
+          ? '已在书籍标签页'
+          : '切换到书籍（每本时长/字数/进度）'}
+        class={baseIconClasses}
+        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.BOOKS}
+        on:click={() => ($lastStatisticsTab$ = StatisticsTab.BOOKS)}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faBook} />
+      </div>
+      <div
+        tabindex="0"
+        role="button"
+        title={$lastStatisticsTab$ === StatisticsTab.AUTHORS
+          ? '已在作者标签页'
+          : '切换到作者（按 manualBook.author 聚合）'}
+        class={baseIconClasses}
+        class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.AUTHORS}
+        on:click={() => ($lastStatisticsTab$ = StatisticsTab.AUTHORS)}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faUserPen} />
       </div>
       <div
         tabindex="0"

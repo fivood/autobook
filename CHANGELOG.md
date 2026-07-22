@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.20.4
+
+统计面板 Phase C 完成：书籍 + 作者两个探索 tab 上线。至此统计重整（1.19.0 起）5 阶段全部落地——MAIN 主视图 / BOOKS / AUTHORS / SESSIONS / SUMMARY / HIGHLIGHTS 6 个 tab + 顶部时段 chip，所有 tab 共享同一时段筛选和标题过滤。
+
+- **`books-summary.ts` 新增聚合器**：`computeBooksList` 按时段+标题过滤 statistic 表得每本时长/字数/天数/完成标记，再从 manualBook 表联结作者/译者/出版社/总字数/封面/标签，从 data 表联结 characters 作为总字数 fallback。`computeAuthorsList` 在此基础上按 `manualBook.author.trim()` 分组，缺失作者的书归到「未知作者」桶
+- **statistics-books tab**：可排序表格（书名/时长/字数/天数/进度/最近，点表头切排序），左侧缩略封面（用 manualBook.coverBlob 建 ObjectURL，onDestroy revoke），行内显示作者+出版+标签+完成 badge。进度条只在有 totalCharacters 时显示
+- **statistics-authors tab**：按作者卡片列表展示，每张卡显示作者名 + 总时长（含时段占比%）+ 书数/字数/天数 + 该作者名下的书 chip 列表。顶部提示还有多少本书未填作者
+- **懒加载 manualBook + data 元数据**：跟 sessions 一样，`ensureBookMetaLoaded()` 在 BOOKS/AUTHORS tab 首次显示时一次性拿 manualBook.getAll + data.getAll(title, characters) — 其他 tab 打开速度不受影响
+- **statistics-header 加书籍/作者按钮**：faBook + faUserPen，在会话按钮之前；tab 顺序按信息层级排列（MAIN/BOOKS/AUTHORS/SESSIONS/SUMMARY/HIGHLIGHTS）
+
 ## 1.20.3
 
 修 1.20.2 格式显示在 Tauri 桌面完全没生效（书卡来自 FS 不是 IDB），另加阅读时顶部菜单显示书名。
