@@ -263,9 +263,21 @@ export default function generateEpubHtml(
 
     currentCharCount += elementCharCount;
 
-    if (!elementCharCount) {
+    // Image-only sections (fixed-layout / scanned EPUBs): strip the
+    // page-margin via .ttu-no-text and tag their <img> / SVG <image> as
+    // .book-page-image so BookImageZoom's `--book-image-scale` CSS var
+    // applies (same rail the PDF/CBZ readers use). Detected by "no text
+    // content but at least one image node" — a truly empty page (0 text,
+    // 0 images) still gets .ttu-no-text like before.
+    const hasText = !!childBodyDiv.textContent?.replace(/\s/g, '').length;
+    const pageImages = childBodyDiv.querySelectorAll('img, image');
+
+    if (!hasText) {
       childHtmlDiv.classList.add('ttu-no-text');
       childBodyDiv.classList.add('ttu-no-text');
+      if (pageImages.length) {
+        pageImages.forEach((img) => img.classList.add('book-page-image'));
+      }
     }
 
     const mainChapterIndex = mainChapters.findIndex((chapter) =>

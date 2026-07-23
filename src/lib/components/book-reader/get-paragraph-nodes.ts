@@ -7,7 +7,7 @@
 import { isNodeGaiji } from '$lib/functions/is-node-gaiji';
 
 export function getParagraphNodes(node: Node) {
-  return getTextNodeOrGaijiNodes(node, (n) => {
+  const textNodes = getTextNodeOrGaijiNodes(node, (n) => {
     if (n.nodeName === 'RT') {
       return false;
     }
@@ -27,6 +27,19 @@ export function getParagraphNodes(node: Node) {
     }
     return false;
   });
+
+  if (textNodes.length) return textNodes;
+
+  // Scan-only / fixed-layout EPUBs (old PDF→EPUB conversions) have no text
+  // in this section — every page is a single <img> or SVG <image>. Without
+  // a "paragraph" node the position tracker can't advance, so the reader
+  // stays stuck on the cover. Fall back to image elements so each scan page
+  // counts as one unit for scrolling, bookmarks, and progress %. Mixed
+  // books (text with occasional inline images) skip this branch and count
+  // text only, so their existing progress numbers stay untouched.
+  return node instanceof Element
+    ? (Array.from(node.querySelectorAll('img, image')) as Node[])
+    : [];
 }
 
 function getTextNodeOrGaijiNodes(node: Node, filterFn: (n: Node) => boolean): Node[] {
