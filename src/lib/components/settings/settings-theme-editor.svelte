@@ -148,7 +148,7 @@
   }
 </script>
 
-<div class="mt-2 rounded-lg border border-gray-400/40 p-4 bg-black/5">
+<div class="mt-2 rounded-lg border border-current/20 p-4 bg-soft-active">
   <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
     <div class="text-sm font-medium">
       正在编辑：<span class="font-mono">{themeId}</span>
@@ -158,7 +158,7 @@
     </div>
     <div class="flex items-center gap-2">
       <button
-        class="flex justify-center items-center rounded-md border-2 border-gray-400/60 p-2 text-base"
+        class="flex justify-center items-center rounded-md border-2 border-current/40 p-2 text-base"
         style={themeStyle}
         title="预览"
       >
@@ -237,7 +237,8 @@
   <div class="mt-4 flex flex-wrap justify-end gap-2">
     {#if isCustom}
       <button
-        class="rounded-md border-2 border-red-400 px-3 py-1 text-sm text-red-600"
+        class="rounded-md border-2 px-3 py-1 text-sm"
+        style="border-color:var(--danger-color);color:var(--danger-color);"
         on:click={handleDelete}
       >
         删除
@@ -245,7 +246,7 @@
       </button>
     {:else}
       <button
-        class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+        class="rounded-md border-2 border-current/40 px-3 py-1 text-sm"
         title="还原为内置主题的初始颜色"
         on:click={handleReset}
       >
@@ -254,7 +255,7 @@
       </button>
     {/if}
     <button
-      class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+      class="rounded-md border-2 border-current/40 px-3 py-1 text-sm"
       on:click={() => dispatch('close')}
     >
       关闭

@@ -104,13 +104,13 @@
         <button
           type="button"
           class="rounded px-2 py-0.5"
-          class:bg-current-10={!preview}
+          class:bg-soft-active={!preview}
           on:click={() => (preview = false)}
         >{$t('notebook.edit')}</button>
         <button
           type="button"
           class="rounded px-2 py-0.5"
-          class:bg-current-10={preview}
+          class:bg-soft-active={preview}
           on:click={() => (preview = true)}
         >{$t('notebook.editor.preview')}</button>
       </div>
@@ -181,7 +181,7 @@
       <button
         type="button"
         class="rounded px-4 py-1.5 text-sm font-medium"
-        style="background:rgba(95,126,123,0.9);color:#f0efe6;"
+        style="background:var(--menu-background);color:var(--menu-foreground);"
         on:click={commit}
       >{$t('notebook.editor.save')}</button>
     </div>

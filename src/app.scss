@@ -22,7 +22,13 @@
   outline: none;
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
-.settings-input option {
+/* Native <option> popup on Windows (WebView2 / Chromium) can't inherit
+   font/background from the themed <select>, so every select in the app
+   would otherwise need its own inline `style="color:#000"` on each option.
+   Centralize it here — dark text on white matches the OS-drawn popup and
+   works on every theme. Applies to every <option> in the app, not just
+   .settings-input. */
+option {
   color: #111;
   background: #fff;
 }
@@ -118,6 +124,10 @@
   --muted-color: #c3c1af;
   --menu-background: #2b5a69;
   --menu-foreground: #f0efe6;
+  /* Semantic red for destructive actions — kept theme-agnostic (no menu
+     variant) because every built-in menu palette so far is dark; when a
+     light-menu theme lands, override via .bg-menu context. */
+  --danger-color: #d95555;
   scrollbar-color: #5f7e7b #f0efe6;
 }
 
@@ -125,10 +135,14 @@
   overflow-clip-margin: unset;
 }
 
-mark.hl-yellow { background: rgba(255, 235, 59, 0.5); }
-mark.hl-blue { background: rgba(100, 181, 246, 0.5); }
-mark.hl-green { background: rgba(129, 199, 132, 0.5); }
-mark.hl-pink { background: rgba(244, 143, 177, 0.5); }
+/* Highlight text-mark backgrounds. RGB tuples come from
+   `$lib/data/highlight-color.ts` (single source of truth) — layout mirrors
+   them to `--hl-*-rgb` on :root at mount. Alpha is per-surface, see
+   HIGHLIGHT_COLOR_MARK / _CHIP / _DOT there. */
+mark.hl-yellow { background: rgba(var(--hl-yellow-rgb, 255, 235, 59), 0.5); }
+mark.hl-blue { background: rgba(var(--hl-blue-rgb, 100, 181, 246), 0.5); }
+mark.hl-green { background: rgba(var(--hl-green-rgb, 129, 199, 132), 0.5); }
+mark.hl-pink { background: rgba(var(--hl-pink-rgb, 244, 143, 177), 0.5); }
 mark[data-hl-id] { cursor: pointer; border-radius: 2px; }
 
 ::selection {
@@ -187,6 +201,22 @@ input[type='range'] {
   .hover-menu-inverted:hover {
     background-color: var(--menu-foreground);
     color: var(--menu-background);
+  }
+  /* Theme-agnostic soft hover for buttons on page-color surfaces
+     (dialogs, drawers, sidebars). Mixes against currentColor so the
+     highlight is always visible whether font-color is dark on light or
+     light on dark. Replaces hard-coded hover:bg-black/5 which vanishes
+     on dark themes. */
+  .hover-soft:hover {
+    background-color: color-mix(in srgb, currentColor 10%, transparent);
+  }
+  .hover-soft-strong:hover {
+    background-color: color-mix(in srgb, currentColor 16%, transparent);
+  }
+  /* Selected/active row on page-color surfaces. Same idiom as hover-soft
+     but slightly stronger so it reads through a hover. */
+  .bg-soft-active {
+    background-color: color-mix(in srgb, currentColor 10%, transparent);
   }
 }
 

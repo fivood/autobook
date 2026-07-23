@@ -518,17 +518,17 @@
                 <div class="flex justify-between mt-2 gap-1">
                   <button
                     type="button"
-                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover:bg-white/10"
+                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover-menu-inverted"
                     on:click={() => ($bookCoverMinWidth$ = 130)}
                   >{$t('manager.cover.dense')}</button>
                   <button
                     type="button"
-                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover:bg-white/10"
+                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover-menu-inverted"
                     on:click={() => ($bookCoverMinWidth$ = 170)}
                   >{$t('manager.cover.standard')}</button>
                   <button
                     type="button"
-                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover:bg-white/10"
+                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover-menu-inverted"
                     on:click={() => ($bookCoverMinWidth$ = 220)}
                   >{$t('manager.cover.large')}</button>
                 </div>

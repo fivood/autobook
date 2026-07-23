@@ -79,19 +79,19 @@
   </div>
   <button
     type="button"
-    class="rounded px-2 py-1.5 text-left hover:bg-black/5 {selectedKey === 'all' ? 'bg-black/5' : ''}"
+    class="rounded px-2 py-1.5 text-left hover-soft {selectedKey === 'all' ? 'bg-soft-active' : ''}"
     style:font-weight={selectedKey === 'all' ? '600' : '400'}
     on:click={() => dispatch('select', 'all')}
   >{$t('notebook.sidebar.all')} <span class="text-xs opacity-50">{counts.all ?? 0}</span></button>
   <button
     type="button"
-    class="rounded px-2 py-1.5 text-left hover:bg-black/5 {selectedKey === 'unfiled' ? 'bg-black/5' : ''}"
+    class="rounded px-2 py-1.5 text-left hover-soft {selectedKey === 'unfiled' ? 'bg-soft-active' : ''}"
     style:font-weight={selectedKey === 'unfiled' ? '600' : '400'}
     on:click={() => dispatch('select', 'unfiled')}
   >{$t('notebook.uncategorized')} <span class="text-xs opacity-50">{counts.unfiled ?? 0}</span></button>
   <button
     type="button"
-    class="rounded px-2 py-1.5 text-left hover:bg-black/5 {selectedKey === 'standalone' ? 'bg-black/5' : ''}"
+    class="rounded px-2 py-1.5 text-left hover-soft {selectedKey === 'standalone' ? 'bg-soft-active' : ''}"
     style:font-weight={selectedKey === 'standalone' ? '600' : '400'}
     on:click={() => dispatch('select', 'standalone')}
   >{$t('notebook.standalone')} <span class="text-xs opacity-50">{counts.standalone ?? 0}</span></button>
@@ -111,7 +111,7 @@
   {#each folders as f (f.id)}
     {@const key = `folder:${f.id}`}
     {@const active = selectedKey === key}
-    <div class="group flex items-center gap-1 rounded hover:bg-black/5 {active ? 'bg-black/5' : ''}">
+    <div class="group flex items-center gap-1 rounded hover-soft {active ? 'bg-soft-active' : ''}">
       <Fa icon={faFolder} size="xs" class="ml-2 opacity-60" />
       {#if renamingId === f.id}
         <input

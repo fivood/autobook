@@ -63,7 +63,7 @@
       {#each filtered as c (c.id)}
         <button
           type="button"
-          class="mb-1 w-full rounded px-3 py-2 text-left text-sm hover:bg-black/5"
+          class="mb-1 w-full rounded px-3 py-2 text-left text-sm hover-soft"
           on:click={() => dispatch('pick', c.id)}
         >
           <p class="line-clamp-2 break-all">{preview(c)}</p>

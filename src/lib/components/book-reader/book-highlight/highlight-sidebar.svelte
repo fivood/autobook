@@ -81,7 +81,7 @@
         {#each group.items as hl (hl.id)}
           <button
             type="button"
-            class="mb-2 w-full rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-black/5"
+            class="mb-2 w-full rounded-lg px-3 py-2 text-left text-sm transition-colors hover-soft"
             on:click={() => dispatch('navigate', hl)}
           >
             <div class="flex items-start gap-2">

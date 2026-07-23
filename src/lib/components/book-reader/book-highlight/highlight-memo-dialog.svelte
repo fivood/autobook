@@ -53,7 +53,7 @@
     style="background:var(--background-color,#fff);color:var(--font-color,#333);"
   >
     {#if selectedText}
-      <p class="mb-3 rounded bg-black/5 px-3 py-2 text-sm italic line-clamp-3">
+      <p class="mb-3 rounded bg-soft-active px-3 py-2 text-sm italic line-clamp-3">
         "{selectedText.slice(0, 200)}{selectedText.length > 200 ? '…' : ''}"
       </p>
     {/if}
@@ -81,7 +81,7 @@
       <button
         type="button"
         class="rounded px-4 py-1.5 text-sm font-medium"
-        style="background:rgba(95,126,123,0.9);color:#f0efe6;"
+        style="background:var(--menu-background);color:var(--menu-foreground);"
         on:click={commit}
       >保存 (Ctrl+Enter)</button>
     </div>

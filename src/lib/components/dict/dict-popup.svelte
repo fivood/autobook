@@ -118,14 +118,14 @@
     <div class="flex-1" />
     <button
       type="button"
-      class="rounded p-1 opacity-60 hover:bg-black/5 hover:opacity-100"
+      class="rounded p-1 opacity-60 hover-soft hover:opacity-100"
       title={$t('dict.pickFolderTooltip')}
       on:click={pickAndLoad}
       disabled={busy}
     ><Fa icon={faFolderOpen} size="xs" /></button>
     <button
       type="button"
-      class="rounded p-1 opacity-60 hover:bg-black/5 hover:opacity-100"
+      class="rounded p-1 opacity-60 hover-soft hover:opacity-100"
       on:click={() => dispatch('close')}
     ><Fa icon={faTimes} size="xs" /></button>
   </div>

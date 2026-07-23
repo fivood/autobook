@@ -20,6 +20,7 @@
   } from '$lib/data/store';
   import { startSyncLoop } from '$lib/data/sync/sync-manager';
   import { availableThemes } from '$lib/data/theme-option';
+  import { HIGHLIGHT_COLOR_RGB } from '$lib/data/highlight-color';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
   import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
@@ -56,6 +57,11 @@
     setVar('--selection-background', theme.selectionBackgroundColor, '#5f7e7b');
     setVar('--selection-foreground', theme.selectionFontColor, '#f0efe6');
     setVar('--link-color', theme.linkColor, '#2b5a69');
+    // Highlight color RGB tuples — consumed by app.scss `mark.hl-*` so
+    // there's no second place to edit if the palette changes.
+    for (const [name, [r, g, b]] of Object.entries(HIGHLIGHT_COLOR_RGB)) {
+      s.setProperty(`--hl-${name}-rgb`, `${r}, ${g}, ${b}`);
+    }
   }
 
   if (clearConsoleOnReload && import.meta.hot) {

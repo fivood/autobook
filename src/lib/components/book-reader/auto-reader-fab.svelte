@@ -165,24 +165,23 @@
       class:group-hover:opacity-95={!enabled}
       class:group-hover:h-12={!enabled}
       class:group-hover:w-12={!enabled}
-      style="background-color: rgba(95, 126, 123, 0.92); color: #f0efe6;"
+      style="background-color: var(--button-selected); color: var(--menu-foreground);"
     >
       <Fa icon={enabled ? faVolumeHigh : faVolumeXmark} size="lg" />
       <span class="sr-only">{enabled ? $t('tts.pauseAria') : $t('tts.playAria')}</span>
     </button>
 
     <div
-      class="flex items-center gap-1 rounded-full px-2 py-1 shadow backdrop-blur transition-all duration-150"
+      class="bg-menu text-menu flex items-center gap-1 rounded-full px-2 py-1 shadow backdrop-blur transition-all duration-150"
       class:opacity-0={!enabled}
       class:pointer-events-none={!enabled}
       class:pointer-events-auto={enabled}
-      style="background-color: rgba(195, 193, 175, 0.9); color: #405a5c;"
     >
       <button
         type="button"
         title={$t('tts.rateSlower')}
         on:click={() => setRate($readerRate$ - 0.1)}
-        class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
+        class="hover-menu-inverted flex h-6 w-6 items-center justify-center rounded-full"
       >
         <Fa icon={faMinus} size="xs" />
       </button>
@@ -191,7 +190,7 @@
         type="button"
         title={$t('tts.rateFaster')}
         on:click={() => setRate($readerRate$ + 0.1)}
-        class="flex h-6 w-6 items-center justify-center rounded-full hover:bg-black/10"
+        class="hover-menu-inverted flex h-6 w-6 items-center justify-center rounded-full"
       >
         <Fa icon={faPlus} size="xs" />
       </button>

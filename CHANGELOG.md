@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.9
+
+- 主题一致性：菜单、对话框、FAB、高亮 mark 底色统一走主题变量。切换/自定义主题不再有 sage 绿或 pastel 色残留；notebook 侧栏的选中和悬停在深色主题下也能看清了
+
 ## 1.20.8
 
 - 设置面板多语言：Reader / TTS / Appearance / Data / Stats 各分区的标题、toggle 选项、按钮、tooltip 全部接入 zh/en/ja

@@ -218,7 +218,7 @@
               <div
                 tabindex="0"
                 role="button"
-                class="px-4 py-2 text-sm hover:bg-white/10"
+                class="px-4 py-2 text-sm hover-menu-inverted"
                 on:click={() => dispatchCustomReadingPointAction(actionItem.action)}
                 on:keyup={dummyFn}
               >

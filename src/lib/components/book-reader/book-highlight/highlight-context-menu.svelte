@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { HighlightColor } from '$lib/data/database/books-db/versions/books-db';
+  import { HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_CHIP } from '$lib/data/highlight-color';
   import { t } from '$lib/i18n';
 
   export let x = 0;
@@ -18,12 +19,11 @@
     close: void;
   }>();
 
-  const colors: { id: HighlightColor; bg: string; labelKey: string }[] = [
-    { id: 'yellow', bg: 'rgba(255,235,59,0.6)', labelKey: 'highlight.color.yellow' },
-    { id: 'blue', bg: 'rgba(100,181,246,0.5)', labelKey: 'highlight.color.blue' },
-    { id: 'green', bg: 'rgba(129,199,132,0.5)', labelKey: 'highlight.color.green' },
-    { id: 'pink', bg: 'rgba(244,143,177,0.5)', labelKey: 'highlight.color.pink' }
-  ];
+  const colors = HIGHLIGHT_COLORS.map((id) => ({
+    id,
+    bg: HIGHLIGHT_COLOR_CHIP[id],
+    labelKey: `highlight.color.${id}`
+  }));
 
   function handleColor(c: HighlightColor) {
     dispatch('color', c);
@@ -49,22 +49,22 @@
       {#each colors as c (c.id)}
         <button
           type="button"
-          class="h-7 w-7 rounded-full border-2 border-transparent hover:border-white/60 transition-colors"
+          class="h-7 w-7 rounded-full border-2 border-transparent hover:border-current/60 transition-colors"
           style="background:{c.bg}"
           title={$t('highlight.color.tooltip', { label: $t(c.labelKey) })}
           on:click={() => handleColor(c.id)}
         />
       {/each}
-      <span class="mx-0.5 h-5 w-px bg-white/30" />
+      <span class="mx-0.5 h-5 w-px bg-current/30" />
       <button
         type="button"
-        class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
+        class="rounded px-2 py-0.5 text-xs hover-menu-inverted transition-colors"
         title={$t('highlight.addMemo')}
         on:click={() => dispatch('memo')}
       >{$t('highlight.memo.short')}</button>
       <button
         type="button"
-        class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
+        class="rounded px-2 py-0.5 text-xs hover-menu-inverted transition-colors"
         title={$t('highlight.dict.tooltip')}
         on:click={() => dispatch('lookup')}
       >{$t('highlight.dict.short')}</button>
@@ -72,21 +72,22 @@
       {#each colors as c (c.id)}
         <button
           type="button"
-          class="h-7 w-7 rounded-full border-2 border-transparent hover:border-white/60 transition-colors"
+          class="h-7 w-7 rounded-full border-2 border-transparent hover:border-current/60 transition-colors"
           style="background:{c.bg}"
           title={$t('highlight.recolor.tooltip', { label: $t(c.labelKey) })}
           on:click={() => handleColor(c.id)}
         />
       {/each}
-      <span class="mx-0.5 h-5 w-px bg-white/30" />
+      <span class="mx-0.5 h-5 w-px bg-current/30" />
       <button
         type="button"
-        class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
+        class="rounded px-2 py-0.5 text-xs hover-menu-inverted transition-colors"
         on:click={() => dispatch('editMemo')}
       >{hasMemo ? $t('highlight.editMemo') : $t('highlight.addMemo')}</button>
       <button
         type="button"
-        class="rounded px-2 py-0.5 text-xs text-red-300 hover:bg-white/15 transition-colors"
+        class="rounded px-2 py-0.5 text-xs hover-soft-strong transition-colors"
+        style="color:var(--danger-color);"
         on:click={() => dispatch('delete')}
       >{$t('highlight.delete')}</button>
     {/if}

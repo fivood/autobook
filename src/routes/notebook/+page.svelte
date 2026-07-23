@@ -537,18 +537,18 @@
     </select>
     <button
       type="button"
-      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
+      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
       title={$t('notebook.review.tooltip')}
       on:click={openReview}
     ><Fa icon={faShuffle} size="xs" /> {$t('notebook.review.button')}</button>
     <button
       type="button"
-      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
+      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
       on:click={openCreateNote}
     ><Fa icon={faPlus} size="xs" /> {$t('notebook.new')}</button>
     <button
       type="button"
-      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
+      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
       on:click={exportMarkdown}
       disabled={!filtered.length}
     ><Fa icon={faDownload} size="xs" /> {$t('notebook.exportMd')}</button>
@@ -556,7 +556,7 @@
       {#if $obsidianVaultPath$}
         <button
           type="button"
-          class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
+          class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
           on:click={syncToVault}
           disabled={syncing || !highlights.length}
           title="vault: {$obsidianVaultPath$}"
@@ -570,7 +570,7 @@
       {:else}
         <button
           type="button"
-          class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover:bg-black/5"
+          class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
           on:click={pickVaultFolder}
         ><Fa icon={faFolder} size="xs" /> {$t('notebook.pickVault')}</button>
       {/if}

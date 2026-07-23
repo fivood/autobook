@@ -56,6 +56,24 @@ ESLint 走「少而准」路线，只开确实咬过这个仓库的规则，**�
 - **禁止「隐形但可点」的控件**：hover-reveal 的按钮在未激活时必须保持 `pointer-events-none`，只允许视觉 preview。两个 FAB 栈相邻时斜划误触就是这么修的
 - PWA 的 `readingActive` 语义：打字机 = `playing`；手动阅读（PDF / 滑屏）= 3 分钟交互窗口内。唤醒锁和阅读计时都挂在这个标志上，改动前想清楚两边
 
+### 主题调色板契约
+
+写任何浮层 / 菜单 / 对话框时必须走主题变量，禁止用 `bg-white/N` / `bg-black/N` / 具体 rgba 硬编码——主题一换就废。两套语义色，各归各的浮层类型：
+
+- **menu 色** `--menu-background` / `--menu-foreground`（工具类 `bg-menu` / `text-menu`）
+  - 常驻在 reader chrome 上的浮标、header 下拉菜单、上下文/右键菜单、短命令 toast、banner。深底浅字，从阅读内容里跳出来
+  - hover 用 `hover-menu-inverted`（反相高亮）
+- **页面色** `--background-color` / `--font-color`
+  - 对话框、抽屉（AI/highlights）、笔记编辑器、模态帮助面板、词典弹窗、侧栏
+  - hover 用 `hover-soft`（`color-mix(currentColor 10%)`，深浅主题双向自适应），选中态用 `bg-soft-active`
+
+其它 currentColor-based 惯用写法（都在 `app.scss`）：
+- 边框/分隔线：`border-current/20`、`bg-current/30`
+- 危险操作文字：`color:var(--danger-color);`（配 `hover-soft-strong`，别用 `text-red-300`）
+- 主按钮（对话框「保存/确认」）：`style="background:var(--menu-background);color:var(--menu-foreground);"`，或用 `buttonClasses`（走 `--link-color`）
+
+原生 `<select>` 的 `<option>` 弹出层在 Windows / WebView2 不继承主题字色，`app.scss` 里的全局 `option { color:#111; background:#fff }` 已经兜底，不用每个 `<option>` 内联写 `style="color:#000"`。
+
 ## 发版流程
 
 桌面（在 `desktop` 分支上）：

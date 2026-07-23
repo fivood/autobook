@@ -186,20 +186,20 @@
     <div class="flex-1" />
     <button
       type="button"
-      class="rounded p-1.5 opacity-60 hover:bg-black/5 hover:opacity-100"
+      class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
       title={$t('ai.settings')}
       on:click={() => (showSettings = !showSettings)}
     ><Fa icon={faCog} size="xs" /></button>
     <button
       type="button"
-      class="rounded p-1.5 opacity-60 hover:bg-black/5 hover:opacity-100"
+      class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
       title={$t('ai.clearChat')}
       disabled={streaming}
       on:click={clearChat}
     ><Fa icon={faTrash} size="xs" /></button>
     <button
       type="button"
-      class="rounded p-1.5 opacity-60 hover:bg-black/5 hover:opacity-100"
+      class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
       on:click={() => dispatch('close')}
     ><Fa icon={faTimes} /></button>
   </div>
