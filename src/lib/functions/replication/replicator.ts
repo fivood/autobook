@@ -9,25 +9,35 @@ import { BaseStorageHandler, FilePrefix } from '$lib/data/storage/handler/base-h
 import { storage } from '$lib/data/window/navigator/storage';
 import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
 import { database, requestPersistentStorage$ } from '$lib/data/store';
-import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
-import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
-import loadMd from '$lib/functions/file-loaders/md/load-md';
-import loadMobi, { setForceNativeParser } from '$lib/functions/file-loaders/mobi/load-mobi';
-import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
-import loadCbr from '$lib/functions/file-loaders/cbr/load-cbr';
-import loadPdf from '$lib/functions/file-loaders/pdf/load-pdf';
 import { sniffFormat, sniffZipKind } from '$lib/functions/file-loaders/utils/sniff-format';
 
 // dev-only console toggle: window.__forceNativeMobi(true) forces the built-in
-// MOBI parser, bypassing Calibre. Mirrors the __autobook hook in store.ts.
+// MOBI parser, bypassing Calibre. Lazy-loads the MOBI module so the parser
+// (and its dep tree) stays off the /manage bundle for users who never touch it.
 if (typeof window !== 'undefined') {
-  (window as any).__forceNativeMobi = (val = true) => {
+  (window as any).__forceNativeMobi = async (val = true) => {
+    const { setForceNativeParser } = await import('$lib/functions/file-loaders/mobi/load-mobi');
     setForceNativeParser(val);
     console.info(val ? '已切换到内置 MOBI 解析器' : '已恢复 Calibre 优先模式');
   };
 }
-import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
+
 import type { LoadData } from '$lib/functions/file-loaders/types';
+
+// Every format loader below is imported per-branch so the /manage entry
+// bundle isn't dragged into loading pdfjs / hljs / katex / marked /
+// libarchive / mobi-parser upfront. Only the format the user actually
+// imports pays the code-split cost.
+const loadEpub = () => import('$lib/functions/file-loaders/epub/load-epub').then((m) => m.default);
+const loadTxt = () => import('$lib/functions/file-loaders/txt/load-txt').then((m) => m.default);
+const loadMd = () => import('$lib/functions/file-loaders/md/load-md').then((m) => m.default);
+const loadMobi = () =>
+  import('$lib/functions/file-loaders/mobi/load-mobi').then((m) => m.default);
+const loadPdf = () => import('$lib/functions/file-loaders/pdf/load-pdf').then((m) => m.default);
+const loadCbz = () => import('$lib/functions/file-loaders/cbz/load-cbz').then((m) => m.default);
+const loadCbr = () => import('$lib/functions/file-loaders/cbr/load-cbr').then((m) => m.default);
+const loadHtmlz = () =>
+  import('$lib/functions/file-loaders/htmlz/load-htmlz').then((m) => m.default);
 import { detectBookFormat } from '$lib/functions/book-format';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
@@ -87,40 +97,40 @@ export async function importData(
           // Step 2: if the extension didn't match anything, sniff the magic
           // bytes so renamed/extensionless files still load correctly.
           if (file.name.endsWith('.epub')) {
-            bookContent = await loadEpub(file, document, lastBookModified);
+            bookContent = await (await loadEpub())(file, document, lastBookModified);
           } else if (file.name.endsWith('.txt')) {
-            bookContent = await loadTxt(file, lastBookModified);
+            bookContent = await (await loadTxt())(file, lastBookModified);
           } else if (/\.(md|markdown)$/i.test(file.name)) {
-            bookContent = await loadMd(file, lastBookModified);
+            bookContent = await (await loadMd())(file, lastBookModified);
           } else if (/\.(mobi|azw3?)$/i.test(file.name)) {
-            bookContent = await loadMobi(file, lastBookModified);
+            bookContent = await (await loadMobi())(file, lastBookModified);
           } else if (/\.pdf$/i.test(file.name)) {
-            bookContent = await loadPdf(file, lastBookModified);
+            bookContent = await (await loadPdf())(file, lastBookModified);
           } else if (/\.cbz$/i.test(file.name)) {
-            bookContent = await loadCbz(file, lastBookModified);
+            bookContent = await (await loadCbz())(file, lastBookModified);
           } else if (/\.(cbr|cb7|cbt)$/i.test(file.name)) {
-            bookContent = await loadCbr(file, lastBookModified);
+            bookContent = await (await loadCbr())(file, lastBookModified);
           } else if (/\.htmlz$/i.test(file.name)) {
-            bookContent = await loadHtmlz(file, document, lastBookModified);
+            bookContent = await (await loadHtmlz())(file, document, lastBookModified);
           } else {
             const sniffed = await sniffFormat(file);
             if (sniffed === 'pdf') {
-              bookContent = await loadPdf(file, lastBookModified);
+              bookContent = await (await loadPdf())(file, lastBookModified);
             } else if (sniffed === 'mobi') {
-              bookContent = await loadMobi(file, lastBookModified);
+              bookContent = await (await loadMobi())(file, lastBookModified);
             } else if (sniffed === 'zip') {
               const kind = await sniffZipKind(file);
               if (kind === 'cbz') {
-                bookContent = await loadCbz(file, lastBookModified);
+                bookContent = await (await loadCbz())(file, lastBookModified);
               } else if (kind === 'htmlz') {
-                bookContent = await loadHtmlz(file, document, lastBookModified);
+                bookContent = await (await loadHtmlz())(file, document, lastBookModified);
               } else {
                 // EPUB or fallback to EPUB (most common ZIP-based ebook)
-                bookContent = await loadEpub(file, document, lastBookModified);
+                bookContent = await (await loadEpub())(file, document, lastBookModified);
               }
             } else {
               // Last resort: try EPUB (it'll error out cleanly if not actually one)
-              bookContent = await loadEpub(file, document, lastBookModified);
+              bookContent = await (await loadEpub())(file, document, lastBookModified);
             }
           }
 

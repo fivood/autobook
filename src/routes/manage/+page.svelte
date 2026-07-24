@@ -198,9 +198,26 @@
   /** Free-text title search. Deliberately NOT persisted — users
    * expect to see their full library on next open. */
   let searchQuery = '';
+  // Applied query — the `visibleBookCards` filter runs off this rather than
+  // `searchQuery` directly, so a fast typist doesn't re-scan the whole
+  // library on every keystroke. 120ms is under the perceptual threshold for
+  // "instant" while collapsing the burst into a single filter pass.
+  let debouncedSearchQuery = '';
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  $: {
+    clearTimeout(searchDebounceTimer);
+    const q = searchQuery;
+    if (!q) {
+      debouncedSearchQuery = '';
+    } else {
+      searchDebounceTimer = setTimeout(() => {
+        debouncedSearchQuery = q;
+      }, 120);
+    }
+  }
   $: visibleBookCards = (() => {
     const cards = $filteredBookCards$ || [];
-    const q = searchQuery.trim().toLowerCase();
+    const q = debouncedSearchQuery.trim().toLowerCase();
     if (!q) return cards;
     return cards.filter((c) => c.title.toLowerCase().includes(q));
   })();

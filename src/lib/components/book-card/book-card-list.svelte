@@ -126,7 +126,7 @@
   {#each bookCards as bookCard (bookCard.id)}
     <div
       role="banner"
-      class="relative cursor-grab active:cursor-grabbing"
+      class="book-grid-item relative cursor-grab active:cursor-grabbing"
       class:opacity-60={bookCard.isPlaceholder}
       draggable="true"
       title="可拖入左侧分类"
@@ -229,6 +229,18 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(var(--book-card-min, 170px), 1fr));
     justify-content: start;
+  }
+
+  /* Off-screen cards skip layout + paint. Card is aspect 2:3 so height
+     tracks column width; --book-card-min is the min-width, so
+     min-height ≈ 1.5×min-width. `auto` lets the browser cache the actual
+     rendered size after the first render, so scroll position stays true
+     as the user pans. Impact scales with library size — for 1000-book
+     libraries the manage page's initial layout drops from O(n) to
+     O(viewport). */
+  .book-grid-item {
+    content-visibility: auto;
+    contain-intrinsic-size: auto calc(var(--book-card-min, 170px) * 1.5);
   }
   @media (max-width: 480px) {
     /* Cap min-width on narrow screens so we never end up with a single

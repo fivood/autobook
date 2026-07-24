@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.11
+
+- 性能优化：书库页初次进入不再一次性加载 pdfjs / highlight.js / katex / libarchive / mobi 等重依赖，改成实际导入某种格式的书时才拉——启动更快
+- 书库网格给屏外卡片加 content-visibility，1000 本级别的库滚动/初次渲染明显轻
+- 阅读器位置追踪对 Element 节点（扫描 EPUB / 图册每页的 img）走原生 getBoundingClientRect，省掉 Range 分配
+- 书库搜索输入 120ms debounce，连续键入不再每帧重扫全库
+
 ## 1.20.10
 
 - 扫描版 / 图册 EPUB（多是老 PDF 硬转的）现在能翻页、有阅读进度、能上书签，之前只显示封面就卡住。左下角的图片缩放 pill 也扩展到这类 EPUB，跟 PDF/CBZ 一套

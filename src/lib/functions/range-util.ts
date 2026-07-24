@@ -62,7 +62,16 @@ export function getRangeForUserSelection(window: Window, preSelection: Range | u
   return createRange(nodes[0]);
 }
 
-export function getNodeBoundingRect(document: Document, node: Node) {
+export function getNodeBoundingRect(document: Document, node: Node): DOMRect {
+  // Element nodes (paragraphs' <img> in scan-only EPUBs, and any Element
+  // that slipped through from a mixed source) already expose the native
+  // `getBoundingClientRect` — using it skips the Range allocation +
+  // selectNode step that would otherwise fire for every paragraph on
+  // resize / scroll init. Text nodes still need a Range to compute their
+  // rect. Called in tight loops from CharacterStatsCalculator.
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    return (node as Element).getBoundingClientRect();
+  }
   const range = document.createRange();
   range.selectNode(node);
   return range.getBoundingClientRect();
