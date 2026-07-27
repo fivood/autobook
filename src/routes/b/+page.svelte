@@ -909,27 +909,23 @@
     if (typeof window === 'undefined') return;
     const root = document.querySelector('.book-content') as HTMLElement | null;
     if (!root) return;
-    // Walk text nodes and find the one containing globalIdx. Then scroll
-    // its parent into view roughly centered. Throttle via the position
-    // matching .tw-c spans when typewriter is active.
-    const twcSpans = root.querySelectorAll<HTMLElement>('.tw-c');
+    // Walk text nodes and find the one containing globalIdx, then scroll its
+    // parent roughly to center. Deliberately a plain walk: the typewriter now
+    // wraps only the one paragraph straddling its reveal frontier, so
+    // indexing `.tw-c` spans would address the wrong character entirely (and
+    // even when it wrapped the whole book it silently skipped newlines).
     let target: Element | null = null;
-    if (twcSpans.length > 0) {
-      const i = Math.min(globalIdx, twcSpans.length - 1);
-      target = twcSpans[i];
-    } else {
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-      let total = 0;
-      let node: Node | null = walker.nextNode();
-      while (node) {
-        const text = node.textContent || '';
-        if (total + text.length >= globalIdx) {
-          target = node.parentElement;
-          break;
-        }
-        total += text.length;
-        node = walker.nextNode();
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    let total = 0;
+    let node: Node | null = walker.nextNode();
+    while (node) {
+      const text = node.textContent || '';
+      if (total + text.length >= globalIdx) {
+        target = node.parentElement;
+        break;
       }
+      total += text.length;
+      node = walker.nextNode();
     }
     if (target) {
       const rect = target.getBoundingClientRect();

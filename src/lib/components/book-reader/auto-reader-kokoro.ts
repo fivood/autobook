@@ -4,33 +4,21 @@
  * All rights reserved.
  *
  * Kokoro-82M offline TTS — runs an ONNX model entirely in WebView2 via
- * onnxruntime-web (bundled with kokoro-js). After first download the
- * models are cached by transformers.js / browser Cache API so subsequent
- * launches need no network.
+ * onnxruntime-web (bundled with kokoro-js). After first download the models
+ * are cached by transformers.js / browser Cache API so subsequent launches
+ * need no network.
  *
- * The engine class is identical in shape to AutoReaderCustom / Sapi: same
- * paragraphs[]/paraIndex/charOffset rhythm, same boundary interpolation
- * via audio.ontimeupdate so the v1.11.1 page-flip logic still works.
+ * Playback, position tracking and prefetch live in BlobAutoReader. Inference
+ * is seconds per sentence on the single WASM thread, which is precisely the
+ * dead air the prefetch pipeline removes — but for the same reason the depth
+ * stays at 1, so warming the next sentence never competes with the one
+ * currently being waited on.
  *
- * Model loading is **opt-in**: nothing fetches until the user clicks the
- * "下载并启用" button in settings, which sets the `pdfKokoroAccepted$`
- * flag and the engine's first `on()` call kicks off the download.
- *
- * Hard rules:
- *   - Never download without explicit consent (kokoroAccepted flag)
- *   - Stream progress to a store so the UI can show MB/s + percentage
- *   - Cancel-safe: aborting the load shouldn't leave the engine half-loaded
+ * Model loading is **opt-in**: nothing fetches until the user clicks
+ * "下载并启用" in settings, which sets `kokoroAccepted$`.
  */
 
-import { BehaviorSubject, type Observable } from 'rxjs';
-import type { AutoReader } from './types';
-import {
-  computeGlobalCharIndex,
-  extractText,
-  seekParagraphsToExplored,
-  selectionToCharIndex,
-  splitSentences
-} from './auto-reader-shared';
+import { BlobAutoReader } from './auto-reader-blob-base';
 import {
   kokoroAccepted$,
   kokoroLoadStatus$,
@@ -85,242 +73,48 @@ async function loadModel(onProgress: (status: KokoroLoadStatus) => void) {
   return ttsPromise;
 }
 
-export class AutoReaderKokoro implements AutoReader {
-  wasReaderEnabled$ = new BehaviorSubject<boolean>(false);
+export class AutoReaderKokoro extends BlobAutoReader {
+  /** No rate parameter in kokoro-js's generate() — base class uses playbackRate. */
+  protected readonly synthesisHonorsRate = false;
 
-  private enabled$ = new BehaviorSubject<boolean>(false);
-  private paragraphs: string[] = [];
-  private paraIndex = 0;
-  private charOffset = 0;
-  private contentEl: HTMLElement | undefined;
-  private _rate = 1;
-  private _lang = 'zh-CN';
-  private audio: HTMLAudioElement | undefined;
-  private currentSpeakToken = 0;
-  private currentBlobUrl: string | undefined;
+  /** Inference is CPU-bound on one WASM thread; deeper prefetch would delay
+   *  the sentence the listener is actually waiting for. */
+  protected prefetchDepth = 1;
 
-  onBoundary?: (charIndex: number) => void;
-  onEnd?: () => void;
-  onError?: (message: string) => void;
-
-  constructor(destroy$: Observable<void>) {
-    this.enabled$.subscribe((v) => this.wasReaderEnabled$.next(v));
-    destroy$.subscribe(() => this.off());
-  }
-
-  setContentEl(el: HTMLElement | undefined) {
-    if (this.contentEl === el) return;
-    this.contentEl = el;
-    this.reset();
-  }
-
-  set rate(v: number) {
-    this._rate = Math.max(0.5, Math.min(2, v));
-    if (this.audio) this.audio.playbackRate = this._rate;
-  }
-  get rate() {
-    return this._rate;
-  }
-
-  // Kokoro voice ID lives in its own store; the standard `voice` setter
-  // (which takes a SpeechSynthesisVoice) doesn't apply here.
-  set voice(_v: SpeechSynthesisVoice | undefined) {
-    /* no-op — see kokoroVoiceId$ */
-  }
-  get voice() {
-    return undefined;
-  }
-
-  set lang(v: string) {
-    this._lang = v;
-  }
-  get lang() {
-    return this._lang;
-  }
-
-  autoSelectVoice() {
-    /* no-op — voice is picked in settings */
-  }
-
-  prepare() {
-    if (!this.contentEl) return;
-    const text = extractText(this.contentEl);
-    this.paragraphs = splitSentences(text);
-    this.paraIndex = 0;
-    this.charOffset = 0;
-  }
-
-  getPosition() {
-    return { para: this.paraIndex, offset: this.charOffset };
-  }
-
-  setPosition(para: number, offset: number) {
-    if (!this.paragraphs.length) return;
-    this.paraIndex = Math.min(Math.max(0, para), this.paragraphs.length - 1);
-    this.charOffset = Math.min(Math.max(0, offset), this.paragraphs[this.paraIndex].length);
-  }
-
-  getCurrentSentence(): { globalStart: number; globalEnd: number; text: string } | null {
-    if (this.paraIndex >= this.paragraphs.length) return null;
-    const text = this.paragraphs[this.paraIndex];
-    const globalStart = computeGlobalCharIndex(this.paragraphs, this.paraIndex, 0);
-    return { globalStart, globalEnd: globalStart + text.length, text };
-  }
-
-  seekToExplored(exploredCharCount: number) {
-    const pos = seekParagraphsToExplored(this.paragraphs, exploredCharCount);
-    this.paraIndex = pos.paraIndex;
-    this.charOffset = pos.charOffset;
-  }
-
-  seekToSelection(): boolean {
-    if (!this.contentEl) return false;
-    const charIdx = selectionToCharIndex(this.contentEl);
-    if (charIdx == null) return false;
-    this.seekToExplored(charIdx);
-    return true;
-  }
-
-  toggle() {
-    if (this.enabled$.getValue()) this.off();
-    else this.on();
-  }
-
-  on() {
+  protected canStart(): string | null {
     if (!kokoroAccepted$.getValue()) {
-      this.onError?.('Kokoro 模型尚未下载。请在设置 → 阅读 → 朗读引擎 里点「下载并启用」');
-      return;
+      return 'Kokoro 模型尚未下载。请在设置 → 阅读 → 朗读引擎 里点「下载并启用」';
     }
-    if (!this.paragraphs.length) this.prepare();
-    if (!this.paragraphs.length) return;
-    this.enabled$.next(true);
-    this.speakNext();
+    return null;
   }
 
-  off() {
-    this.enabled$.next(false);
-    this.currentSpeakToken += 1;
-    if (this.audio) {
-      this.audio.pause();
-      this.audio.src = '';
-      this.audio = undefined;
-    }
-    if (this.currentBlobUrl) {
-      URL.revokeObjectURL(this.currentBlobUrl);
-      this.currentBlobUrl = undefined;
-    }
-  }
-
-  private reset() {
-    this.off();
-    this.paragraphs = [];
-    this.paraIndex = 0;
-    this.charOffset = 0;
-  }
-
-  private async speakNext() {
-    if (!this.enabled$.getValue()) return;
-    if (this.paraIndex >= this.paragraphs.length) {
-      this.off();
-      this.onEnd?.();
-      return;
-    }
-
-    const text = this.paragraphs[this.paraIndex].slice(this.charOffset);
-    if (!text) {
-      this.paraIndex += 1;
-      this.charOffset = 0;
-      this.speakNext();
-      return;
-    }
-
-    const globalIndex = computeGlobalCharIndex(this.paragraphs, this.paraIndex, this.charOffset);
-    this.onBoundary?.(globalIndex);
-
-    const token = ++this.currentSpeakToken;
+  protected async synthesize(text: string): Promise<Blob> {
     let tts: any;
     try {
       tts = await loadModel((status) => kokoroLoadStatus$.next(status));
     } catch (err: any) {
-      if (token !== this.currentSpeakToken) return;
-      this.onError?.(`Kokoro 加载失败: ${err?.message || err}`);
-      this.off();
-      return;
+      throw new Error(`Kokoro 加载失败: ${err?.message || err}`);
     }
-    if (token !== this.currentSpeakToken || !this.enabled$.getValue()) return;
 
-    try {
-      // Validate the saved voice id against the model's actual voice list.
-      // Stale ids (e.g. the zf_ Chinese voices my v1.12.0 first cut wrongly
-      // suggested) trip a hard failure inside kokoro.generate; rescue them
-      // here so the user sees a working voice instead of a red error.
-      let voiceId = kokoroVoiceId$.getValue() || 'af_heart';
-      const voices = tts?.voices ? Object.keys(tts.voices) : [];
-      if (voices.length && !voices.includes(voiceId)) {
-        const fallback = voices.find((v) => v.startsWith('af_')) || voices[0];
-        console.warn(`[kokoro] voice ${voiceId} not in model; fell back to ${fallback}`);
-        voiceId = fallback;
-        kokoroVoiceId$.next(voiceId);
-      }
-      const audioOut = await tts.generate(text, { voice: voiceId });
-      if (token !== this.currentSpeakToken || !this.enabled$.getValue()) return;
-
-      // kokoro-js returns a RawAudio whose .toBlob() yields a WAV blob.
-      const blob: Blob =
-        typeof audioOut?.toBlob === 'function'
-          ? audioOut.toBlob()
-          : new Blob([audioOut?.audio?.buffer || audioOut], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-
-      const audio = new Audio(url);
-      audio.playbackRate = this._rate;
-      const cleanup = () => {
-        audio.removeAttribute('src');
-        audio.load();
-        URL.revokeObjectURL(url);
-      };
-
-      // Same boundary interpolation pattern as Sapi / Custom — Kokoro
-      // returns one audio buffer per paragraph with no per-word events,
-      // so synthesize boundaries from audio.currentTime to keep page-flip
-      // logic in lockstep.
-      const paraStartGlobalIndex = globalIndex;
-      const paraLength = text.length;
-      let lastReportedFraction = 0;
-      audio.ontimeupdate = () => {
-        if (token !== this.currentSpeakToken) return;
-        if (!audio.duration || !isFinite(audio.duration) || audio.duration <= 0) return;
-        const fraction = Math.min(1, audio.currentTime / audio.duration);
-        if (fraction - lastReportedFraction < 0.02) return;
-        lastReportedFraction = fraction;
-        const localOffset = Math.floor(paraLength * fraction);
-        this.charOffset = localOffset;
-        this.onBoundary?.(paraStartGlobalIndex + localOffset);
-      };
-      audio.onended = () => {
-        cleanup();
-        if (token !== this.currentSpeakToken) return;
-        this.paraIndex += 1;
-        this.charOffset = 0;
-        this.speakNext();
-      };
-      audio.onerror = () => {
-        cleanup();
-        if (token !== this.currentSpeakToken) return;
-        this.onError?.('Kokoro 音频播放失败');
-        this.off();
-      };
-
-      this.audio = audio;
-      this.currentBlobUrl = url;
-      await audio.play();
-    } catch (err: any) {
-      if (token !== this.currentSpeakToken) return;
-      const message = typeof err === 'string' ? err : err?.message ?? String(err);
-      console.warn('[kokoro] synth failed:', message);
-      this.onError?.(message);
-      this.off();
+    // Validate the saved voice id against the model's actual voice list.
+    // Stale ids (e.g. the zf_ Chinese voices v1.12.0's first cut wrongly
+    // suggested) trip a hard failure inside kokoro.generate; rescue them here
+    // so the user gets a working voice instead of a red error.
+    let voiceId = kokoroVoiceId$.getValue() || 'af_heart';
+    const voices = tts?.voices ? Object.keys(tts.voices) : [];
+    if (voices.length && !voices.includes(voiceId)) {
+      const fallback = voices.find((v) => v.startsWith('af_')) || voices[0];
+      console.warn(`[kokoro] voice ${voiceId} not in model; fell back to ${fallback}`);
+      voiceId = fallback;
+      kokoroVoiceId$.next(voiceId);
     }
+
+    const audioOut = await tts.generate(text, { voice: voiceId });
+
+    // kokoro-js returns a RawAudio whose .toBlob() yields a WAV blob.
+    return typeof audioOut?.toBlob === 'function'
+      ? audioOut.toBlob()
+      : new Blob([audioOut?.audio?.buffer || audioOut], { type: 'audio/wav' });
   }
 }
 

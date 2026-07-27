@@ -184,6 +184,14 @@ input[type='range'] {
     visibility: hidden;
   }
 
+  /* typewriter: whole paragraph not yet reached. Hiding at block level is
+     what lets the reveal skip per-character wrapping for everything except
+     the one paragraph the frontier is inside — visibility (not display)
+     so the page height, and therefore the scrollbar, never moves. */
+  .tw-block-hidden {
+    visibility: hidden;
+  }
+
   .bg-menu {
     background-color: var(--menu-background);
   }

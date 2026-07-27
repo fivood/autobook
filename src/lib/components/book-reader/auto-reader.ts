@@ -14,9 +14,10 @@ import { BehaviorSubject, type Observable } from 'rxjs';
 import {
   computeGlobalCharIndex,
   extractText,
-  seekParagraphsToExplored,
+  seekSentencesToExplored,
   selectionToCharIndex,
-  splitSentences
+  splitSentencesDetailed,
+  type Sentence
 } from './auto-reader-shared';
 
 export interface AutoReader {
@@ -34,7 +35,7 @@ export class AutoReaderContinuous implements AutoReader {
 
   private utterance: SpeechSynthesisUtterance | null = null;
 
-  private paragraphs: string[] = [];
+  private sentences: Sentence[] = [];
 
   private paraIndex = 0;
 
@@ -139,8 +140,7 @@ export class AutoReaderContinuous implements AutoReader {
 
   prepare() {
     if (!this.contentEl) return;
-    const text = extractText(this.contentEl);
-    this.paragraphs = splitSentences(text);
+    this.sentences = splitSentencesDetailed(extractText(this.contentEl));
     this.paraIndex = 0;
     this.charOffset = 0;
   }
@@ -150,22 +150,21 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   setPosition(para: number, offset: number) {
-    if (!this.paragraphs.length) return;
-    this.paraIndex = Math.min(Math.max(0, para), this.paragraphs.length - 1);
-    this.charOffset = Math.min(Math.max(0, offset), this.paragraphs[this.paraIndex].length);
+    if (!this.sentences.length) return;
+    this.paraIndex = Math.min(Math.max(0, para), this.sentences.length - 1);
+    this.charOffset = Math.min(Math.max(0, offset), this.sentences[this.paraIndex].text.length);
   }
 
   getCurrentSentence(): { globalStart: number; globalEnd: number; text: string } | null {
-    if (this.paraIndex >= this.paragraphs.length) return null;
-    const text = this.paragraphs[this.paraIndex];
-    const globalStart = computeGlobalCharIndex(this.paragraphs, this.paraIndex, 0);
-    return { globalStart, globalEnd: globalStart + text.length, text };
+    const sentence = this.sentences[this.paraIndex];
+    if (!sentence) return null;
+    return { globalStart: sentence.start, globalEnd: sentence.end, text: sentence.text };
   }
 
   seekToExplored(exploredCharCount: number) {
-    const pos = seekParagraphsToExplored(this.paragraphs, exploredCharCount);
-    this.paraIndex = pos.paraIndex;
-    this.charOffset = pos.charOffset;
+    const pos = seekSentencesToExplored(this.sentences, exploredCharCount);
+    this.paraIndex = pos.index;
+    this.charOffset = pos.offset;
   }
 
   seekToSelection(): boolean {
@@ -186,8 +185,8 @@ export class AutoReaderContinuous implements AutoReader {
 
   on() {
     if (!this.synth) return;
-    if (!this.paragraphs.length) this.prepare();
-    if (!this.paragraphs.length) return;
+    if (!this.sentences.length) this.prepare();
+    if (!this.sentences.length) return;
     this.enabled$.next(true);
     this.speakNext();
   }
@@ -224,20 +223,20 @@ export class AutoReaderContinuous implements AutoReader {
 
   private reset() {
     this.off();
-    this.paragraphs = [];
+    this.sentences = [];
     this.paraIndex = 0;
     this.charOffset = 0;
   }
 
   private speakNext() {
     if (!this.enabled$.getValue() || !this.synth) return;
-    if (this.paraIndex >= this.paragraphs.length) {
+    if (this.paraIndex >= this.sentences.length) {
       this.off();
       this.onEnd?.();
       return;
     }
 
-    const text = this.paragraphs[this.paraIndex].slice(this.charOffset);
+    const text = this.sentences[this.paraIndex].text.slice(this.charOffset);
     // Skip empty / whitespace-only slices and roll forward. This triggers
     // when the cursor-start strategy lands the position at the end of a
     // paragraph — without this guard Web Speech rejects the empty
@@ -262,7 +261,7 @@ export class AutoReaderContinuous implements AutoReader {
     // tracking works even on platforms (Win10 + old OneCore voices) where
     // SpeechSynthesisUtterance.onboundary never fires word-level events.
     const paraStartGlobalIndex = computeGlobalCharIndex(
-      this.paragraphs,
+      this.sentences,
       this.paraIndex,
       paraStartOffset
     );
@@ -274,7 +273,7 @@ export class AutoReaderContinuous implements AutoReader {
       if (ev.name === 'word' || ev.name === 'sentence') {
         const localIndex = paraStartOffset + ev.charIndex;
         this.charOffset = localIndex;
-        const globalIndex = computeGlobalCharIndex(this.paragraphs, this.paraIndex, localIndex);
+        const globalIndex = computeGlobalCharIndex(this.sentences, this.paraIndex, localIndex);
         this.onBoundary?.(globalIndex);
       }
     };

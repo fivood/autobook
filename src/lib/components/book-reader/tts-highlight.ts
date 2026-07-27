@@ -50,28 +50,11 @@ export class TtsHighlighter {
     this.supported = hasHighlightApi();
     if (!this.supported) return;
 
-    // Match extractText()'s text-node walk so character indices line up. We
-    // honor the same script/style skip and prefer .tw-c spans when present
-    // (typewriter wraps each char in one) — that keeps indices stable while
-    // typewriter playback is in progress.
-    const twcSpans = root.querySelectorAll('.tw-c');
-    if (twcSpans.length > 0) {
-      let total = 0;
-      for (const span of twcSpans) {
-        const textNode = span.firstChild as Text | null;
-        if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
-          total += (span.textContent || '').length;
-          continue;
-        }
-        const len = (textNode.textContent || '').length;
-        if (len > 0) {
-          this.segments.push({ node: textNode, start: total, end: total + len });
-        }
-        total += len;
-      }
-      return;
-    }
-
+    // Match extractText()'s text-node walk so character indices line up.
+    // A plain walk covers the typewriter's per-character spans too — it yields
+    // exactly the Text nodes inside them, in the same order — so there's no
+    // need (and, now that the typewriter only wraps one paragraph at a time,
+    // no way) to special-case `.tw-c`.
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
     let total = 0;
     let node: Node | null = walker.nextNode();
