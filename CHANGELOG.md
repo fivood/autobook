@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.21.1
+
+TTS 引擎/预设大扩：本地能装 Kokoro 中文版，云端加了新一代模型，还接入了本地自建服务器。
+
+- **Kokoro 可选 v1.1-zh 中文版**（默认）：40+ 中文音色（男女）+ 3 个新英语音色（Maple/Sol/Vale），82M 参数依然纯离线跑在浏览器里。v1.0 英语原版仍保留。切换模型时旧音色会自动 clamp 到新模型合法值
+- **OpenAI 升到 gpt-4o-mini-tts**：$0.015/min 更便宜、13 个音色（新增 Marin/Cedar/Ballad/Verse/Coral/Sage/Ash），支持 `instructions` 自然语言控制语气
+- **新增 DeepInfra Qwen3-TTS**：阿里 Qwen3-TTS 官方托管，OpenAI 兼容接口，新账号有免费额度不用绑卡，中文极佳
+- **新增 3 个本地 HTTP TTS 预设**：qwentts.cpp（Qwen3-TTS GGUF）、GPT-SoVITS（声音克隆）、Piper（超轻量 CPU）— 自己启服务器就能白嫖，完全离线
+- **预设下拉分组**：按「🏠 本地免费 / ☁️🎁 云端免费 / ☁️💰 云端付费 / 手动」分组显示，一眼看清各选项的成本
+
 ## 1.21.0
 
 打字机和朗读两条核心链路的体验重做。

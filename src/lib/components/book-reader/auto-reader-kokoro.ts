@@ -20,14 +20,19 @@
 
 import { BlobAutoReader } from './auto-reader-blob-base';
 import {
+  KOKORO_MODEL_REPOS,
   kokoroAccepted$,
   kokoroLoadStatus$,
+  kokoroModel$,
   kokoroVoiceId$,
-  type KokoroLoadStatus
+  type KokoroLoadStatus,
+  type KokoroModelId
 } from '$lib/data/store';
 
-// Lazy-loaded once on first synth; cached for the lifetime of the page.
-let ttsPromise: Promise<any> | null = null;
+// One in-flight/settled TTS instance per model id — switching Kokoro variant
+// in settings invalidates the last one but keeps the earlier one cached in
+// case the user flips back.
+const ttsPromises = new Map<KokoroModelId, Promise<any>>();
 
 /** kokoro-js's TS bundle doesn't export the KokoroTTS class cleanly, so both
  *  the engine and the settings preview route through this single cast. */
@@ -36,15 +41,21 @@ export async function loadKokoroTtsClass(): Promise<any> {
   return (mod as any).KokoroTTS;
 }
 
-async function loadModel(onProgress: (status: KokoroLoadStatus) => void) {
-  if (ttsPromise) return ttsPromise;
-  ttsPromise = (async () => {
-    onProgress({ phase: 'loading', message: '正在加载 Kokoro-82M…', loaded: 0, total: 0 });
+async function loadModel(
+  modelId: KokoroModelId,
+  onProgress: (status: KokoroLoadStatus) => void
+) {
+  const cached = ttsPromises.get(modelId);
+  if (cached) return cached;
+
+  const repo = KOKORO_MODEL_REPOS[modelId] ?? KOKORO_MODEL_REPOS['v1.1-zh'];
+  const promise = (async () => {
+    onProgress({ phase: 'loading', message: `正在加载 Kokoro (${modelId})…`, loaded: 0, total: 0 });
     const KokoroTTS = await loadKokoroTtsClass();
     if (!KokoroTTS?.from_pretrained) {
       throw new Error('kokoro-js 模块加载异常（未找到 KokoroTTS.from_pretrained）');
     }
-    const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+    const tts = await KokoroTTS.from_pretrained(repo, {
       dtype: 'q8',
       device: 'wasm',
       progress_callback: (info: any) => {
@@ -61,7 +72,7 @@ async function loadModel(onProgress: (status: KokoroLoadStatus) => void) {
     onProgress({ phase: 'ready', message: '', loaded: 0, total: 0 });
     return tts;
   })().catch((err) => {
-    ttsPromise = null;
+    ttsPromises.delete(modelId);
     onProgress({
       phase: 'errored',
       message: err?.message || String(err),
@@ -70,7 +81,8 @@ async function loadModel(onProgress: (status: KokoroLoadStatus) => void) {
     });
     throw err;
   });
-  return ttsPromise;
+  ttsPromises.set(modelId, promise);
+  return promise;
 }
 
 export class AutoReaderKokoro extends BlobAutoReader {
@@ -89,22 +101,29 @@ export class AutoReaderKokoro extends BlobAutoReader {
   }
 
   protected async synthesize(text: string): Promise<Blob> {
+    const modelId = (kokoroModel$.getValue() as KokoroModelId) || 'v1.1-zh';
     let tts: any;
     try {
-      tts = await loadModel((status) => kokoroLoadStatus$.next(status));
+      tts = await loadModel(modelId, (status) => kokoroLoadStatus$.next(status));
     } catch (err: any) {
       throw new Error(`Kokoro 加载失败: ${err?.message || err}`);
     }
 
-    // Validate the saved voice id against the model's actual voice list.
-    // Stale ids (e.g. the zf_ Chinese voices v1.12.0's first cut wrongly
-    // suggested) trip a hard failure inside kokoro.generate; rescue them here
-    // so the user gets a working voice instead of a red error.
-    let voiceId = kokoroVoiceId$.getValue() || 'af_heart';
+    // Validate the saved voice id against the model's actual voice list. The
+    // two model variants ship disjoint voice sets (v1.0 has af_heart etc.,
+    // v1.1-zh has zf_/zm_ plus af_maple/af_sol/bf_vale), so a saved voice
+    // from one is guaranteed invalid on the other — kokoro.generate would
+    // throw. Prefer a Chinese voice on v1.1-zh, English (af_) on v1.0.
+    let voiceId = kokoroVoiceId$.getValue();
     const voices = tts?.voices ? Object.keys(tts.voices) : [];
-    if (voices.length && !voices.includes(voiceId)) {
-      const fallback = voices.find((v) => v.startsWith('af_')) || voices[0];
-      console.warn(`[kokoro] voice ${voiceId} not in model; fell back to ${fallback}`);
+    if (voices.length && (!voiceId || !voices.includes(voiceId))) {
+      const preferChinese = modelId === 'v1.1-zh';
+      const fallback =
+        (preferChinese
+          ? voices.find((v) => v.startsWith('zf_')) || voices.find((v) => v.startsWith('zm_'))
+          : voices.find((v) => v === 'af_heart') || voices.find((v) => v.startsWith('af_'))) ||
+        voices[0];
+      console.warn(`[kokoro] voice ${voiceId || '(unset)'} not in ${modelId}; fell back to ${fallback}`);
       voiceId = fallback;
       kokoroVoiceId$.next(voiceId);
     }
@@ -121,5 +140,6 @@ export class AutoReaderKokoro extends BlobAutoReader {
 /** Pre-warm the model so the first sentence doesn't wait for download. */
 export async function ensureKokoroLoaded(): Promise<void> {
   if (!kokoroAccepted$.getValue()) return;
-  await loadModel((s) => kokoroLoadStatus$.next(s));
+  const modelId = (kokoroModel$.getValue() as KokoroModelId) || 'v1.1-zh';
+  await loadModel(modelId, (s) => kokoroLoadStatus$.next(s));
 }

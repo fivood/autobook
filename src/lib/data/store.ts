@@ -366,12 +366,28 @@ export const kokoroAccepted$ = writableBooleanLocalStorageSubject()(
   'kokoroAccepted',
   false
 );
-// kokoro-js v1.0 ONNX bundles English voices only (am_/af_/bm_/bf_). The
-// older zf_ / zm_ Chinese voice IDs my first cut suggested don't exist in
-// this build, so we default to af_heart and gate to the known-good list.
+
+/** Which Kokoro variant to load. v1.0 is English-only (28 voices). v1.1-zh
+ *  from 2025-03 drops most v1.0 voices but adds 40+ Mandarin voices plus
+ *  three new English speakers (Maple/Sol/Vale) — the pick for Chinese
+ *  audiobook use. Default is v1.1-zh: the reader is Chinese-first and the
+ *  v1.0 English voices it drops aren't the ones users typically pick anyway.
+ *  Swapping the id invalidates the current voice, so the settings UI must
+ *  clamp `kokoroVoiceId$` into the new list. */
+export type KokoroModelId = 'v1.0' | 'v1.1-zh';
+export const kokoroModel$ = writableStringLocalStorageSubject<KokoroModelId>()(
+  'kokoroModel',
+  'v1.1-zh'
+);
+export const KOKORO_MODEL_REPOS: Record<KokoroModelId, string> = {
+  'v1.0': 'onnx-community/Kokoro-82M-v1.0-ONNX',
+  'v1.1-zh': 'onnx-community/Kokoro-82M-v1.1-zh-ONNX'
+};
+// Default voice per model. v1.1-zh drops af_heart, so the default there is
+// the leading Chinese female voice from that build.
 export const kokoroVoiceId$ = writableStringLocalStorageSubject()(
   'kokoroVoiceId',
-  'af_heart'
+  'zf_001'
 );
 
 export interface KokoroLoadStatus {

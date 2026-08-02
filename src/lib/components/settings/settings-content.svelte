@@ -59,13 +59,20 @@
     ttsEngine$,
     kokoroAccepted$,
     kokoroLoadStatus$,
+    kokoroModel$,
     kokoroVoiceId$,
+    type KokoroModelId,
     readerVoiceUri$,
     ttsSapiVoiceId$,
     ttsShortcut$,
     ttsStartStrategy$,
     verticalCustomReadingPosition$
   } from '$lib/data/store';
+  import {
+    getDefaultKokoroVoice,
+    getKokoroVoiceGroups,
+    getKokoroVoices
+  } from '$lib/data/kokoro-voices';
   import { isTauri } from '$lib/data/env';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
@@ -271,6 +278,18 @@
 
   $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
 
+  // Keep the saved Kokoro voice valid whenever the model switches. v1.0 and
+  // v1.1-zh ship disjoint voice sets, so a v1.0 default (af_heart) would
+  // trip a hard error inside kokoro.generate on v1.1-zh, and vice versa.
+  $: kokoroModelId = $kokoroModel$ as KokoroModelId;
+  $: kokoroVoiceGroups = getKokoroVoiceGroups(kokoroModelId);
+  $: if (kokoroModelId) {
+    const allowed = getKokoroVoices(kokoroModelId).map((v) => v.id);
+    if (!allowed.includes($kokoroVoiceId$)) {
+      $kokoroVoiceId$ = getDefaultKokoroVoice(kokoroModelId);
+    }
+  }
+
   // Web Speech voice list. Lived in the reader FAB's gear panel until
   // the panel was replaced by a bare −/+ rate pill; settings is the
   // only picker now. getVoices() can be empty until the engine warms
@@ -291,8 +310,14 @@
 
   $: if ($ttsEngine$ === 'web') loadWebVoices();
 
+  /** Grouping key for the preset dropdown — sorted by how "hands-off" the
+   *  choice is (nothing to sign up for → free tier → paid → manual). */
+  type PresetCategory = 'local' | 'cloudFree' | 'cloudPaid' | 'manual';
+
   interface CustomPreset {
     label: string;
+    /** Section this preset appears under in the picker. */
+    category: PresetCategory;
     method: string;
     endpoint: string;
     headers: string;
@@ -313,9 +338,18 @@
     helpHint?: string;
   }
 
+  const PRESET_CATEGORY_LABEL: Record<PresetCategory, string> = {
+    local: '🏠 本地免费（自建服务器，完全离线）',
+    cloudFree: '☁️🎁 云端免费 / 有免费额度',
+    cloudPaid: '☁️💰 云端付费',
+    manual: '手动配置'
+  };
+  const PRESET_CATEGORY_ORDER: PresetCategory[] = ['local', 'cloudFree', 'cloudPaid', 'manual'];
+
   const CUSTOM_PRESETS: Record<string, CustomPreset> = {
     mimo: {
       label: '★ MiMo-V2.5-TTS（小米，国内直连，限时免费）',
+      category: 'cloudFree',
       method: 'POST',
       endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
       headers: JSON.stringify(
@@ -344,8 +378,46 @@
       helpUrl: 'https://api.xiaomimimo.com',
       helpHint: '小米 MiMo TTS 限时免费阶段（中文听书白嫖首选）；不绑卡，注册即用'
     },
+    deepinfraQwen3: {
+      label: '★ DeepInfra Qwen3-TTS（免费额度，中文极强，OpenAI 兼容）',
+      category: 'cloudFree',
+      method: 'POST',
+      endpoint: 'https://api.deepinfra.com/v1/audio/speech',
+      headers: JSON.stringify(
+        { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_DEEPINFRA_TOKEN' },
+        null,
+        2
+      ),
+      body: JSON.stringify(
+        {
+          model: 'Qwen/Qwen3-TTS',
+          input: '{text}',
+          voice: 'Vivian',
+          response_format: 'mp3',
+          speed: 1.0
+        },
+        null,
+        2
+      ),
+      voices: [
+        { value: 'Vivian', label: 'Vivian（女，中文）' },
+        { value: 'Serena', label: 'Serena（女，中文）' },
+        { value: 'Ono_Anna', label: 'Ono_Anna（女，日语）' },
+        { value: 'Sohee', label: 'Sohee（女，韩语）' },
+        { value: 'Uncle_Fu', label: 'Uncle_Fu（老者男）' },
+        { value: 'Dylan', label: 'Dylan（男）' },
+        { value: 'Eric', label: 'Eric（男）' },
+        { value: 'Ryan', label: 'Ryan（男）' },
+        { value: 'Aiden', label: 'Aiden（男）' }
+      ],
+      voicePath: 'voice',
+      helpUrl: 'https://deepinfra.com/dash/api_keys',
+      helpHint:
+        '阿里 Qwen3-TTS 官方托管，OpenAI 兼容接口。新账号有免费额度，无需绑卡试用；10 语言（含中/日/韩），中文极佳。国外服务，需梯子。'
+    },
     siliconflow: {
       label: '硅基流动 SiliconFlow（国内直连，按字符付费）',
+      category: 'cloudPaid',
       method: 'POST',
       endpoint: 'https://api.siliconflow.cn/v1/audio/speech',
       headers: JSON.stringify(
@@ -381,7 +453,8 @@
       helpHint: 'OpenAI 兼容接口，国内直连不用梯子。按字符计费（CosyVoice2 约 ¥105/100 万字符），部分模型有限免，新用户没有 14 元赠送了（2025 中起取消）'
     },
     aliyunQwen: {
-      label: 'Aliyun DashScope Qwen3-TTS-Flash（国内直连，URL 抽取）',
+      label: 'Aliyun DashScope Qwen3-TTS-Flash（国内直连，有免费额度）',
+      category: 'cloudFree',
       method: 'POST',
       endpoint:
         'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
@@ -412,6 +485,7 @@
     },
     volcengine: {
       label: '火山引擎 大模型 TTS（按字符付费）',
+      category: 'cloudPaid',
       method: 'POST',
       endpoint: 'https://openspeech.bytedance.com/api/v1/tts',
       headers: JSON.stringify(
@@ -441,6 +515,7 @@
     },
     googleCloud: {
       label: '★ Google Cloud TTS（每月 100 万字符免费，性价比之王）',
+      category: 'cloudFree',
       method: 'POST',
       endpoint:
         'https://texttospeech.googleapis.com/v1/text:synthesize?key=YOUR_API_KEY',
@@ -478,7 +553,8 @@
       helpHint: '启用 Cloud Text-to-Speech API + 创建 API 密钥；国外服务，需梯子'
     },
     geminiTts: {
-      label: 'Gemini 2.5 Flash TTS（实验）',
+      label: 'Gemini 2.5 Flash TTS（每月 100 万字符免费，实验）',
+      category: 'cloudFree',
       method: 'POST',
       endpoint:
         'https://texttospeech.googleapis.com/v1/text:synthesize?key=YOUR_API_KEY',
@@ -517,7 +593,8 @@
       helpHint: '每月前 100 万字符免费；模型还在 Preview 阶段，可能限流'
     },
     openai: {
-      label: 'OpenAI TTS（适合英语）',
+      label: 'OpenAI gpt-4o-mini-tts（2025 新，$0.015/min，13 音色可控指令）',
+      category: 'cloudPaid',
       method: 'POST',
       endpoint: 'https://api.openai.com/v1/audio/speech',
       headers: JSON.stringify(
@@ -525,8 +602,27 @@
         null,
         2
       ),
-      body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: '{text}' }, null, 2),
+      body: JSON.stringify(
+        {
+          model: 'gpt-4o-mini-tts',
+          voice: 'marin',
+          input: '{text}',
+          instructions: '清晰、稳定、平和的朗读语气，适合长时间听书。'
+        },
+        null,
+        2
+      ),
       voices: [
+        // Recommended for quality-focused use (per OpenAI 2026 docs)
+        { value: 'marin', label: 'Marin ★ (2025 新，推荐)' },
+        { value: 'cedar', label: 'Cedar ★ (2025 新，推荐)' },
+        // Added March 2025
+        { value: 'ballad', label: 'Ballad (2025 新)' },
+        { value: 'verse', label: 'Verse (2025 新)' },
+        { value: 'coral', label: 'Coral' },
+        { value: 'sage', label: 'Sage' },
+        { value: 'ash', label: 'Ash' },
+        // Original 6 (still available on gpt-4o-mini-tts)
         { value: 'alloy', label: 'Alloy' },
         { value: 'echo', label: 'Echo' },
         { value: 'fable', label: 'Fable' },
@@ -536,10 +632,12 @@
       ],
       voicePath: 'voice',
       helpUrl: 'https://platform.openai.com/api-keys',
-      helpHint: '需绑卡按字符计费；中文质量一般，英语优秀'
+      helpHint:
+        'gpt-4o-mini-tts 比老 tts-1 便宜且好，支持中文；instructions 字段可用自然语言控制语气/情绪。约 $0.015/min，需绑卡。'
     },
     azure: {
-      label: 'Azure Speech（中文质量好但配置繁琐）',
+      label: 'Azure Speech（每月 50 万字符免费，配置繁琐）',
+      category: 'cloudFree',
       method: 'POST',
       endpoint: 'https://YOUR_REGION.tts.speech.microsoft.com/cognitiveservices/v1',
       headers: JSON.stringify(
@@ -565,7 +663,8 @@
       helpHint: '①注册 Azure（绑卡）→ ②创建 Speech 资源 → ③拿订阅 key + region → ④替换 endpoint 里 YOUR_REGION。每月 50 万字符免费，晓晓/云扬质量顶级'
     },
     elevenlabs: {
-      label: 'ElevenLabs（仅英语推荐）',
+      label: 'ElevenLabs（仅英语推荐，试用免费 1 万字符）',
+      category: 'cloudPaid',
       method: 'POST',
       endpoint:
         'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM?output_format=mp3_44100_128',
@@ -596,8 +695,69 @@
       helpUrl: 'https://elevenlabs.io/app/settings/api-keys',
       helpHint: '每月免费 1 万字符（试用）；中文一般、英语顶级；按字符贵'
     },
+    localQwentts: {
+      label: '本地 Qwen3-TTS（qwentts.cpp，llama.cpp 系）',
+      category: 'local',
+      method: 'POST',
+      endpoint: 'http://localhost:8080/v1/audio/speech',
+      headers: JSON.stringify({ 'Content-Type': 'application/json' }, null, 2),
+      body: JSON.stringify(
+        { model: 'qwen3-tts', input: '{text}', voice: 'Vivian', response_format: 'wav' },
+        null,
+        2
+      ),
+      voices: [
+        { value: 'Vivian', label: 'Vivian（女，中文）' },
+        { value: 'Serena', label: 'Serena（女，中文）' },
+        { value: 'Uncle_Fu', label: 'Uncle_Fu（老者男）' },
+        { value: 'Dylan', label: 'Dylan（男）' },
+        { value: 'Eric', label: 'Eric（男）' },
+        { value: 'Aiden', label: 'Aiden（男）' }
+      ],
+      voicePath: 'voice',
+      helpUrl: 'https://github.com/ServeurpersoCom/qwentts.cpp',
+      helpHint:
+        '完全离线本地。装 qwentts.cpp（C++/GGML，CPU/CUDA/Vulkan 加速）启 llama-server，即可用 Qwen3-TTS 音质白嫖。改端口/主机自适应。'
+    },
+    localGptSovits: {
+      label: '本地 GPT-SoVITS（声音克隆神器）',
+      category: 'local',
+      method: 'POST',
+      endpoint: 'http://localhost:9880/tts',
+      headers: JSON.stringify({ 'Content-Type': 'application/json' }, null, 2),
+      body: JSON.stringify(
+        {
+          text: '{text}',
+          text_lang: 'zh',
+          ref_audio_path: 'YOUR_REF_AUDIO.wav',
+          prompt_text: 'YOUR_PROMPT_TEXT',
+          prompt_lang: 'zh',
+          text_split_method: 'cut5',
+          batch_size: 1,
+          media_type: 'wav',
+          streaming_mode: false
+        },
+        null,
+        2
+      ),
+      helpUrl: 'https://github.com/RVC-Boss/GPT-SoVITS',
+      helpHint:
+        '完全离线本地。启 GPT-SoVITS 官方 api_v2.py 服务，填参考音频路径即可用你自己的声音朗读。中文一等公民。'
+    },
+    localPiper: {
+      label: '本地 Piper TTS（超轻量 CPU-only）',
+      category: 'local',
+      method: 'POST',
+      endpoint: 'http://localhost:5000/api/tts',
+      headers: JSON.stringify({ 'Content-Type': 'application/json' }, null, 2),
+      body: JSON.stringify({ text: '{text}' }, null, 2),
+      helpUrl: 'https://github.com/rhasspy/piper',
+      helpHint:
+        '完全离线本地。Piper 是纯 CPU、几十 MB 的 ONNX 小模型，用 rhasspy/wyoming-piper 或 piper-http 起 HTTP 端。质量一般但极快，中文有社区训练版可用。'
+    },
     manual: {
       label: '手动配置（自由接入）',
+      category: 'manual',
       method: 'POST',
       endpoint: '',
       headers: '{\n  "Content-Type": "application/json"\n}',
@@ -698,6 +858,16 @@
     }
     return cur;
   }
+
+  /** Preset entries grouped by category, in the declared order — for the
+   *  picker's `<optgroup>`s. Local presets come first (no signup), then free
+   *  cloud, then paid, then manual. */
+  const presetGroups: { category: PresetCategory; label: string; items: [string, CustomPreset][] }[] =
+    PRESET_CATEGORY_ORDER.map((category) => ({
+      category,
+      label: PRESET_CATEGORY_LABEL[category],
+      items: Object.entries(CUSTOM_PRESETS).filter(([, p]) => p.category === category)
+    })).filter((g) => g.items.length > 0);
 
   $: activePresetDef = CUSTOM_PRESETS[$ttsCustomActivePreset$] ?? CUSTOM_PRESETS.manual;
   $: presetVoices = activePresetDef.voices ?? [];
@@ -1542,13 +1712,26 @@
         <div class="lg:col-span-3">
           <SettingsItemGroup
             title="Kokoro-82M 离线 TTS"
-            tooltip="开源神经网络 TTS，82M 参数，ONNX 模型约 80MB。首次启用会从 Hugging Face 下载到本机缓存（IndexedDB），之后完全离线。中文音色不少（zf_xiaobei / zm_yunjian 等），效果接近商用云端 TTS。"
+            tooltip="开源神经网络 TTS，82M 参数。首次启用从 Hugging Face 下载模型到本机 IndexedDB 缓存，之后完全离线。两个变体：v1.0 只有英语音色；v1.1-zh 有 40+ 中文音色（男女）+ 3 个新英语音色。"
           >
             <div class="space-y-3 text-sm">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs opacity-70">模型</span>
+                <select
+                  class="settings-input px-2 py-1 text-sm"
+                  bind:value={$kokoroModel$}
+                >
+                  <option value="v1.1-zh">v1.1-zh · 中文首选 (40+ 中文音色，约 320 MB)</option>
+                  <option value="v1.0">v1.0 · 英语原版 (28 英语音色，约 80 MB)</option>
+                </select>
+              </div>
+
               {#if !$kokoroAccepted$}
                 <div class="rounded-md border border-current/20 p-3 text-xs leading-relaxed">
-                  <p>启用 Kokoro 需要下载约 <strong>80 MB</strong> 模型文件（首次启用，之后离线）。</p>
-                  <p class="mt-1 opacity-70">模型来自 Hugging Face <code>onnx-community/Kokoro-82M-v1.0-ONNX</code>。下载后用 IndexedDB 缓存，不上传任何阅读内容。</p>
+                  <p>
+                    启用 Kokoro 需下载模型（首次，之后离线）。当前选择：<code>{$kokoroModel$ === 'v1.1-zh' ? 'onnx-community/Kokoro-82M-v1.1-zh-ONNX' : 'onnx-community/Kokoro-82M-v1.0-ONNX'}</code>
+                  </p>
+                  <p class="mt-1 opacity-70">下载后用 IndexedDB 缓存，不上传任何阅读内容。切换模型会各自下载各自的一份。</p>
                   <button
                     class="settings-input mt-2 inline-flex items-center gap-1 px-3 py-1 text-sm"
                     on:click={() => {
@@ -1581,46 +1764,17 @@
                     class="settings-input px-2 py-1 text-sm max-w-xs"
                     bind:value={$kokoroVoiceId$}
                   >
-                    <optgroup label="英语 美式 女声">
-                      <option value="af_heart">af_heart</option>
-                      <option value="af_alloy">af_alloy</option>
-                      <option value="af_aoede">af_aoede</option>
-                      <option value="af_bella">af_bella</option>
-                      <option value="af_jessica">af_jessica</option>
-                      <option value="af_kore">af_kore</option>
-                      <option value="af_nicole">af_nicole</option>
-                      <option value="af_nova">af_nova</option>
-                      <option value="af_river">af_river</option>
-                      <option value="af_sarah">af_sarah</option>
-                      <option value="af_sky">af_sky</option>
-                    </optgroup>
-                    <optgroup label="英语 美式 男声">
-                      <option value="am_adam">am_adam</option>
-                      <option value="am_echo">am_echo</option>
-                      <option value="am_eric">am_eric</option>
-                      <option value="am_fenrir">am_fenrir</option>
-                      <option value="am_liam">am_liam</option>
-                      <option value="am_michael">am_michael</option>
-                      <option value="am_onyx">am_onyx</option>
-                      <option value="am_puck">am_puck</option>
-                      <option value="am_santa">am_santa</option>
-                    </optgroup>
-                    <optgroup label="英语 英式 女声">
-                      <option value="bf_emma">bf_emma</option>
-                      <option value="bf_isabella">bf_isabella</option>
-                      <option value="bf_alice">bf_alice</option>
-                      <option value="bf_lily">bf_lily</option>
-                    </optgroup>
-                    <optgroup label="英语 英式 男声">
-                      <option value="bm_george">bm_george</option>
-                      <option value="bm_lewis">bm_lewis</option>
-                      <option value="bm_daniel">bm_daniel</option>
-                      <option value="bm_fable">bm_fable</option>
-                    </optgroup>
+                    {#each kokoroVoiceGroups as g (g.group)}
+                      <optgroup label={g.group}>
+                        {#each g.voices as v (v.id)}
+                          <option value={v.id}>{v.label}</option>
+                        {/each}
+                      </optgroup>
+                    {/each}
                   </select>
                 </div>
                 <p class="text-xs opacity-60">
-                  注：kokoro-js v1.0 ONNX 当前只打包了**英语**音色（美式 + 英式），中文 / 日语版本需等上游更新或换用「自定义 HTTP TTS」接 Qwen3-TTS / CosyVoice 2 等中文模型。
+                  中文听书优选 v1.1-zh；中文音色为编号命名（zf_/zm_），无描述性名称，可用「试听」按钮快速筛选。
                 </p>
                 <p class="text-xs opacity-60">缓存在 WebView2 IndexedDB；要清除模型走「设置 → 数据 → 清除全部本地数据」</p>
               {/if}
@@ -1696,8 +1850,12 @@
                   value={$ttsCustomActivePreset$}
                   on:change={onPresetSelectChange}
                 >
-                  {#each Object.entries(CUSTOM_PRESETS) as [id, preset] (id)}
-                    <option value={id}>{preset.label}</option>
+                  {#each presetGroups as g (g.category)}
+                    <optgroup label={g.label}>
+                      {#each g.items as [id, preset] (id)}
+                        <option value={id}>{preset.label}</option>
+                      {/each}
+                    </optgroup>
                   {/each}
                 </select>
                 <button
@@ -2499,6 +2657,17 @@
           tooltip={$t('settings.tts.kokoro.tooltip')}
         >
           <div class="space-y-3 text-sm">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs opacity-70">模型</span>
+              <select
+                class="settings-input px-2 py-1 text-sm"
+                bind:value={$kokoroModel$}
+              >
+                <option value="v1.1-zh">v1.1-zh · 中文首选 (40+ 中文音色，约 320 MB)</option>
+                <option value="v1.0">v1.0 · 英语原版 (28 英语音色，约 80 MB)</option>
+              </select>
+            </div>
+
             {#if !$kokoroAccepted$}
               <div class="rounded-md border border-current/20 p-3 text-xs leading-relaxed">
                 <p>{@html $t('settings.tts.kokoro.consent')}</p>
@@ -2529,46 +2698,17 @@
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-xs opacity-70">{$t('settings.tts.voice')}</span>
                 <select class="settings-input px-2 py-1 text-sm max-w-xs" bind:value={$kokoroVoiceId$}>
-                  <optgroup label={tImmediate('settings.tts.kokoro.grp.enUsF')}>
-                    <option value="af_heart">af_heart</option>
-                    <option value="af_alloy">af_alloy</option>
-                    <option value="af_aoede">af_aoede</option>
-                    <option value="af_bella">af_bella</option>
-                    <option value="af_jessica">af_jessica</option>
-                    <option value="af_kore">af_kore</option>
-                    <option value="af_nicole">af_nicole</option>
-                    <option value="af_nova">af_nova</option>
-                    <option value="af_river">af_river</option>
-                    <option value="af_sarah">af_sarah</option>
-                    <option value="af_sky">af_sky</option>
-                  </optgroup>
-                  <optgroup label={tImmediate('settings.tts.kokoro.grp.enUsM')}>
-                    <option value="am_adam">am_adam</option>
-                    <option value="am_echo">am_echo</option>
-                    <option value="am_eric">am_eric</option>
-                    <option value="am_fenrir">am_fenrir</option>
-                    <option value="am_liam">am_liam</option>
-                    <option value="am_michael">am_michael</option>
-                    <option value="am_onyx">am_onyx</option>
-                    <option value="am_puck">am_puck</option>
-                    <option value="am_santa">am_santa</option>
-                  </optgroup>
-                  <optgroup label={tImmediate('settings.tts.kokoro.grp.enGbF')}>
-                    <option value="bf_emma">bf_emma</option>
-                    <option value="bf_isabella">bf_isabella</option>
-                    <option value="bf_alice">bf_alice</option>
-                    <option value="bf_lily">bf_lily</option>
-                  </optgroup>
-                  <optgroup label={tImmediate('settings.tts.kokoro.grp.enGbM')}>
-                    <option value="bm_george">bm_george</option>
-                    <option value="bm_lewis">bm_lewis</option>
-                    <option value="bm_daniel">bm_daniel</option>
-                    <option value="bm_fable">bm_fable</option>
-                  </optgroup>
+                  {#each kokoroVoiceGroups as g (g.group)}
+                    <optgroup label={g.group}>
+                      {#each g.voices as v (v.id)}
+                        <option value={v.id}>{v.label}</option>
+                      {/each}
+                    </optgroup>
+                  {/each}
                 </select>
               </div>
               <p class="text-xs opacity-60">
-                {$t('settings.tts.kokoro.enOnlyNote')}
+                中文听书优选 v1.1-zh；中文音色为编号命名（zf_/zm_），无描述性名称。
               </p>
               <p class="text-xs opacity-60">{$t('settings.tts.kokoro.cacheNote')}</p>
             {/if}
@@ -2638,8 +2778,12 @@
                   value={$ttsCustomActivePreset$}
                   on:change={onPresetSelectChange}
                 >
-                  {#each Object.entries(CUSTOM_PRESETS) as [id, preset] (id)}
-                    <option value={id}>{preset.label}</option>
+                  {#each presetGroups as g (g.category)}
+                    <optgroup label={g.label}>
+                      {#each g.items as [id, preset] (id)}
+                        <option value={id}>{preset.label}</option>
+                      {/each}
+                    </optgroup>
                   {/each}
                 </select>
                 <button
