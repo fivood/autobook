@@ -63,11 +63,13 @@
     kokoroVoiceId$,
     type KokoroModelId,
     readerVoiceUri$,
+    ttsEdgeVoiceId$,
     ttsSapiVoiceId$,
     ttsShortcut$,
     ttsStartStrategy$,
     verticalCustomReadingPosition$
   } from '$lib/data/store';
+  import { getEdgeVoiceGroups } from '$lib/data/edge-voices';
   import {
     getDefaultKokoroVoice,
     getKokoroVoiceGroups,
@@ -283,6 +285,7 @@
   // trip a hard error inside kokoro.generate on v1.1-zh, and vice versa.
   $: kokoroModelId = $kokoroModel$ as KokoroModelId;
   $: kokoroVoiceGroups = getKokoroVoiceGroups(kokoroModelId);
+  const edgeVoiceGroups = getEdgeVoiceGroups();
   $: if (kokoroModelId) {
     const allowed = getKokoroVoices(kokoroModelId).map((v) => v.id);
     if (!allowed.includes($kokoroVoiceId$)) {
@@ -1623,6 +1626,7 @@
             >
               <option value="web">Web Speech（浏览器）</option>
               <option value="sapi">系统 TTS（SAPI）</option>
+              <option value="edge">★ Edge TTS（微软免费，300+ 音色，零配置）</option>
               <option value="kokoro">Kokoro-82M（内置离线）</option>
               <option value="custom">自定义 HTTP TTS</option>
             </select>
@@ -1778,6 +1782,45 @@
                 </p>
                 <p class="text-xs opacity-60">缓存在 WebView2 IndexedDB；要清除模型走「设置 → 数据 → 清除全部本地数据」</p>
               {/if}
+            </div>
+          </SettingsItemGroup>
+        </div>
+      {/if}
+
+      {#if $ttsEngine$ === 'edge'}
+        <div class="lg:col-span-3">
+          <SettingsItemGroup
+            title="Edge TTS 语音（微软免费）"
+            tooltip="走微软 Edge 浏览器内置「大声朗读」使用的免费 WSS 端点，不需要账号、不需要付费。300+ 神经网络音色（含中/英/日/韩/粤/台），中文晓晓/云扬质量对标 Azure Neural TTS。走网络，需能连 speech.platform.bing.com。"
+          >
+            <div class="space-y-2 text-sm">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs opacity-70">音色</span>
+                <select
+                  class="settings-input px-2 py-1 text-sm max-w-xs"
+                  bind:value={$ttsEdgeVoiceId$}
+                >
+                  {#each edgeVoiceGroups as g (g.group)}
+                    <optgroup label={g.group}>
+                      {#each g.voices as v (v.id)}
+                        <option value={v.id}>{v.label}</option>
+                      {/each}
+                    </optgroup>
+                  {/each}
+                </select>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs opacity-70">或自定义音色 ID</span>
+                <input
+                  type="text"
+                  class="settings-input px-2 py-1 text-sm w-72"
+                  placeholder="如 zh-CN-XiaozhenNeural"
+                  bind:value={$ttsEdgeVoiceId$}
+                />
+              </div>
+              <p class="text-xs opacity-60">
+                完整音色清单：<code>https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/voices/list?trustedclienttoken=6A5AA1D4EAFF4E9FB37E23D68491D6F4</code>
+              </p>
             </div>
           </SettingsItemGroup>
         </div>
@@ -2574,6 +2617,7 @@
           >
             <option value="web">{$t('settings.value.ttsEngine.web')}</option>
             <option value="sapi">{$t('settings.value.ttsEngine.sapi')}</option>
+            <option value="edge">★ Edge TTS（微软免费，300+ 音色，零配置）</option>
             <option value="kokoro">{$t('settings.value.ttsEngine.kokoro')}</option>
             <option value="custom">{$t('settings.value.ttsEngine.custom')}</option>
           </select>
@@ -2712,6 +2756,33 @@
               </p>
               <p class="text-xs opacity-60">{$t('settings.tts.kokoro.cacheNote')}</p>
             {/if}
+          </div>
+        </SettingsItemGroup>
+      </div>
+    {/if}
+
+    {#if $ttsEngine$ === 'edge'}
+      <div class="lg:col-span-3">
+        <SettingsItemGroup
+          title="Edge TTS 语音（微软免费）"
+          tooltip="走微软 Edge 浏览器内置「大声朗读」使用的免费 WSS 端点。中文晓晓/云扬质量对标 Azure Neural TTS，需能连 speech.platform.bing.com。"
+        >
+          <div class="space-y-2 text-sm">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs opacity-70">音色</span>
+              <select
+                class="settings-input px-2 py-1 text-sm max-w-xs"
+                bind:value={$ttsEdgeVoiceId$}
+              >
+                {#each edgeVoiceGroups as g (g.group)}
+                  <optgroup label={g.group}>
+                    {#each g.voices as v (v.id)}
+                      <option value={v.id}>{v.label}</option>
+                    {/each}
+                  </optgroup>
+                {/each}
+              </select>
+            </div>
           </div>
         </SettingsItemGroup>
       </div>

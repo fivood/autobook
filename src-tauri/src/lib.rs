@@ -9,6 +9,7 @@ use tauri_plugin_fs::FsExt;
 
 mod calibre_converter;
 mod custom_tts;
+mod edge_tts;
 mod kf8_indx;
 mod kf8_parser;
 mod mobi_parser;
@@ -421,6 +422,7 @@ pub fn run() {
       sapi_list_voices,
       sapi_speak,
       custom_tts_synthesize,
+      edge_tts::edge_tts_synthesize,
       schedule_ui_reset,
       schedule_full_reset,
       get_data_paths,

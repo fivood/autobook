@@ -8,6 +8,7 @@ import type { Observable } from 'rxjs';
 import { isTauri } from '$lib/data/env';
 import { AutoReaderContinuous } from './auto-reader';
 import { AutoReaderCustom } from './auto-reader-custom';
+import { AutoReaderEdge } from './auto-reader-edge';
 import { AutoReaderKokoro } from './auto-reader-kokoro';
 import { AutoReaderSapi } from './auto-reader-sapi';
 import type { AutoReader } from './types';
@@ -18,6 +19,9 @@ export function createAutoReader(engine: string, destroy$: Observable<void>): Au
   if (isTauri()) {
     if (engine === 'sapi') return new AutoReaderSapi(destroy$);
     if (engine === 'custom') return new AutoReaderCustom(destroy$);
+    // Edge TTS uses a WSS pipe to Microsoft's consumer endpoint — needs the
+    // Rust command that speaks the framing protocol.
+    if (engine === 'edge') return new AutoReaderEdge(destroy$);
   }
   return new AutoReaderContinuous(destroy$);
 }

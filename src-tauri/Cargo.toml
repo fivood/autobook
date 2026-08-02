@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.21.1"
+version = "1.22.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -42,3 +42,10 @@ reqwest = { version = "0.12", features = ["rustls-tls"], default-features = fals
 base64 = "0.22"
 mobi = "0.8"
 encoding_rs = "0.8.35"
+# edge_tts: WSS to speech.platform.bing.com + SHA-256 Sec-MS-GEC token +
+# UUID for ConnectionId/X-RequestId. rustls-tls-webpki-roots keeps the TLS
+# stack single-source with reqwest (avoids pulling native-tls on Windows).
+tokio-tungstenite = { version = "0.24", features = ["connect", "rustls-tls-webpki-roots", "url"], default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }

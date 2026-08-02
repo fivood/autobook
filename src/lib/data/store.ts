@@ -136,6 +136,13 @@ export const highlightSidebarOpen$ = writableBooleanLocalStorageSubject()('highl
 
 export const ttsEngine$ = writableStringLocalStorageSubject()('ttsEngine', 'web');
 export const ttsSapiVoiceId$ = writableStringLocalStorageSubject()('ttsSapiVoiceId', '');
+// Microsoft Edge unofficial TTS voice id (like zh-CN-XiaoxiaoNeural).
+// Default is the Chinese female neural voice most Chinese-audiobook users
+// picked in v1.6.0 field tests before we cut Edge TTS out.
+export const ttsEdgeVoiceId$ = writableStringLocalStorageSubject()(
+  'ttsEdgeVoiceId',
+  'zh-CN-XiaoxiaoNeural'
+);
 
 // User-configurable HTTP TTS
 export const ttsCustomEndpoint$ = writableStringLocalStorageSubject()('ttsCustomEndpoint', '');
