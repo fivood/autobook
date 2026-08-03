@@ -157,8 +157,9 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
       abortCtrl = undefined;
       // Whole-book OCR is the heavyweight path: PaddleOCR keeps the det/rec
       // models plus the ORT WASM heap resident for the rest of the session
-      // otherwise. Single-page OCR deliberately does NOT dispose — it would
-      // pay the several-second re-init on every right-click.
+      // otherwise. Re-init afterwards measured ~1.3s (models stay in the HTTP
+      // cache, so nothing re-downloads). Single-page OCR deliberately does
+      // NOT dispose — paying that on every right-click isn't worth it.
       disposeOcrWorker().catch(() => {});
     }
   })();
