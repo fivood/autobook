@@ -3,7 +3,7 @@
 // own UUID so the server can keep per-device daily contributions and clients
 // can sum them when displaying.
 
-export const SYNC_ENDPOINT = 'https://sync.fivood.com/sync';
+const SYNC_ENDPOINT = 'https://sync.fivood.com/sync';
 
 export interface DayClients {
   clients: Record<string, number>;

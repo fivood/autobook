@@ -45,6 +45,6 @@ export const storageSource$ = writableStringLocalStorageSubject<StorageKey>()(
   isTauri() ? StorageKey.TAURI_FS : StorageKey.BROWSER
 );
 
-export const storageIcon$ = writableSubject<StorageIcon>(getStorageIconData(StorageKey.BROWSER));
+const storageIcon$ = writableSubject<StorageIcon>(getStorageIconData(StorageKey.BROWSER));
 
 storageSource$.subscribe((storageSource) => storageIcon$.next(getStorageIconData(storageSource)));

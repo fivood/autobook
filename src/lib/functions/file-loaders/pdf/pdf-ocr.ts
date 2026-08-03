@@ -53,9 +53,9 @@ export interface OcrLineItem {
 
 export interface OcrPageResult {
   items: OcrLineItem[];
-  /** Source image intrinsic dimensions, returned by the engine. Saves a
-   * separate `getBlobImageDimensions` call when both bbox + dims are
-   * needed (the runner uses dims for the shell's `data-page-w/h`). */
+  /** Source image intrinsic dimensions, returned by the engine, so nothing
+   * has to decode the blob a second time just to measure it (the runner uses
+   * dims for the shell's `data-page-w/h`). */
   imageWidth: number;
   imageHeight: number;
   /** Best-effort plain-text concatenation, newline between lines,
@@ -153,27 +153,6 @@ export async function ocrImageBlob(blob: Blob, lang: OcrLanguage): Promise<OcrPa
     imageHeight: r.image?.height || 0,
     text
   };
-}
-
-/** Image dimension probe — only used by the runner when Paddle declined
- * to return image metadata (shouldn't happen, but defensive). */
-export async function getBlobImageDimensions(
-  blob: Blob
-): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      const dim = { width: img.naturalWidth, height: img.naturalHeight };
-      URL.revokeObjectURL(url);
-      resolve(dim);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Image dimension probe failed'));
-    };
-    img.src = url;
-  });
 }
 
 export async function disposeOcrWorker() {

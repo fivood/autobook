@@ -42,7 +42,7 @@ export function rangeToOffsets(
   return { start, end };
 }
 
-export function clearHighlightMarks(container: HTMLElement): void {
+function clearHighlightMarks(container: HTMLElement): void {
   const marks = container.querySelectorAll<HTMLElement>(`mark[${HL_ATTR}]`);
   marks.forEach((mark) => {
     const parent = mark.parentNode!;
@@ -54,7 +54,7 @@ export function clearHighlightMarks(container: HTMLElement): void {
   container.normalize();
 }
 
-export function applyHighlightsToDOM(
+function applyHighlightsToDOM(
   container: HTMLElement,
   highlights: BooksDbHighlight[]
 ): void {

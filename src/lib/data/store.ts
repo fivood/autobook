@@ -201,7 +201,6 @@ export const ttsPositions$ = writableObjectLocalStorageSubject<Record<string, Tt
 
 export const readerRate$ = writableNumberLocalStorageSubject()('readerRate', 1);
 export const readerVoiceUri$ = writableStringLocalStorageSubject()('readerVoiceUri', '');
-export const readerEnabled$ = writableBooleanLocalStorageSubject()('readerEnabled', false);
 export const lastBookHasImages$ = writableBooleanLocalStorageSubject()(
   'lastBookHasImages',
   false
@@ -673,16 +672,6 @@ export const lastStatisticsFilterShowSelectedTitlesOnly$ = writableBooleanLocalS
   'lastStatisticsFilterShowSelectedTitlesOnly',
   false
 );
-
-export const lastStatisticsSummarySortProperty$ = writableStringLocalStorageSubject<
-  keyof BookStatistic
->()('lastStatisticsSummarySortProperty', 'readingTime');
-
-export const lastStatisticsSummarySortDirection$ =
-  writableStringLocalStorageSubject<SortDirection>()(
-    'lastStatisticsSummarySortDirection',
-    SortDirection.DESC
-  );
 
 export const fileCountData$ = writableSubject<Record<string, number> | undefined>(undefined);
 

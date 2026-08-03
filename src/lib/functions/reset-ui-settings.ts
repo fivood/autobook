@@ -7,7 +7,7 @@ const RESET_MESSAGE =
 
 /** Wipe Local Storage and reload. On desktop, ask Rust to schedule it so the
  *  wipe works even when stale UI state would block the page. */
-export async function performUiReset(): Promise<void> {
+async function performUiReset(): Promise<void> {
   if (isTauri()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');

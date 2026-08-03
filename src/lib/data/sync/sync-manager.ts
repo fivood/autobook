@@ -203,7 +203,7 @@ export async function pullNow(): Promise<RemoteState | null> {
   return remote;
 }
 
-export function scheduleDebouncedPush() {
+function scheduleDebouncedPush() {
   if (!syncEnabled$.getValue() || !syncToken$.getValue()) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {

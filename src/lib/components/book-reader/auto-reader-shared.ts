@@ -30,7 +30,7 @@ export interface Sentence {
  * reject with `text-too-long` — and the recovery path skips the whole thing,
  * silently dropping content from the read-through.
  */
-export const MAX_SENTENCE_LENGTH = 180;
+const MAX_SENTENCE_LENGTH = 180;
 
 const TERMINALS = new Set(['。', '！', '？', '；', '…', '.', '!', '?', ';', '\n']);
 
@@ -218,7 +218,7 @@ export function computeGlobalCharIndex(
  * a character index that aligns with extractText() output — so it can feed
  * straight into seekSentencesToExplored / autoReader.seekToExplored.
  */
-export function domPositionToCharIndex(
+function domPositionToCharIndex(
   root: HTMLElement,
   targetNode: Node,
   targetOffset: number

@@ -24,12 +24,12 @@ function escapeYaml(s: string): string {
   return s.replace(/"/g, '\\"').replace(/\n/g, ' ');
 }
 
-export function highlightFilename(h: BooksDbHighlight): string {
+function highlightFilename(h: BooksDbHighlight): string {
   const seed = h.kind === 'note' ? h.memo : h.text;
   return `${h.id}-${slugFromText(seed)}.md`;
 }
 
-export function highlightFolderName(h: BooksDbHighlight): string {
+function highlightFolderName(h: BooksDbHighlight): string {
   if (h.kind === 'note') return STANDALONE_DIR_NAME;
   return sanitizeFilename(h.bookTitle) || 'Untitled';
 }
@@ -42,7 +42,7 @@ function buildLinkRefs(linkedIds: number[] | undefined, byId: Map<number, BooksD
     .map((other) => `${highlightFolderName(other)}/${highlightFilename(other).replace(/\.md$/, '')}`);
 }
 
-export function highlightToMarkdown(
+function highlightToMarkdown(
   h: BooksDbHighlight,
   byId: Map<number, BooksDbHighlight>,
   folderName?: string

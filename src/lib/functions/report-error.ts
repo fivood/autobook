@@ -1,6 +1,6 @@
 const appVersion = __APP_VERSION__;
 
-export const REPORT_ENDPOINT = 'https://sync.fivood.com/report';
+const REPORT_ENDPOINT = 'https://sync.fivood.com/report';
 
 export type ReportType = 'error' | 'install' | 'update' | 'import';
 
