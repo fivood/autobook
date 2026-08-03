@@ -28,7 +28,7 @@ import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books
 import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-types';
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { runOcr, type OcrProgress } from './pdf-ocr-runner';
-import type { OcrLanguage } from './pdf-ocr';
+import { disposeOcrWorker, type OcrLanguage } from './pdf-ocr';
 export type { OcrLanguage };
 
 /**
@@ -155,6 +155,11 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
       _store.update((s) => (s ? { ...s, status: 'errored', error: msg } : s));
     } finally {
       abortCtrl = undefined;
+      // Whole-book OCR is the heavyweight path: PaddleOCR keeps the det/rec
+      // models plus the ORT WASM heap resident for the rest of the session
+      // otherwise. Single-page OCR deliberately does NOT dispose — it would
+      // pay the several-second re-init on every right-click.
+      disposeOcrWorker().catch(() => {});
     }
   })();
 

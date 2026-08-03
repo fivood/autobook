@@ -46,18 +46,3 @@ export async function submitReport(
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
-
-export function buildErrorReport(
-  type: ReportType,
-  error: unknown,
-  context?: Record<string, unknown>
-): ReportPayload {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : 'unknown error';
-  const stack = error instanceof Error ? error.stack : undefined;
-  return { type, message, stack, context };
-}

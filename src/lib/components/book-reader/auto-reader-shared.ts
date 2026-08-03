@@ -176,11 +176,6 @@ export function splitSentencesDetailed(
   return out;
 }
 
-/** Text-only view, kept for callers that don't need offsets. */
-export function splitSentences(text: string, maxLength = MAX_SENTENCE_LENGTH): string[] {
-  return splitSentencesDetailed(text, maxLength).map((s) => s.text);
-}
-
 /**
  * Flatten the rendered book content to plain text.
  *

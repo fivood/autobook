@@ -170,7 +170,3 @@ export async function scanDictFolder(rootPath: string): Promise<DictScanResult> 
   loadedDicts$.set(result.loaded);
   return result;
 }
-
-export function clearLoadedDicts() {
-  loadedDicts$.set([]);
-}

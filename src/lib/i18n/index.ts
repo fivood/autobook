@@ -18,12 +18,6 @@ const STORAGE_KEY = 'locale';
 
 export type Locale = 'zh' | 'en' | 'ja';
 export const LOCALES: Locale[] = ['zh', 'en', 'ja'];
-export const LOCALE_LABELS: Record<Locale, string> = {
-  zh: '中文',
-  en: 'English',
-  ja: '日本語'
-};
-
 type Dict = Record<string, string>;
 const DICTS: Record<Locale, Dict> = { zh, en, ja };
 

@@ -26,10 +26,3 @@ export enum InternalStorageSources {
   INTERNAL_ZIP = 'ttu-internal-zip',
   INTERNAL_TAURI_FS = 'ttu-internal-tauri-fs'
 }
-
-export const internalStorageSourceName = new Set<string>([
-  InternalStorageSources.INTERNAL_DEFAULT,
-  InternalStorageSources.INTERNAL_BROWSER,
-  InternalStorageSources.INTERNAL_ZIP,
-  InternalStorageSources.INTERNAL_TAURI_FS
-]);

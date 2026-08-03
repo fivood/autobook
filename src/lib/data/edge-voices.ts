@@ -74,10 +74,6 @@ const VOICES: EdgeVoice[] = [
   { id: 'ko-KR-InJoonNeural', label: 'InJoon · 男', group: '韩语' }
 ];
 
-export function getEdgeVoices(): EdgeVoice[] {
-  return VOICES;
-}
-
 export function getEdgeVoiceGroups(): { group: string; voices: EdgeVoice[] }[] {
   const groups: { group: string; voices: EdgeVoice[] }[] = [];
   const byName = new Map<string, EdgeVoice[]>();

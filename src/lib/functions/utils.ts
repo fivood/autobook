@@ -44,10 +44,6 @@ export function dummyFn() {}
 
 export const isMobile$ = writableSubject<boolean>(false);
 
-export function isOnlineSourceAvailable() {
-  return true;
-}
-
 export function caluclatePercentage(x: number, y: number) {
   return Math.floor((x / y) * 100);
 }

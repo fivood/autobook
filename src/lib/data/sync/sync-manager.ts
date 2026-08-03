@@ -53,19 +53,6 @@ function saveMyContrib(state: MyContribState) {
   localStorage.setItem(MY_CONTRIB_KEY, JSON.stringify(state));
 }
 
-export function loadCachedRemote(): RemoteState {
-  if (typeof localStorage === 'undefined') return { v: 1, books: {} };
-  try {
-    const raw = localStorage.getItem(REMOTE_CACHE_KEY);
-    if (!raw) return { v: 1, books: {} };
-    const parsed = JSON.parse(raw);
-    if (parsed?.v === 1) return parsed as RemoteState;
-  } catch {
-    // ignore
-  }
-  return { v: 1, books: {} };
-}
-
 function saveCachedRemote(state: RemoteState) {
   if (typeof localStorage === 'undefined') return;
   localStorage.setItem(REMOTE_CACHE_KEY, JSON.stringify(state));
@@ -245,13 +232,4 @@ export function startSyncLoop() {
     }
   });
   database.statisticsChanged$.subscribe(() => scheduleDebouncedPush());
-}
-
-export function stopSyncLoop() {
-  if (pushTimer) clearTimeout(pushTimer);
-  if (pullTimer) clearInterval(pullTimer);
-  pushTimer = undefined;
-  pullTimer = undefined;
-  inFlight = false;
-  started = false;
 }

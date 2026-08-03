@@ -85,10 +85,6 @@ export const readingSpeedDataSources: StatisticsDataSource[] = [
   { key: 'maxReadingSpeed', label: '最高速度' }
 ];
 
-export const dateDataSources: StatisticsDataSource[] = [{ key: 'dateKey', label: '日期' }];
-
-export const titleDataSources: StatisticsDataSource[] = [{ key: 'title', label: '标题' }];
-
 export const exportStatisticsData$ = new Subject<boolean>();
 
 export const deleteStatisticsData$ = new Subject<boolean>();

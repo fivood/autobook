@@ -16,15 +16,6 @@ export const HIGHLIGHT_COLOR_RGB: Record<HighlightColor, readonly [number, numbe
 const rgba = (rgb: readonly [number, number, number], a: number) =>
   `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
 
-/** In-reader text-mark background. Also mirrored as `rgba(var(--hl-*-rgb), 0.5)`
- *  in app.scss so `mark.hl-*` can render without a JS-set inline style. */
-export const HIGHLIGHT_COLOR_MARK: Record<HighlightColor, string> = {
-  yellow: rgba(HIGHLIGHT_COLOR_RGB.yellow, 0.5),
-  blue: rgba(HIGHLIGHT_COLOR_RGB.blue, 0.5),
-  green: rgba(HIGHLIGHT_COLOR_RGB.green, 0.5),
-  pink: rgba(HIGHLIGHT_COLOR_RGB.pink, 0.5)
-};
-
 /** Context-menu color chip — pops slightly stronger than the mark so
  *  the picker reads as active choices, not selected text. */
 export const HIGHLIGHT_COLOR_CHIP: Record<HighlightColor, string> = {
