@@ -143,6 +143,11 @@ export const ttsEdgeVoiceId$ = writableStringLocalStorageSubject()(
   'ttsEdgeVoiceId',
   'zh-CN-XiaoxiaoNeural'
 );
+/** Proxy for the Edge TTS WebSocket. Empty = auto (env vars, then the Windows
+ * system proxy); `direct` forces a direct connection. tokio-tungstenite reads
+ * no proxy config on its own, so without this mainland-China users get
+ * `tls handshake eof` while every other engine works. */
+export const ttsEdgeProxyUrl$ = writableStringLocalStorageSubject()('ttsEdgeProxyUrl', '');
 
 // User-configurable HTTP TTS
 export const ttsCustomEndpoint$ = writableStringLocalStorageSubject()('ttsCustomEndpoint', '');
@@ -402,6 +407,12 @@ export interface KokoroLoadStatus {
   message: string;
   loaded: number;
   total: number;
+  /** modelId this status refers to — needed so the settings UI can show which
+   *  variant is ready when the user has both v1.0 and v1.1-zh cached. */
+  modelId?: string;
+  /** Epoch ms of the last progress tick. Empty during idle/ready/errored. UI
+   *  uses this to warn when a download has stopped making progress. */
+  lastProgressAt?: number;
 }
 export const kokoroLoadStatus$ = writableSubject<KokoroLoadStatus>({
   phase: 'idle',

@@ -50,7 +50,14 @@ async function loadModel(
 
   const repo = KOKORO_MODEL_REPOS[modelId] ?? KOKORO_MODEL_REPOS['v1.1-zh'];
   const promise = (async () => {
-    onProgress({ phase: 'loading', message: `正在加载 Kokoro (${modelId})…`, loaded: 0, total: 0 });
+    onProgress({
+      phase: 'loading',
+      message: `正在加载 Kokoro (${modelId})…`,
+      loaded: 0,
+      total: 0,
+      modelId,
+      lastProgressAt: Date.now()
+    });
     const KokoroTTS = await loadKokoroTtsClass();
     if (!KokoroTTS?.from_pretrained) {
       throw new Error('kokoro-js 模块加载异常（未找到 KokoroTTS.from_pretrained）');
@@ -64,12 +71,14 @@ async function loadModel(
             phase: 'loading',
             message: info?.file ? `下载 ${info.file}…` : '正在下载模型…',
             loaded: Number(info?.loaded || 0),
-            total: Number(info?.total || 0)
+            total: Number(info?.total || 0),
+            modelId,
+            lastProgressAt: Date.now()
           });
         }
       }
     });
-    onProgress({ phase: 'ready', message: '', loaded: 0, total: 0 });
+    onProgress({ phase: 'ready', message: '', loaded: 0, total: 0, modelId });
     return tts;
   })().catch((err) => {
     ttsPromises.delete(modelId);
@@ -77,7 +86,8 @@ async function loadModel(
       phase: 'errored',
       message: err?.message || String(err),
       loaded: 0,
-      total: 0
+      total: 0,
+      modelId
     });
     throw err;
   });
@@ -142,4 +152,36 @@ export async function ensureKokoroLoaded(): Promise<void> {
   if (!kokoroAccepted$.getValue()) return;
   const modelId = (kokoroModel$.getValue() as KokoroModelId) || 'v1.1-zh';
   await loadModel(modelId, (s) => kokoroLoadStatus$.next(s));
+}
+
+/** Drop the in-session cached promise for one model. Needed after a stall so
+ *  a retry actually re-runs `from_pretrained` instead of awaiting the stuck
+ *  promise `ttsPromises` still holds. Underlying fetch can't be aborted (no
+ *  cancel signal in kokoro-js's public API), but transformers.js will
+ *  short-circuit on the second call once the browser Cache stores the bytes. */
+export function invalidateKokoroSessionCache(modelId: KokoroModelId): void {
+  ttsPromises.delete(modelId);
+}
+
+/** Wipe the on-disk Kokoro cache for one model (transformers.js stores each
+ *  shard under the browser Cache Storage keyed by the HuggingFace repo URL).
+ *  After this returns, `ensureKokoroLoaded` on this model will re-download.
+ *  Errors are silent — this is best-effort disk cleanup and any surviving
+ *  entry will just be re-fetched or overwritten on next use. */
+export async function deleteKokoroCache(modelId: KokoroModelId): Promise<void> {
+  ttsPromises.delete(modelId);
+  const repo = KOKORO_MODEL_REPOS[modelId];
+  if (!repo || typeof caches === 'undefined') return;
+  try {
+    for (const cacheName of await caches.keys()) {
+      const cache = await caches.open(cacheName);
+      for (const req of await cache.keys()) {
+        if (req.url.includes(repo)) await cache.delete(req);
+      }
+    }
+  } catch (err) {
+    // Best-effort: Cache Storage may be missing in some WebViews; surviving
+    // shards are self-correcting on next download.
+    console.warn('[kokoro] cache delete failed:', err);
+  }
 }

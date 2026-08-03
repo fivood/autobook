@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.22.0"
+version = "1.22.1"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -36,8 +36,11 @@ windows = { version = "0.58", features = [
   "Storage_Streams",
   "Foundation",
   "Foundation_Collections",
+  # proxy.rs reads the system proxy — the only source a GUI-launched exe sees,
+  # since proxy clients export HTTPS_PROXY into the shell only.
+  "Win32_System_Registry",
 ] }
-tokio = { version = "1", features = ["sync", "rt", "time", "macros", "process"] }
+tokio = { version = "1", features = ["sync", "rt", "time", "macros", "process", "net", "io-util"] }
 reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
 base64 = "0.22"
 mobi = "0.8"

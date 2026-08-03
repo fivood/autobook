@@ -128,13 +128,95 @@ fn is_audio_frame(headers: &str) -> bool {
     path_audio && content_ok
 }
 
+/// Whether a failure is worth another attempt. Proxy chains fail this way a
+/// lot: Clash answers CONNECT with 200 *before* dialing upstream, so a dead
+/// upstream node surfaces as the tunnel closing mid-TLS rather than as a
+/// proxy-level error — indistinguishable from a real handshake failure at
+/// this layer. Auth mistakes and bad voice names are permanent and must fail
+/// immediately, or a typo'd voice would stall for the whole retry budget.
+fn is_transient(err: &str) -> bool {
+    // Lowercase literals so the comparison is a plain `contains`. Note the
+    // rustls mid-stream wording is "closed connection", not "connection
+    // closed" — matching only the latter silently skipped the retry.
+    const MARKERS: [&str; 9] = [
+        "handshake eof",
+        "unexpectedeof",
+        "unexpected eof",
+        "close_notify",
+        "closed connection",
+        "connection closed",
+        "reset by peer",
+        "os error 10054",
+        "代理在返回 connect 响应前关闭了连接",
+    ];
+    let lowered = err.to_ascii_lowercase();
+    MARKERS.iter().any(|m| lowered.contains(m))
+}
+
+#[cfg(test)]
+mod transient_tests {
+    use super::is_transient;
+
+    #[test]
+    fn matches_observed_proxy_failure_modes() {
+        assert!(is_transient("edge-tts connect: IO error: tls handshake eof"));
+        assert!(is_transient(
+            "edge-tts recv: IO error: peer closed connection without sending TLS close_notify"
+        ));
+        assert!(is_transient("os error 10054"));
+    }
+
+    #[test]
+    fn leaves_permanent_failures_alone() {
+        assert!(!is_transient("edge-tts 未收到任何音频，检查网络或音色名"));
+        assert!(!is_transient("代理拒绝 CONNECT: HTTP/1.1 407 Proxy Authentication Required"));
+        assert!(!is_transient("不支持的代理协议: ftp"));
+    }
+}
+
 #[tauri::command]
 pub async fn edge_tts_synthesize(
     text: String,
     voice: Option<String>,
     rate: Option<f32>,
+    proxy_url: Option<String>,
 ) -> Result<String, String> {
-    let voice = voice.unwrap_or_else(|| "en-US-EmmaMultilingualNeural".to_string());
+    // Proxy outages come in bursts lasting seconds, so the retry budget has to
+    // outlast one. Measured over 10 sentences on a mainland Clash setup:
+    // 3 attempts (1.2s of backoff) got 5/10, 5 attempts (4s) got 9/10. Worst
+    // observed success took 5.7s, which `prefetchDepth = 2` hides while the
+    // previous sentence is still playing.
+    const ATTEMPTS: u32 = 5;
+    let mut last = String::new();
+    for attempt in 0..ATTEMPTS {
+        // synthesize_once mints a fresh ConnectionId / X-RequestId each call;
+        // reusing one after a half-open tunnel confuses the server's dedup.
+        match synthesize_once(&text, voice.as_deref(), rate, proxy_url.as_deref()).await {
+            Ok(audio) => return Ok(audio),
+            Err(e) if is_transient(&e) => {
+                last = e;
+                if attempt + 1 < ATTEMPTS {
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        400 * (attempt as u64 + 1),
+                    ))
+                    .await;
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(format!("{last}\n（已重试 {ATTEMPTS} 次仍失败）"))
+}
+
+async fn synthesize_once(
+    text: &str,
+    voice: Option<&str>,
+    rate: Option<f32>,
+    proxy_url: Option<&str>,
+) -> Result<String, String> {
+    let voice = voice
+        .map(str::to_string)
+        .unwrap_or_else(|| "en-US-EmmaMultilingualNeural".to_string());
     let rate = rate.unwrap_or(1.0);
 
     let connection_id = uuid::Uuid::new_v4().simple().to_string();
@@ -180,9 +262,35 @@ pub async fn edge_tts_synthesize(
         );
     }
 
-    let (mut ws, _) = tokio_tungstenite::connect_async(req)
-        .await
-        .map_err(|e| format!("edge-tts connect: {e}"))?;
+    // `connect_async` ignores every proxy setting and dials the host directly,
+    // which is dead on any network that only reaches Bing through a proxy —
+    // the TCP connect succeeds and the TLS handshake then EOFs. Tunnel via
+    // CONNECT whenever a proxy is configured or auto-detected.
+    let proxy = crate::proxy::resolve(proxy_url);
+    let (mut ws, _) = match &proxy {
+        Some(p) => {
+            let tcp = crate::proxy::connect_tunnel(p, "speech.platform.bing.com", 443).await?;
+            tokio_tungstenite::client_async_tls_with_config(req, tcp, None, None)
+                .await
+                .map_err(|e| {
+                    // The tunnel opened but died during TLS — with an HTTP
+                    // proxy that almost always means the upstream node, not
+                    // the local client, is what failed.
+                    format!(
+                        "edge-tts connect (经代理 {p}): {e}\n\
+                         代理已接受 CONNECT 但链路随即断开，通常是代理节点到 \
+                         speech.platform.bing.com 不通。请换一个节点，或确认该域名走的是代理而非直连规则。"
+                    )
+                })?
+        }
+        None => tokio_tungstenite::connect_async(req).await.map_err(|e| {
+            format!(
+                "edge-tts connect: {e}\n\
+                 直连 speech.platform.bing.com 失败。若在中国大陆，该域名通常需要代理才能访问 —— \
+                 请在「设置 → 阅读 → Edge TTS」里填写代理地址（如 http://127.0.0.1:7897）。"
+            )
+        })?,
+    };
 
     // Frame 1: audio config. `outputFormat` is the only field the frontend
     // decodes directly, so keep it at plain MP3 rather than the smaller Opus
@@ -209,7 +317,7 @@ pub async fn edge_tts_synthesize(
          </voice></speak>",
         voice = voice,
         rate = rate_ssml(rate),
-        text = escape_ssml(&text),
+        text = escape_ssml(text),
     );
     let ssml_frame = format!(
         "X-RequestId:{request_id}\r\n\
@@ -302,4 +410,35 @@ fn date_string() -> String {
         dn = DAY_NAMES[dow],
         mn = MONTH_NAMES[(m - 1) as usize]
     )
+}
+
+#[cfg(test)]
+mod live_tests {
+    /// Network-dependent. Run with:
+    /// `cargo test --lib edge_tts::live_tests -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn measures_success_rate() {
+        println!("proxy = {:?}", crate::proxy::resolve(None));
+        let n = 10;
+        let mut ok = 0;
+        for i in 0..n {
+            let t = std::time::Instant::now();
+            match super::edge_tts_synthesize(
+                format!("第{}句，连通性测试。", i + 1),
+                Some("zh-CN-XiaoxiaoNeural".to_string()),
+                Some(1.0),
+                None,
+            )
+            .await
+            {
+                Ok(b) => {
+                    ok += 1;
+                    println!("  #{:<2} OK   {:>7.0}ms  {} bytes", i + 1, t.elapsed().as_millis(), b.len());
+                }
+                Err(e) => println!("  #{:<2} FAIL {:>7.0}ms  {}", i + 1, t.elapsed().as_millis(), e.lines().next().unwrap_or("")),
+            }
+        }
+        println!("成功率 {}/{}", ok, n);
+    }
 }

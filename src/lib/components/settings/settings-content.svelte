@@ -61,6 +61,7 @@
     kokoroLoadStatus$,
     kokoroModel$,
     kokoroVoiceId$,
+    ttsEdgeProxyUrl$,
     type KokoroModelId,
     readerVoiceUri$,
     ttsEdgeVoiceId$,
@@ -342,16 +343,16 @@
   }
 
   const PRESET_CATEGORY_LABEL: Record<PresetCategory, string> = {
-    local: '🏠 本地免费（自建服务器，完全离线）',
-    cloudFree: '☁️🎁 云端免费 / 有免费额度',
-    cloudPaid: '☁️💰 云端付费',
+    local: '本地免费（自建服务器，完全离线）',
+    cloudFree: '云端免费 / 有免费额度',
+    cloudPaid: '云端付费',
     manual: '手动配置'
   };
   const PRESET_CATEGORY_ORDER: PresetCategory[] = ['local', 'cloudFree', 'cloudPaid', 'manual'];
 
   const CUSTOM_PRESETS: Record<string, CustomPreset> = {
     mimo: {
-      label: '★ MiMo-V2.5-TTS（小米，国内直连，限时免费）',
+      label: 'MiMo-V2.5-TTS（小米，国内直连，限时免费）',
       category: 'cloudFree',
       method: 'POST',
       endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
@@ -382,7 +383,7 @@
       helpHint: '小米 MiMo TTS 限时免费阶段（中文听书白嫖首选）；不绑卡，注册即用'
     },
     deepinfraQwen3: {
-      label: '★ DeepInfra Qwen3-TTS（免费额度，中文极强，OpenAI 兼容）',
+      label: 'DeepInfra Qwen3-TTS（免费额度，中文极强，OpenAI 兼容）',
       category: 'cloudFree',
       method: 'POST',
       endpoint: 'https://api.deepinfra.com/v1/audio/speech',
@@ -517,7 +518,7 @@
       helpHint: '火山引擎控制台 → 语音合成 → 应用列表，appid + token 全在「应用详情」'
     },
     googleCloud: {
-      label: '★ Google Cloud TTS（每月 100 万字符免费，性价比之王）',
+      label: 'Google Cloud TTS（每月 100 万字符免费，性价比之王）',
       category: 'cloudFree',
       method: 'POST',
       endpoint:
@@ -993,6 +994,63 @@
     }
   }
 
+  /** Retry after a stall. The stuck promise still sits in the module cache;
+   *  drop it first so ensureKokoroLoaded actually restarts from_pretrained. */
+  async function kokoroRetryLoad() {
+    const { invalidateKokoroSessionCache } = await import(
+      '$lib/components/book-reader/auto-reader-kokoro'
+    );
+    invalidateKokoroSessionCache($kokoroModel$);
+    kokoroLoadStatus$.next({ phase: 'idle', message: '', loaded: 0, total: 0 });
+    await kokoroEnsureLoad();
+  }
+
+  /** Delete the cached model shards from browser Cache Storage. Confirmed
+   *  via dialog because a bad click here is a 320 MB re-download. */
+  async function kokoroDeleteCache() {
+    const modelId = $kokoroModel$;
+    const ok = confirm(
+      `确认删除本地缓存的 Kokoro ${modelId} 模型？（约 ${modelId === 'v1.1-zh' ? '320' : '80'} MB，之后需重新下载才能再用）`
+    );
+    if (!ok) return;
+    const { deleteKokoroCache } = await import(
+      '$lib/components/book-reader/auto-reader-kokoro'
+    );
+    await deleteKokoroCache(modelId);
+    kokoroLoadStatus$.next({ phase: 'idle', message: '', loaded: 0, total: 0 });
+    kokoroAccepted$.next(false);
+  }
+
+  // Auto-verify: when the user lands on kokoro engine and has previously
+  // accepted the download, kick a load. If the shards are already in Cache
+  // Storage this resolves fast and flips phase to 'ready' — closing the
+  // "reopened app, is it still there?" question without user action.
+  $: if (browser && $ttsEngine$ === 'kokoro' && $kokoroAccepted$ && $kokoroLoadStatus$.phase === 'idle') {
+    kokoroEnsureLoad();
+  }
+
+  // Stall detector — fetch() hangs (network drop, proxy timeout) don't throw;
+  // without this the UI sits at "68%" forever. Tick every 3s while loading so
+  // the derived `kokoroStallSeconds` re-computes.
+  let kokoroStallNowTick = Date.now();
+  let kokoroStallTimer: ReturnType<typeof setInterval> | undefined;
+  $: {
+    if ($kokoroLoadStatus$.phase === 'loading' && !kokoroStallTimer) {
+      kokoroStallTimer = setInterval(() => (kokoroStallNowTick = Date.now()), 3000);
+    } else if ($kokoroLoadStatus$.phase !== 'loading' && kokoroStallTimer) {
+      clearInterval(kokoroStallTimer);
+      kokoroStallTimer = undefined;
+    }
+  }
+  onDestroy(() => {
+    if (kokoroStallTimer) clearInterval(kokoroStallTimer);
+  });
+  $: kokoroStallSeconds =
+    $kokoroLoadStatus$.phase === 'loading' && $kokoroLoadStatus$.lastProgressAt
+      ? Math.max(0, Math.floor((kokoroStallNowTick - $kokoroLoadStatus$.lastProgressAt) / 1000))
+      : 0;
+  $: kokoroIsStalled = kokoroStallSeconds >= 30;
+
   async function previewVoice() {
     previewMessage = '';
     if (previewAudio) {
@@ -1069,6 +1127,29 @@
         const bytes = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
         const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/wav' }));
+        previewAudio = new Audio(url);
+        previewAudio.onended = () => {
+          previewState = 'idle';
+          URL.revokeObjectURL(url);
+        };
+        previewAudio.onerror = () => {
+          previewState = 'error';
+          previewMessage = tImmediate('settings.tts.audioPlayFailed');
+          URL.revokeObjectURL(url);
+        };
+        previewState = 'playing';
+        await previewAudio.play();
+      } else if ($ttsEngine$ === 'edge') {
+        const b64 = await invoke<string>('edge_tts_synthesize', {
+          text: previewText,
+          voice: $ttsEdgeVoiceId$ || null,
+          rate: 1,
+          proxyUrl: $ttsEdgeProxyUrl$ || null
+        });
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/mpeg' }));
         previewAudio = new Audio(url);
         previewAudio.onended = () => {
           previewState = 'idle';
@@ -1626,7 +1707,7 @@
             >
               <option value="web">Web Speech（浏览器）</option>
               <option value="sapi">系统 TTS（SAPI）</option>
-              <option value="edge">★ Edge TTS（微软免费，300+ 音色，零配置）</option>
+              <option value="edge">Edge TTS（微软免费，300+ 音色，零配置）</option>
               <option value="kokoro">Kokoro-82M（内置离线）</option>
               <option value="custom">自定义 HTTP TTS</option>
             </select>
@@ -1716,7 +1797,7 @@
         <div class="lg:col-span-3">
           <SettingsItemGroup
             title="Kokoro-82M 离线 TTS"
-            tooltip="开源神经网络 TTS，82M 参数。首次启用从 Hugging Face 下载模型到本机 IndexedDB 缓存，之后完全离线。两个变体：v1.0 只有英语音色；v1.1-zh 有 40+ 中文音色（男女）+ 3 个新英语音色。"
+            tooltip="开源神经网络 TTS，82M 参数（模型型号名，非磁盘大小）。首次启用从 Hugging Face 下载模型到本机 IndexedDB 缓存，之后完全离线。两个变体：v1.0 只有英语音色（约 80MB）；v1.1-zh 有 40+ 中文音色（男女）+ 3 个新英语音色（约 320MB）。"
           >
             <div class="space-y-3 text-sm">
               <div class="flex items-center gap-2 flex-wrap">
@@ -1753,12 +1834,23 @@
                     {(($kokoroLoadStatus$.total || 0) / 1024 / 1024).toFixed(1)} MB)
                   {/if}
                 </div>
+                {#if kokoroIsStalled}
+                  <div class="text-xs mt-1" style="color:var(--danger-color)">
+                    ⚠ 已 {kokoroStallSeconds}s 无进展，可能网络已中断
+                    <button class="settings-input ml-2 px-2 py-0.5 text-xs" on:click={kokoroRetryLoad}>重试下载</button>
+                  </div>
+                {/if}
               {:else if $kokoroLoadStatus$.phase === 'errored'}
                 <p class="text-red-500 text-xs">下载失败：{$kokoroLoadStatus$.message}</p>
                 <button
                   class="settings-input px-3 py-1 text-sm"
-                  on:click={() => kokoroEnsureLoad()}
+                  on:click={kokoroRetryLoad}
                 >重试</button>
+              {:else if $kokoroLoadStatus$.phase === 'ready'}
+                <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs">
+                  <span style="color:rgb(34,197,94)">✓ 模型已就绪 · {$kokoroLoadStatus$.modelId ?? $kokoroModel$}</span>
+                  <button class="settings-input px-2 py-0.5 text-xs" on:click={kokoroDeleteCache}>删除本地模型</button>
+                </div>
               {/if}
 
               {#if $kokoroAccepted$}
@@ -1780,7 +1872,7 @@
                 <p class="text-xs opacity-60">
                   中文听书优选 v1.1-zh；中文音色为编号命名（zf_/zm_），无描述性名称，可用「试听」按钮快速筛选。
                 </p>
-                <p class="text-xs opacity-60">缓存在 WebView2 IndexedDB；要清除模型走「设置 → 数据 → 清除全部本地数据」</p>
+                <p class="text-xs opacity-60">缓存在浏览器 Cache Storage；不再需要时可用上方「删除本地模型」按钮释放磁盘</p>
               {/if}
             </div>
           </SettingsItemGroup>
@@ -1818,6 +1910,19 @@
                   bind:value={$ttsEdgeVoiceId$}
                 />
               </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs opacity-70">代理</span>
+                <input
+                  type="text"
+                  class="settings-input px-2 py-1 text-sm w-72"
+                  placeholder="留空 = 跟随系统代理；direct = 强制直连"
+                  bind:value={$ttsEdgeProxyUrl$}
+                />
+              </div>
+              <p class="text-xs opacity-60">
+                国内需代理才能连 speech.platform.bing.com。留空会自动读取系统代理，通常无需填写；报
+                <code>tls handshake eof</code> 时在此手填，如 <code>http://127.0.0.1:7897</code>（暂不支持 socks5，请用混合端口的 http 入口）。
+              </p>
               <p class="text-xs opacity-60">
                 完整音色清单：<code>https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/voices/list?trustedclienttoken=6A5AA1D4EAFF4E9FB37E23D68491D6F4</code>
               </p>
@@ -2617,7 +2722,7 @@
           >
             <option value="web">{$t('settings.value.ttsEngine.web')}</option>
             <option value="sapi">{$t('settings.value.ttsEngine.sapi')}</option>
-            <option value="edge">★ Edge TTS（微软免费，300+ 音色，零配置）</option>
+            <option value="edge">{$t('settings.value.ttsEngine.edge')}</option>
             <option value="kokoro">{$t('settings.value.ttsEngine.kokoro')}</option>
             <option value="custom">{$t('settings.value.ttsEngine.custom')}</option>
           </select>
@@ -2733,9 +2838,20 @@
                   {(($kokoroLoadStatus$.total || 0) / 1024 / 1024).toFixed(1)} MB)
                 {/if}
               </div>
+              {#if kokoroIsStalled}
+                <div class="text-xs mt-1" style="color:var(--danger-color)">
+                  ⚠ {$t('settings.tts.kokoro.stall', { seconds: kokoroStallSeconds })}
+                  <button class="settings-input ml-2 px-2 py-0.5 text-xs" on:click={kokoroRetryLoad}>{$t('common.retry')}</button>
+                </div>
+              {/if}
             {:else if $kokoroLoadStatus$.phase === 'errored'}
               <p class="text-red-500 text-xs">{$t('settings.tts.kokoro.downloadFailed')}：{$kokoroLoadStatus$.message}</p>
-              <button class="settings-input px-3 py-1 text-sm" on:click={() => kokoroEnsureLoad()}>{$t('common.retry')}</button>
+              <button class="settings-input px-3 py-1 text-sm" on:click={kokoroRetryLoad}>{$t('common.retry')}</button>
+            {:else if $kokoroLoadStatus$.phase === 'ready'}
+              <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs">
+                <span style="color:rgb(34,197,94)">✓ {$t('settings.tts.kokoro.ready', { modelId: $kokoroLoadStatus$.modelId ?? $kokoroModel$ })}</span>
+                <button class="settings-input px-2 py-0.5 text-xs" on:click={kokoroDeleteCache}>{$t('settings.tts.kokoro.delete')}</button>
+              </div>
             {/if}
 
             {#if $kokoroAccepted$}
@@ -2783,6 +2899,19 @@
                 {/each}
               </select>
             </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs opacity-70">代理</span>
+              <input
+                type="text"
+                class="settings-input px-2 py-1 text-sm w-72"
+                placeholder="留空 = 跟随系统代理；direct = 强制直连"
+                bind:value={$ttsEdgeProxyUrl$}
+              />
+            </div>
+            <p class="text-xs opacity-60">
+              国内需代理才能连 speech.platform.bing.com。留空会自动读取系统代理；报
+              <code>tls handshake eof</code> 时在此手填，如 <code>http://127.0.0.1:7897</code>。
+            </p>
           </div>
         </SettingsItemGroup>
       </div>

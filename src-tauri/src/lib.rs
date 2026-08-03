@@ -13,6 +13,7 @@ mod edge_tts;
 mod kf8_indx;
 mod kf8_parser;
 mod mobi_parser;
+mod proxy;
 mod winrt_tts;
 
 #[cfg(test)]

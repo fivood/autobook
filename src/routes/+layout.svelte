@@ -160,13 +160,16 @@
       // subscribe and act when they can (e.g. /b toggles TTS).
       listen('tts-toggle', () => ttsToggleRequest$.next(Date.now()));
 
-      // Apply current shortcut, then keep it in sync with user changes.
-      const applyShortcut = (accel: string) =>
+      // Apply current shortcut and keep it in sync with user changes.
+      // BehaviorSubject.subscribe fires synchronously with the current value,
+      // so we don't need (and must not add) a separate initial invoke — a second
+      // parallel `unregister_all + register` races the first and the second
+      // register hits "HotKey already registered".
+      ttsShortcut$.subscribe((accel) =>
         invoke('set_tts_shortcut', { accelerator: accel }).catch((err) =>
           console.warn('[tts-shortcut] register failed:', err)
-        );
-      applyShortcut(ttsShortcut$.getValue());
-      ttsShortcut$.subscribe(applyShortcut);
+        )
+      );
     } catch (err) {
       console.warn('[launch-files] init failed:', err);
     }

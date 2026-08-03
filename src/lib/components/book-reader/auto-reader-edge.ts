@@ -21,7 +21,7 @@
  */
 
 import { BlobAutoReader } from './auto-reader-blob-base';
-import { ttsEdgeVoiceId$ } from '$lib/data/store';
+import { ttsEdgeProxyUrl$, ttsEdgeVoiceId$ } from '$lib/data/store';
 
 const DEFAULT_VOICE = 'zh-CN-XiaoxiaoNeural';
 
@@ -36,7 +36,8 @@ export class AutoReaderEdge extends BlobAutoReader {
     const b64 = await invoke<string>('edge_tts_synthesize', {
       text,
       voice,
-      rate
+      rate,
+      proxyUrl: ttsEdgeProxyUrl$.getValue() || null
     });
 
     const bin = atob(b64);

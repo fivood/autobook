@@ -19,6 +19,13 @@ const pkgVersion = JSON.parse(
 /** @type {import('vite').UserConfig} */
 const config = {
   plugins: [sveltekit()],
+  // 5173 gets held by NetEase HYPERS on some Windows setups; move to a port
+  // outside common third-party ranges and lock it so any mismatch with
+  // tauri.conf.json's devUrl fails loud instead of silently 404-ing.
+  server: {
+    port: 5273,
+    strictPort: true
+  },
   define: {
     __APP_VERSION__: JSON.stringify(pkgVersion)
   },
