@@ -273,13 +273,20 @@ async fn synthesize_once(
             tokio_tungstenite::client_async_tls_with_config(req, tcp, None, None)
                 .await
                 .map_err(|e| {
-                    // The tunnel opened but died during TLS — with an HTTP
-                    // proxy that almost always means the upstream node, not
-                    // the local client, is what failed.
+                    // The tunnel opened but died during TLS, so the local
+                    // client is fine and the failure is past it. By far the
+                    // most common cause is not a dead node but the proxy's own
+                    // routing: mainstream Clash rulesets match bing.com into a
+                    // "Microsoft" group whose default pick is DIRECT, so the
+                    // request gets dialed straight out again and blocked.
                     format!(
                         "edge-tts connect (经代理 {p}): {e}\n\
-                         代理已接受 CONNECT 但链路随即断开，通常是代理节点到 \
-                         speech.platform.bing.com 不通。请换一个节点，或确认该域名走的是代理而非直连规则。"
+                         代理已接受 CONNECT 但链路随即断开。最常见的原因不是节点故障，\
+                         而是代理软件把该域名判给了直连：主流 Clash 规则集会把 bing.com \
+                         归到「Ⓜ️ Microsoft」分组，而该分组默认选中「全球直连」，于是请求又被直接发出去。\n\
+                         修法：在代理软件里把该分组改选为可用节点，或单独加一条规则 —— \
+                         DOMAIN-SUFFIX,speech.platform.bing.com,<你的节点分组>（只放行朗读，\
+                         Windows Update / Office 仍走直连）。"
                     )
                 })?
         }

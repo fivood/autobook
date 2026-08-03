@@ -17,7 +17,6 @@
   import BookManagerHeader from '$lib/components/book-card/book-manager-header.svelte';
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
-  import ExternalReadDialog from '$lib/components/external-read-dialog.svelte';
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MessageDialog from '$lib/components/message-dialog.svelte';
@@ -390,32 +389,6 @@
 
         idToOpen = await handler.prepareBookForReading();
 
-        if (false) {
-          const nextAction = await new Promise<string>((resolver) => {
-            dialogManager.dialogs$.next([
-              {
-                component: ExternalReadDialog,
-                props: { resolver },
-                disableCloseOnClick: true
-              }
-            ]);
-          });
-
-          if (nextAction === 'cancel') {
-            return;
-          }
-
-          if (nextAction === 'export') {
-            selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
-              set.add(bookId);
-            });
-            selectMode = true;
-
-            await tick();
-
-            return onReplicateData();
-          }
-        }
 
         dialogManager.dialogs$.next([]);
       } catch (error: any) {
