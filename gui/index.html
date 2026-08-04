@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Translator Workbench</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">TRANSLATOR WORKBENCH</p>
+          <h1>本地翻译工作台</h1>
+          <p class="muted">独立于 AutoBook 的文件翻译 GUI，术语确认后再启动 Ollama 初译。</p>
+        </div>
+        <div id="runtimeBadge" class="badge">正在检查 Ollama…</div>
+      </header>
+      <section class="layout">
+        <aside class="panel sidebar">
+          <div class="panel-heading"><h2>任务</h2><button id="refreshJobs" class="icon-button" title="刷新">↻</button></div>
+          <button id="newJob" class="primary full">＋ 新建翻译任务</button>
+          <div id="jobList" class="job-list"><p class="muted">暂无任务</p></div>
+        </aside>
+        <section class="content">
+          <section id="newPanel" class="panel">
+            <div class="panel-heading"><div><h2>导入文件</h2><p class="muted">支持 EPUB、HTML、TXT、Markdown。</p></div></div>
+            <div class="form-grid">
+              <label class="file-drop"><span>选择文件（可多选）</span><input id="sourceFile" type="file" multiple accept=".epub,.html,.htm,.txt,.text,.md,.markdown" /></label>
+              <label class="file-drop"><span>选择文件夹</span><input id="sourceFolder" type="file" webkitdirectory directory multiple accept=".epub,.html,.htm,.txt,.text,.md,.markdown" /></label>
+              <label>目标语言<select id="targetLanguage"><option value="zh-CN">简体中文</option><option value="zh-TW">繁体中文</option><option value="ja">日语</option><option value="en">英语</option></select></label>
+              <label>Ollama 模型<select id="model"><option value="qwen2.5:14b">qwen2.5:14b</option></select></label>
+            </div>
+            <button id="inspect" class="primary" disabled>导入并分析术语</button>
+            <p id="newMessage" class="message"></p>
+          </section>
+          <section id="workspace" class="panel hidden">
+            <div class="workspace-heading"><div><p class="eyebrow">CURRENT JOB</p><h2 id="jobTitle">—</h2><p id="jobMeta" class="muted">—</p></div><div class="actions"><button id="start" class="primary">开始初译</button><button id="pause" class="secondary">中断并保存</button><button id="export" class="secondary">导出当前结果</button></div></div>
+            <div class="progress-card"><div class="progress-line"><strong id="progressLabel">0%</strong><span id="statusLabel" class="status">待开始</span></div><div class="progress-track"><div id="progressBar" class="progress-bar"></div></div><div class="stats"><span id="progressStats">0 / 0 段</span><span>每批完成自动保存 checkpoint</span></div></div>
+            <div id="errorBox" class="error hidden"></div>
+            <div class="glossary-heading"><div><h3>专有词汇校准</h3><p class="muted">填写确认后的译名；留空表示不加入术语表。</p></div><button id="confirmGlossary" class="secondary">确认术语表</button></div>
+            <div id="glossaryTable" class="glossary-table"><p class="muted">导入文件后生成候选词。</p></div>
+            <section id="precisionPanel" class="precision-panel">
+              <div class="glossary-heading"><div><h3>精校（OpenAI-compatible API）</h3><p class="muted">初译完成后，可接入 Codex 网关、LM Studio、Ollama OpenAI 兼容端点或其他模型 API。</p></div><span id="precisionStatus" class="status">尚未开始</span></div>
+              <div class="precision-form"><label>Base URL<input id="precisionBaseUrl" placeholder="https://api.example.com/v1" /></label><label>模型<input id="precisionModel" placeholder="gpt-4.1-mini" /></label><label>API Key（仅保存在当前进程）<input id="precisionApiKey" type="password" placeholder="可留空" /></label></div>
+              <div class="precision-actions"><button id="startPrecision" class="secondary" disabled>开始精校</button><button id="pausePrecision" class="secondary" disabled>中断精校</button><span id="precisionProgress" class="muted">0 / 0 段</span></div>
+            </section>
+          </section>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

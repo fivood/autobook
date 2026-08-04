@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.tmp/
+.svelte-kit/
+build/
+*.log
+.gui-data/
+gui-data/

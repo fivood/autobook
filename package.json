@@ -1,0 +1,35 @@
+{
+  "name": "translator-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md", "package.json"],
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test:roundtrip": "node --experimental-strip-types scripts/roundtrip-test.ts",
+    "test:text": "node --experimental-strip-types scripts/text-roundtrip-test.ts",
+    "test:html": "node --experimental-strip-types scripts/html-roundtrip-test.ts",
+    "test:checkpoint": "node --experimental-strip-types scripts/checkpoint-test.ts",
+    "test:provider": "node --experimental-strip-types scripts/provider-test.ts",
+    "test:epub-compat": "node --experimental-strip-types scripts/epub-compat-test.ts",
+    "translate:live": "node --experimental-strip-types scripts/live-translate.ts",
+    "gui": "pnpm run build && node gui/server.mjs",
+    "gui:dev": "pnpm run build && node gui/server.mjs",
+    "test": "pnpm run check && pnpm run test:roundtrip && pnpm run test:text && pnpm run test:html && pnpm run test:checkpoint && pnpm run test:provider && pnpm run test:epub-compat"
+  },
+  "dependencies": {
+    "@zip.js/zip.js": "2.4.26",
+    "fast-xml-parser": "5.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "25.0.0",
+    "typescript": "6.0.3"
+  }
+}
