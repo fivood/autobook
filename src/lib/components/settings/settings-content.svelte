@@ -71,7 +71,8 @@
     ttsStartStrategy$,
     verticalCustomReadingPosition$
   } from '$lib/data/store';
-  import { getEdgeVoiceGroups } from '$lib/data/edge-voices';
+  import { getEdgeVoiceGroups, getEdgeVoiceIds } from '$lib/data/edge-voices';
+  import { checkVoiceSelection } from '$lib/data/tts/voice-availability';
   import {
     getDefaultKokoroVoice,
     getKokoroVoiceGroups,
@@ -321,6 +322,20 @@
   }
 
   $: if ($ttsEngine$ === 'web') loadWebVoices();
+
+  // A saved voice can outlive the voice itself — an uninstalled Windows voice
+  // pack, settings carried to another machine, a retired Edge neural voice.
+  // Report it instead of letting <select> render blank; see
+  // voice-availability.ts for why the id is not cleared.
+  $: webVoiceState = checkVoiceSelection(
+    $readerVoiceUri$,
+    webVoices.map((v) => v.voiceURI)
+  );
+  $: sapiVoiceState = checkVoiceSelection(
+    $ttsSapiVoiceId$,
+    sapiVoices.map((v) => v.id)
+  );
+  $: edgeVoiceState = checkVoiceSelection($ttsEdgeVoiceId$, getEdgeVoiceIds());
 
 
   /** Snapshot the live fields into the map under the given preset id. */
@@ -1627,6 +1642,11 @@
                 class="settings-input px-2 py-1 text-sm max-w-xs"
                 bind:value={$ttsEdgeVoiceId$}
               >
+                {#if edgeVoiceState === 'missing'}
+                  <option value={$ttsEdgeVoiceId$}>
+                    {$t('settings.tts.voiceCustomOption', { id: $ttsEdgeVoiceId$ })}
+                  </option>
+                {/if}
                 {#each edgeVoiceGroups as g (g.group)}
                   <optgroup label={g.group}>
                     {#each g.voices as v (v.id)}
@@ -1636,6 +1656,22 @@
                 {/each}
               </select>
             </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <!-- The catalog is a curated subset of 300+ voices and Microsoft
+                   retires entries, so there has to be a way to name one
+                   directly — without this, a voice outside the list is
+                   unreachable and an already-saved one renders as a blank
+                   select with no way back. -->
+              <span class="text-xs opacity-70">{$t('settings.tts.edgeCustomVoice')}</span>
+              <input
+                type="text"
+                class="settings-input px-2 py-1 text-sm w-72"
+                placeholder="zh-CN-XiaoxiaoNeural"
+                spellcheck="false"
+                bind:value={$ttsEdgeVoiceId$}
+              />
+            </div>
+            <p class="text-xs opacity-60">{$t('settings.tts.edgeCustomVoiceHint')}</p>
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs opacity-70">代理</span>
               <input
@@ -1674,10 +1710,20 @@
           {:else}
             <select class="settings-input px-2 py-1 text-sm max-w-xs" bind:value={$ttsSapiVoiceId$}>
               <option value="">{$t('settings.tts.sysDefault')}</option>
+              {#if sapiVoiceState === 'missing'}
+                <option value={$ttsSapiVoiceId$}>
+                  {$t('settings.tts.voiceMissingOption', { id: $ttsSapiVoiceId$ })}
+                </option>
+              {/if}
               {#each sapiVoices as voice (voice.id)}
                 <option value={voice.id}>{voice.name} ({voice.language})</option>
               {/each}
             </select>
+            {#if sapiVoiceState === 'missing'}
+              <p class="mt-1 text-xs" style="color:var(--danger-color);">
+                {$t('settings.tts.voiceMissingHintSapi')}
+              </p>
+            {/if}
           {/if}
         </SettingsItemGroup>
       </div>
@@ -1694,10 +1740,22 @@
           {:else}
             <select class="settings-input px-2 py-1 text-sm max-w-xs" bind:value={$readerVoiceUri$}>
               <option value="">{$t('settings.value.systemDefault')}</option>
+              {#if webVoiceState === 'missing'}
+                <!-- Keeps the select from rendering blank, and keeps the saved
+                     id selectable so it survives a trip through this page. -->
+                <option value={$readerVoiceUri$}>
+                  {$t('settings.tts.voiceMissingOption', { id: $readerVoiceUri$ })}
+                </option>
+              {/if}
               {#each webVoices as voice (voice.voiceURI)}
                 <option value={voice.voiceURI}>{voice.name} ({voice.lang})</option>
               {/each}
             </select>
+            {#if webVoiceState === 'missing'}
+              <p class="mt-1 text-xs" style="color:var(--danger-color);">
+                {$t('settings.tts.voiceMissingHint')}
+              </p>
+            {/if}
           {/if}
         </SettingsItemGroup>
       </div>
