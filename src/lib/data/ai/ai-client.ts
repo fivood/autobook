@@ -1,4 +1,4 @@
-export type AiProvider = 'anthropic' | 'openai';
+export type AiProvider = 'anthropic' | 'openai' | 'ollama';
 
 export interface AiMessage {
   role: 'user' | 'assistant';
@@ -25,8 +25,97 @@ export async function* streamChat(
 ): AsyncGenerator<string, void, void> {
   if (opts.provider === 'anthropic') {
     yield* streamAnthropic(opts, req);
+  } else if (opts.provider === 'ollama') {
+    yield* streamOllama(opts, req);
   } else {
     yield* streamOpenAi(opts, req);
+  }
+}
+
+/**
+ * One request, one string back. Short tasks — glossing a word, naming a
+ * chapter, suggesting tags — have no use for streaming, and a plain awaited
+ * call keeps their call sites free of generator plumbing.
+ */
+export async function chatOnce(
+  opts: AiClientOpts,
+  req: StreamRequest & { jsonMode?: boolean }
+): Promise<string> {
+  if (opts.provider === 'ollama') {
+    const base = (opts.baseUrl || 'http://127.0.0.1:11434').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: opts.model,
+        stream: false,
+        ...(req.jsonMode ? { format: 'json' } : {}),
+        options: { temperature: 0 },
+        messages: [{ role: 'system', content: req.system }, ...req.messages]
+      }),
+      signal: req.signal
+    });
+    if (!res.ok) throw new Error(`Ollama ${res.status}: ${await safeReadBody(res)}`);
+    const data = await res.json();
+    return String(data?.message?.content ?? data?.response ?? '').trim();
+  }
+
+  // Anthropic and OpenAI-compatible endpoints both stream cleanly, so the
+  // simplest correct implementation is to drain the existing generator rather
+  // than maintain a third pair of request shapes.
+  let out = '';
+  for await (const chunk of streamChat(opts, req)) out += chunk;
+  return out.trim();
+}
+
+/**
+ * Ollama streams newline-delimited JSON rather than SSE, so it needs its own
+ * reader — parseSse would find no `data:` prefixes and yield nothing.
+ */
+async function* streamOllama(
+  opts: AiClientOpts,
+  req: StreamRequest
+): AsyncGenerator<string, void, void> {
+  const base = (opts.baseUrl || 'http://127.0.0.1:11434').replace(/\/$/, '');
+  const res = await fetch(`${base}/api/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: opts.model,
+      stream: true,
+      messages: [{ role: 'system', content: req.system }, ...req.messages]
+    }),
+    signal: req.signal
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`Ollama ${res.status}: ${await safeReadBody(res)}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (!line) continue;
+        try {
+          const data = JSON.parse(line);
+          const text = data?.message?.content;
+          if (typeof text === 'string' && text) yield text;
+          if (data?.done) return;
+        } catch {
+          // A partial line can arrive mid-chunk; the next read completes it.
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
   }
 }
 
