@@ -115,10 +115,24 @@ export async function probeLocalModels(force = false): Promise<LocalProbeState> 
     return next;
   } catch (error: any) {
     // A missing runtime is the common case, not an error worth surfacing.
+    //
+    // A running-but-unreachable runtime is the confusing case: this fetch is
+    // cross-origin (app origin -> 127.0.0.1:11434), and Ollama only sends CORS
+    // headers for origins listed in OLLAMA_ORIGINS. A rejected preflight and a
+    // refused connection both surface as the same opaque TypeError, so the
+    // message has to name both causes rather than guess.
+    const isNetworkOpaque = error?.name === 'TypeError';
     const next: LocalProbeState = {
       status: 'unavailable',
       models: [],
-      error: error?.name === 'AbortError' ? 'timeout' : error?.message || String(error),
+      error:
+        error?.name === 'AbortError'
+          ? 'timeout'
+          : isNetworkOpaque
+            ? `unreachable — runtime not running, or its CORS allow-list (OLLAMA_ORIGINS) excludes ${
+                typeof location !== 'undefined' ? location.origin : 'this app'
+              }`
+            : error?.message || String(error),
       probedAt: Date.now()
     };
     localProbe$.next(next);
