@@ -462,6 +462,16 @@
     ensureBookMetaLoaded();
   }
 
+  /**
+   * The snapshot above is loaded once per panel entry, so a write made from
+   * inside the panel (auto-tagging) has to invalidate it explicitly —
+   * otherwise the applied tags don't show until the panel is reopened.
+   */
+  async function reloadBookMeta() {
+    bookMetaLoaded = false;
+    await ensureBookMetaLoaded();
+  }
+
   $: statisticsDateRangeLabel = getDateRangeLabel(
     $lastStatisticsStartDate$,
     $lastStatisticsEndDate$
@@ -914,6 +924,7 @@
       startDayHours={$startDayHoursForTracker$}
       titleFilter={statisticsTitleFilters}
       {statisticsDateRangeLabel}
+      on:metaChanged={reloadBookMeta}
     />
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.AUTHORS}
