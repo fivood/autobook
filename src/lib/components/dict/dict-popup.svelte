@@ -3,18 +3,10 @@
   import Fa from 'svelte-fa';
   import { faTimes, faFolderOpen, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
   import { isTauri } from '$lib/data/env';
-  import {
-    aiApiKey$,
-    aiBaseUrl$,
-    aiGlossEnabled$,
-    aiLocalBaseUrl$,
-    aiModel$,
-    aiProvider$,
-    dictFolderPath$
-  } from '$lib/data/store';
+  import { aiGlossEnabled$, dictFolderPath$ } from '$lib/data/store';
   import { lookupAll, scanDictFolder, loadedDicts$ } from '$lib/data/dict/dict-manager';
-  import type { AiClientOpts, AiProvider } from '$lib/data/ai/ai-client';
-  import { probeLocalModels, resolveLocalModel } from '$lib/data/ai/local-model';
+  import { resolveEndpoint, type ResolvedEndpoint } from '$lib/data/ai/endpoint';
+  import { probeLocalModels } from '$lib/data/ai/local-model';
   import { requestGloss, type GlossResult } from '$lib/data/ai/gloss';
   import { t, tImmediate } from '$lib/i18n';
 
@@ -128,13 +120,16 @@
   let glossError = '';
   let glossedWord = '';
   let glossAbort: AbortController | undefined;
-  let localModel = '';
+  let endpoint: ResolvedEndpoint | undefined;
 
   onMount(() => {
     // Silent probe: a machine with no runtime shows no gloss button and no
     // message about it. See local-model.ts — probe, never sell.
     probeLocalModels()
-      .then(() => (localModel = resolveLocalModel(1.5)))
+      .then(() => {
+        // 1.5B is enough to pick the right sense out of a sentence.
+        endpoint = resolveEndpoint('prefer-local', 1.5);
+      })
       .catch(() => {
         // Probe failures already collapse to "unavailable" internally.
       });
@@ -148,30 +143,10 @@
     glossBusy = false;
   }
 
-  $: cloudReady = !!$aiApiKey$ && !!$aiModel$;
-  $: glossAvailable = $aiGlossEnabled$ && (!!localModel || cloudReady);
-
-  function glossClientOpts(): AiClientOpts {
-    // Local first when present: the request is short, so latency is fine, and
-    // the sentence never leaves the machine.
-    if (localModel) {
-      return {
-        provider: 'ollama',
-        apiKey: '',
-        baseUrl: $aiLocalBaseUrl$,
-        model: localModel
-      };
-    }
-    return {
-      provider: ($aiProvider$ as AiProvider) || 'anthropic',
-      apiKey: $aiApiKey$,
-      baseUrl: $aiBaseUrl$,
-      model: $aiModel$
-    };
-  }
+  $: glossAvailable = $aiGlossEnabled$ && !!endpoint;
 
   async function runGloss() {
-    if (glossBusy || !glossAvailable) return;
+    if (glossBusy || !endpoint) return;
     glossAbort?.abort();
     const controller = new AbortController();
     glossAbort = controller;
@@ -182,7 +157,7 @@
 
     try {
       const senses = results.flatMap((r) => r.entries.map((entry) => stripHtml(entry)));
-      const result = await requestGloss(glossClientOpts(), {
+      const result = await requestGloss(endpoint.opts, {
         word,
         sentence,
         bookTitle,
@@ -261,7 +236,7 @@
             <p class="mt-1 text-xs opacity-60">{gloss.note}</p>
           {/if}
           <p class="mt-1 text-[11px] opacity-40">
-            {localModel || $aiModel$}{sentence ? '' : ` · ${$t('dict.glossNoSentence')}`}
+            {endpoint?.label ?? ''}{sentence ? '' : ` · ${$t('dict.glossNoSentence')}`}
           </p>
         {:else if glossError}
           <p class="text-xs text-red-500">{glossError}</p>
@@ -269,9 +244,9 @@
           <button
             type="button"
             class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs opacity-70 hover-soft hover:opacity-100 disabled:cursor-wait"
-            title={localModel
-              ? $t('dict.glossTooltipLocal', { model: localModel })
-              : $t('dict.glossTooltipCloud', { model: $aiModel$ })}
+            title={endpoint?.isLocal
+              ? $t('dict.glossTooltipLocal', { model: endpoint.label })
+              : $t('dict.glossTooltipCloud', { model: endpoint?.label ?? '' })}
             disabled={glossBusy}
             on:click={runGloss}
           >
