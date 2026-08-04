@@ -39,6 +39,7 @@ const loadCbr = () => import('$lib/functions/file-loaders/cbr/load-cbr').then((m
 const loadHtmlz = () =>
   import('$lib/functions/file-loaders/htmlz/load-htmlz').then((m) => m.default);
 import { detectBookFormat } from '$lib/functions/book-format';
+import { logger } from '$lib/data/logger';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import {
@@ -155,12 +156,29 @@ export async function importData(
 
           currentTitle = bookContent.title;
 
+          // Side channel off the loader — must not reach saveBook, which
+          // persists whatever it is handed (IDB row for browser storage, a
+          // JSON file on disk for tauri-fs).
+          const extractedMetadata = bookContent._extractedMetadata;
+          delete bookContent._extractedMetadata;
+
           targetHandler.startContext(
             { title: bookContent.title, imagePath: bookContent.coverImage || '' },
             cancelSignal
           );
 
           dataIds.push(await targetHandler.saveBook(bookContent, false));
+
+          if (extractedMetadata) {
+            try {
+              await database.putBookMetadata({ title: bookContent.title, ...extractedMetadata });
+            } catch (error: any) {
+              // The book itself imported fine; losing its author line is not
+              // worth failing the import over, and the user can fill it in by
+              // hand. Warn so it still shows up in the log report.
+              logger.warn(`bookMetadata write failed for ${bookContent.title}: ${error?.message}`);
+            }
+          }
 
           checkCancelAndProgress(cancelSignal, false);
 

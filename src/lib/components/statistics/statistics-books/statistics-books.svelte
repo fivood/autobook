@@ -1,6 +1,7 @@
 <script lang="ts">
   import type {
     BooksDbBookData,
+    BooksDbBookMetadata,
     BooksDbManualBook,
     BooksDbStatistic
   } from '$lib/data/database/books-db/versions/books-db';
@@ -14,6 +15,7 @@
 
   export let statistics: BooksDbStatistic[] = [];
   export let manualBooks: BooksDbManualBook[] = [];
+  export let bookMetadata: BooksDbBookMetadata[] = [];
   export let dataMetas: Pick<BooksDbBookData, 'title' | 'characters'>[] = [];
   export let startDate: string;
   export let endDate: string;
@@ -31,6 +33,7 @@
         period: bounds,
         statistics,
         manualBooks,
+        bookMetadata,
         dataMetas,
         titleFilter
       })

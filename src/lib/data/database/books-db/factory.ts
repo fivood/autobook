@@ -9,7 +9,7 @@ import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 11, {
+  return openDB<BooksDb>(name, 12, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -94,6 +94,12 @@ export function createBooksDb(name = 'books') {
           });
           freshManualBookStore.createIndex('author', 'author');
           freshManualBookStore.createIndex('updatedAt', 'updatedAt');
+
+          // v12: bibliographic metadata parsed out of imported files.
+          const freshBookMetadataStore = oldDb.createObjectStore('bookMetadata', {
+            keyPath: 'title'
+          });
+          freshBookMetadataStore.createIndex('author', 'author');
 
           break;
         }
@@ -201,6 +207,15 @@ export function createBooksDb(name = 'books') {
             });
             manualBookStore.createIndex('author', 'author');
             manualBookStore.createIndex('updatedAt', 'updatedAt');
+          }
+          // fall through to v11 → v12 upgrade.
+        }
+        case 11: {
+          if (!oldDb.objectStoreNames.contains('bookMetadata')) {
+            const bookMetadataStore = oldDb.createObjectStore('bookMetadata', {
+              keyPath: 'title'
+            });
+            bookMetadataStore.createIndex('author', 'author');
           }
           break;
         }

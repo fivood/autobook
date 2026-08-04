@@ -10,6 +10,7 @@ import type {
   BooksDbBookmarkData,
   BooksDbHighlight,
   BooksDbHighlightFolder,
+  BooksDbBookMetadata,
   BooksDbManualBook,
   BooksDbReadingGoal,
   BooksDbSession,
@@ -128,6 +129,8 @@ export class DatabaseService {
   sessionsChanged$ = new Subject<void>();
 
   manualBooksChanged$ = new Subject<void>();
+
+  bookMetadataChanged$ = new Subject<void>();
 
   bookmarksChanged$ = new Subject<void>();
 
@@ -641,6 +644,46 @@ export class DatabaseService {
     const db = await this.db;
     await db.delete('manualBook', title);
     this.manualBooksChanged$.next();
+  }
+
+  // ── bookMetadata (v12): bibliographic data parsed out of imported files ──
+  //
+  // Same `title` key space as manualBook, but never written by the user —
+  // see the v12 schema comment for why the two stay separate stores.
+
+  async getBookMetadata(title: string) {
+    const db = await this.db;
+    return db.get('bookMetadata', title);
+  }
+
+  async getAllBookMetadata() {
+    const db = await this.db;
+    return db.getAll('bookMetadata');
+  }
+
+  /**
+   * Field-level merge: a re-import of a file that dropped a field must not
+   * erase what an earlier import found. Only keys actually present in
+   * `entry` overwrite; `undefined` means "this file didn't say", not "clear".
+   */
+  async putBookMetadata(entry: Omit<BooksDbBookMetadata, 'importedAt'>) {
+    const db = await this.db;
+    const existing = await db.get('bookMetadata', entry.title);
+    const merged: BooksDbBookMetadata = {
+      ...(existing ?? { title: entry.title }),
+      importedAt: Date.now()
+    };
+    // Cast because a keyed write can't be proven type-safe field-by-field
+    // here; the keys come from `entry`, which is the same interface minus
+    // `importedAt`, so the shape is correct by construction.
+    for (const [key, value] of Object.entries(entry)) {
+      if (value !== undefined && value !== '') {
+        (merged as unknown as Record<string, unknown>)[key] = value;
+      }
+    }
+    await db.put('bookMetadata', merged);
+    this.bookMetadataChanged$.next();
+    return merged;
   }
 
   async getStatisticsUntilDate(bookTitle: string, maxDate: string) {

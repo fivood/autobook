@@ -1,6 +1,7 @@
 <script lang="ts">
   import type {
     BooksDbBookData,
+    BooksDbBookMetadata,
     BooksDbManualBook,
     BooksDbStatistic
   } from '$lib/data/database/books-db/versions/books-db';
@@ -14,6 +15,7 @@
 
   export let statistics: BooksDbStatistic[] = [];
   export let manualBooks: BooksDbManualBook[] = [];
+  export let bookMetadata: BooksDbBookMetadata[] = [];
   export let dataMetas: Pick<BooksDbBookData, 'title' | 'characters'>[] = [];
   export let startDate: string;
   export let endDate: string;
@@ -27,20 +29,23 @@
         period: bounds,
         statistics,
         manualBooks,
+        bookMetadata,
         dataMetas,
         titleFilter
       })
     : [];
   $: totalSeconds = authors.reduce((a, x) => a + x.seconds, 0);
 
-  // How many books have no author metadata? Surface as a hint so users
-  // realize they need to fill in manualBook.author to see attribution.
+  // How many books have no author at all — neither typed into manualBook nor
+  // found in the imported file's OPF. Books imported before 1.23 have no
+  // bookMetadata row either way, so this stays a useful nudge.
   $: booksWithoutAuthor = (() => {
     if (!bounds) return 0;
     const list = computeBooksList({
       period: bounds,
       statistics,
       manualBooks,
+      bookMetadata,
       dataMetas,
       titleFilter
     });
