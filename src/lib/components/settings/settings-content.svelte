@@ -26,6 +26,7 @@
   import SettingsReadingGoals from '$lib/components/settings/settings-reading-goals.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSync from '$lib/components/settings/settings-sync.svelte';
+  import SettingsAi from '$lib/components/settings/settings-ai.svelte';
   import SettingsDataPaths from '$lib/components/settings/settings-data-paths.svelte';
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
   import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
@@ -1817,6 +1818,12 @@
         </SettingsItemGroup>
       </div>
     {/if}
+
+  {:else if activeSettings === 'AI'}
+    <SettingsSectionHeader title={$t('settings.section.ai')} hint={$t('settings.section.aiHint')} />
+    <div class="lg:col-span-3">
+      <SettingsAi />
+    </div>
 
   {:else if activeSettings === 'Data'}
     <SettingsSectionHeader title={$t('settings.section.storageBackup')} hint={$t('settings.section.storageBackupHint')} />

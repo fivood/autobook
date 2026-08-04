@@ -248,6 +248,13 @@
         />
       </label>
       <p class="text-xs opacity-50">{$t('ai.privacyNote')}</p>
+      <!-- These four inputs are the same stores the settings page writes, kept
+           here only so a first-run user can start chatting without leaving the
+           book. Everything else (local runtime, per-feature switches) lives in
+           settings — this panel is deliberately not growing to match it. -->
+      <p class="mt-2 text-xs opacity-60">
+        <a href="/settings" class="underline">{$t('ai.moreInSettings')}</a>
+      </p>
     </div>
   {/if}
 

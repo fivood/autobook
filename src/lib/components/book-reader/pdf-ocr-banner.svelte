@@ -7,7 +7,6 @@
     faStop,
     faWandMagicSparkles
   } from '@fortawesome/free-solid-svg-icons';
-  import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import {
     abortOcrJob,
@@ -27,11 +26,14 @@
   } from '$lib/functions/file-loaders/pdf/ocr-correct-job';
   import { resolveEndpoint, type ResolvedEndpoint } from '$lib/data/ai/endpoint';
   import { probeLocalModels } from '$lib/data/ai/local-model';
-  import { pdfOcrPromptEnabled$, pdfOcrSkippedBookIds$ as ocrSkippedBooks$ } from '$lib/data/store';
+  import {
+    aiOcrCorrectEnabled$,
+    pdfOcrLang$,
+    pdfOcrPromptEnabled$,
+    pdfOcrSkippedBookIds$ as ocrSkippedBooks$
+  } from '$lib/data/store';
 
   export let book: BooksDbBookData;
-
-  const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'ch');
 
   const dispatch = createEventDispatcher<{ dismissed: void }>();
 
@@ -56,7 +58,7 @@
 
   function start() {
     if (isOcrJobRunning()) return;
-    startOcrJob(book, $ocrLang$ as OcrLanguage);
+    startOcrJob(book, $pdfOcrLang$ as OcrLanguage);
   }
 
   function applyAndReload() {
@@ -107,6 +109,7 @@
   // Offered once the book actually has a text layer, which is also true for
   // books OCR'd in an earlier session — those never show the OCR prompt again.
   $: canCorrect =
+    $aiOcrCorrectEnabled$ &&
     !!endpoint &&
     !correctDismissed &&
     !correctJobForThisBook &&
@@ -164,7 +167,7 @@
         </div>
       </div>
       <label class="lang">
-        <select bind:value={$ocrLang$} disabled={otherBookRunning}>
+        <select bind:value={$pdfOcrLang$} disabled={otherBookRunning}>
           {#each LANGS as l (l.code)}
             <option value={l.code}>{l.label}</option>
           {/each}

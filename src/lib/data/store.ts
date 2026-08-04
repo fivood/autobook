@@ -78,6 +78,19 @@ export const aiLocalBaseUrl$ = writableStringLocalStorageSubject()(
 export const aiLocalModel$ = writableStringLocalStorageSubject()('aiLocalModel', '');
 /** Contextual gloss beside the offline dictionary. Off until a model is found. */
 export const aiGlossEnabled$ = writableBooleanLocalStorageSubject()('aiGlossEnabled', true);
+/** Offer LLM post-correction of an OCR'd text layer. */
+export const aiOcrCorrectEnabled$ = writableBooleanLocalStorageSubject()(
+  'aiOcrCorrectEnabled',
+  true
+);
+/**
+ * OCR recognition language. Lives here rather than in the components that read
+ * it: pdf-ocr-banner and pdf-page-context-menu each used to build their own
+ * subject over this same localStorage key, so they held two independent
+ * BehaviorSubjects — changing the language in one left the other's subscribers
+ * on the old value until a reload.
+ */
+export const pdfOcrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'ch');
 export const dictFolderPath$ = writableStringLocalStorageSubject()('dictFolderPath', '');
 export const syncToken$ = writableStringLocalStorageSubject()('syncToken', '');
 export const syncDeviceId$ = writableStringLocalStorageSubject()('syncDeviceId', '');
