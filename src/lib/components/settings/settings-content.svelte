@@ -86,7 +86,7 @@
   } from '$lib/data/theme-option';
   import type { VerticalTextOrientation } from '$lib/data/vertical-text-orientation';
   import { ViewMode } from '$lib/data/view-mode';
-  import { t, tImmediate } from '$lib/i18n';
+  import { t, tImmediate, locale$, LOCALES } from '$lib/i18n';
   import type { WritingMode } from '$lib/data/writing-mode';
   import { secondsToMinutes } from '$lib/functions/statistic-util';
   import { dummyFn } from '$lib/functions/utils';
@@ -263,6 +263,11 @@
     thickBorders: true,
     showIcons: true
   }));
+
+  // Each language is labelled in its own script (中文 / English / 日本語) so it
+  // stays findable when the UI is currently in a language you can't read —
+  // which is exactly the state someone opening this setting is trying to fix.
+  $: optionsForLocale = LOCALES.map((loc) => ({ id: loc, text: tImmediate('locale.' + loc) }));
 
   onDestroy(() => dialogManager.dialogs$.next([]));
 
@@ -996,6 +1001,11 @@
 
 <div class="grid grid-cols-1 items-center sm:grid-cols-2 sm:gap-6 lg:md:gap-8 lg:grid-cols-3">
   {#if activeSettings === 'Appearance'}
+    <div class="lg:col-span-3">
+      <SettingsItemGroup title={$t('locale.label')}>
+        <ButtonToggleGroup options={optionsForLocale} bind:selectedOptionId={$locale$} />
+      </SettingsItemGroup>
+    </div>
     <div class="lg:col-span-3">
       <SettingsItemGroup title={$t('settings.section.theme')}>
         <ButtonToggleGroup

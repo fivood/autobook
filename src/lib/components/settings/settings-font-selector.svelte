@@ -20,7 +20,9 @@
       <div
         tabindex="0"
         role="button"
-        class="px-4 py-2 hover:bg-gray-900"
+        class="cursor-pointer px-4 py-2 text-sm hover-menu-inverted"
+        class:bg-menu-inverted={font === fontValue}
+        class:text-menu-inverted={font === fontValue}
         on:click={() => {
           fontValue = font;
           element.toggleOpen();

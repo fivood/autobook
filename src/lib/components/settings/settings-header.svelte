@@ -42,25 +42,26 @@
 </div>
 
 <style>
-  /* Same active/inactive language as ButtonToggleGroup so settings feels
-     consistent: inactive = transparent + 50% opacity + thin foreground
-     accent line, active = bold + full opacity + accent background. */
+  /* Same language as the dropdown menus outside settings (locale picker,
+     library sort menu): this bar already sits on `bg-menu`, so selected and
+     hovered rows invert to the menu foreground instead of being tinted.
+     Fully opaque on purpose — the old `opacity: .5` greyed the label against
+     the dark menu bar, which read as a different design system the moment a
+     real menu opened next to it. */
   .settings-tab {
     background: transparent;
-    transition: background-color 0.12s ease, opacity 0.12s ease;
+    transition: background-color 0.12s ease, color 0.12s ease;
   }
   .settings-tab.is-active {
-    opacity: 1;
     font-weight: 600;
-    background: color-mix(in srgb, currentColor 14%, transparent);
-    box-shadow: inset 0 -2px 0 currentColor;
+    background: var(--menu-foreground);
+    color: var(--menu-background);
   }
   .settings-tab.is-inactive {
-    opacity: 0.5;
     font-weight: 400;
   }
   .settings-tab.is-inactive:hover {
-    opacity: 0.85;
-    background: color-mix(in srgb, currentColor 7%, transparent);
+    background: var(--menu-foreground);
+    color: var(--menu-background);
   }
 </style>
