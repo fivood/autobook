@@ -1,24 +1,24 @@
 # AutoBook 项目规范
 
-AutoBook 是一个双端电子书阅读器：桌面 Tauri 应用（本目录）+ 手机/iPad PWA（`mobile-typewriter/`，部署在 book.fivood.com）。
+AutoBook 是一个双端电子书阅读器：桌面 Tauri 应用（本仓库本分支）+ 手机/iPad PWA（部署在 book.fivood.com）。
 
 **分支分工（2026-07 起，main 已废弃不用）**：
 - `desktop` — 桌面客户端开发。发版打 `vX.Y.Z` tag（tag 触发 CI，不认分支）
 - `release/1.6.0` — PWA / web 端。push 即触发 Cloudflare Pages 生产部署（生产分支绑定就是它，别改名）
+- **PWA 源码（`mobile-typewriter/`）只在 `release/1.6.0` 上**。这个分支上曾经也有一份，但从 2026-07-02 起就没人动过，和 release 那份已经分叉到「一边有整套 i18n、一边全是硬编码」的程度；留着只会让人（和 dev server）跑错目录，2026-08-05 删掉了。要改 PWA 就切分支或另开 worktree
 - 改动涉及两端共享内容（少见，PWA 是独立 npm 包）时，记得在两个分支间 cherry-pick 同步
 
 ## 目录结构
 
 - `src/` — 桌面端 SvelteKit（Svelte 4）源码
 - `src-tauri/` — Tauri 2 Rust 壳
-- `mobile-typewriter/` — 独立 npm 包：PWA 打字机阅读器（有自己的 package.json / eslint.config.js）
 - `stats-sync/` — Cloudflare Worker + KV，阅读时长同步（sync.fivood.com）
 - `scripts/` — 构建辅助脚本
 - `static/vendor/` — postinstall 拷贝的第三方运行时资产（libarchive / ort / pdfjs），**不进 git**
 
 ## 提交前必过的检查
 
-两端各自跑，都必须 **0 error**：
+必须 **0 error**（PWA 在 `release/1.6.0` 上单独跑同样两条）：
 
 ```
 npm run check   # svelte-check（类型 + 模板）
@@ -32,7 +32,7 @@ ESLint 走「少而准」路线，只开确实咬过这个仓库的规则，**�
 - `no-debugger`（error）
 - `@typescript-eslint/no-unused-vars`（warn）— 前缀 `_` 表示有意不用
 
-两个包的 eslint.config.js 保持同步；加规则时两边一起加。
+两个包的 eslint.config.js 保持同步；加规则时记得也去 `release/1.6.0` 的 `mobile-typewriter/` 加一遍。
 
 ## 代码规范
 
