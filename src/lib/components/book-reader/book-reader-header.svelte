@@ -54,6 +54,7 @@
     setCustomReadingPoint: void;
     resetCustomReadingPoint: void;
     statisticsClick: void;
+    translateClick: void;
     readerImageGalleryClick: void;
     settingsClick: void;
     domainHintClick: void;
@@ -105,7 +106,7 @@
       items.push(mergeEntries.READER_IMAGE_GALLERY);
     }
 
-    items.push(mergeEntries.SETTINGS, mergeEntries.MANAGE);
+    items.push(mergeEntries.TRANSLATE, mergeEntries.SETTINGS, mergeEntries.MANAGE);
 
     menuItems = items;
   }
@@ -247,6 +248,8 @@
       on:action={({ detail }) => {
         if (detail === mergeEntries.STATISTICS.label) {
           dispatch('statisticsClick');
+        } else if (detail === mergeEntries.TRANSLATE.label) {
+          dispatch('translateClick');
         } else if (detail === mergeEntries.JUMP_TO_POSITION.label) {
           dispatch('jumpClick');
         } else if (detail === mergeEntries.READER_IMAGE_GALLERY.label) {

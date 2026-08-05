@@ -21,6 +21,7 @@ import {
   faFolderPlus,
   faHashtag,
   faImages,
+  faLanguage,
   faLightbulb,
   faSignOutAlt,
   faTriangleExclamation
@@ -58,6 +59,14 @@ export const mergeEntries = {
     icon: faLightbulb,
     title: '高亮笔记本（跨书）',
     titleKey: 'menu.notebook.title'
+  },
+  TRANSLATE: {
+    routeId: '/translate',
+    label: '翻译',
+    labelKey: 'menu.translate.label',
+    icon: faLanguage,
+    title: '打开翻译工作台',
+    titleKey: 'menu.translate.title'
   },
   JUMP_TO_POSITION: {
     routeId: '',

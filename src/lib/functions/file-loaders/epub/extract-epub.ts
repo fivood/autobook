@@ -5,7 +5,12 @@
  */
 
 import { BlobReader, BlobWriter, TextWriter, ZipReader } from '@zip.js/zip.js';
-import { isOPFType, type EpubContent, type EpubOPFContent } from './types';
+import {
+  isOPFType,
+  type EpubContent,
+  type EpubOPFContent,
+  type EpubSpineItemRef
+} from './types';
 
 import type { Entry } from '@zip.js/zip.js';
 import { XMLParser } from 'fast-xml-parser';
@@ -45,6 +50,26 @@ export default async function extractEpub(blob: Blob) {
 
     contents = parser.parse(contentsXml);
 
+    // fast-xml-parser collapses a single child element into an object instead
+    // of a one-element array — the same trap `rootfiles.rootfile` is
+    // normalised for above. The declared type claims `EpubSpineItemRef[]`, so
+    // the compiler can't catch it: a one-chapter EPUB (short works, generated
+    // files, samples) threw "itemref.map is not a function" and failed import.
+    const rawSpineItemRefs: EpubSpineItemRef[] | EpubSpineItemRef | undefined = isOPFType(contents)
+      ? contents['opf:package']['opf:spine']?.['opf:itemref']
+      : contents.package.spine?.itemref;
+    const spineItemRefs = !rawSpineItemRefs
+      ? []
+      : Array.isArray(rawSpineItemRefs)
+        ? rawSpineItemRefs
+        : [rawSpineItemRefs];
+    // An unreadable spine must not read as "nothing is in the spine" — that
+    // would make every missing file non-critical and quietly turn a truncated
+    // EPUB into an empty book. With no spine, don't apply the spine test.
+    const spineIds = spineItemRefs.length
+      ? new Set(spineItemRefs.map((item) => item['@_idref']))
+      : undefined;
+
     await Promise.all(
       (isOPFType(contents)
         ? contents['opf:package']['opf:manifest']['opf:item']
@@ -72,7 +97,8 @@ export default async function extractEpub(blob: Blob) {
             mediaType.startsWith('video/') ||
             mediaType === 'text/css' ||
             mediaType === 'application/vnd.ms-opentype' ||
-            mediaType === 'application/font-woff';
+            mediaType === 'application/font-woff' ||
+            (!!spineIds && !spineIds.has(item['@_id']));
 
           if (isNonCritical) {
             console.warn(`[epub] skipping missing resource: ${fileRelativePath}`);

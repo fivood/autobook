@@ -73,6 +73,7 @@
     "svelte-fa": "4.0.4",
     "svelte-gestures": "5.0.7",
     "svelte-meta-tags": "3.1.4",
+    "translator-workbench": "file:vendor/translator-workbench.tgz",
     "ua-parser-js": "2.0.10"
   }
 }

@@ -2335,6 +2335,10 @@
 
         leaveReader(mergeEntries.STATISTICS.routeId, false);
       }}
+      on:translateClick={() => {
+        showHeader = false;
+        leaveReader(`${mergeEntries.TRANSLATE.routeId}?bookId=${$rawBookData$?.id || ''}`, false);
+      }}
       on:readerImageGalleryClick={async () => {
         showHeader = false;
         await loadImageGallery();
