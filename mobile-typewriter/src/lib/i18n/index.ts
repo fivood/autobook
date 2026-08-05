@@ -23,7 +23,14 @@ const DICTS: Record<Locale, Dict> = { zh, en, ja };
 const STORAGE_KEY = 'tw-locale';
 
 function detectDefault(): Locale {
-  if (typeof navigator === 'undefined') return 'zh';
+  // `typeof navigator === 'undefined'` used to mean "running on the server",
+  // but Node 21 added a global `navigator`, so the guard no longer holds. It
+  // is inert here today because +layout.ts sets `ssr = false`, which keeps
+  // this out of the prerender pass entirely — but the desktop build, which
+  // does prerender, shipped every page in the build machine's ICU language
+  // and flashed it for a frame before hydration. Fixed on both sides so
+  // turning SSR back on here (for SEO, say) can't quietly reintroduce it.
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'zh';
   const nav = navigator.language.toLowerCase();
   if (nav.startsWith('ja')) return 'ja';
   if (nav.startsWith('zh')) return 'zh';
@@ -31,7 +38,11 @@ function detectDefault(): Locale {
 }
 
 function readStored(): Locale {
-  if (typeof localStorage === 'undefined') return detectDefault();
+  // Same reasoning — Node 22 can expose a global localStorage behind a flag,
+  // so gate on the browser itself rather than on the API's existence.
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return detectDefault();
+  }
   const raw = localStorage.getItem(STORAGE_KEY);
   return LOCALES.includes(raw as Locale) ? (raw as Locale) : detectDefault();
 }
