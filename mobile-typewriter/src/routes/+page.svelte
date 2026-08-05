@@ -29,7 +29,7 @@
     type SavedPosition
   } from '$lib/persist';
   import { deleteStoredBook, getStoredBook, storeBook } from '$lib/book-store';
-  import { t, tImmediate } from '$lib/i18n';
+  import { t, tImmediate, locale$, LOCALES } from '$lib/i18n';
 
   const SPEED_KEY = 'tw-speed';
   const STOP_KEY = 'tw-stop-at-chapter';
@@ -842,6 +842,23 @@
     {/if}
 
     <footer>
+      <!-- Language sits on the landing page rather than inside the sync
+           sheet: it used to need two taps through a dialog nobody opens
+           unless they want sync. Each label is written in its own script so
+           it stays findable when the UI is in a language you can't read. -->
+      <div class="locale-row">
+        <span>{$t('locale.label')}</span>
+        <div class="locale-chips">
+          {#each LOCALES as loc (loc)}
+            <button
+              type="button"
+              class="locale-chip"
+              class:active={$locale$ === loc}
+              on:click={() => locale$.set(loc)}
+            >{$t('locale.' + loc)}</button>
+          {/each}
+        </div>
+      </div>
       <button class="link" on:click={() => (syncOpen = true)}>{$t('landing.syncOpen')}</button>
       <p>{@html $t('landing.desktopFullLink', { link: '<a href="https://github.com/fivood/autobook/releases/latest" rel="noopener">GitHub Releases</a>' })}</p>
     </footer>
@@ -1229,6 +1246,32 @@
     margin-top: 3rem;
     font-size: 0.78rem;
     color: var(--fg-dim);
+  }
+  .locale-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-bottom: 0.9rem;
+    flex-wrap: wrap;
+  }
+  .locale-chips {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+  .locale-chip {
+    padding: 0.3rem 0.65rem;
+    border: 1px solid var(--fg-dim);
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .locale-chip.active {
+    background: color-mix(in srgb, currentColor 18%, transparent);
+    font-weight: 600;
   }
     .reader {
     display: flex;

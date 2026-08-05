@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
-  import { t, tImmediate, locale$, LOCALES } from '$lib/i18n';
+  import { t, tImmediate } from '$lib/i18n';
   import { faTimes, faCheck, faCopy } from '@fortawesome/free-solid-svg-icons';
   import {
     generateToken,
@@ -162,22 +162,6 @@
       <p class="message">{message}</p>
     {/if}
 
-    <!-- Language picker lives here (not in a top nav) because the PWA
-         has no global chrome and this sheet is where users go to
-         configure the app once. -->
-    <div class="locale-row">
-      <span class="meta">{$t('locale.label')}</span>
-      <div class="locale-chips">
-        {#each LOCALES as loc (loc)}
-          <button
-            type="button"
-            class="locale-chip"
-            class:active={$locale$ === loc}
-            on:click={() => locale$.set(loc)}
-          >{$t('locale.' + loc)}</button>
-        {/each}
-      </div>
-    </div>
   </div>
 </div>
 
@@ -255,33 +239,6 @@
     font-size: 0.75rem;
     color: var(--fg-dim);
     margin: 0;
-  }
-  .locale-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin-top: 1rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--fg-dim);
-    flex-wrap: wrap;
-  }
-  .locale-chips {
-    display: flex;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-  }
-  .locale-chip {
-    padding: 0.35rem 0.7rem;
-    border: 1px solid var(--fg-dim);
-    border-radius: 999px;
-    background: transparent;
-    color: inherit;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .locale-chip.active {
-    background: color-mix(in srgb, currentColor 18%, transparent);
-    font-weight: 600;
   }
   .mono {
     font-family: ui-monospace, monospace;

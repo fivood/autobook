@@ -1,8 +1,13 @@
 {
   "extends": "./.svelte-kit/tsconfig.json",
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": true,
+    // No allowJs/checkJs — src/ is entirely .ts/.svelte, so the only thing
+    // they bought was svelte-check type-checking JS it has no business
+    // checking: the minified pdfjs runtimes postinstall drops into
+    // static/vendor/ (3000+ errors like "Variable 'J' implicitly has an
+    // 'any[]' type") plus the build scripts. That made `npm run check`
+    // permanently red and the repo's "must be 0 error" rule unenforceable
+    // here. The desktop package omits them for the same reason.
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
