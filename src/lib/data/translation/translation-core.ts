@@ -9,7 +9,7 @@ import {
   type TranslationDocument
 } from 'translator-workbench';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import { localStorage } from '$lib/data/window/local-storage';
+import { aiLocalBaseUrl$ } from '$lib/data/store';
 import { tImmediate } from '$lib/i18n';
 
 /**
@@ -77,21 +77,11 @@ export async function inspectStoredBook(book: BooksDbBookData): Promise<Inspecte
 }
 
 /**
- * Local runtime URL for the translation providers.
- *
- * Reads the same localStorage key the reader's AI settings page writes rather
- * than importing `aiLocalBaseUrl$`: that store lands with the AI branch and
- * doesn't exist on `desktop` yet. Reading the key directly keeps ONE source of
- * truth — the alternative was a second local-runtime setting that silently
- * disagreed with the one in settings. Same read semantics as
- * `writableStringLocalStorageSubject` (stored value or default; strings are
- * kept raw, not JSON-encoded).
- *
- * Post-merge this becomes `aiLocalBaseUrl$.getValue()`; the behaviour is
- * already identical, so that change is cosmetic.
+ * Local runtime URL for the translation providers — the same one the rest of
+ * the AI surface uses, so changing it in settings moves everything at once.
  */
 export function localTranslationBaseUrl(): string {
-  return localStorage.getItem('aiLocalBaseUrl') || 'http://127.0.0.1:11434';
+  return aiLocalBaseUrl$.getValue();
 }
 
 export async function checkLocalTranslationRuntime(): Promise<ProviderHealth> {
