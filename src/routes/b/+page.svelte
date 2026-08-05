@@ -163,6 +163,7 @@
     }
   }
   import DictPopup from '$lib/components/dict/dict-popup.svelte';
+  import { extractSentence } from '$lib/data/ai/gloss';
   import {
     highlights$ as hlStore$,
     initHighlightManager,
@@ -352,6 +353,7 @@
   let aiDrawerOpen = false;
   let dictPopupOpen = false;
   let dictPopupWord = '';
+  let dictPopupSentence = '';
   let dictPopupX = 0;
   let dictPopupY = 0;
   let hlPendingColor: HighlightColor = 'yellow';
@@ -1711,10 +1713,41 @@
       return;
     }
     dictPopupWord = text;
+    dictPopupSentence = extractSelectionSentence(hlPendingRange, text);
     dictPopupX = hlMenuX;
     dictPopupY = hlMenuY + 30;
     dictPopupOpen = true;
     hlMenuVisible = false;
+  }
+
+  /**
+   * Grab the sentence around a selection for the contextual gloss. Walks up to
+   * the nearest block-level ancestor rather than using the text node alone,
+   * because inline markup (ruby, emphasis, links) routinely splits a sentence
+   * across several text nodes. Returns '' when the sentence can't be recovered;
+   * the gloss then falls back to word-only, and the dictionary is unaffected.
+   */
+  function extractSelectionSentence(range: Range, selected: string): string {
+    try {
+      let node: Node | null = range.commonAncestorContainer;
+      if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+      let block = node as HTMLElement | null;
+      while (
+        block &&
+        block.parentElement &&
+        (block.textContent || '').length < selected.length + 40
+      ) {
+        block = block.parentElement;
+      }
+      const text = (block?.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text) return '';
+      const at = text.indexOf(selected);
+      return extractSentence(text, at >= 0 ? at : 0);
+    } catch {
+      // Detached ranges and cross-document nodes both land here; a missing
+      // sentence only downgrades the gloss, so it is not worth surfacing.
+      return '';
+    }
   }
 
   function handleHlEditMemoRequest() {
@@ -2517,6 +2550,8 @@
 {#if dictPopupOpen}
   <DictPopup
     word={dictPopupWord}
+    sentence={dictPopupSentence}
+    bookTitle={$rawBookData$?.title ?? ''}
     x={dictPopupX}
     y={dictPopupY}
     on:close={() => (dictPopupOpen = false)}

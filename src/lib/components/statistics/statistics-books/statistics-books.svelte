@@ -1,6 +1,7 @@
 <script lang="ts">
   import type {
     BooksDbBookData,
+    BooksDbBookMetadata,
     BooksDbManualBook,
     BooksDbStatistic
   } from '$lib/data/database/books-db/versions/books-db';
@@ -9,17 +10,21 @@
     type BookRow
   } from '$lib/components/statistics/books-summary';
   import { resolvePeriod } from '$lib/components/statistics/statistics-period';
+  import StatisticsBooksAutotag from '$lib/components/statistics/statistics-books/statistics-books-autotag.svelte';
   import { t, tImmediate } from '$lib/i18n';
-  import { onDestroy } from 'svelte';
+  import { createEventDispatcher, onDestroy } from 'svelte';
 
   export let statistics: BooksDbStatistic[] = [];
   export let manualBooks: BooksDbManualBook[] = [];
+  export let bookMetadata: BooksDbBookMetadata[] = [];
   export let dataMetas: Pick<BooksDbBookData, 'title' | 'characters'>[] = [];
   export let startDate: string;
   export let endDate: string;
   export let startDayHours: number;
   export let titleFilter: Map<string, boolean>;
   export let statisticsDateRangeLabel: string;
+
+  const dispatch = createEventDispatcher<{ metaChanged: void }>();
 
   type SortKey = 'seconds' | 'chars' | 'days' | 'progress' | 'lastDateKey' | 'title';
   let sortKey: SortKey = 'seconds';
@@ -31,6 +36,7 @@
         period: bounds,
         statistics,
         manualBooks,
+        bookMetadata,
         dataMetas,
         titleFilter
       })
@@ -105,6 +111,15 @@
 <div class="my-4 opacity-80">
   {$t('stats.books.header', { range: statisticsDateRangeLabel, n: rows.length })}
 </div>
+
+{#if rows.length > 0}
+  <StatisticsBooksAutotag
+    {manualBooks}
+    {bookMetadata}
+    titles={rows.map((r) => r.title)}
+    on:applied={() => dispatch('metaChanged')}
+  />
+{/if}
 
 {#if rows.length === 0}
   <div class="opacity-60 text-sm py-6">{$t('stats.empty.period')}</div>

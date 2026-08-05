@@ -66,6 +66,31 @@ export const aiProvider$ = writableStringLocalStorageSubject()('aiProvider', 'an
 export const aiApiKey$ = writableStringLocalStorageSubject()('aiApiKey', '');
 export const aiBaseUrl$ = writableStringLocalStorageSubject()('aiBaseUrl', '');
 export const aiModel$ = writableStringLocalStorageSubject()('aiModel', 'claude-sonnet-4-6');
+// Local runtime (Ollama and anything speaking its /api surface). Kept separate
+// from the cloud endpoint above so a user can have both configured and let each
+// task pick: short interactive work goes local when a model is present, the
+// spoiler-safe assistant stays on the cloud model that follows constraints better.
+export const aiLocalBaseUrl$ = writableStringLocalStorageSubject()(
+  'aiLocalBaseUrl',
+  'http://127.0.0.1:11434'
+);
+/** Empty means "whatever is installed" — resolved to the largest local model. */
+export const aiLocalModel$ = writableStringLocalStorageSubject()('aiLocalModel', '');
+/** Contextual gloss beside the offline dictionary. Off until a model is found. */
+export const aiGlossEnabled$ = writableBooleanLocalStorageSubject()('aiGlossEnabled', true);
+/** Offer LLM post-correction of an OCR'd text layer. */
+export const aiOcrCorrectEnabled$ = writableBooleanLocalStorageSubject()(
+  'aiOcrCorrectEnabled',
+  true
+);
+/**
+ * OCR recognition language. Lives here rather than in the components that read
+ * it: pdf-ocr-banner and pdf-page-context-menu each used to build their own
+ * subject over this same localStorage key, so they held two independent
+ * BehaviorSubjects — changing the language in one left the other's subscribers
+ * on the old value until a reload.
+ */
+export const pdfOcrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'ch');
 export const dictFolderPath$ = writableStringLocalStorageSubject()('dictFolderPath', '');
 export const syncToken$ = writableStringLocalStorageSubject()('syncToken', '');
 export const syncDeviceId$ = writableStringLocalStorageSubject()('syncDeviceId', '');

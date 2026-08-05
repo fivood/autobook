@@ -222,11 +222,22 @@
           '$lib/components/statistics/statistics-year/year-summary'
         );
         const { buildYearReportMarkdown } = await import('$lib/functions/year-report');
+        const { computeAuthorsList } = await import('$lib/components/statistics/books-summary');
+        const { resolvePeriod } = await import('$lib/components/statistics/statistics-period');
 
         const [highlights, sessions] = await Promise.all([
           database.getAllHighlights(),
           database.getAllSessions()
         ]);
+
+        // The books/authors tabs load this lazily; an export can happen
+        // without ever visiting them, so make sure it's there first.
+        await ensureBookMetaLoaded();
+        const authorPeriod = resolvePeriod(
+          $lastStatisticsStartDate$,
+          $lastStatisticsEndDate$,
+          $startDayHoursForTracker$
+        );
 
         const scopedStatistics = statisticsData.filter(
           (s) =>
@@ -260,6 +271,16 @@
           endDate: $lastStatisticsEndDate$,
           statistics: scopedStatistics,
           highlights: highlightSummary,
+          authors: authorPeriod
+            ? computeAuthorsList({
+                period: authorPeriod,
+                statistics: statisticsData,
+                manualBooks,
+                bookMetadata,
+                dataMetas,
+                titleFilter: statisticsTitleFilters
+              })
+            : [],
           year: yearSummary
         });
 
@@ -409,6 +430,8 @@
     import('$lib/data/database/books-db/versions/books-db').BooksDbBookData,
     'title' | 'characters'
   >[] = [];
+  let bookMetadata: import('$lib/data/database/books-db/versions/books-db').BooksDbBookMetadata[] =
+    [];
   let bookMetaLoaded = false;
   let bookMetaLoading = false;
 
@@ -417,11 +440,13 @@
     bookMetaLoading = true;
     try {
       const db = await database.db;
-      const [mBooks, data] = await Promise.all([
+      const [mBooks, imported, data] = await Promise.all([
         database.getAllManualBooks(),
+        database.getAllBookMetadata(),
         db.getAll('data')
       ]);
       manualBooks = mBooks;
+      bookMetadata = imported;
       dataMetas = data.map((d) => ({ title: d.title, characters: d.characters || 0 }));
       bookMetaLoaded = true;
     } finally {
@@ -435,6 +460,16 @@
     !bookMetaLoaded
   ) {
     ensureBookMetaLoaded();
+  }
+
+  /**
+   * The snapshot above is loaded once per panel entry, so a write made from
+   * inside the panel (auto-tagging) has to invalidate it explicitly —
+   * otherwise the applied tags don't show until the panel is reopened.
+   */
+  async function reloadBookMeta() {
+    bookMetaLoaded = false;
+    await ensureBookMetaLoaded();
   }
 
   $: statisticsDateRangeLabel = getDateRangeLabel(
@@ -882,18 +917,21 @@
     <StatisticsBooks
       statistics={statisticsData}
       {manualBooks}
+      {bookMetadata}
       {dataMetas}
       startDate={$lastStatisticsStartDate$}
       endDate={$lastStatisticsEndDate$}
       startDayHours={$startDayHoursForTracker$}
       titleFilter={statisticsTitleFilters}
       {statisticsDateRangeLabel}
+      on:metaChanged={reloadBookMeta}
     />
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.AUTHORS}
     <StatisticsAuthors
       statistics={statisticsData}
       {manualBooks}
+      {bookMetadata}
       {dataMetas}
       startDate={$lastStatisticsStartDate$}
       endDate={$lastStatisticsEndDate$}

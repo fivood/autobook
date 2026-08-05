@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { faBookOpenReader, faClock, faDatabase, faPalette, faVolumeHigh } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faBookOpenReader,
+    faClock,
+    faDatabase,
+    faPalette,
+    faVolumeHigh,
+    faWandMagicSparkles
+  } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import Ripple from '$lib/components/ripple.svelte';
@@ -15,6 +22,7 @@
   const settingItems = [
     { label: 'Reader', labelKey: 'settings.tab.reader', icon: faBookOpenReader },
     { label: 'TTS', labelKey: 'settings.tab.tts', icon: faVolumeHigh },
+    { label: 'AI', labelKey: 'settings.tab.ai', icon: faWandMagicSparkles },
     { label: 'Appearance', labelKey: 'settings.tab.appearance', icon: faPalette },
     { label: 'Data', labelKey: 'settings.tab.data', icon: faDatabase },
     { label: 'Statistics', labelKey: 'settings.tab.statistics', icon: faClock }

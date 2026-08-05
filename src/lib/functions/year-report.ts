@@ -4,11 +4,13 @@
  * All rights reserved.
  */
 
+import type { AuthorRow } from '$lib/components/statistics/books-summary';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
 import type { HighlightStatsSummary } from '$lib/functions/highlight-stats';
 import type { YearSummary } from '$lib/components/statistics/statistics-year/year-summary';
 import { toTimeString } from '$lib/functions/statistic-util';
 import { highlightColorLabels, highlightColors } from '$lib/functions/highlight-stats';
+import { UNKNOWN_AUTHOR_KEY } from '$lib/components/statistics/books-summary';
 
 export interface YearReportInput {
   label: string;
@@ -17,6 +19,9 @@ export interface YearReportInput {
   /** Statistics rows already scoped to the report's date range. */
   statistics: BooksDbStatistic[];
   highlights: HighlightStatsSummary;
+  /** Per-author rollup for the same range. Empty when no book in the range
+   * has an author from either manualBook or the imported file's metadata. */
+  authors?: AuthorRow[];
   /** Full-year summary. Optional — when the range doesn't align to a calendar
    * year (e.g. "本月") we still include it for context. */
   year?: YearSummary;
@@ -30,7 +35,7 @@ interface DayTotals {
 }
 
 export function buildYearReportMarkdown(input: YearReportInput): string {
-  const { label, statistics, highlights, year } = input;
+  const { label, statistics, highlights, authors, year } = input;
 
   const totals = { readingTime: 0, charactersRead: 0 };
   const perDay = new Map<string, DayTotals>();
@@ -78,6 +83,21 @@ export function buildYearReportMarkdown(input: YearReportInput): string {
     lines.push('|---|---|---|---|');
     topInRange.forEach(([title, v], i) => {
       lines.push(`| ${i + 1} | ${title} | ${toTimeString(v.seconds)} | ${v.chars.toLocaleString()} |`);
+    });
+    lines.push('');
+  }
+
+  const rankedAuthors = (authors ?? [])
+    .filter((a) => a.author !== UNKNOWN_AUTHOR_KEY && a.seconds > 0)
+    .slice(0, 10);
+  if (rankedAuthors.length) {
+    lines.push('## 本期 Top 作者', '');
+    lines.push('| # | 作者 | 时长 | 字数 | 书目 |');
+    lines.push('|---|---|---|---|---|');
+    rankedAuthors.forEach((a, i) => {
+      lines.push(
+        `| ${i + 1} | ${a.author} | ${toTimeString(a.seconds)} | ${a.chars.toLocaleString()} | ${a.books.join('、')} |`
+      );
     });
     lines.push('');
   }

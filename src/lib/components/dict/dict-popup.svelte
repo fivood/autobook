@@ -1,13 +1,19 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
-  import { faTimes, faFolderOpen } from '@fortawesome/free-solid-svg-icons';
+  import { faTimes, faFolderOpen, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
   import { isTauri } from '$lib/data/env';
-  import { dictFolderPath$ } from '$lib/data/store';
+  import { aiGlossEnabled$, dictFolderPath$ } from '$lib/data/store';
   import { lookupAll, scanDictFolder, loadedDicts$ } from '$lib/data/dict/dict-manager';
+  import { resolveEndpoint, type ResolvedEndpoint } from '$lib/data/ai/endpoint';
+  import { probeLocalModels } from '$lib/data/ai/local-model';
+  import { requestGloss, type GlossResult } from '$lib/data/ai/gloss';
   import { t, tImmediate } from '$lib/i18n';
 
   export let word: string;
+  /** Sentence the word was selected in. Empty degrades the gloss, not the dict. */
+  export let sentence = '';
+  export let bookTitle = '';
   export let x = 0;
   export let y = 0;
 
@@ -103,6 +109,71 @@
     // many StarDict packs store HTML in m/h types; strip naively for readability
     return s.replace(/<br\s*\/?>(?!\s*$)/gi, '\n').replace(/<[^>]+>/g, '');
   }
+
+  // --- contextual gloss -----------------------------------------------------
+  // Runs only when asked. The dictionary above is instant and offline; firing a
+  // model on every lookup would spend time and (on a cloud endpoint) money the
+  // reader did not ask for, so this stays behind one click.
+
+  let gloss: GlossResult | undefined;
+  let glossBusy = false;
+  let glossError = '';
+  let glossedWord = '';
+  let glossAbort: AbortController | undefined;
+  let endpoint: ResolvedEndpoint | undefined;
+
+  onMount(() => {
+    // Silent probe: a machine with no runtime shows no gloss button and no
+    // message about it. See local-model.ts — probe, never sell.
+    probeLocalModels()
+      .then(() => {
+        // 1.5B is enough to pick the right sense out of a sentence.
+        endpoint = resolveEndpoint('prefer-local', 1.5);
+      })
+      .catch(() => {
+        // Probe failures already collapse to "unavailable" internally.
+      });
+  });
+
+  $: if (word !== glossedWord) {
+    // A new selection invalidates the previous answer.
+    glossAbort?.abort();
+    gloss = undefined;
+    glossError = '';
+    glossBusy = false;
+  }
+
+  $: glossAvailable = $aiGlossEnabled$ && !!endpoint;
+
+  async function runGloss() {
+    if (glossBusy || !endpoint) return;
+    glossAbort?.abort();
+    const controller = new AbortController();
+    glossAbort = controller;
+    glossBusy = true;
+    glossError = '';
+    gloss = undefined;
+    glossedWord = word;
+
+    try {
+      const senses = results.flatMap((r) => r.entries.map((entry) => stripHtml(entry)));
+      const result = await requestGloss(endpoint.opts, {
+        word,
+        sentence,
+        bookTitle,
+        dictionarySenses: senses,
+        signal: controller.signal
+      });
+      if (controller.signal.aborted) return;
+      if (result) gloss = result;
+      else glossError = tImmediate('dict.glossEmpty');
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+      glossError = err?.message || String(err);
+    } finally {
+      if (!controller.signal.aborted) glossBusy = false;
+    }
+  }
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -151,6 +222,39 @@
     {/if}
     {#if message && loaded.length && results.length}
       <p class="mt-2 text-xs opacity-50">{message}</p>
+    {/if}
+
+    {#if glossAvailable}
+      <section class="mt-2 border-t border-current/10 pt-2">
+        {#if gloss}
+          <h4 class="mb-1 flex items-center gap-1 text-xs font-medium opacity-50">
+            <Fa icon={faWandMagicSparkles} size="xs" />
+            {$t('dict.glossHeading')}
+          </h4>
+          <p class="whitespace-pre-wrap break-words leading-relaxed">{gloss.meaning}</p>
+          {#if gloss.note}
+            <p class="mt-1 text-xs opacity-60">{gloss.note}</p>
+          {/if}
+          <p class="mt-1 text-[11px] opacity-40">
+            {endpoint?.label ?? ''}{sentence ? '' : ` · ${$t('dict.glossNoSentence')}`}
+          </p>
+        {:else if glossError}
+          <p class="text-xs text-red-500">{glossError}</p>
+        {:else}
+          <button
+            type="button"
+            class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs opacity-70 hover-soft hover:opacity-100 disabled:cursor-wait"
+            title={endpoint?.isLocal
+              ? $t('dict.glossTooltipLocal', { model: endpoint.label })
+              : $t('dict.glossTooltipCloud', { model: endpoint?.label ?? '' })}
+            disabled={glossBusy}
+            on:click={runGloss}
+          >
+            <Fa icon={faWandMagicSparkles} size="xs" />
+            {glossBusy ? $t('dict.glossBusy') : $t('dict.glossAction')}
+          </button>
+        {/if}
+      </section>
     {/if}
   </div>
 </div>

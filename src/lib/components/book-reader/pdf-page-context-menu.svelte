@@ -3,16 +3,13 @@
   import { onMount, onDestroy } from 'svelte';
   import Fa from 'svelte-fa';
   import { faMagnifyingGlass, faRotateRight } from '@fortawesome/free-solid-svg-icons';
-  import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
-  import { database } from '$lib/data/store';
+  import { database, pdfOcrLang$ } from '$lib/data/store';
   import { runOcrOnPage } from '$lib/functions/file-loaders/pdf/pdf-ocr-runner';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import type { OcrLanguage } from '$lib/functions/file-loaders/pdf/pdf-ocr';
   import { t, tImmediate } from '$lib/i18n';
 
   export let book: BooksDbBookData;
-
-  const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'ch');
 
   const LANGS: Array<{ code: OcrLanguage; label: string }> = [
     { code: 'ch', label: '中文（简中 + 英文）' },
@@ -52,7 +49,7 @@
   }
 
   function runReocrWithSavedLang() {
-    return reocr($ocrLang$ as OcrLanguage);
+    return reocr($pdfOcrLang$ as OcrLanguage);
   }
 
   async function reocr(lang: OcrLanguage) {
@@ -104,7 +101,7 @@
       <button class="item" on:click={runReocrWithSavedLang}>
         <Fa icon={faRotateRight} size="xs" />
         <span>{$t('pdfCtx.reOcrThisPage')}</span>
-        <span class="meta">{LANGS.find((l) => l.code === $ocrLang$)?.label || $ocrLang$}</span>
+        <span class="meta">{LANGS.find((l) => l.code === $pdfOcrLang$)?.label || $pdfOcrLang$}</span>
       </button>
       <button class="item" on:click={() => (showLangPicker = true)}>
         <Fa icon={faMagnifyingGlass} size="xs" />

@@ -1,8 +1,12 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
-  import { faTimes, faMagnifyingGlass, faStop } from '@fortawesome/free-solid-svg-icons';
-  import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
+  import {
+    faTimes,
+    faMagnifyingGlass,
+    faStop,
+    faWandMagicSparkles
+  } from '@fortawesome/free-solid-svg-icons';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import {
     abortOcrJob,
@@ -12,11 +16,24 @@
     startOcrJob,
     type OcrLanguage
   } from '$lib/functions/file-loaders/pdf/ocr-job-manager';
-  import { pdfOcrPromptEnabled$, pdfOcrSkippedBookIds$ as ocrSkippedBooks$ } from '$lib/data/store';
+  import {
+    abortOcrCorrectJob,
+    clearOcrCorrectJob,
+    hasCorrectableText,
+    isOcrCorrectJobRunning,
+    ocrCorrectJob$,
+    startOcrCorrectJob
+  } from '$lib/functions/file-loaders/pdf/ocr-correct-job';
+  import { resolveEndpoint, type ResolvedEndpoint } from '$lib/data/ai/endpoint';
+  import { probeLocalModels } from '$lib/data/ai/local-model';
+  import {
+    aiOcrCorrectEnabled$,
+    pdfOcrLang$,
+    pdfOcrPromptEnabled$,
+    pdfOcrSkippedBookIds$ as ocrSkippedBooks$
+  } from '$lib/data/store';
 
   export let book: BooksDbBookData;
-
-  const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'ch');
 
   const dispatch = createEventDispatcher<{ dismissed: void }>();
 
@@ -41,7 +58,7 @@
 
   function start() {
     if (isOcrJobRunning()) return;
-    startOcrJob(book, $ocrLang$ as OcrLanguage);
+    startOcrJob(book, $pdfOcrLang$ as OcrLanguage);
   }
 
   function applyAndReload() {
@@ -65,6 +82,48 @@
     $ocrSkippedBooks$ = Array.from(next).join(',');
     dismissed = true;
     dispatch('dismissed');
+  }
+
+  // ── OCR post-correction ────────────────────────────────────────────
+  // Corrects the transparent text layer only; the page image the reader
+  // looks at never changes. So this improves selection / search / TTS /
+  // AI context, and a poor result costs nothing visible and is re-runnable.
+
+  let endpoint: ResolvedEndpoint | undefined;
+  let correctDismissed = false;
+
+  onMount(() => {
+    // 3B is the floor where fixing glyph confusions stops introducing new
+    // errors of its own.
+    probeLocalModels()
+      .then(() => (endpoint = resolveEndpoint('prefer-local', 3)))
+      .catch(() => {
+        // Absent runtime simply leaves `endpoint` undefined; no UI appears.
+      });
+  });
+
+  $: correctJobForThisBook =
+    $ocrCorrectJob$ && $ocrCorrectJob$.bookId === book.id ? $ocrCorrectJob$ : null;
+  $: correctOtherBookRunning =
+    !!$ocrCorrectJob$ && $ocrCorrectJob$.bookId !== book.id && $ocrCorrectJob$.status === 'running';
+  // Offered once the book actually has a text layer, which is also true for
+  // books OCR'd in an earlier session — those never show the OCR prompt again.
+  $: canCorrect =
+    $aiOcrCorrectEnabled$ &&
+    !!endpoint &&
+    !correctDismissed &&
+    !correctJobForThisBook &&
+    !!book?.elementHtml &&
+    hasCorrectableText(book);
+
+  function startCorrect() {
+    if (!endpoint || isOcrCorrectJobRunning()) return;
+    startOcrCorrectJob(book, endpoint.opts);
+  }
+
+  function applyCorrectAndReload() {
+    clearOcrCorrectJob();
+    window.location.reload();
   }
 </script>
 
@@ -108,7 +167,7 @@
         </div>
       </div>
       <label class="lang">
-        <select bind:value={$ocrLang$} disabled={otherBookRunning}>
+        <select bind:value={$pdfOcrLang$} disabled={otherBookRunning}>
           {#each LANGS as l (l.code)}
             <option value={l.code}>{l.label}</option>
           {/each}
@@ -118,6 +177,73 @@
       <button class="btn" on:click={dontAskForThisBook} title="只看原图，不要再为这本书提示">仅看原图</button>
       <button class="btn ghost" on:click={dismiss} title="本次会话不再提示"><Fa icon={faTimes} /></button>
     {/if}
+  </div>
+{/if}
+
+<!--
+  Correction lives in its own block rather than a branch of the one above:
+  that banner is suppressed once a book lands in the OCR skip list, which is
+  exactly the state a previously-OCR'd book is in — the one that most needs
+  correcting.
+-->
+{#if correctJobForThisBook}
+  <div class="banner">
+    {#if correctJobForThisBook.status === 'running'}
+      <Fa icon={faWandMagicSparkles} class="ico" />
+      <div class="text">
+        <div class="title">
+          OCR 纠错中… {correctJobForThisBook.progress.batch} / {correctJobForThisBook.progress
+            .totalBatches} 批
+        </div>
+        <div class="meta">
+          已修正 {correctJobForThisBook.progress.linesCorrected} 行 · 使用 {correctJobForThisBook.modelId}
+        </div>
+      </div>
+      <button class="btn danger" on:click={abortOcrCorrectJob}>
+        <Fa icon={faStop} size="xs" /> 中止
+      </button>
+    {:else if correctJobForThisBook.status === 'finished'}
+      <Fa icon={faWandMagicSparkles} class="ico" />
+      <div class="text">
+        <div class="title">
+          纠错完成 · 修正 {correctJobForThisBook.progress.linesCorrected} / {correctJobForThisBook
+            .progress.totalLines} 行
+        </div>
+        <div class="meta">
+          {correctJobForThisBook.failedBatches
+            ? `${correctJobForThisBook.failedBatches} 批未返回可用结果，这些行保持原样`
+            : '刷新后生效，页面图像不变'}
+        </div>
+      </div>
+      <button class="btn primary" on:click={applyCorrectAndReload}>应用并刷新</button>
+      <button class="btn ghost" on:click={clearOcrCorrectJob}><Fa icon={faTimes} /></button>
+    {:else}
+      <Fa icon={faWandMagicSparkles} class="ico" />
+      <div class="text">
+        <div class="title">OCR 纠错失败</div>
+        <div class="meta">{correctJobForThisBook.error}</div>
+      </div>
+      <button class="btn primary" on:click={startCorrect}>重试</button>
+      <button class="btn ghost" on:click={clearOcrCorrectJob}><Fa icon={faTimes} /></button>
+    {/if}
+  </div>
+{:else if canCorrect}
+  <div class="banner">
+    <Fa icon={faWandMagicSparkles} class="ico" />
+    <div class="text">
+      <div class="title">可以用模型纠正 OCR 文字层</div>
+      <div class="meta">
+        {correctOtherBookRunning
+          ? `「${$ocrCorrectJob$?.bookTitle}」正在纠错 — 中止后才能开始这本`
+          : `修正形近字与多余空格，改善选择 / 搜索 / 朗读；页面图像不变 · ${endpoint?.label ?? ''}`}
+      </div>
+    </div>
+    <button class="btn primary" on:click={startCorrect} disabled={correctOtherBookRunning}>
+      开始纠错
+    </button>
+    <button class="btn ghost" on:click={() => (correctDismissed = true)} title="本次会话不再提示">
+      <Fa icon={faTimes} />
+    </button>
   </div>
 {/if}
 
