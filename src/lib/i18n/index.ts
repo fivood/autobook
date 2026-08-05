@@ -24,7 +24,17 @@ const DICTS: Record<Locale, Dict> = { zh, en, ja };
 /** Persisted locale. Reads localStorage on load; auto-detects browser
  * language on first visit. */
 function detectDefault(): Locale {
-  if (typeof navigator === 'undefined') return 'zh';
+  // `typeof navigator === 'undefined'` used to mean "running on the server".
+  // Node 21 added a global `navigator`, so that guard silently stopped
+  // working: prerendering read the *build machine's* ICU language and baked
+  // every static HTML file in it (this machine reports ja-JP, so every page
+  // shipped as Japanese). The browser painted that, then hydration read
+  // localStorage and switched back — the one-frame language flash.
+  //
+  // `window` is the reliable browser check; Node has never defined it. On the
+  // server we fall back to zh, the origin language everything else already
+  // falls back to, so the prerendered HTML no longer depends on who built it.
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'zh';
   const nav = navigator.language.toLowerCase();
   if (nav.startsWith('ja')) return 'ja';
   if (nav.startsWith('zh')) return 'zh';
@@ -34,7 +44,11 @@ function detectDefault(): Locale {
 }
 
 function readStored(): Locale {
-  if (typeof localStorage === 'undefined') return detectDefault();
+  // Same reasoning as above — Node 22 can expose a global localStorage behind
+  // a flag, so gate on the browser itself rather than on the API's existence.
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return detectDefault();
+  }
   const raw = localStorage.getItem(STORAGE_KEY);
   return LOCALES.includes(raw as Locale) ? (raw as Locale) : detectDefault();
 }
