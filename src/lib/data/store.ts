@@ -76,6 +76,8 @@ export const aiLocalBaseUrl$ = writableStringLocalStorageSubject()(
 );
 /** Empty means "whatever is installed" — resolved to the largest local model. */
 export const aiLocalModel$ = writableStringLocalStorageSubject()('aiLocalModel', '');
+export const translateDraftSource$ = writableStringLocalStorageSubject()('translateDraftSource', 'local');
+export const translateReviewSource$ = writableStringLocalStorageSubject()('translateReviewSource', 'cloud');
 /** Contextual gloss beside the offline dictionary. Off until a model is found. */
 export const aiGlossEnabled$ = writableBooleanLocalStorageSubject()('aiGlossEnabled', true);
 /** Offer LLM post-correction of an OCR'd text layer. */

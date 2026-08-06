@@ -3,10 +3,10 @@
   import { onMount } from 'svelte';
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
-  import { adapterForTranslationDocument, checkLocalTranslationRuntime, createLocalTranslationProvider, inspectStoredBook, inspectTranslationFile, listLocalTranslationModels, localTranslationBaseUrl } from '$lib/data/translation/translation-core';
-  import { aiApiKey$, aiBaseUrl$, aiModel$, aiProvider$, database } from '$lib/data/store';
+  import { adapterForTranslationDocument, checkLocalTranslationRuntime, createCloudTranslationProvider, createLocalTranslationProvider, inspectStoredBook, inspectTranslationFile, listLocalTranslationModels, localTranslationBaseUrl, type TranslationSource } from '$lib/data/translation/translation-core';
+  import { aiApiKey$, aiModel$, aiProvider$, database, translateDraftSource$, translateReviewSource$ } from '$lib/data/store';
   import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob } from '$lib/data/translation/translation-job-store';
-  import { exportHtmlAsMarkdownChunks, extractGlossaryCandidates, OpenAICompatibleProvider, translateInBatches } from 'translator-workbench';
+  import { exportHtmlAsMarkdownChunks, extractGlossaryCandidates, translateInBatches } from 'translator-workbench';
   import { createJob, pendingSegments, recordTranslationResults, setJobStatus, validateTranslationJob } from 'translator-workbench';
   import type { DocumentAdapter, GlossaryEntry, ModelInfo, TranslationDocument, TranslationJob, TranslationResult } from 'translator-workbench';
   import { buttonClasses, inputClasses } from '$lib/css-classes';
@@ -65,19 +65,15 @@
     jobStatus = job?.status ?? '';
   }
 
-  // The review pass reads the reader's own AI settings rather than keeping a
-  // second endpoint config of its own. Two places to type an API key that
-  // silently disagree is worse than one place that occasionally says "not
-  // configured yet" — and the settings page is already where every other AI
-  // feature is wired up.
-  //
-  // Gated on the OpenAI-compatible provider on purpose: OpenAICompatibleProvider
-  // speaks that wire format only, so an Anthropic key would fail at request
-  // time with a confusing error instead of up front with a clear one.
-  $: precisionBaseUrl = ($aiBaseUrl$ || 'https://api.openai.com/v1').trim();
-  $: precisionModel = ($aiModel$ || '').trim();
-  $: precisionProviderOk = $aiProvider$ === 'openai';
-  $: precisionReady = precisionProviderOk && !!precisionModel;
+  $: draftSource = $translateDraftSource$ as TranslationSource;
+  $: reviewSource = $translateReviewSource$ as TranslationSource;
+  $: draftIsCloud = draftSource === 'cloud';
+  $: reviewIsCloud = reviewSource === 'cloud';
+  $: cloudModel = ($aiModel$ || '').trim();
+  $: cloudProvider = ($aiProvider$ || 'anthropic');
+  $: cloudReady = !!$aiApiKey$ && !!cloudModel;
+  $: draftReady = draftIsCloud ? cloudReady : !!selectedModel;
+  $: precisionReady = reviewIsCloud ? cloudReady : !!selectedModel;
 
   $: completedSegmentCount = translations.size;
   $: totalSegmentCount = translationDocument?.segments.length || 0;
@@ -313,14 +309,15 @@
     const abortController = new AbortController();
     activeAbortController = abortController;
     try {
-      const provider = createLocalTranslationProvider();
+      const provider = draftIsCloud ? createCloudTranslationProvider() : createLocalTranslationProvider();
+      const model = draftIsCloud ? cloudModel : selectedModel;
       await translateInBatches(pendingSegments(job), {
         provider,
-        model: selectedModel,
+        model,
         sourceLanguage: translationDocument.sourceLanguage || 'en',
         targetLanguage,
         glossary: job.glossary,
-        batchSize: 3,
+        batchSize: draftIsCloud ? 6 : 3,
         maxSourceChars: 12000,
         maxRetries: 3,
         retryDelayMs: 2000,
@@ -367,25 +364,27 @@
     localStorage.setItem('autobook-translation-markdown-chars', String(markdownChunkChars));
   }
 
-  function precisionProvider() {
-    return new OpenAICompatibleProvider({
-      baseUrl: precisionBaseUrl,
-      apiKey: $aiApiKey$.trim() || undefined
-    });
+  function reviewProvider() {
+    return reviewIsCloud ? createCloudTranslationProvider() : createLocalTranslationProvider();
   }
 
-  async function checkPrecisionProvider() {
+  function reviewModel() {
+    return reviewIsCloud ? cloudModel : selectedModel;
+  }
+
+  async function checkReviewProvider() {
     errorMessage = '';
-    if (!precisionProviderOk) {
-      precisionMessage = tImmediate('translate.precision.needsOpenAi', { provider: $aiProvider$ });
+    const isCloud = reviewIsCloud;
+    if (isCloud && !cloudReady) {
+      precisionMessage = tImmediate('translate.precision.needsSettings');
       return;
     }
-    if (!precisionModel) {
+    if (!isCloud && !selectedModel) {
       precisionMessage = tImmediate('translate.precision.needsSettings');
       return;
     }
     try {
-      const provider = precisionProvider();
+      const provider = reviewProvider();
       const health = await provider.healthCheck();
       precisionMessage = health.message;
       if (health.ok) {
@@ -401,7 +400,8 @@
   }
 
   async function startPrecisionReview() {
-    if (!translationDocument || !translationJob || !documentAdapter || !precisionReady) return;
+    if (!translationDocument || !translationJob || !documentAdapter) return;
+    if (!precisionReady) return;
     running = true;
     errorMessage = '';
     const job = translationJob;
@@ -416,10 +416,11 @@
     const abortController = new AbortController();
     activeAbortController = abortController;
     try {
-      const provider = precisionProvider();
+      const provider = reviewProvider();
+      const model = reviewModel();
       await translateInBatches(sourceSegments, {
         provider,
-        model: precisionModel,
+        model,
         sourceLanguage: targetLanguage,
         targetLanguage,
         glossary: job.glossary,
@@ -647,10 +648,25 @@
   {#if translationDocument}
     <section class="rounded-lg border border-current/20 p-4">
       <h2 class="font-medium">{$t('translate.draft.title')}</h2>
-      <div class="mt-3 grid gap-3 sm:grid-cols-2">
-        <label class="text-sm">{$t('translate.draft.model')}<select class={inputClasses} bind:value={selectedModel} on:change={() => (modelSelectionTouched = true)}>{#each models as model}<option value={model.id}>{model.id}</option>{/each}</select></label>
+      <div class="mt-3 grid gap-3 sm:grid-cols-3">
+        <label class="text-sm">{$t('translate.draft.model')}
+          <select class={inputClasses} bind:value={$translateDraftSource$}>
+            <option value="local">{$t('translate.source.local')}</option>
+            <option value="cloud">{$t('translate.source.cloud')}</option>
+          </select>
+        </label>
+        {#if !draftIsCloud}
+          <label class="text-sm">Ollama<select class={inputClasses} bind:value={selectedModel} on:change={() => (modelSelectionTouched = true)}>{#each models as model}<option value={model.id}>{model.id}</option>{/each}</select></label>
+        {/if}
         <label class="text-sm">{$t('translate.draft.targetLanguage')}<input class={inputClasses} bind:value={targetLanguage} /></label>
       </div>
+      {#if draftIsCloud}
+        {#if cloudReady}
+          <p class="mt-3 text-sm opacity-70">{$t('translate.source.cloudUsing', { provider: cloudProvider, model: cloudModel })}</p>
+        {:else}
+          <p class="mt-3 text-sm" style="color:var(--danger-color);">{$t('translate.source.cloudNotReady')}</p>
+        {/if}
+      {/if}
       {#if translationDocument.format === 'html'}
         <label class="mt-3 block text-sm">{$t('translate.draft.chunkChars')}<input class={inputClasses} type="number" min="4000" max="100000" step="1000" bind:value={markdownChunkChars} on:change={normalizeMarkdownChunkChars} /></label>
       {/if}
@@ -658,7 +674,7 @@
         <button
           class="rounded px-3 py-2 text-sm disabled:opacity-50"
           style="background:var(--menu-background);color:var(--menu-foreground);"
-          disabled={busy || !selectedModel}
+          disabled={busy || !draftReady}
           on:click={startDraftTranslation}
         >
           {translationJob?.status === 'paused' || translationJob?.status === 'failed' ? $t('translate.draft.resume') : $t('translate.draft.start')}
@@ -684,17 +700,26 @@
     <section class="rounded-lg border border-current/20 p-4">
       <h2 class="font-medium">{$t('translate.precision.title')}</h2>
       <p class="mt-1 text-sm opacity-70">{$t('translate.precision.hint')}</p>
-      {#if !precisionProviderOk}
-        <p class="mt-3 text-sm" style="color:var(--danger-color);">
-          {$t('translate.precision.needsOpenAi', { provider: $aiProvider$ })}
-        </p>
-      {:else if !precisionModel}
-        <p class="mt-3 text-sm" style="color:var(--danger-color);">{$t('translate.precision.needsSettings')}</p>
-      {:else}
-        <p class="mt-3 text-sm opacity-70">{$t('translate.precision.using', { model: precisionModel, baseUrl: precisionBaseUrl })}</p>
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        <label class="text-sm">{$t('translate.draft.model')}
+          <select class={inputClasses} bind:value={$translateReviewSource$}>
+            <option value="local">{$t('translate.source.local')}</option>
+            <option value="cloud">{$t('translate.source.cloud')}</option>
+          </select>
+        </label>
+        {#if !reviewIsCloud}
+          <label class="text-sm">Ollama<select class={inputClasses} bind:value={selectedModel} on:change={() => (modelSelectionTouched = true)}>{#each models as model}<option value={model.id}>{model.id}</option>{/each}</select></label>
+        {/if}
+      </div>
+      {#if reviewIsCloud}
+        {#if cloudReady}
+          <p class="mt-3 text-sm opacity-70">{$t('translate.source.cloudUsing', { provider: cloudProvider, model: cloudModel })}</p>
+        {:else}
+          <p class="mt-3 text-sm" style="color:var(--danger-color);">{$t('translate.source.cloudNotReady')}</p>
+        {/if}
       {/if}
       <div class="mt-4 flex flex-wrap gap-2">
-        <button class="rounded border border-current/20 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={busy || !precisionProviderOk} on:click={checkPrecisionProvider}>{$t('translate.precision.check')}</button>
+        <button class="rounded border border-current/20 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={busy || !precisionReady} on:click={checkReviewProvider}>{$t('translate.precision.check')}</button>
         <button
           class="rounded px-3 py-2 text-sm disabled:opacity-50"
           style="background:var(--menu-background);color:var(--menu-foreground);"
