@@ -1004,6 +1004,9 @@ export default {
   'translate.error.unknownFormat': 'unknown',
   'translate.error.noAdapter': 'Cannot restore a translation adapter for {format}.',
   'translate.error.unsupportedFormat':
-    '{ext} files are not supported yet; currently EPUB, HTML, TXT and Markdown.',
-  'translate.error.noHtml': 'This book has no translatable HTML content.'
+    '{ext} files are not supported yet; currently EPUB, HTML, TXT, Markdown and CBZ.',
+  'translate.error.noHtml': 'This book has no translatable HTML content.',
+  'translate.comic.extracting': 'Extracting comic pages…',
+  'translate.comic.ocr': 'OCR in progress {done}/{total} pages…',
+  'translate.comic.ready': 'Comic ready: {pages} pages, {bubbles} text regions'
 };

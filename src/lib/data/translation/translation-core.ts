@@ -1,5 +1,6 @@
 import {
   buildGlossaryPrompt,
+  ComicAdapter,
   EpubAdapter,
   HtmlAdapter,
   OllamaProvider,
@@ -39,6 +40,8 @@ export function adapterForTranslationDocument(document: TranslationDocument): Do
     case 'htmlz': return new HtmlAdapter();
     case 'markdown': return new TextAdapter('markdown');
     case 'txt': return new TextAdapter('txt');
+    case 'cbz':
+    case 'cbr': return new ComicAdapter();
     default:
       throw new Error(tImmediate('translate.error.noAdapter', { format: document.format }));
   }
@@ -67,6 +70,11 @@ export async function inspectTranslationFile(file: File): Promise<InspectedTrans
     adapter,
     extension: extension === 'markdown' ? 'md' : extension === 'htm' ? 'html' : extension
   };
+}
+
+export function isComicFile(file: File): boolean {
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  return ext === 'cbz' || ext === 'cbr';
 }
 
 export async function inspectStoredBook(book: BooksDbBookData): Promise<InspectedTranslationFile> {

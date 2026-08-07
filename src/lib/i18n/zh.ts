@@ -1039,6 +1039,9 @@ export default {
   'translate.msg.reviewFailed': '精校失败，断点已保存，可继续运行',
   'translate.error.unknownFormat': '未知',
   'translate.error.noAdapter': '无法为 {format} 恢复翻译适配器。',
-  'translate.error.unsupportedFormat': '暂不支持 {ext} 文件；当前支持 EPUB、HTML、TXT、Markdown。',
-  'translate.error.noHtml': '该书没有可翻译的 HTML 内容。'
+  'translate.error.unsupportedFormat': '暂不支持 {ext} 文件；当前支持 EPUB、HTML、TXT、Markdown、CBZ。',
+  'translate.error.noHtml': '该书没有可翻译的 HTML 内容。',
+  'translate.comic.extracting': '正在解压漫画页面…',
+  'translate.comic.ocr': 'OCR 识别中 {done}/{total} 页…',
+  'translate.comic.ready': '漫画就绪：{pages} 页，{bubbles} 个文字区域'
 };

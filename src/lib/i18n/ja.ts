@@ -1008,6 +1008,9 @@ export default {
   'translate.error.unknownFormat': '不明',
   'translate.error.noAdapter': '{format} 用の翻訳アダプターを復元できません。',
   'translate.error.unsupportedFormat':
-    '{ext} ファイルは未対応です。現在は EPUB、HTML、TXT、Markdown に対応しています。',
-  'translate.error.noHtml': 'この本には翻訳できる HTML コンテンツがありません。'
+    '{ext} ファイルは未対応です。現在は EPUB、HTML、TXT、Markdown、CBZ に対応しています。',
+  'translate.error.noHtml': 'この本には翻訳できる HTML コンテンツがありません。',
+  'translate.comic.extracting': 'コミックのページを展開中…',
+  'translate.comic.ocr': 'OCR 処理中 {done}/{total} ページ…',
+  'translate.comic.ready': 'コミック準備完了：{pages} ページ、{bubbles} 個のテキスト領域'
 };

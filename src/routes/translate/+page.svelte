@@ -3,7 +3,11 @@
   import { onMount } from 'svelte';
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
-  import { adapterForTranslationDocument, checkLocalTranslationRuntime, createCloudTranslationProvider, createLocalTranslationProvider, inspectStoredBook, inspectTranslationFile, listLocalTranslationModels, localTranslationBaseUrl, type TranslationSource } from '$lib/data/translation/translation-core';
+  import { adapterForTranslationDocument, checkLocalTranslationRuntime, createCloudTranslationProvider, createLocalTranslationProvider, isComicFile, inspectStoredBook, inspectTranslationFile, listLocalTranslationModels, localTranslationBaseUrl, type TranslationSource } from '$lib/data/translation/translation-core';
+  import { extractComicPages } from '$lib/data/translation/comic-extract';
+  import { ocrComic, type ComicOcrProgress } from '$lib/data/translation/comic-ocr-pipeline';
+  import { TauriComicStorage } from '$lib/data/translation/comic-storage-tauri';
+  import { ComicAdapter, type OcrEngineLanguage } from 'translator-workbench';
   import { aiApiKey$, aiModel$, aiProvider$, database, translateChunkChars$, translateDraftSource$, translateLocalModel$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
   import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob } from '$lib/data/translation/translation-job-store';
   import { exportHtmlAsMarkdownChunks, extractGlossaryCandidates, translateInBatches } from 'translator-workbench';
@@ -60,6 +64,7 @@
   }
   let statusMessage = '';
   let errorMessage = '';
+  let comicOcrProgress: ComicOcrProgress | undefined;
   /** Parsing an imported file. Separate from `running` on purpose — see below. */
   let loading = false;
   /**
@@ -189,10 +194,14 @@
 
   async function inspect(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
-    importQueue = Array.from(input.files || []).filter((candidate) => /\.(epub|html|htm|txt|text|md|markdown)$/i.test(candidate.name));
+    importQueue = Array.from(input.files || []).filter((candidate) => /\.(epub|html|htm|txt|text|md|markdown|cbz|cbr)$/i.test(candidate.name));
     const file = importQueue[0];
     if (!file) return;
-    await inspectFile(file);
+    if (isComicFile(file)) {
+      await inspectComicFile(file);
+    } else {
+      await inspectFile(file);
+    }
   }
 
   async function inspectFile(file: File) {
@@ -220,6 +229,51 @@
       errorMessage = error instanceof Error ? error.message : String(error);
     } finally {
       loading = false;
+    }
+  }
+
+  async function inspectComicFile(file: File) {
+    loading = true;
+    errorMessage = '';
+    statusMessage = '';
+    translationDocument = undefined;
+    documentAdapter = undefined;
+    applyJob(undefined);
+    translations = new Map();
+    comicOcrProgress = undefined;
+    try {
+      statusMessage = tImmediate('translate.comic.extracting');
+      const { title, pageBlobs } = await extractComicPages(file);
+      const jobId = newJobId();
+      const storage = new TauriComicStorage();
+      const ocrLang = (targetLanguage.startsWith('zh') ? 'japan' : 'en') as OcrEngineLanguage;
+      statusMessage = tImmediate('translate.comic.ocr', { done: 0, total: pageBlobs.length });
+      const { pages, bubbles } = await ocrComic(pageBlobs, ocrLang, jobId, storage, (progress) => {
+        comicOcrProgress = progress;
+        statusMessage = tImmediate('translate.comic.ocr', { done: progress.page + (progress.cached ? 1 : 0), total: progress.total });
+      });
+
+      const adapter = new ComicAdapter();
+      const sourceLanguage = ocrLang === 'japan' ? 'ja' : ocrLang === 'korean' ? 'ko' : 'en';
+      const document = adapter.buildDocument(file.name, title, sourceLanguage, pages, bubbles);
+
+      translationDocument = document;
+      documentAdapter = adapter;
+      documentExtension = 'cbz';
+      activeFileName = file.name;
+      glossaryCandidates = extractGlossaryCandidates(document.segments, { minOccurrences: 2, maxCandidates: 80 });
+      glossaryTargets = prefilledGlossaryTargets(glossaryCandidates);
+      const created = createJob(jobId, document, sourceLanguage, targetLanguage, inheritedGlossary());
+      applyJob(created);
+      checkpointWarnings = [];
+      await saveTranslationJob(created);
+      latestJob = undefined;
+      statusMessage = tImmediate('translate.comic.ready', { pages: pages.length, bubbles: bubbles.length });
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error);
+    } finally {
+      loading = false;
+      comicOcrProgress = undefined;
     }
   }
 
@@ -597,7 +651,7 @@
 
   <section class="rounded-lg border border-current/20 p-4">
     <h2 class="font-medium">{$t('translate.import.title')}</h2>
-    <input class="mt-3 block w-full" type="file" multiple accept=".epub,.html,.htm,.txt,.text,.md,.markdown" on:change={inspect} />
+    <input class="mt-3 block w-full" type="file" multiple accept=".epub,.html,.htm,.txt,.text,.md,.markdown,.cbz,.cbr" on:change={inspect} />
     <label class="mt-3 block text-sm opacity-70">{$t('translate.import.folder')}
       <input class="mt-1 block w-full" type="file" multiple use:inputAllowDirectory on:change={inspect} />
     </label>
@@ -611,7 +665,16 @@
         </div>
       </div>
     {/if}
-    {#if loading}<p class="mt-3 text-sm opacity-70">{$t('translate.import.parsing')}</p>{/if}
+    {#if loading}
+      <p class="mt-3 text-sm opacity-70">
+        {#if comicOcrProgress}
+          {$t('translate.comic.ocr', { done: comicOcrProgress.page + (comicOcrProgress.cached ? 1 : 0), total: comicOcrProgress.total })}
+          <span class="ml-2 inline-block h-1.5 rounded-full" style="width:{Math.round(((comicOcrProgress.page + 1) / comicOcrProgress.total) * 100)}%;background:var(--link-color);"></span>
+        {:else}
+          {statusMessage || $t('translate.import.parsing')}
+        {/if}
+      </p>
+    {/if}
     {#if translationDocument}
       <dl class="mt-4 grid grid-cols-2 gap-2 text-sm">
         <dt class="opacity-60">{$t('translate.doc.title')}</dt><dd>{translationDocument.title || $t('translate.doc.untitled')}</dd>
