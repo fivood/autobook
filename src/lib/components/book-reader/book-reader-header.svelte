@@ -36,6 +36,11 @@
   export let showFullscreenButton: boolean;
   export let isBookmarkScreen: boolean;
   export let hasBookmarkData: boolean;
+  /** Whether the spoiler-safe AI assistant can index this book's text.
+   * Comics and not-yet-OCR'd scanned PDFs have no text layer; offering the
+   * drawer there just answers "can't spoil" to everything. Hidden entirely —
+   * see has-indexable-text.ts. */
+  export let aiAvailable = true;
   /** Current book's title. Shown as a centered label between the left
    * and right icon groups when the header slides down — reader wanted
    * to know which book they're reading without going back to library. */
@@ -141,16 +146,18 @@
     >
       <Fa icon={faHighlighter} />
     </div>
-    <div
-      tabindex="0"
-      role="button"
-      title={$t('reader.ai')}
-      class={baseIconClasses}
-      on:click={() => dispatch('aiClick')}
-      on:keyup={dummyFn}
-    >
-      <Fa icon={faRobot} />
-    </div>
+    {#if aiAvailable}
+      <div
+        tabindex="0"
+        role="button"
+        title={$t('reader.ai')}
+        class={baseIconClasses}
+        on:click={() => dispatch('aiClick')}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faRobot} />
+      </div>
+    {/if}
     <div
       tabindex="0"
       role="button"

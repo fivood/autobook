@@ -1,0 +1,186 @@
+/**
+ * Render translated-text overlay on a comic's page images.
+ *
+ * The translation job stores, per bubble, the OCR polygon (image pixel
+ * coordinates) and the translated text (keyed by the same segment id). This
+ * module positions a `<span>` per translated bubble over the corresponding
+ * `img[data-pdf-page]`, scaling image pixels to the image's rendered size —
+ * so the overlay stays glued to the artwork at any zoom or window width.
+ *
+ * The overlay is purely additive: it never touches the page image or the
+ * underlying HTML, so removing it (or the job) leaves the book intact.
+ */
+
+import { findComicTranslationJob } from '$lib/data/translation/translation-job-store';
+
+const OVERLAY_CLASS = 'comic-translation-overlay';
+const OVERLAY_LAYER = 'comic-translation-layer';
+
+function bubbleRect(poly: [number, number][]): { x: number; y: number; w: number; h: number } | null {
+  if (!poly || poly.length < 3) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of poly) {
+    const x = p[0];
+    const y = p[1];
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  const w = maxX - minX;
+  const h = maxY - minY;
+  if (w <= 0 || h <= 0) return null;
+  return { x: minX, y: minY, w, h };
+}
+
+/**
+ * Wrap the rendered text in a span laid out in image pixel space. The layer
+ * scales everything to the img's rendered size; font size derives from the
+ * bubble height so text fills the bubble proportionally.
+ */
+function buildSpan(text: string, rect: { x: number; y: number; w: number; h: number }): HTMLElement {
+  const span = document.createElement('span');
+  span.className = OVERLAY_CLASS;
+  span.textContent = text;
+  span.style.position = 'absolute';
+  span.style.left = `${rect.x}px`;
+  span.style.top = `${rect.y}px`;
+  // Font height ~ half the bubble box: enough for 2-3 lines of translated
+  // text to sit inside the bubble, not one giant line spilling out. The
+  // bubble bbox is the union of its OCR lines, so h * 0.5 ≈ one line height.
+  span.style.fontSize = `${Math.max(rect.h * 0.5, 10)}px`;
+  span.style.width = `${rect.w}px`;
+  span.style.minWidth = `${rect.w}px`;
+  span.style.lineHeight = '1.15';
+  span.style.whiteSpace = 'pre-wrap';
+  span.style.wordBreak = 'break-word';
+  span.style.overflowWrap = 'anywhere';
+  span.style.color = '#000';
+  span.style.textShadow = '0 0 2px #fff, 0 0 4px #fff';
+  span.style.fontWeight = '600';
+  span.style.opacity = '0.95';
+  span.style.pointerEvents = 'none';
+  span.style.userSelect = 'none';
+  return span;
+}
+
+/** One overlay layer per page image, containing all translated bubbles.
+ * The layer is anchored to the img's box (offset within its section), so
+ * the h3 page label above the img stays visible and the coordinate space
+ * lines up exactly with the artwork. */
+function ensureLayer(pageSection: HTMLElement): { layer: HTMLElement; img: HTMLImageElement } | null {
+  let layer = pageSection.querySelector<HTMLElement>(`.${OVERLAY_LAYER}`);
+  const img = pageSection.querySelector<HTMLImageElement>('img[data-pdf-page]');
+  if (!img) return null;
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.className = OVERLAY_LAYER;
+    layer.style.position = 'absolute';
+    layer.style.pointerEvents = 'none';
+    layer.style.overflow = 'hidden';
+    layer.style.transformOrigin = '0 0';
+    pageSection.style.setProperty('position', 'relative');
+    pageSection.appendChild(layer);
+  }
+  return { layer, img };
+}
+
+/** Anchor the layer over the img's rendered box and scale spans to match. */
+function scaleLayer(layer: HTMLElement, img: HTMLImageElement, baseW: number, baseH: number) {
+  const imgW = img.clientWidth || 1;
+  const imgH = img.clientHeight || 1;
+  const scaleX = imgW / (baseW || 1);
+  const scaleY = imgH / (baseH || 1);
+  const offsetLeft = img.offsetLeft;
+  const offsetTop = img.offsetTop;
+  layer.style.left = `${offsetLeft}px`;
+  layer.style.top = `${offsetTop}px`;
+  layer.style.width = `${imgW}px`;
+  layer.style.height = `${imgH}px`;
+  // Spans are laid out in image pixel space; scale the whole layer to the
+  // rendered size. Non-uniform scale is fine for bubbles (they're usually
+  // near axis-aligned).
+  layer.style.transform = `scale(${scaleX}, ${scaleY})`;
+}
+
+export interface ComicOverlayOptions {
+  /** Book title used to find the matching translation job. */
+  title: string;
+  /** The reader content root containing the page images. */
+  contentEl: () => HTMLElement | null;
+  /** Called once the overlay is applied or found nothing to apply. */
+  onApplied?: (count: number) => void;
+  /** Called as soon as a translation job with output is found — before any
+   * spans necessarily render (images may still be lazy-loading). The caller
+   * uses this to hide "open the translation workbench" prompts. */
+  onHasTranslation?: () => void;
+}
+
+export async function applyComicOverlay(options: ComicOverlayOptions): Promise<number> {
+  const job = await findComicTranslationJob(options.title);
+  if (!job) return 0;
+  const translations = Object.keys(job.translations).length ? job.translations : null;
+  if (!translations) return 0;
+  options.onHasTranslation?.();
+
+  const state = job.document.state as { bubbles?: Array<{ id: string; pageIndex: number; poly: [number, number][] }>; pages?: Array<{ imageWidth: number; imageHeight: number }> } | undefined;
+  const bubbles = state?.bubbles || [];
+  const pages = state?.pages || [];
+  if (!bubbles.length) return 0;
+
+  const root = options.contentEl();
+  if (!root) return 0;
+
+  const byPage = new Map<number, typeof bubbles>();
+  for (const bubble of bubbles) {
+    if (!translations[bubble.id]) continue;
+    const list = byPage.get(bubble.pageIndex) || [];
+    list.push(bubble);
+    byPage.set(bubble.pageIndex, list);
+  }
+
+  // Map pageIndex (0-based) to img data-pdf-page (1-based).
+  let rendered = 0;
+  for (const [pageIndex, pageBubbles] of byPage) {
+    const pageNum = pageIndex + 1;
+    const img = root.querySelector<HTMLImageElement>(`img[data-pdf-page="${pageNum}"]`);
+    if (!img) continue;
+    const section = img.closest('.cbz-section') as HTMLElement | null;
+    if (!section) continue;
+    const pageInfo = pages[pageIndex];
+    const baseW = pageInfo?.imageWidth || img.naturalWidth || 1;
+    const baseH = pageInfo?.imageHeight || img.naturalHeight || 1;
+
+    const anchored = ensureLayer(section);
+    if (!anchored) continue;
+    const { layer } = anchored;
+
+    // Idempotent re-apply: replace this page's spans rather than stacking
+    // duplicates on every resize/scroll tick.
+    layer.querySelectorAll(`.${OVERLAY_CLASS}`).forEach((span) => span.remove());
+
+    for (const bubble of pageBubbles) {
+      const rect = bubbleRect(bubble.poly);
+      if (!rect) continue;
+      const span = buildSpan(translations[bubble.id], rect);
+      layer.appendChild(span);
+      rendered += 1;
+    }
+    scaleLayer(layer, img, baseW, baseH);
+  }
+
+  options.onApplied?.(rendered);
+  return rendered;
+}
+
+/**
+ * Re-apply the overlay after the content re-renders (image lazy-load, view
+ * mode switch). Cheap when there's no job: the IDB lookup short-circuits.
+ */
+export function clearComicOverlay(root?: HTMLElement | null) {
+  const scope = root || document;
+  scope.querySelectorAll(`.${OVERLAY_LAYER}`).forEach((layer) => layer.remove());
+}

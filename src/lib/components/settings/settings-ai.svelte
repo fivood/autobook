@@ -22,11 +22,12 @@
     aiLocalBaseUrl$,
     aiLocalModel$,
     aiModel$,
-    aiOcrCorrectEnabled$,
     aiProvider$,
+    translateBatchSegments$,
     translateChunkChars$,
     translateDraftSource$,
     translateLocalModel$,
+    translateMaxSourceChars$,
     translateReviewSource$,
     translateTargetLang$
   } from '$lib/data/store';
@@ -76,7 +77,6 @@
   // What each feature would actually use right now, so the effect of a change
   // is visible here instead of only at the point of use.
   $: glossModel = pickLocal(1.5, $localProbe$, $aiLocalModel$) || (($aiApiKey$ && $aiModel$) || '');
-  $: ocrModel = pickLocal(3, $localProbe$, $aiLocalModel$) || (($aiApiKey$ && $aiModel$) || '');
 </script>
 
 <div class="text-sm">
@@ -183,16 +183,6 @@
     </span>
   </label>
 
-  <label class="mb-2 flex items-start gap-2">
-    <input type="checkbox" class="mt-1" bind:checked={$aiOcrCorrectEnabled$} />
-    <span>
-      {$t('settings.ai.ocrCorrectToggle')}
-      <span class="block text-xs opacity-60">
-        {ocrModel ? $t('settings.ai.wouldUse', { model: ocrModel }) : $t('settings.ai.noEndpoint')}
-      </span>
-    </span>
-  </label>
-
   {#if models.length && !models.some((m) => parseParameterBillions(m.parameterSize) >= 3)}
     <p class="mt-2 text-xs opacity-60">{$t('settings.ai.allModelsSmall')}</p>
   {/if}
@@ -241,4 +231,15 @@
     <span class="text-xs opacity-70">{$t('settings.translate.chunkChars')}</span>
     <input type="number" class={inputClasses} min="4000" max="100000" step="1000" bind:value={$translateChunkChars$} />
   </label>
+
+  <div class="mb-3 grid gap-3 sm:grid-cols-2">
+    <label class="block">
+      <span class="text-xs opacity-70">{$t('settings.translate.batchSegments')}</span>
+      <input type="number" class={inputClasses} min="1" max="50" step="1" bind:value={$translateBatchSegments$} />
+    </label>
+    <label class="block">
+      <span class="text-xs opacity-70">{$t('settings.translate.maxSourceChars')}</span>
+      <input type="number" class={inputClasses} min="500" max="60000" step="500" bind:value={$translateMaxSourceChars$} />
+    </label>
+  </div>
 </div>

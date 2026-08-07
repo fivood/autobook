@@ -23,7 +23,7 @@ const config = {
   // outside common third-party ranges and lock it so any mismatch with
   // tauri.conf.json's devUrl fails loud instead of silently 404-ing.
   server: {
-    port: 5273,
+    port: 5281,
     strictPort: true
   },
   define: {

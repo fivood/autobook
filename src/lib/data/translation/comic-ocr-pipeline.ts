@@ -64,15 +64,28 @@ function verticalGap(a: [number, number, number, number], b: [number, number, nu
 }
 
 /**
- * Check if two bounding boxes overlap horizontally.
+ * Horizontal overlap between two bounding boxes, as a fraction of the
+ * narrower box's width. Two lines belong to the same bubble when they share
+ * most of their horizontal extent — multi-line dialogue is roughly centred or
+ * left-aligned, so adjacent lines overlap heavily. Side-by-side bubbles only
+ * clip a sliver of each other, which must NOT count as "same bubble".
  */
-function horizontalOverlap(a: [number, number, number, number], b: [number, number, number, number]): boolean {
-  return a[0] < b[2] && b[0] < a[2];
+function horizontalOverlapRatio(a: [number, number, number, number], b: [number, number, number, number]): number {
+  const overlapW = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+  if (overlapW <= 0) return 0;
+  const wA = a[2] - a[0];
+  const wB = b[2] - b[0];
+  const narrower = Math.min(wA, wB);
+  if (narrower <= 0) return 0;
+  return overlapW / narrower;
 }
 
 /**
- * Group OCR lines into bubbles. Lines that are vertically close and
- * horizontally overlapping are merged into a single bubble.
+ * Group OCR lines into bubbles. Two lines merge when they're vertically close
+ * AND share enough horizontal extent to plausibly be consecutive lines of one
+ * speech bubble. A tall gap, or only a sliver of horizontal overlap, keeps
+ * them as separate bubbles — that's how side-by-side bubbles (common in
+ * Western comics) stay apart.
  */
 export function groupLinesToBubbles(
   items: OcrLine[],
@@ -83,6 +96,10 @@ export function groupLinesToBubbles(
 
   const lineHeight = imageHeight * 0.04;
   const maxGap = lineHeight * 1.5;
+  // Consecutive lines of one bubble overlap at least half their width.
+  // Weaker overlap (say 0.35) admits slightly offset lines in rounder
+  // bubbles without pulling in a neighbouring bubble's text.
+  const minOverlapRatio = 0.35;
 
   const boxes = items.map((it) => bbox(it.poly));
   const merged = new Array<boolean>(items.length).fill(false);
@@ -100,7 +117,7 @@ export function groupLinesToBubbles(
         if (merged[j]) continue;
         for (const gi of group) {
           const gap = verticalGap(boxes[gi], boxes[j]);
-          if (gap < maxGap && horizontalOverlap(boxes[gi], boxes[j])) {
+          if (gap < maxGap && horizontalOverlapRatio(boxes[gi], boxes[j]) >= minOverlapRatio) {
             group.push(j);
             merged[j] = true;
             changed = true;
@@ -165,18 +182,19 @@ export interface ComicOcrProgress {
 export async function ocrComic(
   pageBlobs: Blob[],
   lang: OcrEngineLanguage,
-  jobId: string,
+  cacheKey: string,
   storage: ComicStorage,
   onProgress?: (progress: ComicOcrProgress) => void
-): Promise<{ pages: ComicPageInfo[]; bubbles: ComicBubble[] }> {
+): Promise<{ pages: ComicPageInfo[]; bubbles: ComicBubble[]; allCached: boolean }> {
   const engine = new PaddleOcrEngine();
   const pages: ComicPageInfo[] = [];
   const allBubbles: ComicBubble[] = [];
+  let allCached = true;
 
   for (let i = 0; i < pageBlobs.length; i++) {
     onProgress?.({ page: i, total: pageBlobs.length, cached: false });
 
-    const cached = (await storage.readOcrCache(jobId, i)) as OcrCacheData | null;
+    const cached = (await storage.readOcrCache(cacheKey, i)) as OcrCacheData | null;
     if (cached) {
       onProgress?.({ page: i, total: pageBlobs.length, cached: true });
       pages.push({
@@ -189,7 +207,8 @@ export async function ocrComic(
       continue;
     }
 
-    await storage.writePage(jobId, i, pageBlobs[i]);
+    allCached = false;
+    await storage.writePage(cacheKey, i, pageBlobs[i]);
 
     const result = await engine.predict(pageBlobs[i], lang);
     const bubbles = groupLinesToBubbles(result.items, i, result.imageHeight);
@@ -200,7 +219,7 @@ export async function ocrComic(
       imageHeight: result.imageHeight,
       bubbles
     };
-    await storage.writeOcrCache(jobId, i, cacheData);
+    await storage.writeOcrCache(cacheKey, i, cacheData);
 
     pages.push({
       index: i,
@@ -211,5 +230,34 @@ export async function ocrComic(
     allBubbles.push(...bubbles);
   }
 
-  return { pages, bubbles: allBubbles };
+  return { pages, bubbles: allBubbles, allCached };
+}
+
+/**
+ * Write AI-corrected bubbles back into the per-page OCR cache, so a later
+ * re-entry of the same book skips not just PaddleOCR but the correction LLM
+ * round-trips too. Best-effort: a failed write only costs re-correcting next
+ * time.
+ */
+export async function persistCorrectedBubbles(
+  cacheKey: string,
+  corrected: ComicBubble[],
+  storage: ComicStorage
+): Promise<void> {
+  const byPage = new Map<number, ComicBubble[]>();
+  for (const bubble of corrected) {
+    const list = byPage.get(bubble.pageIndex) || [];
+    list.push(bubble);
+    byPage.set(bubble.pageIndex, list);
+  }
+  for (const [pageIndex, bubbles] of byPage) {
+    try {
+      const cached = (await storage.readOcrCache(cacheKey, pageIndex)) as OcrCacheData | null;
+      if (cached) {
+        await storage.writeOcrCache(cacheKey, pageIndex, { ...cached, bubbles });
+      }
+    } catch {
+      // Leave the raw OCR cache in place; re-entry will just re-correct.
+    }
+  }
 }

@@ -1,15 +1,25 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
+  import { afterNavigate, goto } from '$app/navigation';
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
+  import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
+  import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
+  import { pagePath } from '$lib/data/env';
   import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
   import { adapterForTranslationDocument, checkLocalTranslationRuntime, createCloudTranslationProvider, createLocalTranslationProvider, isComicFile, inspectStoredBook, inspectTranslationFile, listLocalTranslationModels, localTranslationBaseUrl, type TranslationSource } from '$lib/data/translation/translation-core';
   import { extractComicPages } from '$lib/data/translation/comic-extract';
-  import { ocrComic, type ComicOcrProgress } from '$lib/data/translation/comic-ocr-pipeline';
+  import { ocrComic, persistCorrectedBubbles, type ComicOcrProgress } from '$lib/data/translation/comic-ocr-pipeline';
+  import { correctComicBubbles, type ComicCorrectionProgress } from '$lib/data/translation/comic-ocr-correct';
+  import { comicCacheKey } from '$lib/data/translation/comic-cache-key';
+  import { hasIndexableText } from '$lib/data/ai/has-indexable-text';
+  import { prewarmOcr } from '$lib/functions/file-loaders/pdf/pdf-ocr';
+  import { resolveEndpoint } from '$lib/data/ai/endpoint';
+  import { probeLocalModels } from '$lib/data/ai/local-model';
   import { TauriComicStorage } from '$lib/data/translation/comic-storage-tauri';
   import { ComicAdapter, type OcrEngineLanguage } from 'translator-workbench';
-  import { aiApiKey$, aiModel$, aiProvider$, database, translateChunkChars$, translateDraftSource$, translateLocalModel$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
-  import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob } from '$lib/data/translation/translation-job-store';
+  import { aiApiKey$, aiModel$, aiProvider$, aiOcrCorrectEnabled$, database, translateBatchSegments$, translateChunkChars$, translateComicAutoOcr$, translateDraftSource$, translateLocalModel$, translateMaxSourceChars$, translateOcrLang$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
+  import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob, deleteTranslationJob } from '$lib/data/translation/translation-job-store';
   import { exportHtmlAsMarkdownChunks, extractGlossaryCandidates, translateInBatches } from 'translator-workbench';
   import { createJob, pendingSegments, recordTranslationResults, setJobStatus, validateTranslationJob } from 'translator-workbench';
   import type { DocumentAdapter, GlossaryEntry, ModelInfo, TranslationDocument, TranslationJob, TranslationResult } from 'translator-workbench';
@@ -65,6 +75,25 @@
   let statusMessage = '';
   let errorMessage = '';
   let comicOcrProgress: ComicOcrProgress | undefined;
+  let enteredFromBook = false;
+  let pendingComicOcr: {
+    blobs: Blob[];
+    title: string;
+    fmt: string;
+    book?: import('$lib/data/database/books-db/versions/books-db').BooksDbBookData;
+  } | undefined;
+  // Skip-cover defaults are format-aware: comics conventionally start with a
+  // cover page worth skipping, scanned PDFs do not. Reset per book so a
+  // previous comic's choices don't leak onto the next PDF.
+  let comicSkipCover = true;
+  let comicSkipBackCover = true;
+  let prevPage = `${pagePath}${mergeEntries.MANAGE.routeId}`;
+
+  afterNavigate((navigation) => {
+    const { from } = navigation;
+    if (!from) return;
+    prevPage = `${from.url.pathname}${from.url.search}`;
+  });
   /** Parsing an imported file. Separate from `running` on purpose — see below. */
   let loading = false;
   /**
@@ -132,6 +161,13 @@
       : jobStatus;
 
   onMount(async () => {
+    // Warm the shared local-model probe so the comic OCR correction step can
+    // resolve a local endpoint without a settings detour. TTL-cached; the
+    // reader/settings routes usually probed it already.
+    probeLocalModels().catch(() => {
+      // Absent runtime leaves the probe 'unavailable'; correction falls back
+      // to raw OCR — no UI should appear over a dead runtime.
+    });
     try {
       latestJob = await getLatestTranslationJob();
       if (latestJob) {
@@ -151,18 +187,54 @@
       if (bookId) {
         const book = await database.getData(bookId);
         if (book) {
-          const inspected = await inspectStoredBook(book);
-          translationDocument = inspected.document;
-          documentAdapter = inspected.adapter;
-          documentExtension = inspected.extension;
-          activeFileName = `${book.title}.html`;
-          glossaryCandidates = extractGlossaryCandidates(translationDocument.segments, { minOccurrences: 2, maxCandidates: 80 });
-          glossaryTargets = prefilledGlossaryTargets(glossaryCandidates);
-          const created = createJob(newJobId(), translationDocument, translationDocument.sourceLanguage || 'en', targetLanguage, inheritedGlossary());
-          applyJob(created);
-          await saveTranslationJob(created);
-          latestJob = undefined;
-          statusMessage = tImmediate('translate.msg.createdFromBook');
+          enteredFromBook = true;
+          activeFileName = book.title || '';
+          const fmt = (book.originalFormat || '').toLowerCase();
+          // The user opened the workbench because this book needs
+          // translating. Decide by whether its text can be selected at all,
+          // not by file extension: comics (cbz/cbr) AND scanned PDFs without
+          // a text layer both go through OCR; books with selectable text
+          // (EPUB/TXT/MD/text-layer PDF) translate directly.
+          if (!hasIndexableText(book)) {
+            await inspectStoredComic(book, fmt);
+          } else {
+            const bookLang = (book.language || '').toLowerCase();
+            const targetLang = targetLanguage.toLowerCase();
+            if (bookLang && targetLang && bookLang.split('-')[0] === targetLang.split('-')[0]) {
+              statusMessage = tImmediate('translate.book.noTranslationNeeded');
+            } else {
+              const inspected = await inspectStoredBook(book);
+              translationDocument = inspected.document;
+              documentAdapter = inspected.adapter;
+              documentExtension = inspected.extension;
+              activeFileName = `${book.title}.html`;
+              glossaryCandidates = extractGlossaryCandidates(translationDocument.segments, { minOccurrences: 2, maxCandidates: 80 });
+              glossaryTargets = prefilledGlossaryTargets(glossaryCandidates);
+              const created = createJob(newJobId(), translationDocument, translationDocument.sourceLanguage || 'en', targetLanguage, inheritedGlossary());
+              applyJob(created);
+              await saveTranslationJob(created);
+              latestJob = undefined;
+              statusMessage = tImmediate('translate.msg.createdFromBook');
+            }
+          }
+        }
+      }
+      // No book was opened: if the most recent job was interrupted (paused by
+      // the user or failed mid-way) with some segments done, resume it and
+      // keep translating automatically — that's the point of a checkpoint.
+      // A fresh/glossary-review job is left for the user to kick off.
+      if (!bookId && latestJob) {
+        const interrupted =
+          latestJob.status === 'paused' ||
+          (latestJob.status === 'failed' && Object.keys(latestJob.translations).length > 0);
+        if (interrupted) {
+          await restoreLatestJob();
+          // Need the model list to know what `selectedModel` resolves to
+          // before auto-continuing a local draft.
+          await checkOllama();
+          if (draftReady && translationJob && translationJob.status !== 'completed') {
+            await startDraftTranslation();
+          }
         }
       }
     } catch (error) {
@@ -190,6 +262,20 @@
     glossaryTargets = Object.fromEntries(restoredJob.glossary.map((entry) => [entry.source, entry.target]));
     statusMessage = tImmediate('translate.msg.restored', { done: translations.size, total: translationDocument.segments.length });
     latestJob = undefined;
+  }
+
+  async function discardLatestJob() {
+    if (!latestJob) return;
+    const target = latestJob;
+    const ok = confirm(tImmediate('translate.resume.deleteConfirm', { title: target.document.title || target.id }));
+    if (!ok) return;
+    try {
+      await deleteTranslationJob(target.id);
+      latestJob = undefined;
+      statusMessage = tImmediate('translate.msg.jobDeleted');
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error);
+    }
   }
 
   async function inspect(event: Event) {
@@ -235,6 +321,105 @@
   async function inspectComicFile(file: File) {
     loading = true;
     errorMessage = '';
+    statusMessage = tImmediate('translate.comic.extracting');
+    try {
+      const { title, pageBlobs } = await extractComicPages(file);
+      activeFileName = file.name;
+      loading = false;
+      if (translateComicAutoOcr$.getValue()) {
+        await runComicOcr(pageBlobs, title, file.name.split('.').pop()?.toLowerCase() || 'cbz');
+      } else {
+        const fmt = file.name.split('.').pop()?.toLowerCase() || 'cbz';
+        comicSkipCover = fmt === 'cbz' || fmt === 'cbr';
+        comicSkipBackCover = fmt === 'cbz' || fmt === 'cbr';
+        pendingComicOcr = { blobs: pageBlobs, title, fmt };
+        // Warm PaddleOCR while the user reads the pending card.
+        prewarmOcr(ocrLangForBook(undefined));
+        statusMessage = tImmediate('translate.comic.pendingOcr', { pages: pageBlobs.length });
+      }
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error);
+      loading = false;
+    }
+  }
+
+  async function inspectStoredComic(book: import('$lib/data/database/books-db/versions/books-db').BooksDbBookData, fmt: string) {
+    const pageBlobs: Blob[] = [];
+    const blobEntries = Object.entries(book.blobs || {})
+      // Both image-book formats land here: comics (cbz-page-*) and scanned
+      // PDFs (pdf-page-*). The user opened the workbench to translate, so the
+      // question is "can the text be selected?" — not the file extension.
+      .filter(([key]) => /^(cbz|pdf)-page-\d+\.\w+$/.test(key))
+      .sort(([a], [b]) => {
+        const na = parseInt(a.match(/\d+/)?.[0] || '0', 10);
+        const nb = parseInt(b.match(/\d+/)?.[0] || '0', 10);
+        return na - nb;
+      });
+    for (const [, blob] of blobEntries) pageBlobs.push(blob as Blob);
+    if (!pageBlobs.length) {
+      errorMessage = tImmediate('translate.error.noHtml');
+      return;
+    }
+    // Comics skip their cover / back cover by default; scanned PDFs usually
+    // have real content on page 1, so leave everything in.
+    comicSkipCover = fmt === 'cbz' || fmt === 'cbr';
+    comicSkipBackCover = fmt === 'cbz' || fmt === 'cbr';
+    if (translateComicAutoOcr$.getValue()) {
+      await runComicOcr(pageBlobs, book.title || '', fmt, book);
+    } else {
+      pendingComicOcr = { blobs: pageBlobs, title: book.title || '', fmt, book };
+      // Warm PaddleOCR while the user reads the pending card; the model init
+      // (~10s) then overlaps the review instead of blocking "Run OCR".
+      prewarmOcr(ocrLangForBook(book));
+      statusMessage = tImmediate('translate.comic.pendingOcr', { pages: pageBlobs.length });
+    }
+  }
+
+  function ocrLangFromStore(): OcrEngineLanguage {
+    return (translateOcrLang$.getValue() || 'japan') as OcrEngineLanguage;
+  }
+
+  /** Per-book language wins over the global default for stored books. */
+  function ocrLangForBook(book?: import('$lib/data/database/books-db/versions/books-db').BooksDbBookData): OcrEngineLanguage {
+    if (book?.ocrLang) return book.ocrLang as OcrEngineLanguage;
+    return ocrLangFromStore();
+  }
+
+  function onComicOcrLangChange(event: Event) {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    translateOcrLang$.next(value);
+    prewarmOcr(value as OcrEngineLanguage);
+    if (pendingComicOcr?.book) persistBookOcrLang(pendingComicOcr.book, value as OcrEngineLanguage);
+  }
+
+  /** Persist the language used for this comic back onto the book, so the
+   * next entry from the library starts on the same language. Best-effort. */
+  async function persistBookOcrLang(book: import('$lib/data/database/books-db/versions/books-db').BooksDbBookData, lang: OcrEngineLanguage): Promise<void> {
+    try {
+      const db = await database.db;
+      const fresh = await db.get('data', book.id);
+      if (fresh && fresh.ocrLang !== lang) {
+        await db.put('data', { ...fresh, ocrLang: lang });
+      }
+    } catch {
+      // Failed write just loses the per-book override; global default holds.
+    }
+  }
+
+  const OCR_LANG_TO_SOURCE: Record<string, string> = {
+    japan: 'ja', korean: 'ko', ch: 'zh', chinese_cht: 'zh-TW', en: 'en',
+    french: 'fr', german: 'de', es: 'es', it: 'it', pt: 'pt',
+    nl: 'nl', pl: 'pl', da: 'da', sv: 'sv', no: 'no',
+    cs: 'cs', ro: 'ro', hu: 'hu', tr: 'tr', vi: 'vi'
+  };
+
+  function sourceLanguageFromOcrLang(ocrLang: OcrEngineLanguage): string {
+    return OCR_LANG_TO_SOURCE[ocrLang] || 'en';
+  }
+
+  async function runComicOcr(pageBlobs: Blob[], title: string, fmt: string, book?: import('$lib/data/database/books-db/versions/books-db').BooksDbBookData) {
+    loading = true;
+    errorMessage = '';
     statusMessage = '';
     translationDocument = undefined;
     documentAdapter = undefined;
@@ -242,25 +427,65 @@
     translations = new Map();
     comicOcrProgress = undefined;
     try {
-      statusMessage = tImmediate('translate.comic.extracting');
-      const { title, pageBlobs } = await extractComicPages(file);
+      const startIdx = comicSkipCover ? 1 : 0;
+      const endIdx = comicSkipBackCover && pageBlobs.length > 1 ? pageBlobs.length - 1 : pageBlobs.length;
+      const ocrBlobs = pageBlobs.slice(startIdx, endIdx);
+      if (!ocrBlobs.length) {
+        statusMessage = tImmediate('translate.comic.pendingOcr', { pages: 0 });
+        loading = false;
+        return;
+      }
+      statusMessage = tImmediate('translate.comic.ocr', { done: 0, total: ocrBlobs.length });
       const jobId = newJobId();
       const storage = new TauriComicStorage();
-      const ocrLang = (targetLanguage.startsWith('zh') ? 'japan' : 'en') as OcrEngineLanguage;
-      statusMessage = tImmediate('translate.comic.ocr', { done: 0, total: pageBlobs.length });
-      const { pages, bubbles } = await ocrComic(pageBlobs, ocrLang, jobId, storage, (progress) => {
+      const ocrLang = ocrLangForBook(book);
+      // Cache namespace is the book identity (title+fmt+lang), not the job
+      // UUID — so re-entering the same book hits the OCR cache instead of
+      // re-running the whole pipeline. See comic-cache-key.ts.
+      const sourceLanguage = sourceLanguageFromOcrLang(ocrLang);
+      const cacheKey = comicCacheKey(title, fmt, sourceLanguage);
+      // Warm the model while OCR's initial book-work (page writes, first
+      // predict) runs; hides the ~10s first-load instead of blocking after
+      // the user clicked "Run OCR".
+      prewarmOcr(ocrLang as OcrEngineLanguage);
+      const { pages, bubbles, allCached } = await ocrComic(ocrBlobs, ocrLang, cacheKey, storage, (progress) => {
         comicOcrProgress = progress;
         statusMessage = tImmediate('translate.comic.ocr', { done: progress.page + (progress.cached ? 1 : 0), total: progress.total });
       });
-
+      // Persist the language actually used onto the book once OCR starts, so
+      // the library→translate entry keeps using it without re-picking.
+      if (book) await persistBookOcrLang(book, ocrLang);
+      // Comic bubbles get the same LLM post-correction pass as printed-book
+      // text layers, gated on the shared toggle. Untouched bubbles keep their
+      // OCR text; a dead endpoint falls back to raw OCR rather than failing.
+      let finalBubbles = bubbles;
+      // When every page came from cache, the bubbles were already corrected on
+      // the run that produced them (persisted below) — skip the LLM entirely
+      // so a re-entry is a pure cache read.
+      if (!allCached && aiOcrCorrectEnabled$.getValue()) {
+        const endpoint = resolveEndpoint('prefer-local', 3);
+        if (endpoint) {
+          statusMessage = tImmediate('translate.comic.correcting');
+          try {
+            finalBubbles = await correctComicBubbles(bubbles, endpoint.opts, undefined, (correction: ComicCorrectionProgress) => {
+              statusMessage = tImmediate('translate.comic.correctingProgress', { batch: correction.batch, total: correction.totalBatches });
+            });
+            // Persist so the next re-entry skips both OCR and correction.
+            persistCorrectedBubbles(cacheKey, finalBubbles, storage);
+          } catch (error) {
+            // Correction is best-effort; the raw OCR bubbles are still usable.
+            finalBubbles = bubbles;
+          }
+        }
+      }
       const adapter = new ComicAdapter();
-      const sourceLanguage = ocrLang === 'japan' ? 'ja' : ocrLang === 'korean' ? 'ko' : 'en';
-      const document = adapter.buildDocument(file.name, title, sourceLanguage, pages, bubbles);
-
+      const document = adapter.buildDocument(`${title}.${fmt}`, title, sourceLanguage, pages, finalBubbles);
+      // Record the stable cache namespace so deleteTranslationJob can clean up
+      // the right fs directory (see comic-cache-key.ts).
+      document.metadata.cacheKey = cacheKey;
       translationDocument = document;
       documentAdapter = adapter;
-      documentExtension = 'cbz';
-      activeFileName = file.name;
+      documentExtension = fmt;
       glossaryCandidates = extractGlossaryCandidates(document.segments, { minOccurrences: 2, maxCandidates: 80 });
       glossaryTargets = prefilledGlossaryTargets(glossaryCandidates);
       const created = createJob(jobId, document, sourceLanguage, targetLanguage, inheritedGlossary());
@@ -268,6 +493,7 @@
       checkpointWarnings = [];
       await saveTranslationJob(created);
       latestJob = undefined;
+      pendingComicOcr = undefined;
       statusMessage = tImmediate('translate.comic.ready', { pages: pages.length, bubbles: bubbles.length });
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
@@ -390,14 +616,18 @@
     try {
       const provider = draftIsCloud ? createCloudTranslationProvider() : createLocalTranslationProvider();
       const model = draftIsCloud ? cloudModel : selectedModel;
+      const batchSegments = Number(translateBatchSegments$.getValue()) || 3;
+      const maxSourceChars = Number(translateMaxSourceChars$.getValue()) || 12000;
       await translateInBatches(pendingSegments(job), {
         provider,
         model,
         sourceLanguage: translationDocument.sourceLanguage || 'en',
         targetLanguage,
         glossary: job.glossary,
-        batchSize: draftIsCloud ? 6 : 3,
-        maxSourceChars: 12000,
+        // Local models translate faster and fail less on short batches — both
+        // knobs are user-tunable in settings for exactly this reason.
+        batchSize: batchSegments,
+        maxSourceChars,
         maxRetries: 3,
         retryDelayMs: 2000,
         signal: abortController.signal,
@@ -564,6 +794,18 @@
     }
   }
 
+  /** Comic translations live as an overlay in the reader, not an exportable
+   * file — send the user back to the book to see them. */
+  async function goToReaderForOverlay() {
+    const last = localStorage.getItem('autobook-last-item');
+    const id = last ? Number(last) : NaN;
+    if (!Number.isNaN(id)) {
+      await goto(`${pagePath}/b?id=${id}`);
+      return;
+    }
+    await goto(`${pagePath}${mergeEntries.MANAGE.routeId}`);
+  }
+
   async function exportMarkdownChunks() {
     if (!translationDocument || translationDocument.format !== 'html' || !translations.size) return;
     try {
@@ -592,11 +834,14 @@
   <title>{$t('translate.title')}</title>
 </svelte:head>
 
+<header class="sticky top-0 z-10 flex items-center gap-3 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
+  <h1 class="text-xl font-medium">{$t('translate.title')}</h1>
+  <span class="text-sm opacity-50">{$t('translate.subtitle')}</span>
+  <div class="flex-1" />
+  <MergedHeaderIcon leavePageLink={prevPage} />
+</header>
+
 <main class="mx-auto flex max-w-4xl flex-col gap-6 p-6">
-  <header>
-    <h1 class="text-2xl font-semibold">{$t('translate.title')}</h1>
-    <p class="mt-2 text-sm opacity-70">{$t('translate.subtitle')}</p>
-  </header>
 
   {#if latestJob}
     <section class="rounded-lg border border-current/20 bg-current/5 p-4 text-sm">
@@ -614,6 +859,9 @@
           on:click={restoreLatestJob}
         >
           {$t('translate.resume.action')}
+        </button>
+        <button class="rounded border border-current/40 px-3 py-2 text-sm hover-soft" on:click={discardLatestJob}>
+          {$t('translate.resume.delete')}
         </button>
       </div>
     </section>
@@ -649,41 +897,139 @@
     </section>
   {/if}
 
-  <section class="rounded-lg border border-current/20 p-4">
-    <h2 class="font-medium">{$t('translate.import.title')}</h2>
-    <input class="mt-3 block w-full" type="file" multiple accept=".epub,.html,.htm,.txt,.text,.md,.markdown,.cbz,.cbr" on:change={inspect} />
-    <label class="mt-3 block text-sm opacity-70">{$t('translate.import.folder')}
-      <input class="mt-1 block w-full" type="file" multiple use:inputAllowDirectory on:change={inspect} />
-    </label>
-    {#if importQueue.length > 1}
-      <div class="mt-3 rounded border border-current/20 p-3 text-sm">
-        <p class="opacity-70">{$t('translate.import.queued', { n: importQueue.length, name: activeFileName || importQueue[0]?.name || '' })}</p>
-        <div class="mt-2 flex flex-wrap gap-2">
-          {#each importQueue as queuedFile}
-            <button class="rounded border border-current/20 px-2 py-1 hover-soft" class:bg-soft-active={queuedFile.name === activeFileName} on:click={() => inspectFile(queuedFile)}>{queuedFile.name}</button>
-          {/each}
+  {#if enteredFromBook}
+    <section class="rounded-lg border border-current/20 p-4">
+      <h2 class="font-medium">{$t('translate.book.title')}</h2>
+      <p class="mt-1 text-sm opacity-70">{activeFileName}</p>
+      {#if loading}
+        <p class="mt-3 text-sm opacity-70">
+          {#if comicOcrProgress}
+            {$t('translate.comic.ocr', { done: comicOcrProgress.page + (comicOcrProgress.cached ? 1 : 0), total: comicOcrProgress.total })}
+            <span class="ml-2 inline-block h-1.5 rounded-full" style="width:{Math.round(((comicOcrProgress.page + 1) / comicOcrProgress.total) * 100)}%;background:var(--link-color);"></span>
+          {:else}
+            {statusMessage || $t('translate.import.parsing')}
+          {/if}
+        </p>
+      {/if}
+      {#if translationDocument}
+        <dl class="mt-4 grid grid-cols-2 gap-2 text-sm">
+          <dt class="opacity-60">{$t('translate.doc.title')}</dt><dd>{translationDocument.title || $t('translate.doc.untitled')}</dd>
+          <dt class="opacity-60">{$t('translate.doc.language')}</dt><dd>{translationDocument.sourceLanguage || $t('translate.doc.unknownLanguage')}</dd>
+          <dt class="opacity-60">{$t('translate.doc.segments')}</dt><dd>{translationDocument.segments.length}</dd>
+          <dt class="opacity-60">{$t('translate.doc.id')}</dt><dd class="break-all">{translationDocument.id}</dd>
+        </dl>
+      {/if}
+      {#if statusMessage && !loading}<p class="mt-3 text-sm opacity-80">{statusMessage}</p>{/if}
+      {#if errorMessage}<p class="mt-3 text-sm" style="color:var(--danger-color);">{errorMessage}</p>{/if}
+      <button class="mt-3 text-sm opacity-50 hover:opacity-100 hover-soft rounded px-2 py-1" on:click={() => { enteredFromBook = false; }}>{$t('translate.book.pickAnother')}</button>
+    </section>
+  {:else}
+    <section class="rounded-lg border border-current/20 p-4">
+      <h2 class="font-medium">{$t('translate.import.title')}</h2>
+      <input class="mt-3 block w-full" type="file" multiple accept=".epub,.html,.htm,.txt,.text,.md,.markdown,.cbz,.cbr" on:change={inspect} />
+      <label class="mt-3 block text-sm opacity-70">{$t('translate.import.folder')}
+        <input class="mt-1 block w-full" type="file" multiple use:inputAllowDirectory on:change={inspect} />
+      </label>
+      {#if importQueue.length > 1}
+        <div class="mt-3 rounded border border-current/20 p-3 text-sm">
+          <p class="opacity-70">{$t('translate.import.queued', { n: importQueue.length, name: activeFileName || importQueue[0]?.name || '' })}</p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            {#each importQueue as queuedFile}
+              <button class="rounded border border-current/20 px-2 py-1 hover-soft" class:bg-soft-active={queuedFile.name === activeFileName} on:click={() => inspectFile(queuedFile)}>{queuedFile.name}</button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+      {#if loading}
+        <p class="mt-3 text-sm opacity-70">
+          {#if comicOcrProgress}
+            {$t('translate.comic.ocr', { done: comicOcrProgress.page + (comicOcrProgress.cached ? 1 : 0), total: comicOcrProgress.total })}
+            <span class="ml-2 inline-block h-1.5 rounded-full" style="width:{Math.round(((comicOcrProgress.page + 1) / comicOcrProgress.total) * 100)}%;background:var(--link-color);"></span>
+          {:else}
+            {statusMessage || $t('translate.import.parsing')}
+          {/if}
+        </p>
+      {/if}
+      {#if translationDocument}
+        <dl class="mt-4 grid grid-cols-2 gap-2 text-sm">
+          <dt class="opacity-60">{$t('translate.doc.title')}</dt><dd>{translationDocument.title || $t('translate.doc.untitled')}</dd>
+          <dt class="opacity-60">{$t('translate.doc.language')}</dt><dd>{translationDocument.sourceLanguage || $t('translate.doc.unknownLanguage')}</dd>
+          <dt class="opacity-60">{$t('translate.doc.segments')}</dt><dd>{translationDocument.segments.length}</dd>
+          <dt class="opacity-60">{$t('translate.doc.id')}</dt><dd class="break-all">{translationDocument.id}</dd>
+        </dl>
+      {/if}
+    </section>
+  {/if}
+
+  {#if pendingComicOcr}
+    <section class="rounded-lg border border-current/20 bg-current/5 p-4">
+      <h2 class="font-medium">{$t('translate.comic.ocrTitle')}</h2>
+      <p class="mt-1 text-sm opacity-70">{$t('translate.comic.pendingOcr', { pages: pendingComicOcr.blobs.length })}</p>
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        <label class="block text-sm">
+          <span class="opacity-70">{$t('settings.translate.ocrLang')}</span>
+          <select class={inputClasses} value={ocrLangForBook(pendingComicOcr.book)} on:change={onComicOcrLangChange}>
+            <option value="japan">{$t('settings.translate.ocrLang.japan')}</option>
+            <option value="ch">{$t('settings.translate.ocrLang.ch')}</option>
+            <option value="chinese_cht">{$t('settings.translate.ocrLang.cht')}</option>
+            <option value="en">{$t('settings.translate.ocrLang.en')}</option>
+            <option value="korean">{$t('settings.translate.ocrLang.korean')}</option>
+            <option value="french">{$t('settings.translate.ocrLang.fr')}</option>
+            <option value="german">{$t('settings.translate.ocrLang.de')}</option>
+            <option value="es">{$t('settings.translate.ocrLang.es')}</option>
+            <option value="it">{$t('settings.translate.ocrLang.it')}</option>
+            <option value="pt">{$t('settings.translate.ocrLang.pt')}</option>
+            <option value="nl">{$t('settings.translate.ocrLang.nl')}</option>
+            <option value="pl">{$t('settings.translate.ocrLang.pl')}</option>
+            <option value="tr">{$t('settings.translate.ocrLang.tr')}</option>
+            <option value="vi">{$t('settings.translate.ocrLang.vi')}</option>
+          </select>
+        </label>
+        <div class="flex flex-col gap-2 text-sm">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" bind:checked={$translateComicAutoOcr$} />
+            {$t('settings.translate.comicAutoOcr')}
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" bind:checked={comicSkipCover} />
+            {$t('translate.comic.skipCover')}
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" bind:checked={comicSkipBackCover} />
+            {$t('translate.comic.skipBackCover')}
+          </label>
         </div>
       </div>
-    {/if}
-    {#if loading}
-      <p class="mt-3 text-sm opacity-70">
+      <!-- The OCR step is the whole point of this card: it stays on screen
+           with a visible progress bar even before the user starts, so a
+           book that needs OCR announces "next step: OCR" up front. -->
+      <div class="mt-4">
         {#if comicOcrProgress}
-          {$t('translate.comic.ocr', { done: comicOcrProgress.page + (comicOcrProgress.cached ? 1 : 0), total: comicOcrProgress.total })}
-          <span class="ml-2 inline-block h-1.5 rounded-full" style="width:{Math.round(((comicOcrProgress.page + 1) / comicOcrProgress.total) * 100)}%;background:var(--link-color);"></span>
+          <div class="flex items-center justify-between text-sm">
+            <span>
+              {$t('translate.comic.ocr', { done: comicOcrProgress.page + (comicOcrProgress.cached ? 1 : 0), total: comicOcrProgress.total })}
+              {#if comicOcrProgress.cached}<span class="opacity-60">· {$t('translate.comic.cached')}</span>{/if}
+            </span>
+            <span class="tabular-nums">{Math.round(((comicOcrProgress.page + 1) / comicOcrProgress.total) * 100)}%</span>
+          </div>
+          <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-current/20" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(((comicOcrProgress.page + 1) / comicOcrProgress.total) * 100)}>
+            <div class="h-full rounded-full transition-all duration-300" style="width:{Math.round(((comicOcrProgress.page + 1) / comicOcrProgress.total) * 100)}%;background:var(--link-color,#155e75);"></div>
+          </div>
+        {:else if loading}
+          <p class="text-sm opacity-70">{statusMessage || $t('translate.import.parsing')}</p>
         {:else}
-          {statusMessage || $t('translate.import.parsing')}
+          <button
+            class="rounded px-3 py-2 text-sm disabled:opacity-50"
+            style="background:var(--menu-background);color:var(--menu-foreground);"
+            disabled={busy}
+            on:click={() => { if (pendingComicOcr) runComicOcr(pendingComicOcr.blobs, pendingComicOcr.title, pendingComicOcr.fmt, pendingComicOcr.book); }}
+          >
+            {$t('translate.comic.runOcr')}
+          </button>
         {/if}
-      </p>
-    {/if}
-    {#if translationDocument}
-      <dl class="mt-4 grid grid-cols-2 gap-2 text-sm">
-        <dt class="opacity-60">{$t('translate.doc.title')}</dt><dd>{translationDocument.title || $t('translate.doc.untitled')}</dd>
-        <dt class="opacity-60">{$t('translate.doc.language')}</dt><dd>{translationDocument.sourceLanguage || $t('translate.doc.unknownLanguage')}</dd>
-        <dt class="opacity-60">{$t('translate.doc.segments')}</dt><dd>{translationDocument.segments.length}</dd>
-        <dt class="opacity-60">{$t('translate.doc.id')}</dt><dd class="break-all">{translationDocument.id}</dd>
-      </dl>
-    {/if}
-  </section>
+      </div>
+    </section>
+  {/if}
 
   {#if glossaryCandidates.length || worldGlossary.length}
     <section class="rounded-lg border border-current/20 p-4">
@@ -805,7 +1151,11 @@
           {translationJob?.status === 'paused' || translationJob?.status === 'failed' ? $t('translate.draft.resume') : $t('translate.draft.start')}
         </button>
         <button class="rounded border border-current/40 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={!running} on:click={pauseTranslation}>{$t('translate.draft.pause')}</button>
-        <button class="rounded border border-current/20 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={!translations.size || busy} on:click={exportDraft}>{$t('translate.draft.export')}</button>
+        {#if translationDocument.format !== 'cbz' && translationDocument.format !== 'cbr'}
+          <button class="rounded border border-current/20 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={!translations.size || busy} on:click={exportDraft}>{$t('translate.draft.export')}</button>
+        {:else}
+          <button class="rounded border border-current/20 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={!translations.size || busy} on:click={goToReaderForOverlay}>{$t('translate.draft.viewOverlay')}</button>
+        {/if}
         {#if translationDocument.format === 'html'}
           <button class="rounded border border-current/20 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={!translations.size || busy} on:click={exportMarkdownChunks}>{$t('translate.draft.exportChunks')}</button>
         {/if}

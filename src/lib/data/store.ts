@@ -81,6 +81,15 @@ export const translateReviewSource$ = writableStringLocalStorageSubject()('trans
 export const translateTargetLang$ = writableStringLocalStorageSubject()('translateTargetLang', 'zh-CN');
 export const translateLocalModel$ = writableStringLocalStorageSubject()('translateLocalModel', '');
 export const translateChunkChars$ = writableStringLocalStorageSubject()('translateChunkChars', '24000');
+/** Max segments per translation batch. Smaller batches are steadier on slow
+ * local models — a long request is more likely to time out or get truncated
+ * mid-output. */
+export const translateBatchSegments$ = writableStringLocalStorageSubject()('translateBatchSegments', '3');
+/** Approximate source character budget per batch. Together with the segment
+ * count this bounds how much context each model call must digest. */
+export const translateMaxSourceChars$ = writableStringLocalStorageSubject()('translateMaxSourceChars', '12000');
+export const translateOcrLang$ = writableStringLocalStorageSubject()('translateOcrLang', 'japan');
+export const translateComicAutoOcr$ = writableBooleanLocalStorageSubject()('translateComicAutoOcr', false);
 /** Contextual gloss beside the offline dictionary. Off until a model is found. */
 export const aiGlossEnabled$ = writableBooleanLocalStorageSubject()('aiGlossEnabled', true);
 /** Offer LLM post-correction of an OCR'd text layer. */

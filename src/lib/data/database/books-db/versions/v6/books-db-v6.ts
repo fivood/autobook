@@ -51,6 +51,12 @@ interface BooksDbV6BookData {
    * and the book-card corner chip to show the true source format even
    * after the title has been stripped of its filename extension. */
   originalFormat?: string;
+  /** Per-book OCR recognition language override. Undefined = fall back to the
+   * global default (pdfOcrLang$ for scanned PDFs, translateOcrLang$ for comic
+   * translation). Added as an optional field like originalFormat — IDB is
+   * schemaless, so old rows need no migration. Written from the OCR banners'
+   * language selector so a Japanese scan never re-prompts in Chinese. */
+  ocrLang?: string;
 }
 
 interface BooksDbV6BookmarkData {

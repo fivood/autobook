@@ -1,18 +1,18 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "AutoBook",
-  "version": "1.23.2",
+  "version": "1.24.0",
   "identifier": "io.github.fukki.ebookreader",
   "build": {
     "frontendDist": "../build",
-    "devUrl": "http://localhost:5273",
+    "devUrl": "http://localhost:5281",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },
   "app": {
     "windows": [
       {
-        "title": "AutoBook v1.23.2",
+        "title": "AutoBook v1.24.0",
         "width": 1280,
         "height": 860,
         "resizable": true,
@@ -28,66 +28,91 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "windows": {
       "nsis": {
         "installMode": "currentUser",
         "compression": "zlib",
         "displayLanguageSelector": false,
-        "languages": ["English"],
+        "languages": [
+          "English"
+        ],
         "installerHooks": "installer-hooks.nsh"
       }
     },
     "fileAssociations": [
       {
-        "ext": ["epub"],
+        "ext": [
+          "epub"
+        ],
         "name": "EPUB",
         "description": "EPUB 电子书",
         "mimeType": "application/epub+zip",
         "role": "Viewer"
       },
       {
-        "ext": ["htmlz"],
+        "ext": [
+          "htmlz"
+        ],
         "name": "HTMLZ",
         "description": "HTMLZ 电子书",
         "role": "Viewer"
       },
       {
-        "ext": ["txt"],
+        "ext": [
+          "txt"
+        ],
         "name": "Text",
         "description": "文本电子书",
         "mimeType": "text/plain",
         "role": "Viewer"
       },
       {
-        "ext": ["md", "markdown"],
+        "ext": [
+          "md",
+          "markdown"
+        ],
         "name": "Markdown",
         "description": "Markdown 文档",
         "mimeType": "text/markdown",
         "role": "Viewer"
       },
       {
-        "ext": ["mobi", "azw", "azw3"],
+        "ext": [
+          "mobi",
+          "azw",
+          "azw3"
+        ],
         "name": "Mobi",
         "description": "Kindle 电子书",
         "role": "Viewer"
       },
       {
-        "ext": ["pdf"],
+        "ext": [
+          "pdf"
+        ],
         "name": "PDF",
         "description": "PDF 文档",
         "mimeType": "application/pdf",
         "role": "Viewer"
       },
       {
-        "ext": ["cbz"],
+        "ext": [
+          "cbz"
+        ],
         "name": "CBZ",
         "description": "漫画归档（ZIP 包图片）",
         "mimeType": "application/x-cbz",
         "role": "Viewer"
       },
       {
-        "ext": ["cbr", "cb7", "cbt"],
+        "ext": [
+          "cbr",
+          "cb7",
+          "cbt"
+        ],
         "name": "ComicArchive",
         "description": "漫画归档（RAR / 7z / tar 包图片）",
         "role": "Viewer"

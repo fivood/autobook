@@ -3,6 +3,7 @@
     faBookOpenReader,
     faClock,
     faDatabase,
+    faFileLines,
     faPalette,
     faVolumeHigh,
     faWandMagicSparkles
@@ -22,6 +23,7 @@
   const settingItems = [
     { label: 'Reader', labelKey: 'settings.tab.reader', icon: faBookOpenReader },
     { label: 'TTS', labelKey: 'settings.tab.tts', icon: faVolumeHigh },
+    { label: 'OCR', labelKey: 'settings.tab.ocr', icon: faFileLines },
     { label: 'AI', labelKey: 'settings.tab.ai', icon: faWandMagicSparkles },
     { label: 'Appearance', labelKey: 'settings.tab.appearance', icon: faPalette },
     { label: 'Data', labelKey: 'settings.tab.data', icon: faDatabase },

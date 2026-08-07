@@ -27,6 +27,7 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSync from '$lib/components/settings/settings-sync.svelte';
   import SettingsAi from '$lib/components/settings/settings-ai.svelte';
+  import SettingsOcr from '$lib/components/settings/settings-ocr.svelte';
   import SettingsDataPaths from '$lib/components/settings/settings-data-paths.svelte';
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
   import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
@@ -185,10 +186,6 @@
   export let persistentStorage: boolean;
 
   export let hideExternalReadHint: boolean;
-
-  export let ocrPromptEnabled: boolean;
-
-  export let ocrSkippedBooks: string;
 
   export let confirmClose: boolean;
 
@@ -1893,6 +1890,12 @@
       <SettingsAi />
     </div>
 
+  {:else if activeSettings === 'OCR'}
+    <SettingsSectionHeader title={$t('settings.section.ocr')} hint={$t('settings.section.ocrHint')} />
+    <div class="lg:col-span-3">
+      <SettingsOcr />
+    </div>
+
   {:else if activeSettings === 'Data'}
     <SettingsSectionHeader title={$t('settings.section.storageBackup')} hint={$t('settings.section.storageBackupHint')} />
     <div class="lg:col-span-3">
@@ -1980,25 +1983,6 @@
         options={optionsForToggle}
         bind:selectedOptionId={showExternalPlaceholder}
       />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title={$t('settings.item.pdfOcrHint')}
-      tooltip={$t('settings.tip.pdfOcrHint')}
-    >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={ocrPromptEnabled} />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title={$t('settings.item.clearOcrMemory')}
-      tooltip={$t('settings.tip.clearOcrMemory')}
-    >
-      <button
-        class="m-1 rounded-md border-2 border-gray-400 p-2"
-        on:click={() => (ocrSkippedBooks = '')}
-        disabled={!ocrSkippedBooks}
-      >
-        {$t('settings.button.clearOcrMemory', { n: ocrSkippedBooks ? ocrSkippedBooks.split(',').filter(Boolean).length : 0 })}
-        <Ripple />
-      </button>
     </SettingsItemGroup>
 
     <SettingsSectionHeader title={$t('settings.section.diagnostics')} hint={$t('settings.section.diagnosticsHint')} />

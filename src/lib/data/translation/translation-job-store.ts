@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { GlossaryEntry, TranslationJob } from 'translator-workbench';
+import { isTauri } from '$lib/data/env';
 
 export interface TranslationGlossaryProfile {
   id: string;
@@ -60,8 +61,43 @@ export async function getLatestTranslationJob(): Promise<TranslationJob | undefi
   return jobs.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
 }
 
+/**
+ * The most recently updated image-book job (cbz/cbr) matching a book title.
+ * The reader uses this to find the translation to overlay on a comic. Falls
+ * back to any comic-format job when no title matches — one comic at a time
+ * is the common case.
+ */
+export async function findComicTranslationJob(title?: string): Promise<TranslationJob | undefined> {
+  const jobs = await (await getDatabase()).getAll('jobs');
+  const sorted = jobs.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const isComic = (job: TranslationJob) => job.document.format === 'cbz' || job.document.format === 'cbr';
+  if (title) {
+    const byTitle = sorted.find((job) => isComic(job) && job.document.title === title);
+    if (byTitle) return byTitle;
+  }
+  return sorted.find(isComic);
+}
+
 export async function deleteTranslationJob(id: string): Promise<void> {
-  await (await getDatabase()).delete('jobs', id);
+  const db = await getDatabase();
+  const job = await db.get('jobs', id);
+  await db.delete('jobs', id);
+  // Comic jobs spill page images + OCR caches into the filesystem under a
+  // *stable* cache key (title|fmt|lang, see comic-cache-key.ts), not the job
+  // UUID — so the IDB delete above alone would orphan hundreds of MB. The
+  // cache key rides on the job document's metadata; older jobs that predate
+  // that fall back to the job id (which was the old namespace).
+  if (!isTauri()) return;
+  const cacheKey = job?.document?.metadata?.cacheKey || id;
+  try {
+    const { TauriComicStorage } = await import('./comic-storage-tauri');
+    await new TauriComicStorage().deleteJob(cacheKey);
+  } catch (error) {
+    // The IDB row is already gone; a failed fs cleanup (locked file, etc.)
+    // must not turn a user-requested delete into a visible error. Leftover
+    // dirs are reclaimable manually — better than blocking the delete.
+    console.warn('comic cache cleanup failed', error);
+  }
 }
 
 export async function getGlossaryProfile(

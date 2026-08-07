@@ -27,6 +27,9 @@
   let message = '';
   let showLangPicker = false;
 
+  // Per-book language wins over the global default, matching the OCR banner.
+  $: savedLang = (book.ocrLang || $pdfOcrLang$) as OcrLanguage;
+
   function onContextMenu(e: MouseEvent) {
     const target = e.target as HTMLElement;
     if (!target) return;
@@ -49,7 +52,7 @@
   }
 
   function runReocrWithSavedLang() {
-    return reocr($pdfOcrLang$ as OcrLanguage);
+    return reocr(savedLang);
   }
 
   async function reocr(lang: OcrLanguage) {
@@ -60,6 +63,11 @@
     try {
       const { updated, recognized } = await runOcrOnPage(book, targetPage, lang);
       const db = await database.db;
+      // Persist the language this page was re-OCR'd with onto the book so the
+      // banner and next re-OCR agree, even if the global default differs.
+      if (book.ocrLang !== lang) {
+        updated.ocrLang = lang;
+      }
       await db.put('data', updated);
       message = recognized
         ? tImmediate('pdfCtx.reOcrDone', { n: targetPage, chars: recognized.length })
@@ -101,7 +109,7 @@
       <button class="item" on:click={runReocrWithSavedLang}>
         <Fa icon={faRotateRight} size="xs" />
         <span>{$t('pdfCtx.reOcrThisPage')}</span>
-        <span class="meta">{LANGS.find((l) => l.code === $pdfOcrLang$)?.label || $pdfOcrLang$}</span>
+        <span class="meta">{LANGS.find((l) => l.code === savedLang)?.label || savedLang}</span>
       </button>
       <button class="item" on:click={() => (showLangPicker = true)}>
         <Fa icon={faMagnifyingGlass} size="xs" />

@@ -148,7 +148,10 @@
   import PdfPageContextMenu from '$lib/components/book-reader/pdf-page-context-menu.svelte';
   import KeyboardShortcutsHelp from '$lib/components/book-reader/keyboard-shortcuts-help.svelte';
   import BookImageZoom from '$lib/components/book-reader/book-image-zoom.svelte';
+  import ComicTranslateBanner from '$lib/components/book-reader/comic-translate-banner.svelte';
+  import ComicOverlay from '$lib/components/book-reader/comic-overlay.svelte';
   import { isScannedPdf } from '$lib/functions/file-loaders/pdf/pdf-ocr-runner';
+  import { hasIndexableText, isComicBook } from '$lib/data/ai/has-indexable-text';
   import HighlightContextMenu from '$lib/components/book-reader/book-highlight/highlight-context-menu.svelte';
   import HighlightMemoDialog from '$lib/components/book-reader/book-highlight/highlight-memo-dialog.svelte';
   import HighlightSidebar from '$lib/components/book-reader/book-highlight/highlight-sidebar.svelte';
@@ -351,6 +354,10 @@
   let hlMemoSelectedText = '';
   let hlMemoTags: string[] = [];
   let aiDrawerOpen = false;
+  /** Set when a comic translation job with renderable output is found — the
+   * overlay shows it, so the "open translation workbench" banner would be
+   * redundant. */
+  let comicHasTranslation = false;
   let dictPopupOpen = false;
   let dictPopupWord = '';
   let dictPopupSentence = '';
@@ -1055,6 +1062,10 @@
   function handleGlobalContextMenu(ev: MouseEvent) {
     const target = ev.target as HTMLElement;
     if (!target.closest('.book-content')) return;
+    // Page images (PDF scan pages, comic pages) own their own context menu —
+    // the per-page OCR re-run. Highlights only apply to text, so skip the
+    // highlight logic here and let PdfPageContextMenu handle the event.
+    if (target.closest('img.pdf-page-img, img.book-page-image')) return;
     handleBookContentContextMenu(ev);
   }
 
@@ -2281,6 +2292,16 @@
     on:updated={() => window.location.reload()}
   />
 {/if}
+{#if $rawBookData$ && isComicBook($rawBookData$)}
+  <ComicOverlay title={$rawBookData$.title} on:hasTranslation={() => (comicHasTranslation = true)} />
+  {#if !comicHasTranslation}
+    <ComicTranslateBanner
+      bookId={$rawBookData$.id}
+      bookTitle={$rawBookData$.title}
+      on:translate={() => leaveReader(`${mergeEntries.TRANSLATE.routeId}?bookId=${$rawBookData$?.id || ''}`, false)}
+    />
+  {/if}
+{/if}
 {#if $rawBookData$ && !isPaginated && /pdf-page-img|cbz-img/.test($rawBookData$.elementHtml || '')}
   <BookImageZoom />
 {/if}
@@ -2300,6 +2321,7 @@
     <BookReaderHeader
       hasChapterData={!!$sectionData$?.length}
       hasText={!!bookCharCount}
+      aiAvailable={$rawBookData$ ? hasIndexableText($rawBookData$) : true}
       hasCustomReadingPoint={!!(
         ($customReadingPointEnabled$ || isPaginated) &&
         ((isPaginated && customReadingPointRange) ||

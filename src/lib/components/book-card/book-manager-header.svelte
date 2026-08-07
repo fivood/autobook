@@ -17,7 +17,6 @@
     baseIconClasses,
     nTranslateXHeaderFa,
     pHeaderFa,
-    pxScreen,
     translateXHeaderFa
   } from '$lib/css-classes';
   import { SortDirection } from '$lib/data/sort-types';
@@ -259,7 +258,7 @@
 />
 <div class={baseHeaderClasses}>
   {#if !replicationToProgress}
-    <div class="flex h-full justify-between {pxScreen}">
+    <div class="flex h-full justify-between px-4 md:px-8 xl:max-w-none 2xl:max-w-6xl mx-auto">
       {#if selectedCount === 0}
         <div
           title={selectMode ? $t('manager.selectMode.exit') : $t('manager.selectMode.enter')}

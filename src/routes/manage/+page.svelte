@@ -18,6 +18,7 @@
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
+  import LoadingDialog from '$lib/components/loading-dialog.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { preFilteredTitlesForStatistics$ } from '$lib/components/statistics/statistics-types';
@@ -194,6 +195,9 @@
 
   let selectedBookIds: ReadonlySet<number> = new Set();
   let selectMode = false;
+  /** True while a book-click's prepareBookForReading is in flight. Guards
+   * against double-click stacking a second loading dialog / prepare. */
+  let openingBook = false;
   /** Free-text title search. Deliberately NOT persisted — users
    * expect to see their full library on next open. */
   let searchQuery = '';
@@ -349,9 +353,15 @@
     }
 
     if (!selectMode) {
+      // A second click while the first open is still preparing must not
+      // stack another dialog — the loading dialog also blocks the click,
+      // but guard here anyway so a double-click can't fire two prepares.
+      if (openingBook) return;
+      openingBook = true;
+
       dialogManager.dialogs$.next([
         {
-          component: '<div/>',
+          component: LoadingDialog,
           disableCloseOnClick: true
         }
       ]);
@@ -389,7 +399,6 @@
 
         idToOpen = await handler.prepareBookForReading();
 
-
         dialogManager.dialogs$.next([]);
       } catch (error: any) {
         const message = `Error opening book: ${error.message}`;
@@ -406,9 +415,11 @@
           }
         ]);
 
+        openingBook = false;
         return;
       }
 
+      openingBook = false;
       openBook(idToOpen);
       return;
     }

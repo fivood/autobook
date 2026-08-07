@@ -26,6 +26,7 @@
   } from '$lib/functions/file-loaders/pdf/ocr-correct-job';
   import { resolveEndpoint, type ResolvedEndpoint } from '$lib/data/ai/endpoint';
   import { probeLocalModels } from '$lib/data/ai/local-model';
+  import { database } from '$lib/data/store';
   import {
     aiOcrCorrectEnabled$,
     pdfOcrLang$,
@@ -56,9 +57,34 @@
   $: jobForThisBook = $ocrJob$ && $ocrJob$.bookId === book.id ? $ocrJob$ : null;
   $: otherBookRunning = !!$ocrJob$ && $ocrJob$.bookId !== book.id && $ocrJob$.status === 'running';
 
+  // Per-book language wins over the global default. Changed on the fly in the
+  // banner; persisted back onto the book so a Japanese scan stays on `japan`
+  // even after the global default is changed for a different book.
+  $: ocrLang = book.ocrLang || $pdfOcrLang$;
+
+  function setOcrLang(value: string) {
+    if (!value) return;
+    ocrLang = value;
+    pdfOcrLang$.next(value);
+    // Write the per-book override back. Best-effort — if the write fails the
+    // global default still holds for this session.
+    database.db
+      .then(async (db) => {
+        const fresh = await db.get('data', book.id);
+        if (fresh) await db.put('data', { ...fresh, ocrLang: value });
+      })
+      .catch(() => {
+        // A failed per-book write just loses the override; global default wins.
+      });
+  }
+
+  function onLangChange(event: Event) {
+    setOcrLang((event.currentTarget as HTMLSelectElement).value);
+  }
+
   function start() {
     if (isOcrJobRunning()) return;
-    startOcrJob(book, $pdfOcrLang$ as OcrLanguage);
+    startOcrJob(book, ocrLang as OcrLanguage);
   }
 
   function applyAndReload() {
@@ -167,7 +193,7 @@
         </div>
       </div>
       <label class="lang">
-        <select bind:value={$pdfOcrLang$} disabled={otherBookRunning}>
+        <select value={ocrLang} on:change={onLangChange} disabled={otherBookRunning}>
           {#each LANGS as l (l.code)}
             <option value={l.code}>{l.label}</option>
           {/each}

@@ -34,7 +34,10 @@ import { pagePath } from '$lib/data/env';
 
 /** Public language codes the UI exposes. Map to Paddle's `lang` parameter
  * just before instantiation. */
-export type OcrLanguage = 'ch' | 'chinese_cht' | 'japan' | 'en' | 'korean';
+export type OcrLanguage =
+  | 'ch' | 'chinese_cht' | 'japan' | 'en' | 'korean'
+  | 'french' | 'german' | 'es' | 'it' | 'pt' | 'nl' | 'pl'
+  | 'da' | 'sv' | 'no' | 'cs' | 'ro' | 'hu' | 'tr' | 'vi';
 
 /** Single corner of a Paddle polygon. PaddleOCR emits `[x, y]` tuples, NOT
  * `{ x, y }` objects — easy thing to get wrong. */
@@ -153,6 +156,23 @@ export async function ocrImageBlob(blob: Blob, lang: OcrLanguage): Promise<OcrPa
     imageHeight: r.image?.height || 0,
     text
   };
+}
+
+/**
+ * Kick off PaddleOCR model loading without running any prediction. Comic
+ * OCR's ~10s first-run cost is almost all model init; warming it while the
+ * user reads the pending-OCR card (or before auto-OCR fires) hides the
+ * latency instead of making them stare at a spinner after hitting "Run".
+ * Fire-and-forget — callers never await it.
+ */
+export function prewarmOcr(lang: OcrLanguage): void {
+  getOcrInstance(lang)
+    .then(() => {
+      // Instance cached module-level; nothing to surface.
+    })
+    .catch(() => {
+      // Load failure surfaces on the real predict; prewarm must stay silent.
+    });
 }
 
 export async function disposeOcrWorker() {

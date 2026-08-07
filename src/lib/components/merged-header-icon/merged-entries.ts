@@ -11,6 +11,7 @@
 // `$t()` at render time — untranslated identity is preserved on the
 // wire, only the visible strings switch locale.
 import {
+  faArrowRightArrowLeft,
   faBug,
   faChartLine,
   faClockRotateLeft,
@@ -21,7 +22,6 @@ import {
   faFolderPlus,
   faHashtag,
   faImages,
-  faLanguage,
   faLightbulb,
   faSignOutAlt,
   faTriangleExclamation
@@ -64,7 +64,9 @@ export const mergeEntries = {
     routeId: '/translate',
     label: '翻译',
     labelKey: 'menu.translate.label',
-    icon: faLanguage,
+    // Not faLanguage — that's the locale picker's icon (switching the app
+    // language). A bidirectional arrow reads as "convert this text" instead.
+    icon: faArrowRightArrowLeft,
     title: '打开翻译工作台',
     titleKey: 'menu.translate.title'
   },

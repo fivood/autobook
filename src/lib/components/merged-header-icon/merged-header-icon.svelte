@@ -73,7 +73,7 @@
     </div>
   </a>
 {:else}
-  <div class="hidden sm:flex">
+  <div class="hidden lg:flex">
     {#each actionItems as actionItem (actionItem.label)}
       <div
         tabindex="0"
@@ -87,7 +87,7 @@
       </div>
     {/each}
   </div>
-  <div class="flex sm:hidden">
+  <div class="flex lg:hidden">
     <Popover
       placement="bottom"
       fallbackPlacements={['bottom-end', 'bottom-start']}
