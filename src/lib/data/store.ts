@@ -78,6 +78,9 @@ export const aiLocalBaseUrl$ = writableStringLocalStorageSubject()(
 export const aiLocalModel$ = writableStringLocalStorageSubject()('aiLocalModel', '');
 export const translateDraftSource$ = writableStringLocalStorageSubject()('translateDraftSource', 'local');
 export const translateReviewSource$ = writableStringLocalStorageSubject()('translateReviewSource', 'cloud');
+export const translateTargetLang$ = writableStringLocalStorageSubject()('translateTargetLang', 'zh-CN');
+export const translateLocalModel$ = writableStringLocalStorageSubject()('translateLocalModel', '');
+export const translateChunkChars$ = writableStringLocalStorageSubject()('translateChunkChars', '24000');
 /** Contextual gloss beside the offline dictionary. Off until a model is found. */
 export const aiGlossEnabled$ = writableBooleanLocalStorageSubject()('aiGlossEnabled', true);
 /** Offer LLM post-correction of an OCR'd text layer. */

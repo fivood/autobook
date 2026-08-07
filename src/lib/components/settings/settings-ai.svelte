@@ -23,7 +23,12 @@
     aiLocalModel$,
     aiModel$,
     aiOcrCorrectEnabled$,
-    aiProvider$
+    aiProvider$,
+    translateChunkChars$,
+    translateDraftSource$,
+    translateLocalModel$,
+    translateReviewSource$,
+    translateTargetLang$
   } from '$lib/data/store';
   import {
     localProbe$,
@@ -193,4 +198,47 @@
   {/if}
 
   <p class="mt-4 text-xs opacity-50 leading-relaxed">{$t('settings.ai.spoilerNote')}</p>
+
+  <!-- ── Translation workbench defaults ───────────────────────────── -->
+  <h4 class="mb-1 mt-5 font-medium">{$t('settings.translate.heading')}</h4>
+  <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.translate.description')}</p>
+
+  <label class="mb-3 block">
+    <span class="text-xs opacity-70">{$t('settings.translate.targetLang')}</span>
+    <input type="text" class={inputClasses} bind:value={$translateTargetLang$} spellcheck="false" />
+  </label>
+
+  <div class="mb-3 grid gap-3 sm:grid-cols-2">
+    <label class="block">
+      <span class="text-xs opacity-70">{$t('settings.translate.draftSource')}</span>
+      <select class={inputClasses} bind:value={$translateDraftSource$}>
+        <option value="local">{$t('translate.source.local')}</option>
+        <option value="cloud">{$t('translate.source.cloud')}</option>
+      </select>
+    </label>
+    <label class="block">
+      <span class="text-xs opacity-70">{$t('settings.translate.reviewSource')}</span>
+      <select class={inputClasses} bind:value={$translateReviewSource$}>
+        <option value="local">{$t('translate.source.local')}</option>
+        <option value="cloud">{$t('translate.source.cloud')}</option>
+      </select>
+    </label>
+  </div>
+
+  {#if models.length}
+    <label class="mb-3 block">
+      <span class="text-xs opacity-70">{$t('settings.translate.localModel')}</span>
+      <select class={inputClasses} bind:value={$translateLocalModel$}>
+        <option value="">{$t('settings.ai.autoLargest', { model: autoPick })}</option>
+        {#each models as m (m.id)}
+          <option value={m.id}>{m.id}</option>
+        {/each}
+      </select>
+    </label>
+  {/if}
+
+  <label class="mb-3 block">
+    <span class="text-xs opacity-70">{$t('settings.translate.chunkChars')}</span>
+    <input type="number" class={inputClasses} min="4000" max="100000" step="1000" bind:value={$translateChunkChars$} />
+  </label>
 </div>

@@ -4,7 +4,7 @@
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
   import { adapterForTranslationDocument, checkLocalTranslationRuntime, createCloudTranslationProvider, createLocalTranslationProvider, inspectStoredBook, inspectTranslationFile, listLocalTranslationModels, localTranslationBaseUrl, type TranslationSource } from '$lib/data/translation/translation-core';
-  import { aiApiKey$, aiModel$, aiProvider$, database, translateDraftSource$, translateReviewSource$ } from '$lib/data/store';
+  import { aiApiKey$, aiModel$, aiProvider$, database, translateChunkChars$, translateDraftSource$, translateLocalModel$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
   import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob } from '$lib/data/translation/translation-job-store';
   import { exportHtmlAsMarkdownChunks, extractGlossaryCandidates, translateInBatches } from 'translator-workbench';
   import { createJob, pendingSegments, recordTranslationResults, setJobStatus, validateTranslationJob } from 'translator-workbench';
@@ -25,13 +25,39 @@
   let worldGlossary: GlossaryEntry[] = [];
   let reuseWorldGlossary = true;
   let saveToWorldGlossary = true;
-  let selectedModel = '';
+  let selectedModel = translateLocalModel$.getValue() || '';
   let modelSelectionTouched = false;
-  let targetLanguage = 'zh-CN';
+  let targetLanguage = translateTargetLang$.getValue() || 'zh-CN';
   let translations = new Map<string, string>();
   let runtimeMessage = tImmediate('translate.runtime.unchecked');
   let precisionMessage = tImmediate('translate.precision.unconfigured');
-  let markdownChunkChars = 24000;
+  let markdownChunkChars = Number(translateChunkChars$.getValue()) || 24000;
+
+  // Defaults snapshot — taken once at page load so we can tell which fields
+  // were changed from their configured defaults.
+  const defaults = {
+    targetLanguage: targetLanguage,
+    draftSource: translateDraftSource$.getValue(),
+    reviewSource: translateReviewSource$.getValue(),
+    localModel: selectedModel,
+    chunkChars: markdownChunkChars
+  };
+
+  $: targetLangOverridden = targetLanguage !== defaults.targetLanguage;
+  $: draftSourceOverridden = $translateDraftSource$ !== defaults.draftSource;
+  $: reviewSourceOverridden = $translateReviewSource$ !== defaults.reviewSource;
+  $: localModelOverridden = selectedModel !== defaults.localModel;
+  $: chunkCharsOverridden = markdownChunkChars !== defaults.chunkChars;
+
+  function resetField(field: keyof typeof defaults) {
+    switch (field) {
+      case 'targetLanguage': targetLanguage = defaults.targetLanguage; break;
+      case 'draftSource': $translateDraftSource$ = defaults.draftSource; break;
+      case 'reviewSource': $translateReviewSource$ = defaults.reviewSource; break;
+      case 'localModel': selectedModel = defaults.localModel; modelSelectionTouched = false; break;
+      case 'chunkChars': markdownChunkChars = defaults.chunkChars; break;
+    }
+  }
   let statusMessage = '';
   let errorMessage = '';
   /** Parsing an imported file. Separate from `running` on purpose — see below. */
@@ -116,8 +142,6 @@
       }
       const glossaryProfile = await getGlossaryProfile(DEFAULT_GLOSSARY_PROFILE_ID);
       worldGlossary = glossaryProfile?.entries.filter((entry) => entry.approved) || [];
-      const savedChunkChars = Number(localStorage.getItem('autobook-translation-markdown-chars') || '');
-      if (Number.isInteger(savedChunkChars) && savedChunkChars >= 4000) markdownChunkChars = Math.min(savedChunkChars, 100000);
       const bookId = Number($page.url.searchParams.get('bookId') || '');
       if (bookId) {
         const book = await database.getData(bookId);
@@ -206,7 +230,8 @@
       runtimeMessage = health.message;
       models = health.ok ? await listLocalTranslationModels() : [];
       if (models.length && (!modelSelectionTouched || !models.some((model) => model.id === selectedModel))) {
-        selectedModel = bestLocalModel(models);
+        const preferred = translateLocalModel$.getValue();
+        selectedModel = (preferred && models.some((m) => m.id === preferred)) ? preferred : bestLocalModel(models);
       }
     } catch (error) {
       runtimeMessage = tImmediate('translate.runtime.unavailable');
@@ -361,7 +386,6 @@
   function normalizeMarkdownChunkChars() {
     const value = Number(markdownChunkChars);
     markdownChunkChars = Number.isFinite(value) ? Math.min(100000, Math.max(4000, Math.trunc(value))) : 24000;
-    localStorage.setItem('autobook-translation-markdown-chars', String(markdownChunkChars));
   }
 
   function reviewProvider() {
@@ -649,16 +673,44 @@
     <section class="rounded-lg border border-current/20 p-4">
       <h2 class="font-medium">{$t('translate.draft.title')}</h2>
       <div class="mt-3 grid gap-3 sm:grid-cols-3">
-        <label class="text-sm">{$t('translate.draft.model')}
+        <div class="text-sm">
+          <span class="flex items-center gap-1">
+            {$t('translate.draft.model')}
+            {#if draftSourceOverridden}
+              <button class="inline-flex opacity-50 hover:opacity-100" title={$t('translate.override.reset')} on:click={() => resetField('draftSource')}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3"><path d="M13.5 3.5a.5.5 0 0 0-.5.5v.3l-.7-.7a5 5 0 1 0 .2 7.3.5.5 0 1 0-.7-.7 4 4 0 1 1-.2-5.8l.7.7H12a.5.5 0 0 0 0 1h2a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5z"/></svg>
+              </button>
+            {/if}
+          </span>
           <select class={inputClasses} bind:value={$translateDraftSource$}>
             <option value="local">{$t('translate.source.local')}</option>
             <option value="cloud">{$t('translate.source.cloud')}</option>
           </select>
-        </label>
+        </div>
         {#if !draftIsCloud}
-          <label class="text-sm">Ollama<select class={inputClasses} bind:value={selectedModel} on:change={() => (modelSelectionTouched = true)}>{#each models as model}<option value={model.id}>{model.id}</option>{/each}</select></label>
+          <div class="text-sm">
+            <span class="flex items-center gap-1">
+              Ollama
+              {#if localModelOverridden}
+                <button class="inline-flex opacity-50 hover:opacity-100" title={$t('translate.override.reset')} on:click={() => resetField('localModel')}>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3"><path d="M13.5 3.5a.5.5 0 0 0-.5.5v.3l-.7-.7a5 5 0 1 0 .2 7.3.5.5 0 1 0-.7-.7 4 4 0 1 1-.2-5.8l.7.7H12a.5.5 0 0 0 0 1h2a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5z"/></svg>
+                </button>
+              {/if}
+            </span>
+            <select class={inputClasses} bind:value={selectedModel} on:change={() => (modelSelectionTouched = true)}>{#each models as model}<option value={model.id}>{model.id}</option>{/each}</select>
+          </div>
         {/if}
-        <label class="text-sm">{$t('translate.draft.targetLanguage')}<input class={inputClasses} bind:value={targetLanguage} /></label>
+        <div class="text-sm">
+          <span class="flex items-center gap-1">
+            {$t('translate.draft.targetLanguage')}
+            {#if targetLangOverridden}
+              <button class="inline-flex opacity-50 hover:opacity-100" title={$t('translate.override.reset')} on:click={() => resetField('targetLanguage')}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3"><path d="M13.5 3.5a.5.5 0 0 0-.5.5v.3l-.7-.7a5 5 0 1 0 .2 7.3.5.5 0 1 0-.7-.7 4 4 0 1 1-.2-5.8l.7.7H12a.5.5 0 0 0 0 1h2a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5z"/></svg>
+              </button>
+            {/if}
+          </span>
+          <input class={inputClasses} bind:value={targetLanguage} />
+        </div>
       </div>
       {#if draftIsCloud}
         {#if cloudReady}
@@ -668,7 +720,17 @@
         {/if}
       {/if}
       {#if translationDocument.format === 'html'}
-        <label class="mt-3 block text-sm">{$t('translate.draft.chunkChars')}<input class={inputClasses} type="number" min="4000" max="100000" step="1000" bind:value={markdownChunkChars} on:change={normalizeMarkdownChunkChars} /></label>
+        <div class="mt-3 text-sm">
+          <span class="flex items-center gap-1">
+            {$t('translate.draft.chunkChars')}
+            {#if chunkCharsOverridden}
+              <button class="inline-flex opacity-50 hover:opacity-100" title={$t('translate.override.reset')} on:click={() => resetField('chunkChars')}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3"><path d="M13.5 3.5a.5.5 0 0 0-.5.5v.3l-.7-.7a5 5 0 1 0 .2 7.3.5.5 0 1 0-.7-.7 4 4 0 1 1-.2-5.8l.7.7H12a.5.5 0 0 0 0 1h2a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5z"/></svg>
+              </button>
+            {/if}
+          </span>
+          <input class={inputClasses} type="number" min="4000" max="100000" step="1000" bind:value={markdownChunkChars} on:change={normalizeMarkdownChunkChars} />
+        </div>
       {/if}
       <div class="mt-4 flex flex-wrap items-center gap-2">
         <button
@@ -701,14 +763,32 @@
       <h2 class="font-medium">{$t('translate.precision.title')}</h2>
       <p class="mt-1 text-sm opacity-70">{$t('translate.precision.hint')}</p>
       <div class="mt-3 grid gap-3 sm:grid-cols-2">
-        <label class="text-sm">{$t('translate.draft.model')}
+        <div class="text-sm">
+          <span class="flex items-center gap-1">
+            {$t('translate.draft.model')}
+            {#if reviewSourceOverridden}
+              <button class="inline-flex opacity-50 hover:opacity-100" title={$t('translate.override.reset')} on:click={() => resetField('reviewSource')}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3"><path d="M13.5 3.5a.5.5 0 0 0-.5.5v.3l-.7-.7a5 5 0 1 0 .2 7.3.5.5 0 1 0-.7-.7 4 4 0 1 1-.2-5.8l.7.7H12a.5.5 0 0 0 0 1h2a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5z"/></svg>
+              </button>
+            {/if}
+          </span>
           <select class={inputClasses} bind:value={$translateReviewSource$}>
             <option value="local">{$t('translate.source.local')}</option>
             <option value="cloud">{$t('translate.source.cloud')}</option>
           </select>
-        </label>
+        </div>
         {#if !reviewIsCloud}
-          <label class="text-sm">Ollama<select class={inputClasses} bind:value={selectedModel} on:change={() => (modelSelectionTouched = true)}>{#each models as model}<option value={model.id}>{model.id}</option>{/each}</select></label>
+          <div class="text-sm">
+            <span class="flex items-center gap-1">
+              Ollama
+              {#if localModelOverridden}
+                <button class="inline-flex opacity-50 hover:opacity-100" title={$t('translate.override.reset')} on:click={() => resetField('localModel')}>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3"><path d="M13.5 3.5a.5.5 0 0 0-.5.5v.3l-.7-.7a5 5 0 1 0 .2 7.3.5.5 0 1 0-.7-.7 4 4 0 1 1-.2-5.8l.7.7H12a.5.5 0 0 0 0 1h2a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5z"/></svg>
+                </button>
+              {/if}
+            </span>
+            <select class={inputClasses} bind:value={selectedModel} on:change={() => (modelSelectionTouched = true)}>{#each models as model}<option value={model.id}>{model.id}</option>{/each}</select>
+          </div>
         {/if}
       </div>
       {#if reviewIsCloud}
