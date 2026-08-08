@@ -52,6 +52,14 @@
       onHasTranslation: () => dispatch('hasTranslation'),
       onSpanCreated: (span, bubble, order) => {
         if (!editMode || !cacheKey) return;
+        // Lift the whole page's overlay layer above the full-screen drag
+        // target (z-30) so bubble spans + order badges are clickable for
+        // re-ordering while in edit mode.
+        const layer = span.closest('.comic-translation-layer') as HTMLElement | null;
+        if (layer) {
+          layer.style.zIndex = '40';
+          layer.style.pointerEvents = 'auto';
+        }
         // Order badge + click-to-swap in edit mode.
         span.dataset.bubbleId = bubble.id;
         span.dataset.pageIndex = String(bubble.pageIndex);
@@ -66,7 +74,8 @@
           'position:absolute;top:0;left:0;transform:translate(-40%,-40%);' +
           'background:var(--menu-background,#222);color:var(--menu-foreground,#fff);' +
           'font-size:10px;line-height:1;padding:2px 5px;border-radius:999px;' +
-          'pointer-events:auto;cursor:pointer;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.5);';
+          // Above the full-screen edit drag layer (z-30) so bubble clicks land.
+          'pointer-events:auto;cursor:pointer;z-index:40;box-shadow:0 1px 3px rgba(0,0,0,0.5);';
         badge.addEventListener('click', (ev) => {
           ev.stopPropagation();
           handleSwapClick(bubble.id, bubble.pageIndex);
@@ -145,6 +154,7 @@
 
   onDestroy(() => {
     stopPolling();
+    detachDragListeners();
     resizeObserver?.disconnect();
     resizeObserver = undefined;
     clearComicOverlay(rootEl);
@@ -161,17 +171,38 @@
     };
   }
 
+  /** Find the page image under a screen point, skipping the edit drag layer.
+   * The drag layer is `fixed inset-0`, so `ev.target` is always that div when
+   * clicking empty space — we must resolve the real element underneath. */
+  function imageUnderPoint(clientX: number, clientY: number): HTMLImageElement | null {
+    // elementFromPoint returns the top-most element; if it's a bubble badge
+    // or overlay span, the click is for re-ordering, not for drawing.
+    const top = document.elementFromPoint(clientX, clientY);
+    if (top?.closest('.comic-translation-overlay')) return null;
+    const img = top?.closest('img[data-pdf-page]') as HTMLImageElement | null;
+    if (img) return img;
+    // Fall back to geometric hit-test against every page image.
+    for (const candidate of Array.from(document.querySelectorAll<HTMLImageElement>('img[data-pdf-page]'))) {
+      const r = candidate.getBoundingClientRect();
+      if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
   function onMouseDown(ev: MouseEvent) {
     if (!editMode || ev.button !== 0) return;
     // Clicking a bubble (to re-order) must not start a selection drag.
     const overlay = (ev.target as HTMLElement).closest('.comic-translation-overlay') as HTMLElement | null;
     if (overlay) return;
-    const img = (ev.target as HTMLElement).closest('img[data-pdf-page]') as HTMLImageElement | null;
+    const img = imageUnderPoint(ev.clientX, ev.clientY);
     if (!img) return;
     ev.preventDefault();
     const pageAttr = img.getAttribute('data-pdf-page');
     if (!pageAttr) return;
     drawing = true;
+    attachDragListeners();
     // raw data-pdf-page (1-based full book) → slice index (0-based, cover
     // skipped during OCR) so manual regions + inpaint cache line up.
     dragPage = Number(pageAttr) - 1 - startPage;
@@ -191,7 +222,20 @@
     };
   }
 
+  /** Window-scoped listeners so a drag keeps tracking even when the pointer
+   * crosses a bubble (the overlay layer sits above the drag div in z-index). */
+  function attachDragListeners() {
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  function detachDragListeners() {
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  }
+
   async function onMouseUp() {
+    detachDragListeners();
     if (!drawing) return;
     drawing = false;
     if (!dragImg || dragRect.w < 20 || dragRect.h < 20) {
@@ -287,13 +331,12 @@
 {/if}
 
 {#if editMode}
-  <!-- Drag target: draw a rectangle on the current page image to erase it. -->
+  <!-- Drag target: draw a rectangle on the current page image to erase it.
+       mousemove/mouseup are window-scoped (attachDragListeners) so the drag
+       keeps tracking even over bubbles. -->
   <div
     class="fixed inset-0 z-30 cursor-crosshair"
     on:mousedown={onMouseDown}
-    on:mousemove={onMouseMove}
-    on:mouseup={onMouseUp}
-    on:mouseleave={onMouseUp}
   >
     {#if drawing && dragImg && dragRect.w > 0 && dragRect.h > 0}
       <div
