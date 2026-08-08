@@ -11,7 +11,7 @@ if (!inFile || !outFile) {
   console.error('Usage: node scripts/comic-translate.mjs <ocr.json> <out.json> [model]');
   process.exit(1);
 }
-const model = modelArg || 'qwen2.5:14b';
+const model = modelArg || '<LOCAL_MODEL>';
 const baseUrl = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 
 const data = JSON.parse(readFileSync(inFile, 'utf8'));

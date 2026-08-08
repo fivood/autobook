@@ -5,7 +5,7 @@
 //!
 //! Not a hermetic unit test — it reads a directory you point it at via the
 //! `AUTOBOOK_MOBI_SCAN_DIR` env var, so it's `#[ignore]`d (skipped in CI).
-//! Run (PowerShell): `$env:AUTOBOOK_MOBI_SCAN_DIR='E:\book'; cargo test --lib scan_e_book -- --ignored --nocapture`
+//! Run (PowerShell): `$env:AUTOBOOK_MOBI_SCAN_DIR='<BOOK_DIR>'; cargo test --lib scan_e_book -- --ignored --nocapture`
 //! Reports land in the OS temp dir (mobi_scan.tsv / mobi_deep.tsv / mobi_inspect.txt).
 
 #![cfg(test)]
@@ -373,13 +373,13 @@ fn phase4_svg_flow_stats() {
     }
 }
 
-/// Dump first 6 fragments (raw fields) for 刺客正传2 so we can hand-check
+/// Dump first 6 fragments (raw fields) for a sample joint KF8 file so we can hand-check
 /// against Calibre's expected values.
 #[test]
 #[ignore]
 fn phase3_dump_fragment_rows() {
     use crate::kf8_indx::{parse_fragment_indx, primary_indx_data_count};
-    let path = r"E:\book\刺客正传2·皇家刺客 - 罗宾·霍布.mobi";
+    let path = r"<BOOK_DIR>\<sample_joint_kf8>.mobi";
     let bytes = fs::read(path).expect("read file");
     let (records, _) = parse_palmdb_records(&bytes).expect("palmdb");
     // Locate KF8 segment
@@ -409,9 +409,9 @@ fn phase3_dump_fragment_rows() {
 #[ignore]
 fn phase3_calibre_compare_dump() {
     let targets = [
-        r"E:\book\亨利·詹姆斯小说系列（套装共5册).mobi",
-        r"E:\book\刺客正传2·皇家刺客 - 罗宾·霍布.mobi",
-        r"E:\book\卡拉马佐夫兄弟 (陀思妥耶夫斯基) (Z-Library).mobi",
+        r"<BOOK_DIR>\<sample>.mobi",
+        r"<BOOK_DIR>\<sample_joint_kf8>.mobi",
+        r"<BOOK_DIR>\<sample>.mobi",
     ];
     let out_dir = std::env::temp_dir().join("phase3_verify");
     let _ = fs::create_dir_all(&out_dir);
@@ -479,7 +479,7 @@ fn probe_kf8_header_indx_pointers() {
     walk(Path::new(&dir), &["mobi", "azw3"], &mut files);
     files.sort();
     // Just take a few well-formed joint files to keep output small.
-    let targets = ["亨利·詹姆斯", "刺客正传2", "卡拉马佐夫", "创造自然"];
+    let targets = ["<title_a>", "<title_b>", "<title_c>", "<title_d>"];
     for f in &files {
         let name = f
             .file_name()
