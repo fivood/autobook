@@ -38,29 +38,54 @@ function bubbleRect(poly: [number, number][]): { x: number; y: number; w: number
 }
 
 /**
- * Wrap the rendered text in a span laid out in image pixel space. The layer
- * scales everything to the img's rendered size; font size derives from the
- * bubble height so text fills the bubble proportionally.
+ * Wrap the translated text in a span laid out in image pixel space, with
+ * adaptive sizing so it fits the bubble rather than spilling out.
+ *
+ * Font size is derived from the bubble's *source line height* (bbox height ÷
+ * source line count), then clamped by width (so a long translation wraps) and
+ * by estimated translated-line count (shrink until it fits, floor 10px). This
+ * is the cover-layer analogue of M4's baked auto-layout — DOM text wraps
+ * naturally, so no canvas math needed.
  */
-function buildSpan(text: string, rect: { x: number; y: number; w: number; h: number }): HTMLElement {
+function buildSpan(
+  text: string,
+  rect: { x: number; y: number; w: number; h: number },
+  sourceLineCount: number
+): HTMLElement {
   const span = document.createElement('span');
   span.className = OVERLAY_CLASS;
   span.textContent = text;
   span.style.position = 'absolute';
   span.style.left = `${rect.x}px`;
   span.style.top = `${rect.y}px`;
-  // Font height ~ half the bubble box: enough for 2-3 lines of translated
-  // text to sit inside the bubble, not one giant line spilling out. The
-  // bubble bbox is the union of its OCR lines, so h * 0.5 ≈ one line height.
-  span.style.fontSize = `${Math.max(rect.h * 0.5, 10)}px`;
+
+  // Base size from one source line height, with horizontal padding.
+  const sourceLineH = Math.max(10, rect.h / Math.max(1, sourceLineCount));
+  const maxFontW = Math.max(8, rect.w / 12); // ~12 chars/line lower bound for CJK
+  let fontSize = Math.min(sourceLineH * 0.85, rect.w / 3, maxFontW * 1.5);
+
+  // Shrink until the estimated wrapped lines fit the bubble height.
+  const targetChars = [...text].length;
+  for (let guard = 0; guard < 20; guard += 1) {
+    const perLine = Math.max(1, Math.floor(rect.w / Math.max(1, fontSize)));
+    const lines = Math.max(1, Math.ceil(targetChars / perLine));
+    const needed = lines * fontSize * 1.2;
+    if (needed <= rect.h * 0.95 || fontSize <= 10) break;
+    fontSize *= 0.9;
+  }
+  fontSize = Math.max(10, Math.round(fontSize));
+
+  span.style.fontSize = `${fontSize}px`;
   span.style.width = `${rect.w}px`;
   span.style.minWidth = `${rect.w}px`;
-  span.style.lineHeight = '1.15';
+  span.style.lineHeight = '1.2';
   span.style.whiteSpace = 'pre-wrap';
   span.style.wordBreak = 'break-word';
   span.style.overflowWrap = 'anywhere';
   span.style.color = '#000';
-  span.style.textShadow = '0 0 2px #fff, 0 0 4px #fff';
+  // White halo keeps text readable over busy panels (M2/M3 erased bubbles,
+  // but un-erased SFX/lettering may still sit behind).
+  span.style.textShadow = '0 0 3px #fff, 0 0 6px #fff, 0 0 2px #fff';
   span.style.fontWeight = '600';
   span.style.opacity = '0.95';
   span.style.pointerEvents = 'none';
@@ -162,7 +187,7 @@ export async function applyComicOverlay(options: ComicOverlayOptions): Promise<n
   // so bubble pageIndex (0-based within the slice) must be shifted by this to
   // land on the raw 1-based data-pdf-page of the full book.
   const startPage = Number(job.document.metadata?.startPage) || 0;
-  const state = job.document.state as { bubbles?: Array<{ id: string; pageIndex: number; poly: [number, number][] }>; pages?: Array<{ imageWidth: number; imageHeight: number }> } | undefined;
+  const state = job.document.state as { bubbles?: Array<{ id: string; pageIndex: number; poly: [number, number][]; text?: string }>; pages?: Array<{ imageWidth: number; imageHeight: number }> } | undefined;
   const bubbles = state?.bubbles || [];
   const pages = state?.pages || [];
   if (!bubbles.length) return 0;
@@ -215,7 +240,10 @@ export async function applyComicOverlay(options: ComicOverlayOptions): Promise<n
       const bubble = ordered[orderIdx];
       const rect = bubbleRect(bubble.poly);
       if (!rect) continue;
-      const span = buildSpan(translations[bubble.id], rect);
+      // Source line count drives the base font size — a 3-line bubble gets a
+      // smaller per-line font than a 1-liner, so the translation fits.
+      const sourceLines = Math.max(1, (bubble.text?.split('\n').length) || 1);
+      const span = buildSpan(translations[bubble.id], rect, sourceLines);
       layer.appendChild(span);
       options.onSpanCreated?.(span, { id: bubble.id, pageIndex }, orderIdx);
       rendered += 1;
