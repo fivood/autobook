@@ -6,6 +6,8 @@
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import { pagePath } from '$lib/data/env';
+  import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
+  import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-types';
   import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
   import { adapterForTranslationDocument, checkLocalTranslationRuntime, createCloudTranslationProvider, createLocalTranslationProvider, isComicFile, inspectStoredBook, inspectTranslationFile, listLocalTranslationModels, localTranslationBaseUrl, type TranslationSource } from '$lib/data/translation/translation-core';
   import { extractComicPages } from '$lib/data/translation/comic-extract';
@@ -186,10 +188,13 @@
       worldGlossary = glossaryProfile?.entries.filter((entry) => entry.approved) || [];
       const bookId = Number($page.url.searchParams.get('bookId') || '');
       if (bookId) {
-        const book = await database.getData(bookId);
+        let book = await database.getData(bookId);
         if (book) {
           enteredFromBook = true;
           activeFileName = book.title || '';
+          // On-disk library books arrive as empty stubs (see resolveFullStoredBook);
+          // hydrate the real elementHtml/blobs before deciding on a path.
+          book = await resolveFullStoredBook(book);
           const fmt = (book.originalFormat || '').toLowerCase();
           // The user opened the workbench because this book needs
           // translating. Decide by whether its text can be selected at all,
@@ -342,6 +347,40 @@
       errorMessage = error instanceof Error ? error.message : String(error);
       loading = false;
     }
+  }
+
+  /**
+   * Books stored in the on-disk library (INTERNAL_TAURI_FS) keep only
+   * metadata in IndexedDB — `elementHtml` and `blobs` are empty placeholders,
+   * the real content lives in `<root>/<title>/bookdata_*.json`. The reader
+   * pulls it via the FS handler's `getBook()` before rendering; the workbench
+   * must do the same or OCR finds no pages. Non-FS books (or FS loads that
+   * fail) return the record untouched so the existing error path fires.
+   */
+  async function resolveFullStoredBook(book: import('$lib/data/database/books-db/versions/books-db').BooksDbBookData): Promise<import('$lib/data/database/books-db/versions/books-db').BooksDbBookData> {
+    const isFsStub =
+      book.storageSource === InternalStorageSources.INTERNAL_TAURI_FS ||
+      book.storageSource === InternalStorageSources.INTERNAL_DEFAULT;
+    if (!isFsStub || Object.keys(book.blobs || {}).length) return book;
+    try {
+      const external = getStorageHandler(
+        window,
+        StorageKey.TAURI_FS,
+        book.storageSource,
+        true
+      );
+      external.startContext({ id: book.id, title: book.title });
+      const loaded = await external.getBook();
+      if (loaded && (loaded as import('$lib/data/database/books-db/versions/books-db').BooksDbBookData).blobs) {
+        const full = loaded as import('$lib/data/database/books-db/versions/books-db').BooksDbBookData;
+        return { ...book, ...full };
+      }
+    } catch {
+      // Failed disk load keeps the stub so inspectStoredComic / inspectStoredBook
+      // surface their normal "no translatable content" error instead of a raw
+      // fs exception.
+    }
+    return book;
   }
 
   async function inspectStoredComic(book: import('$lib/data/database/books-db/versions/books-db').BooksDbBookData, fmt: string) {
