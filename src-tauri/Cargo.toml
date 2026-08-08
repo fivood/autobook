@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.24.0"
+version = "1.25.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -36,7 +36,7 @@ windows = { version = "0.58", features = [
   "Storage_Streams",
   "Foundation",
   "Foundation_Collections",
-  # proxy.rs reads the system proxy â€” the only source a GUI-launched exe sees,
+  # proxy.rs reads the system proxy â€?the only source a GUI-launched exe sees,
   # since proxy clients export HTTPS_PROXY into the shell only.
   "Win32_System_Registry",
 ] }
