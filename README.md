@@ -1,6 +1,6 @@
 # AutoBook
 
-> A Windows desktop ebook reader that turns reading into a searchable personal knowledge base. Typewriter-style auto-play + TTS, spoiler-safe AI Q&A over the book you're reading, offline dictionaries, and one-click Obsidian sync. Reads EPUB, MOBI/AZW3, PDF (with OCR), Markdown, TXT, HTMLZ, CBZ/CBR. Chinese and Japanese first-class.
+> A Windows desktop ebook reader that turns reading into a searchable personal knowledge base. Typewriter auto-play, spoiler-safe AI Q&A, offline dictionaries, comic translation, and one-click Obsidian sync.
 
 **English** · [简体中文](./README.zh-CN.md)
 
@@ -9,111 +9,80 @@
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-lightgrey)](https://github.com/fivood/autobook/releases/latest)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)](https://tauri.app/)
-[![SvelteKit](https://img.shields.io/badge/frontend-SvelteKit-ff3e00)](https://kit.svelte.dev/)
 
-Originally forked from [ttu-ebook-reader](https://github.com/ttu-ttu/ebook-reader) and now substantially diverged. Tauri 2 + SvelteKit + Rust, NSIS installer, signed auto-update channel.
+Forked from [ttu-ebook-reader](https://github.com/ttu-ttu/ebook-reader), substantially diverged. Tauri 2 + SvelteKit + Rust, signed auto-update channel.
 
 ---
 
-## What it does
-
-```
- EPUB / MOBI / AZW3 / PDF / MD / TXT / HTMLZ / CBZ / CBR
-                          │
-                          ▼
-                       Reader
-                          │
-        ┌─────────────────┼──────────────────┐
-        │                 │                  │
-   Highlights +      AI assistant       Look up words
-    memos + tags    (spoiler-safe)      in offline dicts
-        │                                     │
-        ▼                                     │
-   Auto-play                                  │
-   typewriter                                 │
-   or TTS                                     │
-        │                                     │
-        └──────────────────┬──────────────────┘
-                           ▼
-                    Knowledge base (Notebook)
-                    ├─ Folders + tags
-                    ├─ [[wiki-links]] between highlights
-                    ├─ Daily review draw
-                    └─ Export .md · sync to Obsidian
-```
-
 ## Highlights
 
-- 📚 **Everything readable**: EPUB, MOBI/AZW/AZW3 (native Rust parser, no third-party crate), PDF (via PDF.js + optional PaddleOCR for scans), Markdown (with KaTeX + syntax highlighting), TXT (auto-encoding, chapter detection), HTMLZ, CBZ/CBR. Batch-import a ZIP of any mix.
-- ⌨️ **Typewriter auto-play**: characters fade in at 1–60 chars/sec. Hands-free reading with `A`/`D` speed control.
-- 🔊 **TTS**: WinRT system voices, or point at any HTTP TTS endpoint (iFlytek, Baidu, local GPT-SoVITS…) with custom headers/body templates. Language auto-detected from `dc:language` or CJK density.
-- 🎨 **4-color highlights + memos + tags**: right-click any selection. Independent of the book file — deleting a book keeps the notes.
-- 🧠 **Spoiler-safe AI Q&A**: BM25 index of the book you're reading, hard-capped at your current progress. Ask "who's this character?" or "what's happened so far?" without spoilers. Works with Anthropic Claude, OpenAI, OpenRouter, or a local Ollama endpoint.
-- 📖 **Offline dictionaries**: bring your own StarDict packs ([ECDICT](https://github.com/skywind3000/ECDICT), CC-CEDICT, JMdict…). Multi-dict lookup, English lemma fallback, fully offline.
-- 🔗 **Personal knowledge base**: cross-book notebook with folders, tags, [[wiki-links]] between highlights, weighted daily-review draw, full-text search. Jump back to the exact page in the original book.
-- 📤 **Obsidian sync**: one-click push. Each highlight becomes an atomic `.md` with rich frontmatter (color, tags, links, review dates). Graph, backlinks, and tag panes light up.
-- 🖼️ **Scanned book support**: fixed-layout / image-only EPUBs, CBZ/CBR, and scanned PDFs get position tracking, bookmarks, and a 12-step zoom pill.
-- 🌓 **13 built-in themes** (light / sepia / dark / seafoam / abyss / rainforest / espresso…), plus a full custom-theme editor with per-menu palette control.
+- **Formats**: EPUB, MOBI/AZW/AZW3 (native Rust parser), PDF (text + OCR for scans), Markdown, TXT, HTMLZ, CBZ/CBR. Batch-import any mix as a ZIP.
+- **Typewriter / TTS**: hands-free reading with speed control; WinRT voices or any HTTP TTS endpoint.
+- **Comic translation**: CBZ/CBR → OCR → bubble grouping → local/cloud LLM → translated overlay right in the reader.
+- **Comic inpainting**: auto-erase source text (flat-fill + optional LaMa), manual frame-selection for missed SFX.
+- **Spoiler-safe AI Q&A**: BM25 over the book, hard-capped at your progress. Anthropic, OpenAI-compatible, or local Ollama.
+- **Offline dictionaries**: bring your own StarDict packs; fully offline, multi-dict.
+- **Knowledge base**: cross-book notebook with folders, tags, wiki-links, daily review, full-text search, and Obsidian sync.
+- **Translation workbench**: per-book glossary, checkpointed batch translation, interrupt/resume — for text and comics alike.
+- **13 themes** with a full custom-theme editor.
 
-## Screenshots
+## Reading
 
-_See [Releases](https://github.com/fivood/autobook/releases) for the current UI. In-app language: 简体中文 · English · 日本語._
+- **Typewriter mode**: characters fade in at 1–60 chars/sec, `A`/`D` speed control.
+- **TTS**: WinRT system voices or custom HTTP endpoints (iFlytek, Baidu, local GPT-SoVITS…) with header/body templates.
+- **Highlights**: 4-color + memos + tags, stored independently of the book file — deleting a book keeps your notes.
+- **Dictionaries**: right-click lookup, English lemma fallback, multi-pack merge.
+
+## AI & Translation
+
+- **Spoiler-safe assistant**: ask "who's this character?" without future spoilers. Progress-capped retrieval.
+- **Translation workbench** (`/translate`): import a book or file, review per-book glossary candidates, then batch-translate with checkpoints that survive interruption or restart.
+- **Comic translation**: works end-to-end on CBZ/CBR — OCR (19 languages), bubble grouping, AI OCR correction, batch translation, and a rendered overlay in the reader.
+- **Inpainting**: source text is erased from bubbles (flat-fill; gradient/textured backgrounds hand off to a LaMa sidecar), so the overlay sits on a clean page. Manual frame-selection catches what OCR missed.
+- **Model management**: one page shows status, download progress, storage location, and uninstall for PaddleOCR, Kokoro, Ollama, and LaMa.
+
+## Knowledge Base
+
+- Cross-book notebook: folders, tags, `[[wiki-links]]`, weighted daily-review draw, full-text search, jump back to the exact page.
+- **Obsidian sync**: one-click push, each highlight becomes an atomic `.md` with rich frontmatter.
 
 ## Install
 
-Grab the latest installer from [Releases](https://github.com/fivood/autobook/releases/latest):
+Grab the installer from [Releases](https://github.com/fivood/autobook/releases/latest):
 
 - `AutoBook_<ver>_x64-setup.exe` (NSIS, recommended)
 - `AutoBook_<ver>_x64_en-US.msi`
 
-First launch shows a SmartScreen "Unknown publisher" prompt — click **More info → Run anyway**. Subsequent updates apply silently via the built-in updater.
+First launch shows a SmartScreen "Unknown publisher" prompt — click **More info → Run anyway**. Updates apply silently via the built-in updater.
 
 ## Data
 
 | What | Where |
 |---|---|
-| Library + highlights + folders | IndexedDB (schemaless) |
+| Library + highlights + folders | IndexedDB |
 | Original book files | `~/Documents/AutoBook/<title>/` |
-| UI settings + AI keys + dictionary paths | localStorage |
-| Obsidian sync target | user-chosen vault directory |
-| Dictionaries | user-chosen directory |
+| UI settings, AI keys, dict paths | localStorage |
+| Obsidian sync / dictionaries | user-chosen directories |
 
-**"Reset UI"** wipes only localStorage — books, highlights, notes, and folders are kept.
+**"Reset UI"** wipes only localStorage.
 
 ## Develop
 
 ```sh
 npm install
-npm run tauri dev    # Vite dev server + Rust hot-reload
-npm run check        # svelte-check (types + templates)
-npm run lint         # ESLint
+npm run tauri dev
+npm run check   # svelte-check
+npm run lint    # ESLint
 ```
 
 ## Build
 
-```powershell
-# Signing key must be set for the .sig to be generated (updater needs it).
-$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\autopage.key" -Raw
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+```sh
+# Set the signing key first so the .sig is generated (updater needs it).
 npm run tauri build
 ```
 
-Artifacts land in `src-tauri/target/release/bundle/`:
-- `msi/AutoBook_<ver>_x64_en-US.msi`
-- `nsis/AutoBook_<ver>_x64-setup.exe`
-- Matching `.sig` next to each
-
-Releases: push a `v*` tag → GitHub Actions builds, signs, uploads `latest.json`. In-app auto-update takes over from there.
-
-## Relationship to ttu-ebook-reader
-
-The upstream is a web-based reader focused on Japanese learners (kana, dictionaries, learning aids). AutoBook re-focused around three things:
-
-1. **Chinese long-form reading** on the desktop (formats, encodings, TTS voices, themes)
-2. **Typewriter / TTS auto-play** — hands-free reading
-3. **Personal knowledge base** — highlights → notebook → Obsidian / AI / dictionaries
-
-Modules removed from upstream: web PWA, cloud storage (GDrive / OneDrive), OAuth, service worker, GitHub Pages deployment, Edge Online TTS (always 403), Japanese-learner specifics, in-app bug report.
+Artifacts land in `src-tauri/target/release/bundle/` (`nsis/`, `msi/`, with `.sig`). Release: push a `v*` tag — GitHub Actions builds, signs, uploads `latest.json`.
 
 ## License
 
@@ -121,4 +90,4 @@ BSD-3-Clause, inherited from upstream. See [`LICENSE`](./LICENSE).
 
 ---
 
-<sub>Keywords: Windows ebook reader · EPUB reader · MOBI reader · AZW3 reader · PDF reader · scanned PDF OCR · Markdown reader · Chinese ebook reader · Japanese ebook reader · CJK · typewriter reading mode · text-to-speech ebook · TTS reader · WinRT TTS · spoiler-safe AI · book Q&A · BM25 · Anthropic Claude ebook · offline dictionary · StarDict · Obsidian sync · atomic notes · Zettelkasten · Tauri 2 · SvelteKit · Rust · desktop app · knowledge base · ttu-ebook-reader fork</sub>
+<sub>Keywords: Windows ebook reader · EPUB · MOBI · AZW3 · PDF OCR · CBZ · CBR · comic translation · comic inpainting · LaMa · Markdown · Chinese · Japanese · typewriter · TTS · spoiler-safe AI · BM25 · offline dictionary · StarDict · Obsidian · notebook · Tauri 2 · SvelteKit · Rust</sub>
