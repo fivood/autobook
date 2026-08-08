@@ -29,6 +29,30 @@ import {
   type KokoroModelId
 } from '$lib/data/store';
 
+const KOKORO_DOWNLOADED_KEY = 'kokoroDownloaded';
+
+function markKokoroDownloaded(modelId: KokoroModelId) {
+  try {
+    const raw = localStorage.getItem(KOKORO_DOWNLOADED_KEY);
+    const set = new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+    set.add(modelId);
+    localStorage.setItem(KOKORO_DOWNLOADED_KEY, JSON.stringify([...set]));
+  } catch {
+    // Persist failure only loses the ready hint; TTS still works.
+  }
+}
+
+/** Whether a Kokoro variant has been downloaded (any prior session). */
+export function isKokoroDownloaded(modelId: KokoroModelId): boolean {
+  try {
+    const raw = localStorage.getItem(KOKORO_DOWNLOADED_KEY);
+    if (!raw) return false;
+    return (JSON.parse(raw) as string[]).includes(modelId);
+  } catch {
+    return false;
+  }
+}
+
 // One in-flight/settled TTS instance per model id — switching Kokoro variant
 // in settings invalidates the last one but keeps the earlier one cached in
 // case the user flips back.
@@ -79,6 +103,7 @@ async function loadModel(
       }
     });
     onProgress({ phase: 'ready', message: '', loaded: 0, total: 0, modelId });
+    markKokoroDownloaded(modelId);
     return tts;
   })().catch((err) => {
     ttsPromises.delete(modelId);
@@ -170,6 +195,16 @@ export function invalidateKokoroSessionCache(modelId: KokoroModelId): void {
  *  entry will just be re-fetched or overwritten on next use. */
 export async function deleteKokoroCache(modelId: KokoroModelId): Promise<void> {
   ttsPromises.delete(modelId);
+  try {
+    const raw = localStorage.getItem(KOKORO_DOWNLOADED_KEY);
+    if (raw) {
+      const set = new Set<string>(JSON.parse(raw) as string[]);
+      set.delete(modelId);
+      localStorage.setItem(KOKORO_DOWNLOADED_KEY, JSON.stringify([...set]));
+    }
+  } catch {
+    // Best-effort flag cleanup.
+  }
   const repo = KOKORO_MODEL_REPOS[modelId];
   if (!repo || typeof caches === 'undefined') return;
   try {

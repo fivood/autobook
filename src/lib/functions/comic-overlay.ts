@@ -12,6 +12,7 @@
  */
 
 import { findComicTranslationJob } from '$lib/data/translation/translation-job-store';
+import { orderPageBubbles } from '$lib/functions/comic-inpaint-regions';
 
 const OVERLAY_CLASS = 'comic-translation-overlay';
 const OVERLAY_LAYER = 'comic-translation-layer';
@@ -117,6 +118,36 @@ export interface ComicOverlayOptions {
    * spans necessarily render (images may still be lazy-loading). The caller
    * uses this to hide "open the translation workbench" prompts. */
   onHasTranslation?: () => void;
+  /** Called once per translated bubble span, after it's positioned. The
+   * caller can attach order badges / click handlers for manual re-ordering. */
+  onSpanCreated?: (span: HTMLElement, bubble: { id: string; pageIndex: number }, order: number) => void;
+  /** Optional storage used to swap in in-painted (source-text-erased) page
+   * images beneath the translated overlay. Absent in pure-browser builds. */
+  inpaintStorage?: {
+    readInpainted(cacheKey: string, pageIndex: number): Promise<Blob | null>;
+  };
+}
+
+/** Lazily-created object URLs for inpainted page images, revoked on clear. */
+const inpaintUrls = new Map<string, string>();
+
+async function swapInpaintedBackdrop(
+  cacheKey: string,
+  pageIndex: number,
+  img: HTMLImageElement,
+  inpaintStorage: NonNullable<ComicOverlayOptions['inpaintStorage']>
+) {
+  const urlKey = `${cacheKey}|${pageIndex}`;
+  let url = inpaintUrls.get(urlKey);
+  if (!url) {
+    const blob = await inpaintStorage.readInpainted(cacheKey, pageIndex);
+    if (!blob) return;
+    url = URL.createObjectURL(blob);
+    inpaintUrls.set(urlKey, url);
+  }
+  // Only swap when the current source is the original page image (not an
+  // already-swapped one or a cover placeholder).
+  if (img.src !== url) img.src = url;
 }
 
 export async function applyComicOverlay(options: ComicOverlayOptions): Promise<number> {
@@ -126,6 +157,7 @@ export async function applyComicOverlay(options: ComicOverlayOptions): Promise<n
   if (!translations) return 0;
   options.onHasTranslation?.();
 
+  const cacheKey = job.document.metadata?.cacheKey as string | undefined;
   const state = job.document.state as { bubbles?: Array<{ id: string; pageIndex: number; poly: [number, number][] }>; pages?: Array<{ imageWidth: number; imageHeight: number }> } | undefined;
   const bubbles = state?.bubbles || [];
   const pages = state?.pages || [];
@@ -154,6 +186,14 @@ export async function applyComicOverlay(options: ComicOverlayOptions): Promise<n
     const baseW = pageInfo?.imageWidth || img.naturalWidth || 1;
     const baseH = pageInfo?.imageHeight || img.naturalHeight || 1;
 
+    // Use the in-painted page as the backdrop when available, so translated
+    // text sits on a clean bubble instead of over the original lettering.
+    if (cacheKey && options.inpaintStorage) {
+      swapInpaintedBackdrop(cacheKey, pageIndex, img, options.inpaintStorage).catch(() => {
+        // Backdrop swap is best-effort; fall back to the original page.
+      });
+    }
+
     const anchored = ensureLayer(section);
     if (!anchored) continue;
     const { layer } = anchored;
@@ -162,11 +202,17 @@ export async function applyComicOverlay(options: ComicOverlayOptions): Promise<n
     // duplicates on every resize/scroll tick.
     layer.querySelectorAll(`.${OVERLAY_CLASS}`).forEach((span) => span.remove());
 
-    for (const bubble of pageBubbles) {
+    // Reading order: use the manually adjusted order when present (Western
+    // comics left→right), else the OCR Y-sorted default. Order drives both
+    // DOM order and (optionally) reveal-on-progress.
+    const ordered = cacheKey ? orderPageBubbles(cacheKey, pageIndex, pageBubbles) : pageBubbles;
+    for (let orderIdx = 0; orderIdx < ordered.length; orderIdx += 1) {
+      const bubble = ordered[orderIdx];
       const rect = bubbleRect(bubble.poly);
       if (!rect) continue;
       const span = buildSpan(translations[bubble.id], rect);
       layer.appendChild(span);
+      options.onSpanCreated?.(span, { id: bubble.id, pageIndex }, orderIdx);
       rendered += 1;
     }
     scaleLayer(layer, img, baseW, baseH);
@@ -183,4 +229,6 @@ export async function applyComicOverlay(options: ComicOverlayOptions): Promise<n
 export function clearComicOverlay(root?: HTMLElement | null) {
   const scope = root || document;
   scope.querySelectorAll(`.${OVERLAY_LAYER}`).forEach((layer) => layer.remove());
+  for (const url of inpaintUrls.values()) URL.revokeObjectURL(url);
+  inpaintUrls.clear();
 }

@@ -16,6 +16,7 @@
     pdfOcrPromptEnabled$,
     pdfOcrSkippedBookIds$,
     translateComicAutoOcr$,
+    translateLamaEndpoint$,
     translateOcrLang$
   } from '$lib/data/store';
   import { t } from '$lib/i18n';
@@ -85,6 +86,12 @@
     <label class="mb-3 flex items-center gap-2">
       <input type="checkbox" bind:checked={$translateComicAutoOcr$} />
       <span class="text-xs opacity-70">{$t('settings.translate.comicAutoOcr')}</span>
+    </label>
+
+    <label class="mb-3 block">
+      <span class="text-xs opacity-70">{$t('settings.ocr.lamaEndpoint')}</span>
+      <input type="text" class={inputClasses} bind:value={$translateLamaEndpoint$} spellcheck="false" placeholder="http://127.0.0.1:8080" />
+      <span class="mt-1 block text-xs opacity-60">{$t('settings.ocr.lamaHint')}</span>
     </label>
   </section>
 
