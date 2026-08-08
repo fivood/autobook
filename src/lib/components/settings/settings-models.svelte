@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import Fa from 'svelte-fa';
   import { faSpinner, faDownload, faTrash } from '@fortawesome/free-solid-svg-icons';
@@ -33,34 +33,48 @@
   onMount(() => {
     for (const m of MODELS) refresh(m.id);
     // Keep Kokoro download progress live.
-    kokoroLoadStatus$.subscribe((s) => {
-      if (s?.phase === 'loading') {
+    subscriptions.push(
+      kokoroLoadStatus$.subscribe((s) => {
+        if (s?.phase === 'loading') {
+          statuses.update((all) => ({
+            ...all,
+            'tts-kokoro': {
+              ready: false,
+              checking: false,
+              progress: { loaded: s.loaded, total: s.total, message: s.message }
+            }
+          }));
+        } else if (s?.phase === 'ready') {
+          statuses.update((all) => ({ ...all, 'tts-kokoro': { ready: true, checking: false } }));
+        }
+      })
+    );
+    // Keep PaddleOCR download progress live (det + rec tarballs).
+    subscriptions.push(
+      ocrDownloadProgress$.subscribe((p) => {
+        if (!p.downloading) {
+          statuses.update((all) => ({ ...all, 'ocr-paddle': { ready: isOcrDownloaded(), checking: false } }));
+          return;
+        }
+        const loaded = p.files.reduce((s, f) => s + f.loaded, 0);
+        const total = p.files.reduce((s, f) => s + f.total, 0);
+        const msg = p.files.map((f) => `${f.name}: ${fmtBytes(f.loaded)}`).join(' + ');
         statuses.update((all) => ({
           ...all,
-          'tts-kokoro': {
-            ready: false,
-            checking: false,
-            progress: { loaded: s.loaded, total: s.total, message: s.message }
-          }
+          'ocr-paddle': { ready: false, checking: false, progress: { loaded, total, message: msg } }
         }));
-      } else if (s?.phase === 'ready') {
-        statuses.update((all) => ({ ...all, 'tts-kokoro': { ready: true, checking: false } }));
-      }
-    });
-    // Keep PaddleOCR download progress live (det + rec tarballs).
-    ocrDownloadProgress$.subscribe((p) => {
-      if (!p.downloading) {
-        statuses.update((all) => ({ ...all, 'ocr-paddle': { ready: isOcrDownloaded(), checking: false } }));
-        return;
-      }
-      const loaded = p.files.reduce((s, f) => s + f.loaded, 0);
-      const total = p.files.reduce((s, f) => s + f.total, 0);
-      const msg = p.files.map((f) => `${f.name}: ${fmtBytes(f.loaded)}`).join(' + ');
-      statuses.update((all) => ({
-        ...all,
-        'ocr-paddle': { ready: false, checking: false, progress: { loaded, total, message: msg } }
-      }));
-    });
+      })
+    );
+  });
+
+  const subscriptions: Array<(() => void) | { unsubscribe: () => void }> = [];
+
+  onDestroy(() => {
+    for (const sub of subscriptions) {
+      if (typeof sub === 'function') sub();
+      else sub.unsubscribe();
+    }
+    subscriptions.length = 0;
   });
 
   function fmtBytes(n: number): string {

@@ -124,20 +124,21 @@ export function isOcrDownloaded(): boolean {
   }
 }
 
-function markOcrDownloaded() {
-  try {
-    localStorage.setItem(OCR_DOWNLOADED_KEY, '1');
-  } catch {
-    // Persist failure only loses the "downloaded" hint; OCR still works.
-  }
-}
-
 function clearOcrDownloadedFlag(): boolean {
   try {
     localStorage.removeItem(OCR_DOWNLOADED_KEY);
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Mark PaddleOCR models as present (called when a create() succeeds). */
+export function markOcrDownloaded() {
+  try {
+    localStorage.setItem(OCR_DOWNLOADED_KEY, '1');
+  } catch {
+    // Persist failure only loses the "downloaded" hint; OCR still works.
   }
 }
 
@@ -168,50 +169,40 @@ export function installOcrFetchTracker(): () => void {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
     const isOcrModel = OCR_MODEL_URL_PATTERN.test(url);
     const res = await orig(input, init);
-    if (!isOcrModel) return res;
-    if (res.ok && res.body) {
-      started = true;
-      const name = url.slice(url.lastIndexOf('/') + 1);
-      const total = Number(res.headers.get('content-length')) || 0;
-      files.set(name, { loaded: 0, total });
-      publish();
-      // Stream the body to count bytes as PaddleOCR downloads the tarball.
-      const reader = res.body.getReader();
-      const stream = new ReadableStream({
-        start(controller) {
-          const pump = async () => {
-            try {
-              for (;;) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                controller.enqueue(value);
-                const f = files.get(name);
-                if (f) {
-                  f.loaded += value.byteLength;
-                  publish();
-                }
-              }
-              controller.close();
-            } catch (err) {
-              controller.error(err);
-            }
-          };
-          pump();
+    if (!isOcrModel || !res.ok || !res.body) return res;
+    // Count progress on a *clone*, leaving the original body untouched for
+    // PaddleOCR to consume. `res.blob()` would re-read the stream PaddleOCR
+    // is also reading — breaking its download.
+    const name = url.slice(url.lastIndexOf('/') + 1);
+    const total = Number(res.headers.get('content-length')) || 0;
+    files.set(name, { loaded: 0, total });
+    started = true;
+    publish();
+    const reader = res.clone().body!.getReader();
+    (async () => {
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const f = files.get(name);
+          if (f) {
+            f.loaded += value?.byteLength || 0;
+            publish();
+          }
         }
-      });
-      // Re-wrap so downstream consumers (PaddleOCR) still get a usable body.
-      const newRes = new Response(stream, { status: res.status, headers: res.headers });
-      const finalBody = await newRes.blob();
-      const f = files.get(name);
-      if (f) f.loaded = f.total || finalBody.size;
-      publish();
-      // Both det + rec done => downloaded.
-      if (files.size >= 2 && [...files.values()].every((x) => x.total > 0 && x.loaded >= x.total)) {
-        markOcrDownloaded();
+        const f = files.get(name);
+        if (f) f.loaded = f.total || f.loaded;
+        publish();
+        if (files.size >= 2 && [...files.values()].every((x) => x.total > 0 && x.loaded >= x.total)) {
+          markOcrDownloaded();
+        }
+        ocrDownloadProgress$.set({ downloading: false, loaded: 0, total: 0, files: [] });
+      } catch {
+        // Clone body read failed (e.g. cancelled) — stop tracking; original
+        // response is unaffected.
+        ocrDownloadProgress$.set({ downloading: false, loaded: 0, total: 0, files: [] });
       }
-      ocrDownloadProgress$.set({ downloading: false, loaded: 0, total: 0, files: [] });
-      return new Response(finalBody, { status: res.status, headers: res.headers });
-    }
+    })();
     return res;
   }) as typeof fetch;
   return () => {

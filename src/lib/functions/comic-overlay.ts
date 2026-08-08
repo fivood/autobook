@@ -158,6 +158,10 @@ export async function applyComicOverlay(options: ComicOverlayOptions): Promise<n
   options.onHasTranslation?.();
 
   const cacheKey = job.document.metadata?.cacheKey as string | undefined;
+  // Page offset from the translation job: OCR slices off the cover by default,
+  // so bubble pageIndex (0-based within the slice) must be shifted by this to
+  // land on the raw 1-based data-pdf-page of the full book.
+  const startPage = Number(job.document.metadata?.startPage) || 0;
   const state = job.document.state as { bubbles?: Array<{ id: string; pageIndex: number; poly: [number, number][] }>; pages?: Array<{ imageWidth: number; imageHeight: number }> } | undefined;
   const bubbles = state?.bubbles || [];
   const pages = state?.pages || [];
@@ -174,10 +178,11 @@ export async function applyComicOverlay(options: ComicOverlayOptions): Promise<n
     byPage.set(bubble.pageIndex, list);
   }
 
-  // Map pageIndex (0-based) to img data-pdf-page (1-based).
+  // Map pageIndex (0-based within OCR slice) to raw img data-pdf-page (1-based
+  // on the full book, cover offset applied).
   let rendered = 0;
   for (const [pageIndex, pageBubbles] of byPage) {
-    const pageNum = pageIndex + 1;
+    const pageNum = pageIndex + startPage + 1;
     const img = root.querySelector<HTMLImageElement>(`img[data-pdf-page="${pageNum}"]`);
     if (!img) continue;
     const section = img.closest('.cbz-section') as HTMLElement | null;

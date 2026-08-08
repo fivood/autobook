@@ -31,6 +31,7 @@
  */
 
 import { pagePath } from '$lib/data/env';
+import { markOcrDownloaded } from '$lib/data/models-registry';
 
 /** Public language codes the UI exposes. Map to Paddle's `lang` parameter
  * just before instantiation. */
@@ -114,6 +115,10 @@ async function getOcrInstance(lang: OcrLanguage): Promise<PaddleOcrLike> {
         numThreads: 1
       }
     });
+    // create() resolving means det/rec models loaded — either freshly
+    // downloaded (the fetch tracker counted them) or from an earlier session's
+    // HTTP cache. Either way the model manager should show "ready".
+    markOcrDownloaded();
     // Log which backend ORT actually picked. Useful when diagnosing
     // why a particular machine is slow — `backend=wasm` + `webgpu=false`
     // means the GPU path isn't available so the user is on the slow
