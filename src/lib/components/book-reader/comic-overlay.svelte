@@ -41,6 +41,9 @@
   let lastRegion: { pageIndex: number; id: string } | undefined;
   /** In edit mode, the first bubble picked for a swap. */
   let swapPick: { pageIndex: number; id: string } | undefined;
+  /** Bumped after each manual-region add/remove so `manualCount` (which reads
+   * localStorage via comic-inpaint-regions) re-evaluates reactively. */
+  let manualRevision = 0;
 
   const contentEl = () => document.querySelector('.book-content') as HTMLElement | null;
 
@@ -54,11 +57,13 @@
         if (!editMode || !cacheKey) return;
         // Lift the whole page's overlay layer above the full-screen drag
         // target (z-30) so bubble spans + order badges are clickable for
-        // re-ordering while in edit mode.
+        // re-ordering while in edit mode. Keep the layer itself
+        // pointer-events:none (set in comic-overlay.ts) so its empty areas
+        // let the drag layer underneath start a selection; only the bubble
+        // span (below) and order badge re-enable pointer events.
         const layer = span.closest('.comic-translation-layer') as HTMLElement | null;
         if (layer) {
           layer.style.zIndex = '40';
-          layer.style.pointerEvents = 'auto';
         }
         // Order badge + click-to-swap in edit mode.
         span.dataset.bubbleId = bubble.id;
@@ -264,6 +269,7 @@
     ];
     addManualRegion(cacheKey, pageIndex, { id, poly });
     lastRegion = { pageIndex, id };
+    manualRevision += 1;
     await reapplyPageInpaint(pageIndex);
   }
 
@@ -290,6 +296,7 @@
   /** Remove a persisted manual region and re-erase the page. */
   async function removeRegion(pageIndex: number, id: string) {
     removeManualRegion(cacheKey, pageIndex, id);
+    manualRevision += 1;
     await reapplyPageInpaint(pageIndex);
   }
 
@@ -300,7 +307,7 @@
     lastRegion = undefined;
   }
 
-  $: manualCount = cacheKey
+  $: manualCount = cacheKey && manualRevision >= 0
     ? Object.values(getAllManualRegions(cacheKey)).reduce((sum, list) => sum + list.length, 0)
     : 0;
 </script>
