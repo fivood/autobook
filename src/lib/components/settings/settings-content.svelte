@@ -28,6 +28,7 @@
   import SettingsSync from '$lib/components/settings/settings-sync.svelte';
   import SettingsAi from '$lib/components/settings/settings-ai.svelte';
   import SettingsOcr from '$lib/components/settings/settings-ocr.svelte';
+  import SettingsModels from '$lib/components/settings/settings-models.svelte';
   import SettingsDataPaths from '$lib/components/settings/settings-data-paths.svelte';
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
   import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
@@ -1886,6 +1887,9 @@
 
   {:else if activeSettings === 'AI'}
     <SettingsSectionHeader title={$t('settings.section.ai')} hint={$t('settings.section.aiHint')} />
+    <div class="lg:col-span-3">
+      <SettingsModels />
+    </div>
     <div class="lg:col-span-3">
       <SettingsAi />
     </div>

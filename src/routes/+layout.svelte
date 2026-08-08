@@ -7,6 +7,7 @@
   import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
   import { basePath, clearConsoleOnReload, isTauri, pagePath } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
+  import { installOcrFetchTracker } from '$lib/data/models-registry';
   import { checkForUpdate } from '$lib/functions/updater/check-for-update';
   import { goto } from '$app/navigation';
   import {
@@ -136,6 +137,9 @@
   page.subscribe((p) => (path = p.url.pathname));
 
   onMount(async () => {
+    // Track PaddleOCR model downloads so the model manager can show
+    // "downloaded" without a cache-storage handle.
+    installOcrFetchTracker();
     if (browser && syncEnabled$.getValue() && syncToken$.getValue()) {
       startSyncLoop();
     }

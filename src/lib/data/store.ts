@@ -90,6 +90,9 @@ export const translateBatchSegments$ = writableStringLocalStorageSubject()('tran
 export const translateMaxSourceChars$ = writableStringLocalStorageSubject()('translateMaxSourceChars', '12000');
 export const translateOcrLang$ = writableStringLocalStorageSubject()('translateOcrLang', 'japan');
 export const translateComicAutoOcr$ = writableBooleanLocalStorageSubject()('translateComicAutoOcr', false);
+/** IOPaint (LaMa) sidecar endpoint for complex-background comic inpainting.
+ * Empty = disabled; the pipeline falls back to flat-fill bubbles. */
+export const translateLamaEndpoint$ = writableStringLocalStorageSubject()('translateLamaEndpoint', '');
 /** Contextual gloss beside the offline dictionary. Off until a model is found. */
 export const aiGlossEnabled$ = writableBooleanLocalStorageSubject()('aiGlossEnabled', true);
 /** Offer LLM post-correction of an OCR'd text layer. */

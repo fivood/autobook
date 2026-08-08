@@ -13,16 +13,17 @@
   import { correctComicBubbles, type ComicCorrectionProgress } from '$lib/data/translation/comic-ocr-correct';
   import { comicCacheKey } from '$lib/data/translation/comic-cache-key';
   import { hasIndexableText } from '$lib/data/ai/has-indexable-text';
+  import { inpaintPageWithLama, type InpaintBubble } from '$lib/functions/comic-inpaint';
   import { prewarmOcr } from '$lib/functions/file-loaders/pdf/pdf-ocr';
   import { resolveEndpoint } from '$lib/data/ai/endpoint';
   import { probeLocalModels } from '$lib/data/ai/local-model';
   import { TauriComicStorage } from '$lib/data/translation/comic-storage-tauri';
   import { ComicAdapter, type OcrEngineLanguage } from 'translator-workbench';
-  import { aiApiKey$, aiModel$, aiProvider$, aiOcrCorrectEnabled$, database, translateBatchSegments$, translateChunkChars$, translateComicAutoOcr$, translateDraftSource$, translateLocalModel$, translateMaxSourceChars$, translateOcrLang$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
+  import { aiApiKey$, aiModel$, aiProvider$, aiOcrCorrectEnabled$, database, translateBatchSegments$, translateChunkChars$, translateComicAutoOcr$, translateDraftSource$, translateLamaEndpoint$, translateLocalModel$, translateMaxSourceChars$, translateOcrLang$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
   import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob, deleteTranslationJob } from '$lib/data/translation/translation-job-store';
   import { exportHtmlAsMarkdownChunks, extractGlossaryCandidates, translateInBatches } from 'translator-workbench';
   import { createJob, pendingSegments, recordTranslationResults, setJobStatus, validateTranslationJob } from 'translator-workbench';
-  import type { DocumentAdapter, GlossaryEntry, ModelInfo, TranslationDocument, TranslationJob, TranslationResult } from 'translator-workbench';
+  import type { ComicBubble, DocumentAdapter, GlossaryEntry, ModelInfo, TranslationDocument, TranslationJob, TranslationResult } from 'translator-workbench';
   import { buttonClasses, inputClasses } from '$lib/css-classes';
   import { t, tImmediate } from '$lib/i18n';
 
@@ -379,6 +380,35 @@
     return (translateOcrLang$.getValue() || 'japan') as OcrEngineLanguage;
   }
 
+  /**
+   * Bubble inpainting (M2): erase source text by filling each uniform bubble
+   * with its sampled background colour, then store the result in the comic
+   * cache so the reader can show translated text on a clean page. Best-effort
+   * — skipped bubbles (gradient / textured backgrounds) stay as-is for a later
+   * LaMa pass.
+   */
+  async function runComicInpaint(pageBlobs: Blob[], bubbles: ComicBubble[], cacheKey: string, storage: TauriComicStorage) {
+    const byPage = new Map<number, InpaintBubble[]>();
+    for (const b of bubbles) {
+      const list = byPage.get(b.pageIndex) || [];
+      list.push({ id: b.id, poly: b.poly });
+      byPage.set(b.pageIndex, list);
+    }
+    const lamaEndpoint = translateLamaEndpoint$.getValue().trim();
+    for (const [pageIndex, pageBubbles] of byPage) {
+      const pageBlob = pageBlobs[pageIndex];
+      if (!pageBlob) continue;
+      try {
+        const { result, blob } = await inpaintPageWithLama(pageBlob, pageBubbles, lamaEndpoint);
+        if (result.inpainted > 0) {
+          await storage.writeInpainted(cacheKey, pageIndex, blob);
+        }
+      } catch {
+        // A failed page must not sink the whole run — leave the original.
+      }
+    }
+  }
+
   /** Per-book language wins over the global default for stored books. */
   function ocrLangForBook(book?: import('$lib/data/database/books-db/versions/books-db').BooksDbBookData): OcrEngineLanguage {
     if (book?.ocrLang) return book.ocrLang as OcrEngineLanguage;
@@ -494,6 +524,11 @@
       await saveTranslationJob(created);
       latestJob = undefined;
       pendingComicOcr = undefined;
+      // M2: erase source text from uniform bubbles so the reader overlay can
+      // sit on a clean page. Runs after the job is saved — a failure here
+      // loses only the inpainting, never the translation.
+      statusMessage = tImmediate('translate.comic.inpainting');
+      await runComicInpaint(ocrBlobs, finalBubbles, cacheKey, storage);
       statusMessage = tImmediate('translate.comic.ready', { pages: pages.length, bubbles: bubbles.length });
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);

@@ -14,7 +14,7 @@ import { chromium } from 'playwright-core';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..');
-const testDir = 'C:\\Users\\fukki\\AppData\\Local\\Temp\\opencode\\comic-test';
+const testDir = process.env.COMIC_TEST_DIR || 'C:\\Users\\fukki\\AppData\\Local\\Temp\\opencode\\comic-test';
 const pagesDir = join(testDir, 'pages');
 const modelsDir = join(testDir, 'models');
 const modulesDir = join(repoRoot, 'node_modules');
