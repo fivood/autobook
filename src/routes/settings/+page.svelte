@@ -96,7 +96,7 @@
 
   afterNavigate((navigation) => {
     const { from } = navigation;
-    if (!from) return;
+    if (!from?.url) return;
     prevPage = `${from.url.pathname}${from.url.search}`;
   });
 

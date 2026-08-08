@@ -1123,6 +1123,7 @@ export default {
   'translate.comic.ocrTitle': '漫画 OCR',
   'translate.comic.pendingOcr': '已加载 {pages} 页漫画，需要 OCR 识别文字后才能翻译',
   'translate.comic.runOcr': '开始 OCR 识别',
+  'translate.comic.desktopOnly': '漫画 OCR 需要桌面版（漫画缓存存在本地文件系统）；请用安装的 AutoBook 打开翻译工作台。',
   'translate.comic.skipCover': '跳过封面（第 1 页）',
   'translate.comic.skipBackCover': '跳过封底（最后 1 页）',
   'translate.comic.correcting': 'AI 校正在 OCR 文本…',

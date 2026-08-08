@@ -37,6 +37,20 @@ export function detectBookFormat(title: string): BookFormat {
   return EXT_MAP[ext] || 'other';
 }
 
+/**
+ * Source container format for the import-time `originalFormat` field. Unlike
+ * `detectBookFormat` (which groups every comic archive under `cbz` so the
+ * library filter stays single-entry), this keeps the real container so the
+ * card badge can show CBR / CB7 / CBT instead of lumping them as CBZ.
+ */
+export function detectSourceFormat(title: string): string {
+  const lastDot = title.lastIndexOf('.');
+  if (lastDot < 0 || lastDot === title.length - 1) return 'other';
+  const ext = title.slice(lastDot + 1).toLowerCase();
+  if (ext === 'cbz' || ext === 'cbr' || ext === 'cb7' || ext === 'cbt') return ext;
+  return EXT_MAP[ext] || 'other';
+}
+
 export const BOOK_FORMAT_LABELS: Record<BookFormat, string> = {
   pdf: 'PDF',
   epub: 'EPUB',
