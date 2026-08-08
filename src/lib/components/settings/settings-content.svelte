@@ -791,7 +791,7 @@
     dialogManager.dialogs$.next([
       {
         component: SettingsCustomTheme,
-        props: { existingThemes: optionsForTheme }
+        props: { existingThemes: optionsForTheme, selectedTheme: selectedTheme }
       }
     ]);
   }

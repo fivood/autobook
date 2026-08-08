@@ -226,17 +226,16 @@
         }
       }
       // No book was opened: if the most recent job was interrupted (paused by
-      // the user or failed mid-way) with some segments done, surface it so the
-      // user can decide — the resume card stays visible and the "开始/继续
-      // 初译" button is only pressed by hand. Auto-restarting translation on
-      // page load burns model tokens / quota before the user asked, and an
-      // interrupted job may be one the user deliberately stopped.
+      // the user or failed mid-way) with some segments done, leave it as the
+      // resume card instead of loading it into the editor. The user reads the
+      // card, decides, and clicks 恢复 / 继续初译 by hand — loading the job
+      // automatically (or worse, auto-restarting translation) would both
+      // pre-empt the user's intent and spend model tokens without being asked.
       if (!bookId && latestJob) {
         const interrupted =
           latestJob.status === 'paused' ||
           (latestJob.status === 'failed' && Object.keys(latestJob.translations).length > 0);
         if (interrupted) {
-          await restoreLatestJob();
           await checkOllama();
         }
       }
