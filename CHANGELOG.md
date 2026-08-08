@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.26.0
+
+这版是实测驱动的修复版。用 Playwright + CDP 驱动 `tauri dev` 做了全功能回归，修掉了一批阅读器、翻译工作台和漫画编辑流程的真实 bug。
+
+- **大漫画书不再白屏**：阅读器等所有图片加载完才显示首屏，而漫画页图带 `loading="lazy"`（视口外不触发 load）导致大书（100+ 页）的加载态卡死、整页白屏。现在 `loadingState` 跳过 lazy 页图，只等非 lazy 的封面/正文图，首屏 3 秒内出现
+- **外部存储漫画进翻译工作台不再报「没有可翻译的 HTML 内容」**：磁盘库（`ttu-internal-tauri-fs`）的书在 IndexedDB 里只有元数据占位（elementHtml/blobs 为空），真实内容在 `<root>/<title>/bookdata_*.json`。进工作台时若发现是外部存储且 blobs 为空，先经 Tauri FS handler 从磁盘补全再分流，漫画正常走 OCR
+- **翻译断点恢复改为显式确认**：刷新后不再自动续跑翻译（避免误烧模型配额），只显示「发现可恢复任务」卡片，用户点「恢复最近任务」加载、再点「继续初译」才开跑
+- **漫画翻译 banner 点 x 关不掉**：dismiss 状态用 `dismissedIds$.getValue()` 读取，Svelte 的 `$:` 只追踪 `$store` 引用，`.getValue()` 不触发重算。改用 `$dismissedIds$` 订阅后，点 x 正确关闭且重开不再提示
+- **扫描 PDF 导入无进度反馈**：`loadPdf` 的 load 步整段同步阻塞（逐页渲染到 blob），大扫描 PDF 导入时进度条卡 0、ETA 显示 `~ ??:??:??`，像卡死。现在逐页上报进度，进度条持续推进、ETA 实时倒数
+- **4 个页面首次直达报 `from.url` 空**：`/changelog` `/translate` `/notebook` `/settings` 的 `afterNavigate` 里 `from` 可能为 null（首次直达），读 `from.url` 抛异常污染日志。改判 `from?.url`，直达无报错
+- **漫画 OCR 在浏览器模式不再崩溃**：漫画缓存存在 Tauri 文件系统，纯浏览器/dev 打开 OCR 直接调 `invoke` 报错。现在非 Tauri 环境明确提示「请用桌面版」，不再显示运行时异常
+- **CBR 书卡显示真实来源格式**：CBR/CB7/CBT 之前被归并成 CBZ 徽标。新增 `detectSourceFormat`，新导入的 CBR 徽标显示 CBR（筛选仍按漫画分组不变）
+- **漫画编辑模式气泡排序 + 框选抹字失效**：编辑模式的全屏拖拽层（`fixed inset-0 z-30`）盖住一切，鼠标事件目标永远是它——气泡点不到、框选起不了。修复：气泡层提到拖拽层之上（z-40）、气泡 span/徽标单独可点；`onMouseDown` 用坐标反查命中底层图片；拖拽改 window 级监听（拖过气泡不中断）
+- **编辑层空白区域拦截框选 + 手动计数不刷新**：整层 `pointer-events:auto` 导致层内空白无法框选（改回 layer 穿透、仅气泡可点）；手动区域数读 localStorage 不触发 Svelte 响应式，加 revision 计数实时刷新
+- **`tauri_plugin_log` 初始化失败不再让 app 崩溃**：AppData 残留日志文件让 log 插件撞 `os error 183`，整个 app panic 起不来。dev 日志改走 stderr+webview，且初始化失败降级为警告而非崩溃
+- **自定义主题对话框补 `selectedTheme`**：新建/编辑主题弹窗漏传该 prop，消除运行时警告
+
 ## 1.25.0
 
 这版把漫画翻译从「能看译文」推进到「能改图」。M2/M3 抹字让译文底下是干净的气泡底图，模型管理把阅读器功能全开要预备的四个模型统一管起来。
