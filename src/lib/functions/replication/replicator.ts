@@ -38,7 +38,7 @@ const loadCbz = () => import('$lib/functions/file-loaders/cbz/load-cbz').then((m
 const loadCbr = () => import('$lib/functions/file-loaders/cbr/load-cbr').then((m) => m.default);
 const loadHtmlz = () =>
   import('$lib/functions/file-loaders/htmlz/load-htmlz').then((m) => m.default);
-import { detectBookFormat } from '$lib/functions/book-format';
+import { detectSourceFormat } from '$lib/functions/book-format';
 import { logger } from '$lib/data/logger';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
@@ -152,7 +152,9 @@ export async function importData(
           // card corner chip can display it even after loaders strip the
           // extension from the title (EPUB/MOBI extract clean titles
           // from EXTH; only TXT/MD/CBZ tend to keep the extension).
-          bookContent.originalFormat = detectBookFormat(file.name);
+          // detectSourceFormat (not detectBookFormat) so a CBR keeps its CBR
+          // badge instead of being lumped under CBZ.
+          bookContent.originalFormat = detectSourceFormat(file.name);
 
           currentTitle = bookContent.title;
 

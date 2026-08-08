@@ -19,13 +19,13 @@
   import { prewarmOcr } from '$lib/functions/file-loaders/pdf/pdf-ocr';
   import { resolveEndpoint } from '$lib/data/ai/endpoint';
   import { probeLocalModels } from '$lib/data/ai/local-model';
-  import { TauriComicStorage } from '$lib/data/translation/comic-storage-tauri';
+  import { createComicStorage } from '$lib/data/translation/comic-storage';
   import { ComicAdapter, type OcrEngineLanguage } from 'translator-workbench';
   import { aiApiKey$, aiModel$, aiProvider$, aiOcrCorrectEnabled$, database, translateBatchSegments$, translateChunkChars$, translateComicAutoOcr$, translateDraftSource$, translateLamaEndpoint$, translateLocalModel$, translateMaxSourceChars$, translateOcrLang$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
   import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob, deleteTranslationJob } from '$lib/data/translation/translation-job-store';
   import { exportHtmlAsMarkdownChunks, extractGlossaryCandidates, translateInBatches } from 'translator-workbench';
   import { createJob, pendingSegments, recordTranslationResults, setJobStatus, validateTranslationJob } from 'translator-workbench';
-  import type { ComicBubble, DocumentAdapter, GlossaryEntry, ModelInfo, TranslationDocument, TranslationJob, TranslationResult } from 'translator-workbench';
+  import type { ComicBubble, ComicStorage, DocumentAdapter, GlossaryEntry, ModelInfo, TranslationDocument, TranslationJob, TranslationResult } from 'translator-workbench';
   import { buttonClasses, inputClasses } from '$lib/css-classes';
   import { t, tImmediate } from '$lib/i18n';
 
@@ -94,7 +94,7 @@
 
   afterNavigate((navigation) => {
     const { from } = navigation;
-    if (!from) return;
+    if (!from?.url) return;
     prevPage = `${from.url.pathname}${from.url.search}`;
   });
   /** Parsing an imported file. Separate from `running` on purpose — see below. */
@@ -226,21 +226,18 @@
         }
       }
       // No book was opened: if the most recent job was interrupted (paused by
-      // the user or failed mid-way) with some segments done, resume it and
-      // keep translating automatically — that's the point of a checkpoint.
-      // A fresh/glossary-review job is left for the user to kick off.
+      // the user or failed mid-way) with some segments done, surface it so the
+      // user can decide — the resume card stays visible and the "开始/继续
+      // 初译" button is only pressed by hand. Auto-restarting translation on
+      // page load burns model tokens / quota before the user asked, and an
+      // interrupted job may be one the user deliberately stopped.
       if (!bookId && latestJob) {
         const interrupted =
           latestJob.status === 'paused' ||
           (latestJob.status === 'failed' && Object.keys(latestJob.translations).length > 0);
         if (interrupted) {
           await restoreLatestJob();
-          // Need the model list to know what `selectedModel` resolves to
-          // before auto-continuing a local draft.
           await checkOllama();
-          if (draftReady && translationJob && translationJob.status !== 'completed') {
-            await startDraftTranslation();
-          }
         }
       }
     } catch (error) {
@@ -426,7 +423,7 @@
    * — skipped bubbles (gradient / textured backgrounds) stay as-is for a later
    * LaMa pass.
    */
-  async function runComicInpaint(pageBlobs: Blob[], bubbles: ComicBubble[], cacheKey: string, storage: TauriComicStorage) {
+  async function runComicInpaint(pageBlobs: Blob[], bubbles: ComicBubble[], cacheKey: string, storage: ComicStorage) {
     const byPage = new Map<number, InpaintBubble[]>();
     for (const b of bubbles) {
       const list = byPage.get(b.pageIndex) || [];
@@ -505,8 +502,15 @@
         return;
       }
       statusMessage = tImmediate('translate.comic.ocr', { done: 0, total: ocrBlobs.length });
+      const storage = createComicStorage();
+      if (!storage) {
+        // Comic OCR's page/OCR cache lives in the Tauri filesystem; a plain
+        // browser / dev-server tab has no invoke to reach it.
+        statusMessage = tImmediate('translate.comic.desktopOnly');
+        loading = false;
+        return;
+      }
       const jobId = newJobId();
-      const storage = new TauriComicStorage();
       const ocrLang = ocrLangForBook(book);
       // Cache namespace is the book identity (title+fmt+lang), not the job
       // UUID — so re-entering the same book hits the OCR cache instead of

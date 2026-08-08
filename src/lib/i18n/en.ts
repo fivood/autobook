@@ -1088,6 +1088,7 @@ export default {
   'translate.comic.ocrTitle': 'Comic OCR',
   'translate.comic.pendingOcr': '{pages} comic pages loaded — OCR is needed before translation',
   'translate.comic.runOcr': 'Run OCR',
+  'translate.comic.desktopOnly': 'Comic OCR requires the desktop app (the comic cache lives in the local filesystem). Open the workbench in the installed AutoBook instead.',
   'translate.comic.skipCover': 'Skip cover (page 1)',
   'translate.comic.skipBackCover': 'Skip back cover (last page)',
   'translate.comic.correcting': 'Correcting OCR text with AI…',

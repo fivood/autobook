@@ -1092,6 +1092,7 @@ export default {
   'translate.comic.ocrTitle': 'コミック OCR',
   'translate.comic.pendingOcr': '{pages} ページのコミックを読み込みました。翻訳には OCR が必要です',
   'translate.comic.runOcr': 'OCR を実行',
+  'translate.comic.desktopOnly': 'コミック OCR はデスクトップ版が必要です（コミックのキャッシュはローカルファイルシステムにあります）。インストール済みの AutoBook で翻訳ワークベンチを開いてください。',
   'translate.comic.skipCover': '表紙をスキップ（1 ページ目）',
   'translate.comic.skipBackCover': '裏表紙をスキップ（最終ページ）',
   'translate.comic.correcting': 'AI で OCR テキストを補正中…',
