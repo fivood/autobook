@@ -387,16 +387,24 @@ function isGarbageText(text: string): boolean {
   return letterish.length / meaningful.length < 0.3;
 }
 
-export default async function loadPdf(file: File, lastBookModified: number): Promise<LoadData> {
+export default async function loadPdf(
+  file: File,
+  lastBookModified: number,
+  onProgress?: (page: number, total: number) => void
+): Promise<LoadData> {
   try {
-    return await loadPdfInner(file, lastBookModified);
+    return await loadPdfInner(file, lastBookModified, onProgress);
   } catch (e: any) {
     const msg = e?.message || e?.name || (typeof e === 'string' ? e : JSON.stringify(e));
     throw new Error(`PDF 加载失败: ${msg}`);
   }
 }
 
-async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadData> {
+async function loadPdfInner(
+  file: File,
+  lastBookModified: number,
+  onProgress?: (page: number, total: number) => void
+): Promise<LoadData> {
   const { pdfjs: pdfjsLib, cmapUrl, standardFontDataUrl, wasmUrl } = await loadPdfjs();
   const bytes = new Uint8Array(await file.arrayBuffer());
   const doc = await pdfjsLib.getDocument({
@@ -580,6 +588,8 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
       characters: sectionChars
     });
     totalChars += sectionChars;
+
+    onProgress?.(pageNum, doc.numPages);
 
     page.cleanup();
   }
