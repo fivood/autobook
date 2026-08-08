@@ -27,6 +27,8 @@
   let resizeObserver: ResizeObserver | undefined;
   let rootEl: HTMLElement | null = null;
   let cacheKey = '';
+  /** Cover-skip offset from the job; maps raw data-pdf-page to slice index. */
+  let startPage = 0;
 
   // ── Edit mode (manual inpainting) ───────────────────────────────────
   let editMode = false;
@@ -129,9 +131,11 @@
   onMount(async () => {
     if (!browser) return;
     rootEl = document.querySelector('.book-content') as HTMLElement | null;
-    // Resolve the cache key once so manual regions target the right comic.
+    // Resolve the cache key + cover offset once so manual regions and page
+    // mapping target the right comic / page index.
     const job = await findComicTranslationJob(title);
     cacheKey = (job?.document.metadata?.cacheKey as string) || '';
+    startPage = Number(job?.document.metadata?.startPage) || 0;
     apply().then(() => startPolling());
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => apply());
@@ -168,7 +172,9 @@
     const pageAttr = img.getAttribute('data-pdf-page');
     if (!pageAttr) return;
     drawing = true;
-    dragPage = Number(pageAttr) - 1;
+    // raw data-pdf-page (1-based full book) → slice index (0-based, cover
+    // skipped during OCR) so manual regions + inpaint cache line up.
+    dragPage = Number(pageAttr) - 1 - startPage;
     dragImg = img;
     // Store DOM coords for drawing; convert to image px on mouseup.
     dragStart = { x: ev.clientX, y: ev.clientY };

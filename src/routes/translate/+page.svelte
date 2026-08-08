@@ -511,8 +511,13 @@
       const adapter = new ComicAdapter();
       const document = adapter.buildDocument(`${title}.${fmt}`, title, sourceLanguage, pages, finalBubbles);
       // Record the stable cache namespace so deleteTranslationJob can clean up
-      // the right fs directory (see comic-cache-key.ts).
+      // the right fs directory (see comic-cache-key.ts). Also record the
+      // cover-skip offset so the reader maps bubble pageIndex (0-based within
+      // the OCR'd slice) back to the raw data-pdf-page number (1-based on the
+      // full CBZ) — otherwise translations land on the wrong page when the
+      // cover is skipped.
       document.metadata.cacheKey = cacheKey;
+      document.metadata.startPage = String(startIdx);
       translationDocument = document;
       documentAdapter = adapter;
       documentExtension = fmt;
