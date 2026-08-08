@@ -436,11 +436,21 @@ pub fn run() {
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
-        app.handle().plugin(
+        // The log plugin writes to AppData/<identifier>/logs. A leftover file
+        // from a prior crashed run can make its rotator hit `os error 183`
+        // (file exists) — that must not take the whole app down. Degrade to
+        // stderr so dev logs still surface in the terminal.
+        if let Err(err) = app.handle().plugin(
           tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Info)
+            .targets([
+              tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
+              tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+            ])
             .build(),
-        )?;
+        ) {
+          eprintln!("[log-plugin] init failed, continuing without file log: {err}");
+        }
       }
 
       // Files passed on first launch (double-click association / CLI)
