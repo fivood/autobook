@@ -23,8 +23,7 @@
   // the user has moved on to /translate.
   const dismissedIds$ = writableSubject(readDismissed());
 
-  $: dismissed = dismissedIds$
-    .getValue()
+  $: dismissed = ($dismissedIds$ || '')
     .split(',')
     .filter(Boolean)
     .includes(String(bookId));
