@@ -12,7 +12,16 @@ const IMAGE_LOAD_TIMEOUT_MS = 10000;
 export function imageLoadingState(contentEl: HTMLElement) {
   const elements = Array.from(contentEl.getElementsByTagName('img'));
   return new Observable<boolean>((subscriber) => {
-    const obsArray = elements.filter((el) => el.src).map(imageLoadComplete);
+    // Images marked `loading="lazy"` (PDF/CBZ/CBR page images, see
+    // optimizeBookPageImages) are loaded by the browser only when they enter
+    // the viewport. Waiting on them here would hold `allowDisplay` false —
+    // the full-screen white reader shell — until every off-screen page has
+    // fired load, which on a 100+ page comic either stalls for the per-image
+    // 10s timeout or never resolves in a real WebView2. The whole point of
+    // lazy is "load on demand", so they must not gate first-paint.
+    const obsArray = elements
+      .filter((el) => el.src && el.loading !== 'lazy')
+      .map(imageLoadComplete);
 
     if (obsArray.length <= 0) {
       subscriber.next(false);
