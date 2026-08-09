@@ -14,7 +14,8 @@
     isOcrJobRunning,
     ocrJob$,
     startOcrJob,
-    type OcrLanguage
+    type OcrLanguage,
+    type OcrModelProfile
   } from '$lib/functions/file-loaders/pdf/ocr-job-manager';
   import {
     abortOcrCorrectJob,
@@ -29,10 +30,17 @@
   import { database } from '$lib/data/store';
   import {
     aiOcrCorrectEnabled$,
+    ocrModelProfile$,
     pdfOcrLang$,
     pdfOcrPromptEnabled$,
     pdfOcrSkippedBookIds$ as ocrSkippedBooks$
   } from '$lib/data/store';
+  import {
+    OCR_LANGUAGE_OPTIONS,
+    isOcrLanguageSupported,
+    normalizeOcrModelProfile
+  } from '$lib/functions/file-loaders/pdf/ocr-options';
+  import { t } from '$lib/i18n';
 
   export let book: BooksDbBookData;
 
@@ -40,17 +48,6 @@
 
   $: skippedIds = new Set(($ocrSkippedBooks$ || '').split(',').filter(Boolean).map(Number));
   $: skippedForThisBook = book?.id != null && skippedIds.has(book.id);
-
-  // Paddle's `ch` model handles Simplified Chinese + English + common
-  // punctuation in one go, which covers ~95% of imported scans. Other
-  // codes select the dedicated rec model.
-  const LANGS: Array<{ code: string; label: string }> = [
-    { code: 'ch', label: '中文（简中 + 英文）' },
-    { code: 'chinese_cht', label: '繁体中文' },
-    { code: 'japan', label: '日本語' },
-    { code: 'korean', label: '한국어' },
-    { code: 'en', label: 'English' }
-  ];
 
   let dismissed = false;
   // Job state for THIS book only — ignore jobs belonging to other books.
@@ -60,9 +57,12 @@
   // Per-book language wins over the global default. Changed on the fly in the
   // banner; persisted back onto the book so a Japanese scan stays on `japan`
   // even after the global default is changed for a different book.
-  $: ocrLang = book.ocrLang || $pdfOcrLang$;
+  $: activeProfile = normalizeOcrModelProfile($ocrModelProfile$);
+  $: availableLangs = OCR_LANGUAGE_OPTIONS.filter((lang) => isOcrLanguageSupported(lang.code, activeProfile));
+  $: storedOcrLang = (book.ocrLang || $pdfOcrLang$) as OcrLanguage;
+  $: ocrLang = isOcrLanguageSupported(storedOcrLang, activeProfile) ? storedOcrLang : 'ch';
 
-  function setOcrLang(value: string) {
+  function setOcrLang(value: OcrLanguage) {
     if (!value) return;
     ocrLang = value;
     pdfOcrLang$.next(value);
@@ -79,12 +79,13 @@
   }
 
   function onLangChange(event: Event) {
-    setOcrLang((event.currentTarget as HTMLSelectElement).value);
+    setOcrLang((event.currentTarget as HTMLSelectElement).value as OcrLanguage);
   }
 
   function start() {
     if (isOcrJobRunning()) return;
-    startOcrJob(book, ocrLang as OcrLanguage);
+    if (storedOcrLang !== ocrLang) setOcrLang(ocrLang);
+    startOcrJob(book, ocrLang as OcrLanguage, activeProfile as OcrModelProfile);
   }
 
   function applyAndReload() {
@@ -194,8 +195,8 @@
       </div>
       <label class="lang">
         <select value={ocrLang} on:change={onLangChange} disabled={otherBookRunning}>
-          {#each LANGS as l (l.code)}
-            <option value={l.code}>{l.label}</option>
+          {#each availableLangs as l (l.code)}
+            <option value={l.code}>{$t(l.labelKey)}</option>
           {/each}
         </select>
       </label>

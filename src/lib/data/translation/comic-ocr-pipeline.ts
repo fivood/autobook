@@ -1,12 +1,18 @@
 import type { OcrLine, OcrPageResult, OcrEngine, OcrEngineLanguage, ComicBubble, ComicPageInfo, ComicStorage } from 'translator-workbench';
-import { ocrImageBlob, type OcrLanguage } from '$lib/functions/file-loaders/pdf/pdf-ocr';
+import {
+  ocrImageBlob,
+  type OcrLanguage,
+  type OcrModelProfile
+} from '$lib/functions/file-loaders/pdf/pdf-ocr';
 
 /**
  * Adapts AutoBook's PaddleOCR wrapper to the workbench OcrEngine interface.
  */
 export class PaddleOcrEngine implements OcrEngine {
+  constructor(private readonly profile: OcrModelProfile) {}
+
   async predict(image: Blob, lang: OcrEngineLanguage): Promise<OcrPageResult> {
-    const result = await ocrImageBlob(image, lang as OcrLanguage);
+    const result = await ocrImageBlob(image, lang as OcrLanguage, this.profile);
     return {
       items: result.items.map((it) => ({
         text: it.text,
@@ -182,11 +188,12 @@ export interface ComicOcrProgress {
 export async function ocrComic(
   pageBlobs: Blob[],
   lang: OcrEngineLanguage,
+  profile: OcrModelProfile,
   cacheKey: string,
   storage: ComicStorage,
   onProgress?: (progress: ComicOcrProgress) => void
 ): Promise<{ pages: ComicPageInfo[]; bubbles: ComicBubble[]; allCached: boolean }> {
-  const engine = new PaddleOcrEngine();
+  const engine = new PaddleOcrEngine(profile);
   const pages: ComicPageInfo[] = [];
   const allBubbles: ComicBubble[] = [];
   let allCached = true;

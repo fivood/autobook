@@ -12,6 +12,7 @@
   import { inputClasses } from '$lib/css-classes';
   import {
     aiOcrCorrectEnabled$,
+    ocrModelProfile$,
     pdfOcrLang$,
     pdfOcrPromptEnabled$,
     pdfOcrSkippedBookIds$,
@@ -19,7 +20,33 @@
     translateLamaEndpoint$,
     translateOcrLang$
   } from '$lib/data/store';
+  import {
+    OCR_MODEL_PROFILES,
+    OCR_LANGUAGE_OPTIONS,
+    isOcrLanguageSupported,
+    normalizeOcrModelProfile,
+    type OcrLanguage,
+    type OcrModelProfile
+  } from '$lib/functions/file-loaders/pdf/ocr-options';
   import { t } from '$lib/i18n';
+
+  $: activeProfile = normalizeOcrModelProfile($ocrModelProfile$);
+  $: activeProfileInfo = OCR_MODEL_PROFILES.find((profile) => profile.id === activeProfile)!;
+
+  function onModelProfileChange(event: Event) {
+    const profile = normalizeOcrModelProfile((event.currentTarget as HTMLSelectElement).value);
+    ocrModelProfile$.next(profile);
+    // Never leave a hidden invalid combination behind after changing model.
+    if (!isOcrLanguageSupported($pdfOcrLang$, profile)) pdfOcrLang$.next('ch');
+    if (!isOcrLanguageSupported($translateOcrLang$, profile)) translateOcrLang$.next('japan');
+  }
+
+  function optionLabel(labelKey: string, lang: OcrLanguage, profile: OcrModelProfile): string {
+    const label = $t(labelKey);
+    return isOcrLanguageSupported(lang, profile)
+      ? label
+      : `${label}（${$t('settings.ocr.unsupported')}）`;
+  }
 
   function clearOcrMemory() {
     pdfOcrSkippedBookIds$.next('');
@@ -28,17 +55,31 @@
 
 <div class="grid gap-6">
   <section>
+    <h4 class="mb-1 font-medium">{$t('settings.ocr.modelHeading')}</h4>
+    <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ocr.modelDescription')}</p>
+    <label class="block">
+      <span class="text-xs opacity-70">{$t('settings.ocr.model')}</span>
+      <select class={inputClasses} value={activeProfile} on:change={onModelProfileChange}>
+        {#each OCR_MODEL_PROFILES as profile (profile.id)}
+          <option value={profile.id}>{$t(profile.labelKey)}</option>
+        {/each}
+      </select>
+      <span class="mt-1 block text-xs opacity-60">{$t(activeProfileInfo.hintKey)}</span>
+    </label>
+  </section>
+
+  <section>
     <h4 class="mb-1 font-medium">{$t('settings.ocr.pdfHeading')}</h4>
     <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ocr.pdfDescription')}</p>
 
     <label class="mb-3 block">
       <span class="text-xs opacity-70">{$t('settings.ocr.pdfLang')}</span>
       <select class={inputClasses} bind:value={$pdfOcrLang$}>
-        <option value="ch">{$t('settings.ocr.pdfLang.ch')}</option>
-        <option value="chinese_cht">{$t('settings.ocr.pdfLang.cht')}</option>
-        <option value="japan">{$t('settings.ocr.pdfLang.japan')}</option>
-        <option value="korean">{$t('settings.ocr.pdfLang.korean')}</option>
-        <option value="en">{$t('settings.ocr.pdfLang.en')}</option>
+        {#each OCR_LANGUAGE_OPTIONS as lang (lang.code)}
+          <option value={lang.code} disabled={!isOcrLanguageSupported(lang.code, activeProfile)}>
+            {optionLabel(lang.labelKey, lang.code, activeProfile)}
+          </option>
+        {/each}
       </select>
     </label>
 
@@ -66,20 +107,11 @@
     <label class="mb-3 block">
       <span class="text-xs opacity-70">{$t('settings.ocr.comicLang')}</span>
       <select class={inputClasses} bind:value={$translateOcrLang$}>
-        <option value="japan">{$t('settings.translate.ocrLang.japan')}</option>
-        <option value="ch">{$t('settings.translate.ocrLang.ch')}</option>
-        <option value="chinese_cht">{$t('settings.translate.ocrLang.cht')}</option>
-        <option value="en">{$t('settings.translate.ocrLang.en')}</option>
-        <option value="korean">{$t('settings.translate.ocrLang.korean')}</option>
-        <option value="french">{$t('settings.translate.ocrLang.fr')}</option>
-        <option value="german">{$t('settings.translate.ocrLang.de')}</option>
-        <option value="es">{$t('settings.translate.ocrLang.es')}</option>
-        <option value="it">{$t('settings.translate.ocrLang.it')}</option>
-        <option value="pt">{$t('settings.translate.ocrLang.pt')}</option>
-        <option value="nl">{$t('settings.translate.ocrLang.nl')}</option>
-        <option value="pl">{$t('settings.translate.ocrLang.pl')}</option>
-        <option value="tr">{$t('settings.translate.ocrLang.tr')}</option>
-        <option value="vi">{$t('settings.translate.ocrLang.vi')}</option>
+        {#each OCR_LANGUAGE_OPTIONS as lang (lang.code)}
+          <option value={lang.code} disabled={!isOcrLanguageSupported(lang.code, activeProfile)}>
+            {optionLabel(lang.labelKey, lang.code, activeProfile)}
+          </option>
+        {/each}
       </select>
     </label>
 

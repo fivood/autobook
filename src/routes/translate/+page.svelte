@@ -17,11 +17,19 @@
   import { hasIndexableText } from '$lib/data/ai/has-indexable-text';
   import { inpaintPageWithLama, type InpaintBubble } from '$lib/functions/comic-inpaint';
   import { prewarmOcr } from '$lib/functions/file-loaders/pdf/pdf-ocr';
+  import {
+    OCR_LANGUAGE_OPTIONS,
+    isOcrLanguageSupported,
+    normalizeOcrModelProfile,
+    ocrModelCacheId,
+    type OcrModelProfile
+  } from '$lib/functions/file-loaders/pdf/ocr-options';
   import { resolveEndpoint } from '$lib/data/ai/endpoint';
   import { probeLocalModels } from '$lib/data/ai/local-model';
   import { createComicStorage } from '$lib/data/translation/comic-storage';
+  import { isOcrDownloaded } from '$lib/data/models-registry';
   import { ComicAdapter, type OcrEngineLanguage } from 'translator-workbench';
-  import { aiApiKey$, aiModel$, aiProvider$, aiOcrCorrectEnabled$, database, translateBatchSegments$, translateChunkChars$, translateComicAutoOcr$, translateDraftSource$, translateLamaEndpoint$, translateLocalModel$, translateMaxSourceChars$, translateOcrLang$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
+  import { aiApiKey$, aiModel$, aiProvider$, aiOcrCorrectEnabled$, database, ocrModelProfile$, translateBatchSegments$, translateChunkChars$, translateComicAutoOcr$, translateDraftSource$, translateLamaEndpoint$, translateLocalModel$, translateMaxSourceChars$, translateOcrLang$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
   import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob, deleteTranslationJob } from '$lib/data/translation/translation-job-store';
   import { exportHtmlAsMarkdownChunks, extractGlossaryCandidates, translateInBatches } from 'translator-workbench';
   import { createJob, pendingSegments, recordTranslationResults, setJobStatus, validateTranslationJob } from 'translator-workbench';
@@ -78,6 +86,7 @@
   let statusMessage = '';
   let errorMessage = '';
   let comicOcrProgress: ComicOcrProgress | undefined;
+  $: activeOcrProfile = normalizeOcrModelProfile($ocrModelProfile$);
   let enteredFromBook = false;
   let pendingComicOcr: {
     blobs: Blob[];
@@ -336,7 +345,7 @@
         comicSkipBackCover = fmt === 'cbz' || fmt === 'cbr';
         pendingComicOcr = { blobs: pageBlobs, title, fmt };
         // Warm PaddleOCR while the user reads the pending card.
-        prewarmOcr(ocrLangForBook(undefined));
+        prewarmOcr(ocrLangForBook(undefined), activeOcrProfile);
         statusMessage = tImmediate('translate.comic.pendingOcr', { pages: pageBlobs.length });
       }
     } catch (error) {
@@ -406,13 +415,16 @@
       pendingComicOcr = { blobs: pageBlobs, title: book.title || '', fmt, book };
       // Warm PaddleOCR while the user reads the pending card; the model init
       // (~10s) then overlaps the review instead of blocking "Run OCR".
-      prewarmOcr(ocrLangForBook(book));
+      prewarmOcr(ocrLangForBook(book), activeOcrProfile);
       statusMessage = tImmediate('translate.comic.pendingOcr', { pages: pageBlobs.length });
     }
   }
 
   function ocrLangFromStore(): OcrEngineLanguage {
-    return (translateOcrLang$.getValue() || 'japan') as OcrEngineLanguage;
+    const lang = (translateOcrLang$.getValue() || 'japan') as OcrEngineLanguage;
+    return isOcrLanguageSupported(lang, normalizeOcrModelProfile(ocrModelProfile$.getValue()))
+      ? lang
+      : 'japan';
   }
 
   /**
@@ -446,14 +458,29 @@
 
   /** Per-book language wins over the global default for stored books. */
   function ocrLangForBook(book?: import('$lib/data/database/books-db/versions/books-db').BooksDbBookData): OcrEngineLanguage {
-    if (book?.ocrLang) return book.ocrLang as OcrEngineLanguage;
+    const profile = normalizeOcrModelProfile(ocrModelProfile$.getValue());
+    if (book?.ocrLang && isOcrLanguageSupported(book.ocrLang, profile)) {
+      return book.ocrLang as OcrEngineLanguage;
+    }
     return ocrLangFromStore();
+  }
+
+  /**
+   * Korean forces the dedicated v5-korean pipeline regardless of the global
+   * profile — the shared CJK/Latin v6 model can't OCR Korean, and silently
+   * running it would produce a garbage text layer. Global profile applies
+   * to every other language.
+   */
+  function resolveOcrProfileForLang(lang: OcrEngineLanguage): OcrModelProfile {
+    if (lang === 'korean') return 'v5-korean';
+    return normalizeOcrModelProfile(ocrModelProfile$.getValue());
   }
 
   function onComicOcrLangChange(event: Event) {
     const value = (event.currentTarget as HTMLSelectElement).value;
+    if (!isOcrLanguageSupported(value, activeOcrProfile)) return;
     translateOcrLang$.next(value);
-    prewarmOcr(value as OcrEngineLanguage);
+    prewarmOcr(value as OcrEngineLanguage, activeOcrProfile);
     if (pendingComicOcr?.book) persistBookOcrLang(pendingComicOcr.book, value as OcrEngineLanguage);
   }
 
@@ -511,16 +538,27 @@
       }
       const jobId = newJobId();
       const ocrLang = ocrLangForBook(book);
-      // Cache namespace is the book identity (title+fmt+lang), not the job
+      // Korean forces the dedicated v5-korean pipeline; everything else uses
+      // the user's global OCR profile.
+      const ocrProfile = resolveOcrProfileForLang(ocrLang);
+      // Korean must not silently fall back to a non-Korean OCR model — a
+      // shared CJK/Latin model would emit plausible-but-wrong text. Block the
+      // task with an install prompt when the dedicated model is missing.
+      if (ocrProfile === 'v5-korean' && !isOcrDownloaded('v5-korean')) {
+        errorMessage = tImmediate('translate.comic.koreanModelNeeded');
+        loading = false;
+        return;
+      }
+      // Cache namespace is the book identity (title+fmt+lang+model), not the job
       // UUID — so re-entering the same book hits the OCR cache instead of
       // re-running the whole pipeline. See comic-cache-key.ts.
       const sourceLanguage = sourceLanguageFromOcrLang(ocrLang);
-      const cacheKey = comicCacheKey(title, fmt, sourceLanguage);
+      const cacheKey = comicCacheKey(title, fmt, sourceLanguage, ocrModelCacheId(ocrProfile));
       // Warm the model while OCR's initial book-work (page writes, first
       // predict) runs; hides the ~10s first-load instead of blocking after
       // the user clicked "Run OCR".
-      prewarmOcr(ocrLang as OcrEngineLanguage);
-      const { pages, bubbles, allCached } = await ocrComic(ocrBlobs, ocrLang, cacheKey, storage, (progress) => {
+      prewarmOcr(ocrLang as OcrEngineLanguage, ocrProfile);
+      const { pages, bubbles, allCached } = await ocrComic(ocrBlobs, ocrLang, ocrProfile, cacheKey, storage, (progress) => {
         comicOcrProgress = progress;
         statusMessage = tImmediate('translate.comic.ocr', { done: progress.page + (progress.cached ? 1 : 0), total: progress.total });
       });
@@ -1051,20 +1089,11 @@
         <label class="block text-sm">
           <span class="opacity-70">{$t('settings.translate.ocrLang')}</span>
           <select class={inputClasses} value={ocrLangForBook(pendingComicOcr.book)} on:change={onComicOcrLangChange}>
-            <option value="japan">{$t('settings.translate.ocrLang.japan')}</option>
-            <option value="ch">{$t('settings.translate.ocrLang.ch')}</option>
-            <option value="chinese_cht">{$t('settings.translate.ocrLang.cht')}</option>
-            <option value="en">{$t('settings.translate.ocrLang.en')}</option>
-            <option value="korean">{$t('settings.translate.ocrLang.korean')}</option>
-            <option value="french">{$t('settings.translate.ocrLang.fr')}</option>
-            <option value="german">{$t('settings.translate.ocrLang.de')}</option>
-            <option value="es">{$t('settings.translate.ocrLang.es')}</option>
-            <option value="it">{$t('settings.translate.ocrLang.it')}</option>
-            <option value="pt">{$t('settings.translate.ocrLang.pt')}</option>
-            <option value="nl">{$t('settings.translate.ocrLang.nl')}</option>
-            <option value="pl">{$t('settings.translate.ocrLang.pl')}</option>
-            <option value="tr">{$t('settings.translate.ocrLang.tr')}</option>
-            <option value="vi">{$t('settings.translate.ocrLang.vi')}</option>
+            {#each OCR_LANGUAGE_OPTIONS as lang (lang.code)}
+              <option value={lang.code} disabled={!isOcrLanguageSupported(lang.code, activeOcrProfile)}>
+                {$t(lang.labelKey)}{isOcrLanguageSupported(lang.code, activeOcrProfile) ? '' : `（${$t('settings.ocr.unsupported')}）`}
+              </option>
+            {/each}
           </select>
         </label>
         <div class="flex flex-col gap-2 text-sm">

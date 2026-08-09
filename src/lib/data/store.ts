@@ -59,6 +59,7 @@ import { ViewMode } from './view-mode';
 import type { WritingMode } from './writing-mode';
 import { writableSetLocalStorageSubject } from './internal/writable-set-local-storage-subject';
 import { writableStringLocalStorageSubject } from './internal/writable-string-local-storage-subject';
+import type { OcrModelProfile } from '$lib/functions/file-loaders/pdf/ocr-options';
 
 export const theme$ = writableStringLocalStorageSubject()('theme', 'sage-green-theme');
 export const obsidianVaultPath$ = writableStringLocalStorageSubject()('obsidianVaultPath', '');
@@ -89,6 +90,11 @@ export const translateBatchSegments$ = writableStringLocalStorageSubject()('tran
  * count this bounds how much context each model call must digest. */
 export const translateMaxSourceChars$ = writableStringLocalStorageSubject()('translateMaxSourceChars', '12000');
 export const translateOcrLang$ = writableStringLocalStorageSubject()('translateOcrLang', 'japan');
+/** Shared PaddleOCR model profile for scanned PDFs and comic OCR. */
+export const ocrModelProfile$ = writableStringLocalStorageSubject<OcrModelProfile>()(
+  'ocrModelProfile',
+  'v6-small'
+);
 export const translateComicAutoOcr$ = writableBooleanLocalStorageSubject()('translateComicAutoOcr', false);
 /** IOPaint (LaMa) sidecar endpoint for complex-background comic inpainting.
  * Empty = disabled; the pipeline falls back to flat-fill bubbles. */
