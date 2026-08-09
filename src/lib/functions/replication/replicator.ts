@@ -114,7 +114,7 @@ export async function importData(
               if (page < total) {
                 BaseStorageHandler.reportProgress(1 / total);
               }
-            });
+            }, cancelSignal);
           } else if (/\.cbz$/i.test(file.name)) {
             bookContent = await (await loadCbz())(file, lastBookModified);
           } else if (/\.(cbr|cb7|cbt)$/i.test(file.name)) {
@@ -128,7 +128,7 @@ export async function importData(
                 if (page < total) {
                   BaseStorageHandler.reportProgress(1 / total);
                 }
-              });
+              }, cancelSignal);
             } else if (sniffed === 'mobi') {
               bookContent = await (await loadMobi())(file, lastBookModified);
             } else if (sniffed === 'zip') {

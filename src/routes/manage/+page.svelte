@@ -30,6 +30,7 @@
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
+  import { isTauri } from '$lib/data/env';
   import {
     booklistSortOptions$,
     cacheStorageData$,
@@ -525,6 +526,17 @@
         );
       }
       showError(errorTitle, error, '书籍导入期间发生错误');
+    } else {
+      // Large-file hint: a big comic/scanned-PDF imported into the browser
+      // (IndexedDB) store bloats it and slows every book-list refresh. When a
+      // Tauri filesystem is available, nudge the user to switch instead of
+      // silently changing their chosen storage source.
+      const largeFileCount = files.filter((f) => f.size > 100 * 1024 * 1024).length;
+      if (largeFileCount > 0 && $storageSource$ === StorageKey.BROWSER && isTauri()) {
+        flashToast(
+          `检测到 ${largeFileCount} 个超过 100MB 的大文件，建议在设置中启用「外部文件存储」以节省浏览器存储`
+        );
+      }
     }
   }
 
