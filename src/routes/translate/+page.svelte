@@ -28,6 +28,7 @@
   import { probeLocalModels } from '$lib/data/ai/local-model';
   import { createComicStorage } from '$lib/data/translation/comic-storage';
   import { isOcrDownloaded } from '$lib/data/models-registry';
+  import { pickDraftModel } from '$lib/data/translation/translation-model-registry';
   import { ComicAdapter, type OcrEngineLanguage } from 'translator-workbench';
   import { aiApiKey$, aiModel$, aiProvider$, aiOcrCorrectEnabled$, database, ocrModelProfile$, translateBatchSegments$, translateChunkChars$, translateComicAutoOcr$, translateDraftSource$, translateLamaEndpoint$, translateLocalModel$, translateMaxSourceChars$, translateOcrLang$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
   import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob, deleteTranslationJob } from '$lib/data/translation/translation-job-store';
@@ -631,7 +632,12 @@
       models = health.ok ? await listLocalTranslationModels() : [];
       if (models.length && (!modelSelectionTouched || !models.some((model) => model.id === selectedModel))) {
         const preferred = translateLocalModel$.getValue();
-        selectedModel = (preferred && models.some((m) => m.id === preferred)) ? preferred : bestLocalModel(models);
+        // Draft-pass default: translation-specialized model (e.g. Hy-MT2)
+        // wins over the biggest general chat model. Review can still pick any.
+        const recommended = pickDraftModel(models);
+        selectedModel = (preferred && models.some((m) => m.id === preferred))
+          ? preferred
+          : (recommended?.id || bestLocalModel(models));
       }
     } catch (error) {
       runtimeMessage = tImmediate('translate.runtime.unavailable');
