@@ -10,7 +10,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:types": "tsc --noEmit",
     "check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
-    "test": "node --experimental-strip-types scripts/language-routing-test.ts && node --experimental-strip-types scripts/model-registry-test.ts",
+    "test": "node --experimental-strip-types scripts/language-routing-test.ts && node --experimental-strip-types scripts/model-registry-test.ts && node --experimental-strip-types scripts/qwen-mt-test.ts",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:dev:cdp": "node scripts/tauri-dev-cdp.mjs",
