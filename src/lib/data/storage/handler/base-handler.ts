@@ -91,7 +91,9 @@ export abstract class BaseStorageHandler {
     referenceFilename: string | undefined
   ): Promise<boolean>;
 
-  abstract getBook(): Promise<Omit<BooksDbBookData, 'id'> | File | undefined>;
+  abstract getBook(
+    onProgress?: (done: number, total: number) => void
+  ): Promise<Omit<BooksDbBookData, 'id'> | File | undefined>;
 
   abstract getProgress(): Promise<BooksDbBookmarkData | File | undefined>;
 
@@ -522,7 +524,12 @@ export abstract class BaseStorageHandler {
     return zipData;
   }
 
-  protected async extractBookData(book: Blob, filename: string, progressBase = 1) {
+  protected async extractBookData(
+    book: Blob,
+    filename: string,
+    progressBase = 1,
+    onProgress?: (done: number, total: number) => void
+  ) {
     const bookreader = new ZipReader(new BlobReader(book));
     const bookDataEntries = await bookreader.getEntries();
 
@@ -616,6 +623,12 @@ export abstract class BaseStorageHandler {
                 progressPerStep
               );
             }
+
+            // Surface per-entry progress so the reader can show how far the
+            // storage pull is (big-book bookdata zips hold hundreds of page
+            // blobs; without this the progress bar sits at "storage-pull 10%"
+            // for tens of seconds looking frozen).
+            onProgress?.(index + 1, bookDataEntries.length);
           } catch (error) {
             limiter.clearQueue();
             throw error;

@@ -330,12 +330,14 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     );
   }
 
-  async getBook() {
+  async getBook(onProgress?: (done: number, total: number) => void) {
     const { file } = await this.getExternalFile('bookdata_', this.isForBrowser ? 0.4 : 0.8);
     if (!file) return undefined;
     const bytes = await readFile(file.path, { baseDir: this.baseDir });
     const bookFile = fileFromBytes(bytes, file.name);
-    return this.isForBrowser ? this.extractBookData(bookFile, bookFile.name, 0.6) : bookFile;
+    return this.isForBrowser
+      ? this.extractBookData(bookFile, bookFile.name, 0.6, onProgress)
+      : bookFile;
   }
 
   async getProgress() {
