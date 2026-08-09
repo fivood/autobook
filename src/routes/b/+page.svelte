@@ -403,17 +403,14 @@
         );
 
         localStorageHandler.startContext({ id, title: '' });
-        // Progress the storage-pull stage with the actual bookdata extraction:
-        // big-book zips (hundreds of page blobs) would otherwise sit on
-        // "storage-pull 10%" for tens of seconds looking frozen.
-        bookData = await localStorageHandler.getBook((done, total) => {
-          const pct = 10 + Math.round((done / Math.max(1, total)) * 40);
-          loadProgress$.next({ stage: 'storage-pull', pct, label: STAGE_LABELS['storage-pull'] });
-        });
+        bookData = await localStorageHandler.getBook();
 
         if (!bookData) {
           return bookData;
         }
+        // Baseline for the storage-pull stage; the external disk extraction
+        // (saveExternalLastRead → storageHandler.getBook) advances this from
+        // 10% onward via its onProgress callback.
         loadProgress$.next({ stage: 'storage-pull', pct: 10, label: STAGE_LABELS['storage-pull'] });
 
         const currentContext = {
@@ -448,7 +445,13 @@
           }
         }
 
-        bookData = await saveExternalLastRead(externalStorageHandler, bookData);
+        bookData = await saveExternalLastRead(externalStorageHandler, bookData, (done, total) => {
+          // Map the disk extraction progress into the reader's storage-pull
+          // stage (10% → 50%): the external pull is the slow step for big
+          // books, and without this it sits frozen on 10% for tens of seconds.
+          const pct = 10 + Math.round((done / Math.max(1, total)) * 40);
+          loadProgress$.next({ stage: 'storage-pull', pct, label: STAGE_LABELS['storage-pull'] });
+        });
 
         if (bookData.language) {
           document.documentElement.lang = bookData.language;
@@ -1491,7 +1494,8 @@
 
   async function saveExternalLastRead(
     storageHandler: BaseStorageHandler | undefined,
-    localBookData: BooksDbBookData
+    localBookData: BooksDbBookData,
+    onProgress?: (done: number, total: number) => void
   ) {
     if (!storageHandler) {
       return localBookData;
@@ -1500,7 +1504,12 @@
     let { id, ...bookData } = localBookData;
 
     if (localBookData.storageSource) {
-      const externalBookData = await storageHandler.getBook();
+      // This is the real disk pull for external-storage books: the IDB record
+      // is an empty stub, and extractBookData reads + decompresses the whole
+      // bookdata zip here. Feed the reader's storage-pull progress from it —
+      // the 409-line callback on localStorageHandler never fires (that's an
+      // IDB read, not the disk extraction).
+      const externalBookData = await storageHandler.getBook(onProgress);
 
       if (externalBookData instanceof File) {
         throw new Error(
