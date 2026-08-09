@@ -231,7 +231,7 @@
   let isDragOver = false;
   let replicationProgress = 0;
   let replicationToProgress = 0;
-  let replicationProgressRemaining = '~ ??:??:??';
+  let replicationProgressRemaining = '准备中…';
   let replicationDone = new Subject<void>();
   let progressBase = 0;
   let executionStart: number;
@@ -878,9 +878,10 @@
       const processPerSecond = replicationProgress / duration;
       const remainingTime = (replicationToProgress - replicationProgress) / processPerSecond;
 
+      const eta = getTimestamp(Math.ceil(remainingTime));
       replicationProgressRemaining =
         replicationToProgress > replicationProgress
-          ? `~ ${getTimestamp(Math.ceil(remainingTime))}`
+          ? (eta === '准备中…' ? eta : `~ ${eta}`)
           : '~ 00:00:01';
     }
   }
@@ -929,7 +930,7 @@
   function getTimestamp(seconds: number) {
     return seconds && Number.isFinite(seconds)
       ? new Date(seconds * 1000).toISOString().substr(11, 8)
-      : '??:??:??';
+      : '准备中…';
   }
 </script>
 

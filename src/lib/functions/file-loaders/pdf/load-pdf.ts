@@ -528,9 +528,15 @@ async function loadPdfInner(
 
   async function renderPage(pageNum: number): Promise<RenderedPage> {
     // Cooperative cancel: a user-initiated import abort rejects the in-flight
-    // pages instead of letting a huge PDF finish rendering.
-    if (signal?.aborted) throw new DOMException('Import aborted', 'AbortError');
+    // pages instead of letting a huge PDF finish rendering. The Promise.race
+    // below already rejects the batch on abort; these in-function checks just
+    // let pages that already started bail early too.
+    const checkAbort = () => {
+      if (signal?.aborted) throw new DOMException('Import aborted', 'AbortError');
+    };
+    checkAbort();
     const page = await doc.getPage(pageNum);
+    checkAbort();
     let bodyHtml: string;
     let sectionChars: number;
     let pageHasImage = false;
@@ -546,9 +552,11 @@ async function loadPdfInner(
       const pageW = Math.round(viewport.width);
       const pageH = Math.round(viewport.height);
       const tc = await page.getTextContent();
+      checkAbort();
       const { spans, totalChars: pageChars } = buildTextLayer(tc.items as any[], pageH);
 
       let imgBlob = await renderPageToBlob(page, IMAGE_RENDER_WIDTH, 'image/jpeg', 0.82);
+      checkAbort();
       if (!imgBlob) {
         const freshPage = await doc.getPage(pageNum);
         imgBlob = await extractPageImage(freshPage);
@@ -578,6 +586,7 @@ async function loadPdfInner(
       // Scanned / image-only mode: render page to image, no text layer.
       // OCR (in pdf-ocr-runner) can later inject <p> blocks before the img.
       let imgBlob = await renderPageToBlob(page, IMAGE_RENDER_WIDTH, 'image/jpeg', 0.82);
+      checkAbort();
       if (!imgBlob) {
         const freshPage = await doc.getPage(pageNum);
         imgBlob = await extractPageImage(freshPage);
@@ -602,7 +611,7 @@ async function loadPdfInner(
 
   const limiter = pLimit(3);
   const pageNumbers = Array.from({ length: doc.numPages }, (_, i) => i + 1);
-  const rendered = await Promise.all(
+  const renderAll = Promise.all(
     pageNumbers.map((pageNum) =>
       limiter(async () => {
         const result = await renderPage(pageNum);
@@ -614,6 +623,23 @@ async function loadPdfInner(
       })
     )
   );
+
+  // Abort fast: reject the whole batch on signal so a user cancel doesn't
+  // wait for the current page renders to finish, and tear down the document
+  // (canvas workers / caches) instead of leaking it.
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    const onAbort = () => {
+      signal?.removeEventListener('abort', onAbort);
+      (doc as any).destroy?.().catch(() => undefined);
+      reject(new DOMException('Import aborted', 'AbortError'));
+    };
+    if (signal?.aborted) {
+      onAbort();
+    } else {
+      signal?.addEventListener('abort', onAbort, { once: true });
+    }
+  });
+  const rendered = await Promise.race([renderAll, abortPromise]);
 
   for (const { pageNum, bodyHtml, sectionChars, hasImage } of rendered.sort(
     (a, b) => a.pageNum - b.pageNum

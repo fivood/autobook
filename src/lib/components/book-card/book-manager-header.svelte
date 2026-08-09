@@ -649,7 +649,12 @@
         </div>
       </Popover>
       <progress class="mx-4 w-full" value={replicationProgress} max={replicationToProgress} />
-      <div class="ml-4 min-w-fit">{replicationProgressRemaining}</div>
+      <div class="ml-4 min-w-fit whitespace-nowrap">
+        {#if replicationToProgress > 0}
+          <span class="tabular-nums mr-2">{Math.round((replicationProgress / replicationToProgress) * 100)}%</span>
+        {/if}
+        {replicationProgressRemaining}
+      </div>
     </div>
   {/if}
 </div>
