@@ -9,7 +9,7 @@
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-types';
   import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
-  import { adapterForTranslationDocument, checkLocalTranslationRuntime, createCloudTranslationProvider, createLocalTranslationProvider, isComicFile, inspectStoredBook, inspectTranslationFile, listLocalTranslationModels, localTranslationBaseUrl, type TranslationSource } from '$lib/data/translation/translation-core';
+  import { adapterForTranslationDocument, checkLocalTranslationRuntime, createCloudTranslationProvider, createDraftProvider, createLocalTranslationProvider, draftModel, isComicFile, inspectStoredBook, inspectTranslationFile, listLocalTranslationModels, localTranslationBaseUrl, qwenMtDraftReady, type TranslationSource } from '$lib/data/translation/translation-core';
   import { extractComicPages } from '$lib/data/translation/comic-extract';
   import { ocrComic, persistCorrectedBubbles, type ComicOcrProgress } from '$lib/data/translation/comic-ocr-pipeline';
   import { correctComicBubbles, type ComicCorrectionProgress } from '$lib/data/translation/comic-ocr-correct';
@@ -145,7 +145,9 @@
   $: cloudModel = ($aiModel$ || '').trim();
   $: cloudProvider = ($aiProvider$ || 'anthropic');
   $: cloudReady = !!$aiApiKey$ && !!cloudModel;
-  $: draftReady = draftIsCloud ? cloudReady : !!selectedModel;
+  // Draft pass: ready when the generic cloud LLM or the translation-specialized
+  // Qwen-MT draft provider is configured.
+  $: draftReady = draftIsCloud ? (cloudReady || qwenMtDraftReady()) : !!selectedModel;
   $: precisionReady = reviewIsCloud ? cloudReady : !!selectedModel;
 
   $: completedSegmentCount = translations.size;
@@ -740,8 +742,8 @@
     const abortController = new AbortController();
     activeAbortController = abortController;
     try {
-      const provider = draftIsCloud ? createCloudTranslationProvider() : createLocalTranslationProvider();
-      const model = draftIsCloud ? cloudModel : selectedModel;
+      const provider = draftIsCloud ? createDraftProvider() : createLocalTranslationProvider();
+      const model = draftIsCloud ? draftModel() : selectedModel;
       const batchSegments = Number(translateBatchSegments$.getValue()) || 3;
       const maxSourceChars = Number(translateMaxSourceChars$.getValue()) || 12000;
       await translateInBatches(pendingSegments(job), {

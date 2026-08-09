@@ -67,6 +67,12 @@ export const aiProvider$ = writableStringLocalStorageSubject()('aiProvider', 'an
 export const aiApiKey$ = writableStringLocalStorageSubject()('aiApiKey', '');
 export const aiBaseUrl$ = writableStringLocalStorageSubject()('aiBaseUrl', '');
 export const aiModel$ = writableStringLocalStorageSubject()('aiModel', 'claude-sonnet-4-6');
+/** Qwen-MT (阿里云百炼) translation-specialized draft provider. Separate from
+ * the generic LLM config — the draft pass uses it, the review pass stays on
+ * the general model. */
+export const qwenMtBaseUrl$ = writableStringLocalStorageSubject()('qwenMtBaseUrl', '');
+export const qwenMtApiKey$ = writableStringLocalStorageSubject()('qwenMtApiKey', '');
+export const qwenMtModel$ = writableStringLocalStorageSubject()('qwenMtModel', 'qwen-mt-plus');
 // Local runtime (Ollama and anything speaking its /api surface). Kept separate
 // from the cloud endpoint above so a user can have both configured and let each
 // task pick: short interactive work goes local when a model is present, the
