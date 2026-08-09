@@ -172,7 +172,7 @@
     </button>
 
     <div
-      class="bg-menu text-menu flex items-center gap-1 rounded-full px-2 py-1 shadow backdrop-blur transition-all duration-150"
+      class="menu-surface flex items-center gap-1 rounded-full px-2 py-1 backdrop-blur transition-all duration-150"
       class:opacity-0={!enabled}
       class:pointer-events-none={!enabled}
       class:pointer-events-auto={enabled}
@@ -185,7 +185,7 @@
       >
         <Fa icon={faMinus} size="xs" />
       </button>
-      <span class="min-w-[2rem] text-center text-[10px]">{$readerRate$}×</span>
+      <span class="min-w-[2rem] text-center text-sm">{$readerRate$}×</span>
       <button
         type="button"
         title={$t('tts.rateFaster')}

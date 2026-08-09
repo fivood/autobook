@@ -97,27 +97,27 @@
 
 {#if visible}
   <div
-    class="ctx-menu"
+    class="ctx-menu menu-surface menu-panel"
     style="left:{menuX}px;top:{menuY}px;"
     on:click|stopPropagation
     on:keyup|stopPropagation
     role="menu"
     tabindex="-1"
   >
-    <div class="hint">{$t('pdfCtx.pageLabel', { n: targetPage })}</div>
+    <div class="hint menu-label">{$t('pdfCtx.pageLabel', { n: targetPage })}</div>
     {#if !showLangPicker}
-      <button class="item" on:click={runReocrWithSavedLang}>
+      <button class="item menu-item" on:click={runReocrWithSavedLang}>
         <Fa icon={faRotateRight} size="xs" />
         <span>{$t('pdfCtx.reOcrThisPage')}</span>
         <span class="meta">{LANGS.find((l) => l.code === savedLang)?.label || savedLang}</span>
       </button>
-      <button class="item" on:click={() => (showLangPicker = true)}>
+      <button class="item menu-item" on:click={() => (showLangPicker = true)}>
         <Fa icon={faMagnifyingGlass} size="xs" />
         <span>{$t('pdfCtx.otherLanguage')}</span>
       </button>
     {:else}
       {#each LANGS as l (l.code)}
-        <button class="item lang" on:click={() => reocr(l.code)}>
+        <button class="item menu-item lang" on:click={() => reocr(l.code)}>
           {l.label}
         </button>
       {/each}
@@ -134,43 +134,21 @@
     position: fixed;
     z-index: 30;
     min-width: 14rem;
-    padding: 0.3rem;
-    background: var(--menu-background, rgba(0, 0, 0, 0.85));
-    color: var(--menu-foreground, #fff);
-    border-radius: 0.5rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    font-size: 0.85rem;
   }
   .hint {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.7rem;
-    opacity: 0.55;
     border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.35rem;
   }
   .item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.4rem 0.6rem;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    text-align: left;
-    border-radius: 0.3rem;
-    cursor: pointer;
-  }
-  .item:hover {
-    background: color-mix(in srgb, currentColor 12%, transparent);
+    justify-content: flex-start;
   }
   .item .meta {
     margin-left: auto;
-    font-size: 0.7rem;
+    font-size: 0.8125rem;
     opacity: 0.55;
   }
   .item.lang {
-    font-size: 0.78rem;
+    font-size: 0.9375rem;
   }
   .toast {
     position: fixed;

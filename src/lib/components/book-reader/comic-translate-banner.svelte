@@ -78,7 +78,7 @@
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
     font-size: 0.85rem;
   }
-  .ico { font-size: 1rem; opacity: 0.9; }
+  :global(.ico) { font-size: 1rem; opacity: 0.9; }
   .text { flex: 1; min-width: 0; }
   .title { font-weight: 600; }
   .meta { font-size: 0.72rem; opacity: 0.75; margin-top: 0.15rem; }

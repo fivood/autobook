@@ -343,6 +343,7 @@
        keeps tracking even over bubbles. -->
   <div
     class="fixed inset-0 z-30 cursor-crosshair"
+    role="presentation"
     on:mousedown={onMouseDown}
   >
     {#if drawing && dragImg && dragRect.w > 0 && dragRect.h > 0}

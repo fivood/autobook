@@ -41,6 +41,7 @@ export default async function loadMd(file: File, lastBookModified: number): Prom
     language: detectLanguage(data),
     styleSheet: '',
     elementHtml: element.innerHTML,
+    sourceText: data,
     blobs: {},
     coverImage: undefined,
     hasThumb: false,

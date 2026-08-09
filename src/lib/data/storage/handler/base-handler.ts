@@ -394,7 +394,15 @@ export abstract class BaseStorageHandler {
         | 'lastBookOpen'
         | 'storageSource'
       >
-    > = ['title', 'styleSheet', 'elementHtml', 'htmlBackup', 'sections'];
+    > = [
+      'title',
+      'styleSheet',
+      'elementHtml',
+      'htmlBackup',
+      'sourceText',
+      'sourceTextOriginal',
+      'sections'
+    ];
     const staticData: Record<string, string | Section[] | undefined> = {};
     const limiter = pLimit(1);
     const cover = bookdata.coverImage;
@@ -603,6 +611,12 @@ export abstract class BaseStorageHandler {
 
               if (staticData.htmlBackup) {
                 bookObject.htmlBackup = staticData.htmlBackup;
+              }
+              if (typeof staticData.sourceText === 'string') {
+                bookObject.sourceText = staticData.sourceText;
+              }
+              if (typeof staticData.sourceTextOriginal === 'string') {
+                bookObject.sourceTextOriginal = staticData.sourceTextOriginal;
               }
             } else if (entry.filename.startsWith('blobs/')) {
               const imagePath = entry.filename.replace('blobs/', '');

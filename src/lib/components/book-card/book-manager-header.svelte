@@ -387,7 +387,7 @@
                   <Fa icon={faArrowDownWideShort} />
                 {/if}
               </div>
-              <div class="w-44 bg-menu text-menu" slot="content">
+              <div class="menu-list w-44" slot="content">
                 {#each sortMenuItems as sortMenuItem (sortMenuItem.property)}
                   {@const isCurrentSort =
                     $booklistSortOptions$[$storageSource$].property === sortMenuItem.property}
@@ -395,15 +395,13 @@
                     isCurrentSort &&
                     $booklistSortOptions$[$storageSource$].direction === SortDirection.ASC}
                   <div
-                    class="grid cursor-default grid-cols-[auto_auto_auto] text-sm hover-menu-inverted"
-                    class:bg-menu-inverted={isCurrentSort}
-                    class:text-menu-inverted={isCurrentSort}
-                    class:hover:opacity-70={isCurrentSort}
+                    class="menu-sort-item cursor-default"
+                    class:menu-sort-item-active={isCurrentSort}
                   >
                     <div
                       tabindex="0"
                       role="button"
-                      class="self-center justify-self-start"
+                      class="menu-icon-button self-center justify-self-start"
                       class:text-red-500={isCurrentSortAsc}
                       class:hover:text-red-500={!isCurrentSortAsc}
                       on:click={() => {
@@ -413,13 +411,13 @@
                     >
                       <Fa icon={faSortUp} class="px-4" />
                     </div>
-                    <div class="py-2">
+                    <div class="px-2 py-2">
                       {$t(sortMenuItem.labelKey)}
                     </div>
                     <div
                       tabindex="0"
                       role="button"
-                      class="justify-self-end hover:text-red-500"
+                      class="menu-icon-button justify-self-end hover:text-red-500"
                       class:text-red-500={isCurrentSort && !isCurrentSortAsc}
                       class:hover:text-red-500={!isCurrentSort || isCurrentSortAsc}
                       on:click={() => {
@@ -450,15 +448,15 @@
                   <span class="filter-badge"></span>
                 {/if}
               </div>
-              <div class="filter-panel w-72 bg-menu text-menu p-3 rounded" slot="content">
-                <div class="text-xs opacity-70 mb-1">{$t('manager.filter.format')}</div>
+              <div class="filter-panel menu-panel w-72" slot="content">
+                <div class="menu-label">{$t('manager.filter.format')}</div>
                 <div class="flex flex-wrap gap-1.5 mb-3">
                   {#each BOOK_FORMAT_KEYS as fmt (fmt)}
                     {@const isActive = $libraryFilter$.formats.includes(fmt)}
                     <button
                       type="button"
-                      class="chip"
-                      class:chip-on={isActive}
+                      class="menu-choice"
+                      class:menu-choice-active={isActive}
                       on:click={() => {
                         const formats = isActive
                           ? $libraryFilter$.formats.filter((f) => f !== fmt)
@@ -468,13 +466,13 @@
                     >{formatLabel(fmt)}</button>
                   {/each}
                 </div>
-                <div class="text-xs opacity-70 mb-1">{$t('manager.filter.completion')}</div>
+                <div class="menu-label">{$t('manager.filter.completion')}</div>
                 <div class="flex flex-wrap gap-1.5 mb-2">
                   {#each COMPLETION_OPTIONS as opt (opt.id)}
                     <button
                       type="button"
-                      class="chip"
-                      class:chip-on={$libraryFilter$.completion === opt.id}
+                      class="menu-choice"
+                      class:menu-choice-active={$libraryFilter$.completion === opt.id}
                       on:click={() => ($libraryFilter$ = { ...$libraryFilter$, completion: opt.id })}
                     >{$t(opt.labelKey)}</button>
                   {/each}
@@ -482,7 +480,7 @@
                 {#if $libraryFilter$.formats.length || $libraryFilter$.completion !== 'all'}
                   <button
                     type="button"
-                    class="mt-2 text-xs underline opacity-70 hover:opacity-100"
+                    class="mt-2 px-2 text-sm underline opacity-70 hover:opacity-100"
                     on:click={() => ($libraryFilter$ = { formats: [], completion: 'all' })}
                   >{$t('manager.filter.clearAll')}</button>
                 {/if}
@@ -502,8 +500,8 @@
               <div slot="icon" class={baseIconClasses} title={$t('manager.cover.size')}>
                 <Fa icon={faTableCellsLarge} />
               </div>
-              <div class="w-56 bg-menu text-menu p-3" slot="content">
-                <div class="text-xs opacity-70 mb-2">
+              <div class="menu-panel w-56" slot="content">
+                <div class="menu-label mb-1">
                   {$t('manager.cover.minWidth', { n: $bookCoverMinWidth$ })}
                 </div>
                 <input
@@ -517,21 +515,21 @@
                 <div class="flex justify-between mt-2 gap-1">
                   <button
                     type="button"
-                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover-menu-inverted"
+                    class="menu-choice flex-1"
                     on:click={() => ($bookCoverMinWidth$ = 130)}
                   >{$t('manager.cover.dense')}</button>
                   <button
                     type="button"
-                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover-menu-inverted"
+                    class="menu-choice flex-1"
                     on:click={() => ($bookCoverMinWidth$ = 170)}
                   >{$t('manager.cover.standard')}</button>
                   <button
                     type="button"
-                    class="flex-1 rounded border border-current/30 px-2 py-1 text-xs hover-menu-inverted"
+                    class="menu-choice flex-1"
                     on:click={() => ($bookCoverMinWidth$ = 220)}
                   >{$t('manager.cover.large')}</button>
                 </div>
-                <div class="text-xs opacity-50 mt-2">{$t('manager.cover.autoLayout')}</div>
+                <div class="menu-label mt-1 opacity-60">{$t('manager.cover.autoLayout')}</div>
               </div>
             </Popover>
           </div>
@@ -660,25 +658,6 @@
 </div>
 
 <style>
-  .chip {
-    padding: 0.2rem 0.7rem;
-    border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
-    border-radius: 999px;
-    background: transparent;
-    color: inherit;
-    font-size: 0.72rem;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: background 0.12s ease, border-color 0.12s ease;
-  }
-  .chip:hover {
-    background: color-mix(in srgb, currentColor 9%, transparent);
-  }
-  .chip-on {
-    background: color-mix(in srgb, currentColor 22%, transparent);
-    border-color: color-mix(in srgb, currentColor 55%, transparent);
-    font-weight: 600;
-  }
   .filter-badge {
     position: absolute;
     top: 0.55rem;

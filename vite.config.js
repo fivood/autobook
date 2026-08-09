@@ -33,6 +33,13 @@ const config = {
     minify: false,
     cssMinify: false
   },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler'
+      }
+    }
+  },
   ssr: {
     // https://github.com/FortAwesome/Font-Awesome/issues/18677
     noExternal: ['@fortawesome/*', '@popperjs/*']

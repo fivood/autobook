@@ -15,14 +15,13 @@
   <div slot="icon" class="mx-2" title="显示可用的默认字体">
     <Fa icon={faFont} />
   </div>
-  <div slot="content">
+  <div class="menu-list" slot="content">
     {#each availableFonts as font (font)}
       <div
         tabindex="0"
         role="button"
-        class="cursor-pointer px-4 py-2 text-sm hover-menu-inverted"
-        class:bg-menu-inverted={font === fontValue}
-        class:text-menu-inverted={font === fontValue}
+        class="menu-item"
+        class:menu-item-active={font === fontValue}
         on:click={() => {
           fontValue = font;
           element.toggleOpen();

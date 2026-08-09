@@ -4,6 +4,153 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Shared menu language. Keep all popovers, context menus and compact action
+ * panels on the same type scale and border treatment. Individual menus should
+ * only need to provide width/layout and their own semantic active state. */
+@layer components {
+  .menu-surface {
+    background: var(--menu-background);
+    color: var(--menu-foreground);
+    border: 1px solid color-mix(in srgb, var(--menu-foreground) 24%, transparent);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+    font-size: 0.9375rem;
+    font-weight: 400;
+    line-height: 1.35;
+    overflow: hidden;
+  }
+
+  .menu-surface.rounded-full {
+    border-radius: 9999px;
+  }
+
+  .menu-list,
+  .menu-panel {
+    padding: 0.35rem;
+  }
+
+  .menu-item {
+    display: flex;
+    width: 100%;
+    min-height: 2.5rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 0.875rem;
+    border: 0;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: inherit;
+    font-size: 0.9375rem;
+    font-weight: 400;
+    line-height: 1.25;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .menu-item:hover,
+  .menu-item:focus-visible,
+  .menu-item-active {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+    outline: none;
+  }
+
+  .menu-item-inline {
+    width: auto;
+    min-height: 2.25rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .menu-icon-button {
+    display: inline-flex;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .menu-icon-button:hover,
+  .menu-icon-button:focus-visible {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+    outline: none;
+  }
+
+  .menu-label {
+    padding: 0.35rem 0.5rem 0.25rem;
+    color: color-mix(in srgb, var(--menu-foreground) 68%, transparent);
+    font-size: 0.8125rem;
+    line-height: 1.3;
+  }
+
+  .menu-choice {
+    min-height: 2.125rem;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--menu-foreground) 28%, transparent);
+    border-radius: 0.375rem;
+    background: transparent;
+    color: inherit;
+    font-size: 0.875rem;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  }
+
+  .menu-choice:hover,
+  .menu-choice:focus-visible,
+  .menu-choice-active {
+    border-color: var(--menu-foreground);
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+    outline: none;
+  }
+
+  .menu-item-danger {
+    color: var(--danger-color);
+  }
+
+  .menu-item-danger:hover,
+  .menu-item-danger:focus-visible {
+    background: color-mix(in srgb, var(--danger-color) 16%, transparent);
+    color: var(--danger-color);
+    outline: none;
+  }
+
+  .menu-sort-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: 2.5rem;
+    align-items: center;
+    border-radius: 0.375rem;
+    font-size: 0.9375rem;
+    line-height: 1.25;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .menu-sort-item:hover,
+  .menu-sort-item:focus-within,
+  .menu-sort-item-active {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+  }
+
+  .menu-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem;
+  }
+
+  .menu-divider {
+    width: 1px;
+    height: 1.5rem;
+    background: color-mix(in srgb, currentColor 28%, transparent);
+  }
+}
+
 /* Markdown rendering: KaTeX for math + highlight.js for code blocks. Imported
  * here so the loaded HTML inside the reader picks them up; .md-* / .hljs /
  * .katex selectors all resolve against this global sheet. */

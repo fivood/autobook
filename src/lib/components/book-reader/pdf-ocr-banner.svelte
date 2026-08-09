@@ -292,7 +292,7 @@
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
     font-size: 0.85rem;
   }
-  .ico { font-size: 1rem; opacity: 0.9; }
+  :global(.ico) { font-size: 1rem; opacity: 0.9; }
   .text { flex: 1; min-width: 0; }
   .title { font-weight: 600; }
   .meta { font-size: 0.72rem; opacity: 0.75; margin-top: 0.15rem; }
@@ -315,11 +315,4 @@
   .btn.primary { background: rgba(255, 255, 255, 0.18); }
   .btn.danger { background: rgba(220, 90, 90, 0.35); border-color: rgba(220, 90, 90, 0.5); }
   .btn.ghost { background: transparent; border-color: transparent; opacity: 0.7; padding: 0.3rem 0.5rem; }
-  .err {
-    width: 100%;
-    margin-top: 0.4rem;
-    font-size: 0.72rem;
-    opacity: 0.85;
-    color: #ffc8c8;
-  }
 </style>

@@ -90,6 +90,7 @@
     on:mouseenter={() => (hovered = true)}
     on:mouseleave={() => (hovered = false)}
     role="toolbar"
+    tabindex="-1"
   >
     <button
       type="button"
@@ -97,7 +98,7 @@
         ? $t('typewriter.chapterStop.tooltipOn')
         : $t('typewriter.chapterStop.tooltipOff')}
       on:click={toggleStopAtChapter}
-      class="bg-menu text-menu flex h-9 items-center gap-1 rounded-full px-3 text-xs shadow backdrop-blur transition-all duration-150"
+      class="menu-surface flex h-9 items-center gap-1 rounded-full px-3 text-sm backdrop-blur transition-all duration-150"
       class:opacity-0={!enabled}
       class:pointer-events-none={!enabled}
       class:group-hover:opacity-100={!enabled}
@@ -127,7 +128,7 @@
     </button>
 
     <div
-      class="bg-menu text-menu flex items-center gap-1 rounded-full px-2 py-1 shadow backdrop-blur transition-all duration-150"
+      class="menu-surface flex items-center gap-1 rounded-full px-2 py-1 backdrop-blur transition-all duration-150"
       class:opacity-0={!enabled || ttsActive}
       class:pointer-events-none={!enabled || ttsActive}
       class:group-hover:opacity-100={!enabled && !ttsActive}
@@ -141,7 +142,7 @@
       >
         <Fa icon={faMinus} size="xs" />
       </button>
-      <span class="min-w-[2.5rem] text-center text-[10px]">{$t('typewriter.speedUnit', { n: $multiplier$ })}</span>
+      <span class="min-w-[2.5rem] text-center text-sm">{$t('typewriter.speedUnit', { n: $multiplier$ })}</span>
       <button
         type="button"
         title={$t('typewriter.faster')}

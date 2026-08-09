@@ -6,6 +6,7 @@
   import { dummyFn } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
   import { createEventDispatcher } from 'svelte';
+  import { tick } from 'svelte';
   import {
     folders$,
     bookFolders$,
@@ -25,6 +26,11 @@
   let dragOverFolderId: number | string | null = null;
   let renamingId: number | null = null;
   let renameDraft = '';
+  let renameInput: HTMLInputElement | undefined;
+
+  $: if (renamingId !== null && renameInput) {
+    tick().then(() => renameInput?.focus());
+  }
 
   function countForFolder(folderId: number): number {
     return $bookFolders$.filter((bf) => bf.folderId === folderId).length;
@@ -174,7 +180,7 @@
             }}
             on:blur={commitRename}
             on:keyup={dummyFn}
-            autofocus
+            bind:this={renameInput}
           />
         {:else}
           <button

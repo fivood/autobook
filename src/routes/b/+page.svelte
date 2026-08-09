@@ -144,6 +144,7 @@
   } from '$lib/data/store';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
+  import BookTextEditorDialog from '$lib/components/book-reader/book-text-editor-dialog.svelte';
   import PdfOcrBanner from '$lib/components/book-reader/pdf-ocr-banner.svelte';
   import PdfPageContextMenu from '$lib/components/book-reader/pdf-page-context-menu.svelte';
   import KeyboardShortcutsHelp from '$lib/components/book-reader/keyboard-shortcuts-help.svelte';
@@ -252,6 +253,12 @@
   import { ViewMode } from '$lib/data/view-mode';
   import loadBookData from '$lib/functions/book-data-loader/load-book-data';
   import {
+    formatTextSource,
+    getEditableTextFormat,
+    recoverTextSource,
+    type EditableTextFormat
+  } from '$lib/functions/file-loaders/text-source';
+  import {
     STAGE_LABELS,
     type LoadProgress
   } from '$lib/functions/book-data-loader/load-progress';
@@ -358,6 +365,12 @@
    * overlay shows it, so the "open translation workbench" banner would be
    * redundant. */
   let comicHasTranslation = false;
+  let bookTextEditorOpen = false;
+  let bookTextEditorSaving = false;
+  let bookTextEditorSource = '';
+  let bookTextEditorOriginal: string | undefined;
+  let bookTextEditorRecovered = false;
+  let bookTextEditorFormat: EditableTextFormat = 'markdown';
   let dictPopupOpen = false;
   let dictPopupWord = '';
   let dictPopupSentence = '';
@@ -2272,6 +2285,92 @@
       });
   }
 
+  function openBookTextEditor() {
+    const book = $rawBookData$;
+    if (!book) return;
+    const format = getEditableTextFormat(book);
+    if (!format) return;
+
+    pauseTracker();
+    showHeader = false;
+    bookTextEditorFormat = format;
+    bookTextEditorRecovered = typeof book.sourceText !== 'string';
+    bookTextEditorSource = book.sourceText ?? recoverTextSource(book.elementHtml || '', format);
+    bookTextEditorOriginal = book.sourceTextOriginal;
+    bookTextEditorOpen = true;
+  }
+
+  async function saveBookTextSource(source: string) {
+    const visibleBook = $rawBookData$;
+    if (!visibleBook || bookTextEditorSaving) return;
+
+    bookTextEditorSaving = true;
+    try {
+      const current = await database.getData(visibleBook.id);
+      if (!current) throw new Error('Book data is no longer available');
+
+      const format = getEditableTextFormat(current);
+      if (!format) throw new Error('Only Markdown and TXT books can be edited');
+
+      const currentSource =
+        current.sourceText ?? recoverTextSource(current.elementHtml || '', format);
+      const formatted = formatTextSource(source, format);
+      const now = Date.now();
+      const updated: BooksDbBookData = {
+        ...current,
+        sourceText: source,
+        sourceTextOriginal: current.sourceTextOriginal ?? currentSource,
+        elementHtml: formatted.elementHtml,
+        characters: formatted.characters,
+        sections: formatted.sections,
+        lastBookModified: now
+      };
+
+      const shouldWriteExternal =
+        !!externalStorageHandler &&
+        (!!updated.storageSource ||
+          $autoReplication$ === AutoReplicationType.Up ||
+          $autoReplication$ === AutoReplicationType.All);
+
+      // For an external-storage book, write the canonical bookdata archive
+      // before updating the local cache. This prevents a stale disk copy from
+      // winning on the next launch if the external write fails.
+      if (shouldWriteExternal && externalStorageHandler) {
+        const { id: _id, ...externalBookData } = updated;
+        externalStorageHandler.startContext({
+          id: updated.id,
+          title: updated.title,
+          imagePath: updated.coverImage
+        });
+        await externalStorageHandler.saveBook(externalBookData, true);
+      }
+
+      const db = await database.db;
+      await db.put('data', updated);
+      evictFormattedBookCache();
+      bookTextEditorOpen = false;
+
+      // Recreate the reader's section managers and text indexes from the new
+      // source. The route is client-only, so a local reload is deterministic
+      // and avoids leaving stale highlight/range objects alive.
+      window.location.reload();
+    } catch (error: any) {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: tImmediate('bookEditor.saveFailedTitle'),
+            message: tImmediate('bookEditor.saveFailed', {
+              error: error?.message || String(error)
+            })
+          }
+        }
+      ]);
+    } finally {
+      bookTextEditorSaving = false;
+    }
+  }
+
   function scheduleReplication(dataType: StorageDataType) {
     if (upSyncEnabled) {
       const toReplicate = isReplicating ? dataToReplicateQueue : dataToReplicate;
@@ -2351,6 +2450,7 @@
     <BookReaderHeader
       hasChapterData={!!$sectionData$?.length}
       hasText={!!bookCharCount}
+      textEditable={!!($rawBookData$ && getEditableTextFormat($rawBookData$))}
       aiAvailable={$rawBookData$ ? hasIndexableText($rawBookData$) : true}
       hasCustomReadingPoint={!!(
         ($customReadingPointEnabled$ || isPaginated) &&
@@ -2362,6 +2462,7 @@
       bookTitle={$rawBookData$?.title ?? ''}
       {hasBookmarkData}
       bind:isBookmarkScreen
+      on:editTextClick={openBookTextEditor}
       on:tocClick={() => {
         pauseTracker();
 
@@ -2566,6 +2667,19 @@
     {exploredCharCount}
     {bookCharCount}
     on:close={() => (aiDrawerOpen = false)}
+  />
+{/if}
+
+{#if bookTextEditorOpen && $rawBookData$}
+  <BookTextEditorDialog
+    bookTitle={$rawBookData$.title}
+    source={bookTextEditorSource}
+    originalSource={bookTextEditorOriginal}
+    format={bookTextEditorFormat}
+    recoveredFromHtml={bookTextEditorRecovered}
+    saving={bookTextEditorSaving}
+    on:save={({ detail }) => saveBookTextSource(detail.source)}
+    on:cancel={() => (bookTextEditorOpen = false)}
   />
 {/if}
 

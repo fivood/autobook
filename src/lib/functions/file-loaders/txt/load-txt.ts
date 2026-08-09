@@ -29,6 +29,7 @@ export default async function loadTxt(file: File, lastBookModified: number): Pro
     language: detectLanguage(data),
     styleSheet: '',
     elementHtml: element.innerHTML,
+    sourceText: data,
     blobs: {},
     coverImage: undefined,
     hasThumb: false,

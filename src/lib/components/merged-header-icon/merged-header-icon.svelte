@@ -97,12 +97,12 @@
       <div slot="icon" class={baseIconClasses}>
         <Fa icon={mergeTo.icon} />
       </div>
-      <div class="w-40 bg-menu text-menu md:w-32" slot="content">
+      <div class="menu-list w-40 md:w-32" slot="content">
         {#each actionItems as actionItem (actionItem.label)}
           <div
             tabindex="0"
             role="button"
-            class="px-4 py-2 text-sm hover-menu-inverted"
+            class="menu-item"
             title={actionItem.titleKey ? $t(actionItem.titleKey) : actionItem.title}
             on:click={() => handleActionMenuItem(actionItem.label)}
             on:keyup={dummyFn}

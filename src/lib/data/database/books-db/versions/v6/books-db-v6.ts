@@ -45,6 +45,12 @@ interface BooksDbV6BookData {
   lastBookOpen: number;
   storageSource?: string;
   htmlBackup?: string;
+  /** Original/current source for editable plain-text formats. Optional so
+   * existing rows remain valid without a database migration. */
+  sourceText?: string;
+  /** Immutable import-time source captured on the first edit, used by the
+   * editor's "restore original" action. */
+  sourceTextOriginal?: string;
   /** Original file extension at import time (epub/mobi/pdf/txt/…). Added
    * 1.20.2 as an optional field — old rows have undefined, back-compat via
    * IDB schemalessness (no migration needed). Used by the hover popover

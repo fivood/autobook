@@ -28,14 +28,13 @@
   <div slot="icon" class={baseIconClasses} title={$t('locale.label')}>
     <Fa icon={faLanguage} />
   </div>
-  <div class="w-32 bg-menu text-menu" slot="content">
-    {#each LOCALES as loc (loc)}
+  <div class="menu-list w-32" slot="content">
+      {#each LOCALES as loc (loc)}
       <div
         tabindex="0"
         role="button"
-        class="cursor-pointer px-4 py-2 text-sm hover-menu-inverted"
-        class:bg-menu-inverted={$locale$ === loc}
-        class:text-menu-inverted={$locale$ === loc}
+        class="menu-item"
+        class:menu-item-active={$locale$ === loc}
         on:click={() => pick(loc)}
         on:keyup={dummyFn}
       >

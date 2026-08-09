@@ -809,7 +809,7 @@
 />
 
 <style lang="scss">
-  @import '../styles';
+  @use '../styles';
 
   .book-content {
     // EPUB / inline illustrations get capped at viewport height so a

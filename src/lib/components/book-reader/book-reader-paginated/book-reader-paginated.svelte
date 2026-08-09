@@ -795,7 +795,7 @@
 <svelte:window on:keydown={onKeydown} on:resize={() => (isResizing = true)} />
 
 <style lang="scss">
-  @import '../styles';
+  @use '../styles';
 
   .book-content {
     overflow: hidden;

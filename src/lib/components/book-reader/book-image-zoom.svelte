@@ -72,12 +72,14 @@
     background: var(--menu-background, rgba(0, 0, 0, 0.65));
     color: var(--menu-foreground, #fff);
     border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--menu-foreground, #fff) 24%, transparent);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    font-size: 0.78rem;
+    font-size: 0.875rem;
   }
   .zoom-control.collapsed {
     padding: 0;
     background: transparent;
+    border-color: transparent;
     box-shadow: none;
   }
   .pill {
@@ -87,9 +89,9 @@
     padding: 0.35rem 0.7rem;
     background: var(--menu-background, rgba(0, 0, 0, 0.55));
     color: var(--menu-foreground, #fff);
-    border: none;
+    border: 1px solid color-mix(in srgb, var(--menu-foreground, #fff) 24%, transparent);
     border-radius: 999px;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     cursor: pointer;
     opacity: 0.55;
   }
@@ -99,10 +101,10 @@
   .btn {
     background: transparent;
     color: inherit;
-    border: none;
+    border: 0;
     padding: 0.3rem 0.5rem;
     cursor: pointer;
-    font-size: 0.78rem;
+    font-size: 0.875rem;
     border-radius: 0.3rem;
   }
   .btn:hover {

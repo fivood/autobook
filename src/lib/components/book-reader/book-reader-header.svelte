@@ -8,6 +8,7 @@
     faFlag,
     faHighlighter,
     faList,
+    faPenToSquare,
     faRobot,
     faRotateLeft,
     type IconDefinition
@@ -41,6 +42,8 @@
    * drawer there just answers "can't spoil" to everything. Hidden entirely —
    * see has-indexable-text.ts. */
   export let aiAvailable = true;
+  /** MD/TXT books expose the shared source editor. */
+  export let textEditable = false;
   /** Current book's title. Shown as a centered label between the left
    * and right icon groups when the header slides down — reader wanted
    * to know which book they're reading without going back to library. */
@@ -48,6 +51,7 @@
 
   const dispatch = createEventDispatcher<{
     tocClick: void;
+    editTextClick: void;
     highlightClick: void;
     aiClick: void;
     bookmarkClick: void;
@@ -124,6 +128,18 @@
 
 <div class="flex justify-between items-center px-4 md:px-8 {baseHeaderClasses}">
   <div class="flex transform-gpu {nTranslateXHeaderFa}">
+    {#if textEditable}
+      <div
+        tabindex="0"
+        role="button"
+        title={$t('reader.editText')}
+        class={baseIconClasses}
+        on:click={() => dispatch('editTextClick')}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={faPenToSquare} />
+      </div>
+    {/if}
     {#if hasChapterData}
       <div
         tabindex="0"
@@ -221,12 +237,12 @@
           <div slot="icon" title={$t('reader.customReadingPointMenu')} class={baseIconClasses}>
             <Fa icon={faCrosshairs} />
           </div>
-          <div class="w-40 bg-menu text-menu md:w-32" slot="content">
+          <div class="menu-list w-40 md:w-32" slot="content">
             {#each customReadingPointMenuItems as actionItem (actionItem.action)}
               <div
                 tabindex="0"
                 role="button"
-                class="px-4 py-2 text-sm hover-menu-inverted"
+                class="menu-item"
                 on:click={() => dispatchCustomReadingPointAction(actionItem.action)}
                 on:keyup={dummyFn}
               >

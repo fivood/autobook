@@ -197,7 +197,7 @@
 
 {#if detailCard}
   <div
-    class="detail-popover"
+    class="detail-popover menu-surface"
     style="left:{detailPos.left}px;top:{detailPos.top}px;"
     role="tooltip"
   >
@@ -255,11 +255,7 @@
     z-index: 40;
     width: 280px;
     padding: 0.75rem 0.9rem;
-    background: var(--menu-background, rgba(0, 0, 0, 0.88));
-    color: var(--menu-foreground, #fff);
-    border-radius: 0.6rem;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
-    font-size: 0.78rem;
+    font-size: 0.875rem;
     pointer-events: none;
     animation: popoverIn 0.12s ease-out;
   }
@@ -280,6 +276,7 @@
     margin-bottom: 0.5rem;
     overflow: hidden;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
