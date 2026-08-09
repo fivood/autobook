@@ -15,7 +15,8 @@ import {
   type TranslationResult
 } from 'translator-workbench';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import { aiApiKey$, aiBaseUrl$, aiLocalBaseUrl$, aiModel$, aiProvider$ } from '$lib/data/store';
+import { aiApiKey$, aiBaseUrl$, aiLocalBaseUrl$, aiModel$, aiProvider$, qwenMtApiKey$, qwenMtBaseUrl$, qwenMtModel$ } from '$lib/data/store';
+import { QwenMtProvider } from '$lib/data/translation/qwen-mt-provider';
 import { tImmediate } from '$lib/i18n';
 
 /**
@@ -240,4 +241,35 @@ export function cloudTranslationReady(): boolean {
   const apiKey = aiApiKey$.getValue().trim();
   const model = aiModel$.getValue().trim();
   return !!apiKey && !!model;
+}
+
+/** Whether the Qwen-MT draft provider is configured (base URL + key + model). */
+export function qwenMtDraftReady(): boolean {
+  const base = qwenMtBaseUrl$.getValue().trim();
+  const key = qwenMtApiKey$.getValue().trim();
+  const model = qwenMtModel$.getValue().trim();
+  return /^https?:\/\//i.test(base) && !!key && !!model;
+}
+
+/**
+ * Provider for the *draft* pass. Translation-specialized Qwen-MT is used when
+ * configured; otherwise fall back to the generic cloud/local provider. The
+ * review pass keeps using the generic LLM (createCloudTranslationProvider /
+ * createLocalTranslationProvider) — never Qwen-MT.
+ */
+export function createDraftProvider(): TranslationProvider {
+  if (qwenMtDraftReady()) {
+    return new QwenMtProvider({
+      baseUrl: qwenMtBaseUrl$.getValue().trim(),
+      apiKey: qwenMtApiKey$.getValue().trim() || undefined,
+      model: qwenMtModel$.getValue().trim()
+    });
+  }
+  return createCloudTranslationProvider();
+}
+
+/** Model id for the draft pass (Qwen-MT when configured, else the cloud model). */
+export function draftModel(): string {
+  if (qwenMtDraftReady()) return qwenMtModel$.getValue().trim();
+  return cloudTranslationModel();
 }
