@@ -12,6 +12,7 @@
     "check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "tauri:dev:cdp": "node scripts/tauri-dev-cdp.mjs",
     "tauri:build": "tauri build",
     "postinstall": "node scripts/copy-vendor-assets.js",
     "lint": "eslint src"
