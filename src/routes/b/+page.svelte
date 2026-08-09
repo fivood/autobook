@@ -445,13 +445,28 @@
           }
         }
 
+        let lastPullUpdate = 0;
+        let lastPullPct = 10;
         bookData = await saveExternalLastRead(externalStorageHandler, bookData, (done, total) => {
           // Map the disk extraction progress into the reader's storage-pull
           // stage (10% → 50%): the external pull is the slow step for big
           // books, and without this it sits frozen on 10% for tens of seconds.
+          // A fast 100MB zip can fire hundreds of per-entry callbacks in a
+          // blink — throttle to ~150ms so the bar visibly advances, and force
+          // the final 50% so the stage doesn't stall just under the boundary.
           const pct = 10 + Math.round((done / Math.max(1, total)) * 40);
-          loadProgress$.next({ stage: 'storage-pull', pct, label: STAGE_LABELS['storage-pull'] });
+          const now = Date.now();
+          if (pct === 50 || now - lastPullUpdate > 150) {
+            lastPullUpdate = now;
+            lastPullPct = pct;
+            loadProgress$.next({ stage: 'storage-pull', pct, label: STAGE_LABELS['storage-pull'] });
+          } else if (pct > lastPullPct) {
+            lastPullPct = pct;
+          }
         });
+        if (lastPullPct < 50) {
+          loadProgress$.next({ stage: 'storage-pull', pct: 50, label: STAGE_LABELS['storage-pull'] });
+        }
 
         if (bookData.language) {
           document.documentElement.lang = bookData.language;
