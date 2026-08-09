@@ -66,15 +66,25 @@ export async function getLatestTranslationJob(): Promise<TranslationJob | undefi
  * The reader uses this to find the translation to overlay on a comic. Falls
  * back to any comic-format job when no title matches — one comic at a time
  * is the common case.
+ *
+ * Prefers the newest job that *has translations*: OCR re-runs create fresh
+ * empty jobs (glossary-review / drafting, 0 translations) that would shadow a
+ * translated one, hiding the overlay. Only when nothing translated exists do
+ * we fall back to the newest job.
  */
 export async function findComicTranslationJob(title?: string): Promise<TranslationJob | undefined> {
   const jobs = await (await getDatabase()).getAll('jobs');
   const sorted = jobs.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   const isComic = (job: TranslationJob) => job.document.format === 'cbz' || job.document.format === 'cbr';
+  const hasOutput = (job: TranslationJob) => Object.keys(job.translations || {}).length > 0;
   if (title) {
-    const byTitle = sorted.find((job) => isComic(job) && job.document.title === title);
-    if (byTitle) return byTitle;
+    const byTitle = sorted.filter((job) => isComic(job) && job.document.title === title);
+    const translated = byTitle.find(hasOutput);
+    if (translated) return translated;
+    if (byTitle.length) return byTitle[0];
   }
+  const translatedAny = sorted.find((job) => isComic(job) && hasOutput(job));
+  if (translatedAny) return translatedAny;
   return sorted.find(isComic);
 }
 
