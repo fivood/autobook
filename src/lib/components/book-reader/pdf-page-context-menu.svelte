@@ -3,21 +3,18 @@
   import { onMount, onDestroy } from 'svelte';
   import Fa from 'svelte-fa';
   import { faMagnifyingGlass, faRotateRight } from '@fortawesome/free-solid-svg-icons';
-  import { database, pdfOcrLang$ } from '$lib/data/store';
+  import { database, ocrModelProfile$, pdfOcrLang$ } from '$lib/data/store';
   import { runOcrOnPage } from '$lib/functions/file-loaders/pdf/pdf-ocr-runner';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import type { OcrLanguage } from '$lib/functions/file-loaders/pdf/pdf-ocr';
+  import {
+    OCR_LANGUAGE_OPTIONS,
+    isOcrLanguageSupported,
+    normalizeOcrModelProfile
+  } from '$lib/functions/file-loaders/pdf/ocr-options';
   import { t, tImmediate } from '$lib/i18n';
 
   export let book: BooksDbBookData;
-
-  const LANGS: Array<{ code: OcrLanguage; label: string }> = [
-    { code: 'ch', label: '中文（简中 + 英文）' },
-    { code: 'chinese_cht', label: '繁体中文' },
-    { code: 'japan', label: '日本語' },
-    { code: 'korean', label: '한국어' },
-    { code: 'en', label: 'English' }
-  ];
 
   let visible = false;
   let menuX = 0;
@@ -28,7 +25,10 @@
   let showLangPicker = false;
 
   // Per-book language wins over the global default, matching the OCR banner.
-  $: savedLang = (book.ocrLang || $pdfOcrLang$) as OcrLanguage;
+  $: activeProfile = normalizeOcrModelProfile($ocrModelProfile$);
+  $: availableLangs = OCR_LANGUAGE_OPTIONS.filter((lang) => isOcrLanguageSupported(lang.code, activeProfile));
+  $: storedLang = (book.ocrLang || $pdfOcrLang$) as OcrLanguage;
+  $: savedLang = isOcrLanguageSupported(storedLang, activeProfile) ? storedLang : 'ch';
 
   function onContextMenu(e: MouseEvent) {
     const target = e.target as HTMLElement;
@@ -61,7 +61,7 @@
     busy = true;
     message = tImmediate('pdfCtx.reOcrProgress', { n: targetPage });
     try {
-      const { updated, recognized } = await runOcrOnPage(book, targetPage, lang);
+      const { updated, recognized } = await runOcrOnPage(book, targetPage, lang, activeProfile);
       const db = await database.db;
       // Persist the language this page was re-OCR'd with onto the book so the
       // banner and next re-OCR agree, even if the global default differs.
@@ -109,16 +109,16 @@
       <button class="item" on:click={runReocrWithSavedLang}>
         <Fa icon={faRotateRight} size="xs" />
         <span>{$t('pdfCtx.reOcrThisPage')}</span>
-        <span class="meta">{LANGS.find((l) => l.code === savedLang)?.label || savedLang}</span>
+        <span class="meta">{$t(OCR_LANGUAGE_OPTIONS.find((l) => l.code === savedLang)?.labelKey || '') || savedLang}</span>
       </button>
       <button class="item" on:click={() => (showLangPicker = true)}>
         <Fa icon={faMagnifyingGlass} size="xs" />
         <span>{$t('pdfCtx.otherLanguage')}</span>
       </button>
     {:else}
-      {#each LANGS as l (l.code)}
-        <button class="item lang" on:click={() => reocr(l.code)}>
-          {l.label}
+      {#each availableLangs as l (l.code)}
+        <button class="item menu-item lang" on:click={() => reocr(l.code)}>
+          {$t(l.labelKey)}
         </button>
       {/each}
     {/if}

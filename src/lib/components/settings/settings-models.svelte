@@ -4,7 +4,7 @@
   import Fa from 'svelte-fa';
   import { faSpinner, faDownload, faTrash } from '@fortawesome/free-solid-svg-icons';
   import { MODELS, isOcrDownloaded, ocrDownloadProgress$ } from '$lib/data/models-registry';
-  import { kokoroLoadStatus$, kokoroModel$, type KokoroModelId } from '$lib/data/store';
+  import { kokoroLoadStatus$, kokoroModel$, ocrModelProfile$, type KokoroModelId } from '$lib/data/store';
   import { t, tImmediate } from '$lib/i18n';
 
   interface ModelStatus {
@@ -53,7 +53,10 @@
     subscriptions.push(
       ocrDownloadProgress$.subscribe((p) => {
         if (!p.downloading) {
-          statuses.update((all) => ({ ...all, 'ocr-paddle': { ready: isOcrDownloaded(), checking: false } }));
+          statuses.update((all) => ({
+            ...all,
+            'ocr-paddle': { ready: isOcrDownloaded($ocrModelProfile$), checking: false }
+          }));
           return;
         }
         const loaded = p.files.reduce((s, f) => s + f.loaded, 0);

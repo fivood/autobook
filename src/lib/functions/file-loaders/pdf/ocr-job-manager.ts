@@ -28,8 +28,8 @@ import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books
 import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-types';
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { runOcr, type OcrProgress } from './pdf-ocr-runner';
-import { disposeOcrWorker, type OcrLanguage } from './pdf-ocr';
-export type { OcrLanguage };
+import { disposeOcrWorker, type OcrLanguage, type OcrModelProfile } from './pdf-ocr';
+export type { OcrLanguage, OcrModelProfile };
 
 /**
  * Push the updated bookData (with new OCR-injected elementHtml + blobs) to
@@ -98,6 +98,7 @@ export interface OcrJobState {
   bookId: number;
   bookTitle: string;
   lang: OcrLanguage;
+  profile: OcrModelProfile;
   status: OcrJobStatus;
   progress: OcrProgress;
   /** Set when status is 'errored'; user-friendly message. */
@@ -119,7 +120,11 @@ export function isOcrJobRunning(): boolean {
  * should abort first). Doesn't return the job promise — fire-and-forget;
  * subscribe to `ocrJob$` to observe progress.
  */
-export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
+export function startOcrJob(
+  book: BooksDbBookData,
+  lang: OcrLanguage,
+  profile: OcrModelProfile
+): boolean {
   if (abortCtrl) return false;
   abortCtrl = new AbortController();
   const signal = abortCtrl.signal;
@@ -127,6 +132,7 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
     bookId: book.id,
     bookTitle: book.title,
     lang,
+    profile,
     status: 'running',
     progress: { page: 0, total: 0, text: '' },
     startedAt: Date.now()
@@ -137,6 +143,7 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
       const updated = await runOcr(
         book,
         lang,
+        profile,
         (p) => {
           _store.update((s) => (s ? { ...s, progress: p } : s));
         },

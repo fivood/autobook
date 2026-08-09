@@ -39,8 +39,11 @@ export const MODELS: ModelEntry[] = [
     nameKey: 'models.ocrPaddle',
     purposeKey: 'models.ocrPaddlePurpose',
     location: '浏览器 HTTP 缓存（不可直接访问，见指引）',
-    size: '~22 MB（det+rec）',
-    ready: async () => isOcrDownloaded(),
+    size: '随档位而异（det+rec）',
+    ready: async () => {
+      const { ocrModelProfile$ } = await import('$lib/data/store');
+      return isOcrDownloaded(ocrModelProfile$.getValue());
+    },
     uninstall: async () => clearOcrDownloadedFlag()
   },
   {
@@ -95,8 +98,11 @@ export const MODELS: ModelEntry[] = [
 ];
 
 // ── PaddleOCR download tracking ────────────────────────────────────────
-const OCR_DOWNLOADED_KEY = 'ocrModelsDownloaded';
-const OCR_MODEL_URL_PATTERN = /PP-OCRv5_.*_onnx_infer\.tar/;
+const LEGACY_OCR_DOWNLOADED_KEY = 'ocrModelsDownloaded';
+const OCR_DOWNLOADED_KEY_PREFIX = 'ocrModelsDownloaded:';
+const OCR_MODEL_URL_PATTERN = /(?:PP-OCRv(?:5|6)|korean_PP-OCRv5).*_onnx_infer\.tar/;
+
+import type { OcrModelProfile } from '$lib/functions/file-loaders/pdf/ocr-options';
 
 import { writable } from 'svelte/store';
 
@@ -116,9 +122,11 @@ export const ocrDownloadProgress$ = writable<OcrDownloadProgress>({
   files: []
 });
 
-export function isOcrDownloaded(): boolean {
+export function isOcrDownloaded(profile: string = 'v6-small'): boolean {
   try {
-    return localStorage.getItem(OCR_DOWNLOADED_KEY) === '1';
+    if (localStorage.getItem(`${OCR_DOWNLOADED_KEY_PREFIX}${profile}`) === '1') return true;
+    // Versions before model profiles only shipped PP-OCRv5.
+    return profile === 'v5-mobile' && localStorage.getItem(LEGACY_OCR_DOWNLOADED_KEY) === '1';
   } catch {
     return false;
   }
@@ -126,7 +134,11 @@ export function isOcrDownloaded(): boolean {
 
 function clearOcrDownloadedFlag(): boolean {
   try {
-    localStorage.removeItem(OCR_DOWNLOADED_KEY);
+    localStorage.removeItem(LEGACY_OCR_DOWNLOADED_KEY);
+    localStorage.removeItem(`${OCR_DOWNLOADED_KEY_PREFIX}v5-mobile`);
+    localStorage.removeItem(`${OCR_DOWNLOADED_KEY_PREFIX}v6-small`);
+    localStorage.removeItem(`${OCR_DOWNLOADED_KEY_PREFIX}v6-tiny`);
+    localStorage.removeItem(`${OCR_DOWNLOADED_KEY_PREFIX}v5-korean`);
     return true;
   } catch {
     return false;
@@ -134,9 +146,9 @@ function clearOcrDownloadedFlag(): boolean {
 }
 
 /** Mark PaddleOCR models as present (called when a create() succeeds). */
-export function markOcrDownloaded() {
+export function markOcrDownloaded(profile: OcrModelProfile) {
   try {
-    localStorage.setItem(OCR_DOWNLOADED_KEY, '1');
+    localStorage.setItem(`${OCR_DOWNLOADED_KEY_PREFIX}${profile}`, '1');
   } catch {
     // Persist failure only loses the "downloaded" hint; OCR still works.
   }
@@ -191,12 +203,18 @@ export function installOcrFetchTracker(): () => void {
           }
         }
         const f = files.get(name);
-        if (f) f.loaded = f.total || f.loaded;
-        publish();
-        if (files.size >= 2 && [...files.values()].every((x) => x.total > 0 && x.loaded >= x.total)) {
-          markOcrDownloaded();
+        if (f) {
+          if (!f.total) f.total = f.loaded;
+          f.loaded = f.total;
         }
-        ocrDownloadProgress$.set({ downloading: false, loaded: 0, total: 0, files: [] });
+        publish();
+        // v5/v6 profiles download det + rec (2 files); the Korean profile
+        // downloads a single rec model. Finish when every tracked file is done
+        // rather than assuming exactly two.
+        const all = [...files.values()];
+        if (all.length > 0 && all.every((x) => x.total > 0 && x.loaded >= x.total)) {
+          ocrDownloadProgress$.set({ downloading: false, loaded: 0, total: 0, files: [] });
+        }
       } catch {
         // Clone body read failed (e.g. cancelled) — stop tracking; original
         // response is unaffected.

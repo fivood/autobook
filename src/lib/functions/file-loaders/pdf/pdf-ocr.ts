@@ -32,14 +32,17 @@
 
 import { pagePath } from '$lib/data/env';
 import { markOcrDownloaded } from '$lib/data/models-registry';
+import {
+  getOcrModelCreateOptions,
+  isOcrLanguageSupported,
+  type OcrLanguage,
+  type OcrModelProfile
+} from './ocr-options';
+
+export type { OcrLanguage, OcrModelProfile } from './ocr-options';
 
 /** Public language codes the UI exposes. Map to Paddle's `lang` parameter
  * just before instantiation. */
-export type OcrLanguage =
-  | 'ch' | 'chinese_cht' | 'japan' | 'en' | 'korean'
-  | 'french' | 'german' | 'es' | 'it' | 'pt' | 'nl' | 'pl'
-  | 'da' | 'sv' | 'no' | 'cs' | 'ro' | 'hu' | 'tr' | 'vi';
-
 /** Single corner of a Paddle polygon. PaddleOCR emits `[x, y]` tuples, NOT
  * `{ x, y }` objects — easy thing to get wrong. */
 export type OcrPoint = [number, number];
@@ -69,6 +72,7 @@ export interface OcrPageResult {
 
 let ocrInstancePromise: Promise<unknown> | undefined;
 let ocrInstanceLang: OcrLanguage | '' = '';
+let ocrInstanceProfile: OcrModelProfile | '' = '';
 
 interface PaddleOcrLike {
   predict(input: unknown): Promise<
@@ -80,8 +84,11 @@ interface PaddleOcrLike {
   dispose?(): Promise<void>;
 }
 
-async function getOcrInstance(lang: OcrLanguage): Promise<PaddleOcrLike> {
-  if (ocrInstancePromise && ocrInstanceLang === lang) {
+async function getOcrInstance(lang: OcrLanguage, profile: OcrModelProfile): Promise<PaddleOcrLike> {
+  if (!isOcrLanguageSupported(lang, profile)) {
+    throw new Error(`当前 OCR 模型 ${profile} 不支持语言 ${lang}，请在 OCR 设置中更换语言或模型。`);
+  }
+  if (ocrInstancePromise && ocrInstanceLang === lang && ocrInstanceProfile === profile) {
     return ocrInstancePromise as Promise<PaddleOcrLike>;
   }
   if (ocrInstancePromise) {
@@ -92,33 +99,50 @@ async function getOcrInstance(lang: OcrLanguage): Promise<PaddleOcrLike> {
     prev.then((p) => p.dispose?.()).catch(() => {});
   }
   ocrInstanceLang = lang;
+  ocrInstanceProfile = profile;
   ocrInstancePromise = (async () => {
     const mod = await import('@paddleocr/paddleocr-js');
-    const created = await mod.PaddleOCR.create({
-      lang,
-      ocrVersion: 'PP-OCRv5',
-      // ORT wasm/mjs are served as static files (see postinstall).
-      //
-      // We pin to single-thread WASM. WebGPU initialized cleanly on the
-      // first attempt (Tauri WebView2 exposes it), but PP-OCRv5 ran
-      // through onnxruntime-web's WebGPU EP returned 0 detection items
-      // on the same image where WASM produced 25 — a known class of ORT
-      // WebGPU issue where unsupported ops silently degrade to zero
-      // output. ~25s/page on WASM beats ~4s/page of garbage on WebGPU.
-      //
-      // Multi-thread WASM would need SharedArrayBuffer + COOP/COEP,
-      // which Tauri's dev URL doesn't serve; revisit when we want to
-      // chase a 4-8x speedup with appropriate header config.
-      ortOptions: {
-        backend: 'wasm',
-        wasmPaths: `${pagePath}/vendor/ort/`,
-        numThreads: 1
-      }
-    });
+    const { KOREAN_REC_MODEL_URL, isKoreanProfile } = await import('./ocr-options');
+    // Korean has no SDK asset and `lang:"korean"` is rejected by paddleocr-js
+    // (0.4.2 supports only ch/cht/en/japan). Build it with an explicit rec
+    // asset and omit `lang` so the lang/ocrVersion validation is skipped; the
+    // korean rec model carries its own dictionary. det stays the default v5.
+    const createOptions = isKoreanProfile(profile)
+      ? {
+          textRecognitionModelName: 'korean_PP-OCRv5_mobile_rec',
+          textRecognitionModelAsset: { url: KOREAN_REC_MODEL_URL },
+          ortOptions: {
+            backend: 'wasm',
+            wasmPaths: `${pagePath}/vendor/ort/`,
+            numThreads: 1
+          }
+        }
+      : {
+          lang,
+          ...getOcrModelCreateOptions(profile),
+          // ORT wasm/mjs are served as static files (see postinstall).
+          //
+          // We pin to single-thread WASM. WebGPU initialized cleanly on the
+          // first attempt (Tauri WebView2 exposes it), but PP-OCRv5 ran
+          // through onnxruntime-web's WebGPU EP returned 0 detection items
+          // on the same image where WASM produced 25 — a known class of ORT
+          // WebGPU issue where unsupported ops silently degrade to zero
+          // output. ~25s/page on WASM beats ~4s/page of garbage on WebGPU.
+          //
+          // Multi-thread WASM would need SharedArrayBuffer + COOP/COEP,
+          // which Tauri's dev URL doesn't serve; revisit when we want to
+          // chase a 4-8x speedup with appropriate header config.
+          ortOptions: {
+            backend: 'wasm',
+            wasmPaths: `${pagePath}/vendor/ort/`,
+            numThreads: 1
+          }
+        };
+    const created = await mod.PaddleOCR.create(createOptions);
     // create() resolving means det/rec models loaded — either freshly
     // downloaded (the fetch tracker counted them) or from an earlier session's
     // HTTP cache. Either way the model manager should show "ready".
-    markOcrDownloaded();
+    markOcrDownloaded(profile);
     // Log which backend ORT actually picked. Useful when diagnosing
     // why a particular machine is slow — `backend=wasm` + `webgpu=false`
     // means the GPU path isn't available so the user is on the slow
@@ -127,7 +151,7 @@ async function getOcrInstance(lang: OcrLanguage): Promise<PaddleOcrLike> {
       const summary = (created as { getInitializationSummary?: () => unknown })
         .getInitializationSummary?.();
       if (summary) {
-        console.info('[ocr] PaddleOCR init', summary);
+        console.info('[ocr] PaddleOCR init', { profile, lang, summary });
       }
     } catch {
       // ignore
@@ -142,8 +166,12 @@ async function getOcrInstance(lang: OcrLanguage): Promise<PaddleOcrLike> {
  * image's intrinsic dimensions — Paddle measures the image itself, so
  * the caller doesn't need a separate Image() probe.
  */
-export async function ocrImageBlob(blob: Blob, lang: OcrLanguage): Promise<OcrPageResult> {
-  const ocr = await getOcrInstance(lang);
+export async function ocrImageBlob(
+  blob: Blob,
+  lang: OcrLanguage,
+  profile: OcrModelProfile
+): Promise<OcrPageResult> {
+  const ocr = await getOcrInstance(lang, profile);
   const results = await ocr.predict(blob);
   const r = Array.isArray(results) ? results[0] : results;
   if (!r) {
@@ -170,8 +198,8 @@ export async function ocrImageBlob(blob: Blob, lang: OcrLanguage): Promise<OcrPa
  * latency instead of making them stare at a spinner after hitting "Run".
  * Fire-and-forget — callers never await it.
  */
-export function prewarmOcr(lang: OcrLanguage): void {
-  getOcrInstance(lang)
+export function prewarmOcr(lang: OcrLanguage, profile: OcrModelProfile): void {
+  getOcrInstance(lang, profile)
     .then(() => {
       // Instance cached module-level; nothing to surface.
     })
@@ -190,4 +218,5 @@ export async function disposeOcrWorker() {
   }
   ocrInstancePromise = undefined;
   ocrInstanceLang = '';
+  ocrInstanceProfile = '';
 }

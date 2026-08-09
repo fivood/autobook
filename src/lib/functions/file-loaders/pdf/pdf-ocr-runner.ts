@@ -32,7 +32,12 @@
  */
 
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import { ocrImageBlob, type OcrLanguage, type OcrLineItem } from './pdf-ocr';
+import {
+  ocrImageBlob,
+  type OcrLanguage,
+  type OcrLineItem,
+  type OcrModelProfile
+} from './pdf-ocr';
 
 export interface OcrProgress {
   page: number;
@@ -352,7 +357,8 @@ function pageBlobFromBook(book: BooksDbBookData, pageNum: number): Blob | undefi
 export async function runOcrOnPage(
   book: BooksDbBookData,
   pageNum: number,
-  lang: OcrLanguage
+  lang: OcrLanguage,
+  profile: OcrModelProfile
 ): Promise<{ updated: BooksDbBookData; recognized: string }> {
   const html = book.elementHtml;
   const pages = findPageImages(html);
@@ -366,7 +372,7 @@ export async function runOcrOnPage(
     throw new Error(`OCR 中止：找不到第 ${pageNum} 页的原图数据。`);
   }
 
-  const ocrResult = await ocrImageBlob(blob, lang);
+  const ocrResult = await ocrImageBlob(blob, lang, profile);
   const layer = itemsToTextLayer(ocrResult.items);
   const wrapped = buildPageShell(
     target.imgTag,
@@ -411,6 +417,7 @@ export async function runOcrOnPage(
 export async function runOcr(
   book: BooksDbBookData,
   lang: OcrLanguage,
+  profile: OcrModelProfile,
   onProgress: (p: OcrProgress) => void,
   signal?: AbortSignal
 ): Promise<BooksDbBookData> {
@@ -479,7 +486,7 @@ export async function runOcr(
     let cleanText = '';
     let spans = '';
     try {
-      const result = await ocrImageBlob(blob, lang);
+      const result = await ocrImageBlob(blob, lang, profile);
       pageW = result.imageWidth;
       pageH = result.imageHeight;
       const layer = itemsToTextLayer(result.items);
