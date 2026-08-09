@@ -99,7 +99,10 @@ function getHtmlWithImageSource(
     // Pass 2: single-pass regex over the whole elementHtml. Matches both
     // the dummy data URL (`data:image/gif;ttu:{key};base64,R0lGOD…==`)
     // and the bare `ttu:{key}` markers, replaces via the map. One string
-    // walk instead of `blobs × 2` walks.
+    // walk instead of `blobs × 2` walks. The replace callback's `offset`
+    // argument doubles as the key's position for gallery ordering — records
+    // it in the same single pass instead of a later O(n × htmlLen) indexOf
+    // per URL (quadratic on image-heavy books).
     progress$?.next(progress('blob-register', 32));
     const keys = [...urlByKey.keys()].sort((a, b) => b.length - a.length);
     let elementHtml = bookData.elementHtml;
@@ -112,7 +115,9 @@ function getHtmlWithImageSource(
         `${reEscape(dummyPrefix)}(?:${alt})${reEscape(dummySuffix)}|ttu:(?:${alt})`,
         'g'
       );
-      elementHtml = elementHtml.replace(dummyRe, (match) => {
+      // Since `alt` has no capturing groups, the callback receives
+      // (match, offset, string) — record the original-HTML offset per key.
+      elementHtml = elementHtml.replace(dummyRe, (match, offset: number) => {
         // Extract the key from either branch by trimming known prefixes/suffixes.
         let key: string | undefined;
         if (match.startsWith(dummyPrefix)) {
@@ -121,16 +126,11 @@ function getHtmlWithImageSource(
           key = match.slice(4); // "ttu:".length
         }
         const url = urlByKey.get(key);
+        if (key && url && !urlIndexes.has(url)) {
+          urlIndexes.set(url, offset);
+        }
         return url ?? match;
       });
-    }
-
-    // Populate urlIndexes for gallery ordering. Cheap post-hoc scan.
-    for (const [key, url] of urlByKey) {
-      urlIndexes.set(url, elementHtml.indexOf(url));
-      // Keys with duplicate blob names could collide; treat -1 as end-of-doc
-      // so the gallery order still merges deterministically.
-      void key;
     }
 
     progress$?.next(progress('format-parse', 45));
