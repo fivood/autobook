@@ -55,10 +55,11 @@ if (!prevArg.includes(ARG)) {
 }
 
 const isWin = process.platform === 'win32';
-const child = spawn(isWin ? 'npm.cmd' : 'npm', ['run', 'tauri:dev'], {
-  stdio: 'inherit',
-  env: process.env
-});
+// Windows: npm.cmd is a batch shim — spawning it directly hits EINVAL.
+// Wrap in cmd.exe /d /c so the .cmd resolves and stdio inherits.
+const child = isWin
+  ? spawn('cmd.exe', ['/d', '/c', 'npm.cmd', 'run', 'tauri:dev'], { stdio: 'inherit', env: process.env })
+  : spawn('npm', ['run', 'tauri:dev'], { stdio: 'inherit', env: process.env });
 
 console.log(`[tauri:dev:cdp] after launch, connect Playwright to http://127.0.0.1:${PORT}`);
 console.log(`[tauri:dev:cdp] check: Get-NetTCPConnection -LocalPort ${PORT} -State Listen`);
