@@ -403,7 +403,13 @@
         );
 
         localStorageHandler.startContext({ id, title: '' });
-        bookData = await localStorageHandler.getBook();
+        // Progress the storage-pull stage with the actual bookdata extraction:
+        // big-book zips (hundreds of page blobs) would otherwise sit on
+        // "storage-pull 10%" for tens of seconds looking frozen.
+        bookData = await localStorageHandler.getBook((done, total) => {
+          const pct = 10 + Math.round((done / Math.max(1, total)) * 40);
+          loadProgress$.next({ stage: 'storage-pull', pct, label: STAGE_LABELS['storage-pull'] });
+        });
 
         if (!bookData) {
           return bookData;

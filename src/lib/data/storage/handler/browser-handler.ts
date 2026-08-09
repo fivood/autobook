@@ -296,7 +296,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     );
   }
 
-  async getBook() {
+  async getBook(_onProgress?: (done: number, total: number) => void) {
     const book = this.currentContext.id
       ? await database.getData(this.currentContext.id)
       : await database.getDataByTitle(this.currentContext.title);
