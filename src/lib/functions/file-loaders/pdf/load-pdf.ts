@@ -16,6 +16,7 @@
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
 import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
+import pLimit from 'p-limit';
 
 type PdfjsBundle = {
   pdfjs: typeof import('pdfjs-dist');
@@ -374,18 +375,31 @@ function isGarbageText(text: string): boolean {
   return letterish.length / meaningful.length < 0.3;
 }
 
-export default async function loadPdf(file: File, lastBookModified: number): Promise<LoadData> {
+export default async function loadPdf(
+  file: File,
+  lastBookModified: number,
+  onProgress?: (page: number, total: number) => void,
+  signal?: AbortSignal
+): Promise<LoadData> {
   try {
-    return await loadPdfInner(file, lastBookModified);
+    return await loadPdfInner(file, lastBookModified, onProgress, signal);
   } catch (e: any) {
+    if (signal?.aborted) throw e;
     const msg = e?.message || e?.name || (typeof e === 'string' ? e : JSON.stringify(e));
     throw new Error(`PDF 加载失败: ${msg}`);
   }
 }
 
-async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadData> {
+async function loadPdfInner(
+  file: File,
+  lastBookModified: number,
+  onProgress?: (page: number, total: number) => void,
+  signal?: AbortSignal
+): Promise<LoadData> {
   const { pdfjs: pdfjsLib, cmapUrl, standardFontDataUrl, wasmUrl } = await loadPdfjs();
   const bytes = new Uint8Array(await file.arrayBuffer());
+  // pdfjs-dist's shipped types predate `signal` on DocumentInitParameters,
+  // but the runtime honors it (lets an import abort cancel document parsing).
   const doc = await pdfjsLib.getDocument({
     data: bytes,
     cMapUrl: cmapUrl,
@@ -393,8 +407,9 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
     standardFontDataUrl,
     wasmUrl,
     isOffscreenCanvasSupported: false,
-    useSystemFonts: true
-  }).promise;
+    useSystemFonts: true,
+    signal
+  } as any).promise;
 
   let title = file.name.replace(/\.pdf$/i, '');
   try {
@@ -481,18 +496,31 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
     // PDF has no outline — fine, we'll use "第 N 页"
   }
 
-  // Main pass
+  // Main pass — render pages concurrently (pdf.js getPage + canvas render is
+  // the slow part; a sequential await on a long scanned PDF takes minutes),
+  // then assemble in page order so sections/blobs/character offsets stay
+  // consistent. pLimit(3) bounds the peak memory from concurrent canvases.
   const sections: Section[] = [];
   const htmlParts: string[] = [];
   const blobs: Record<string, Blob> = {};
   let totalChars = 0;
   let hasAnyImage = false;
 
-  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+  interface RenderedPage {
+    pageNum: number;
+    bodyHtml: string;
+    sectionChars: number;
+    hasImage: boolean;
+  }
+
+  async function renderPage(pageNum: number): Promise<RenderedPage> {
+    // Cooperative cancel: a user-initiated import abort rejects the in-flight
+    // pages instead of letting a huge PDF finish rendering.
+    if (signal?.aborted) throw new DOMException('Import aborted', 'AbortError');
     const page = await doc.getPage(pageNum);
-    const id = `pdf-page-${pageNum}`;
     let bodyHtml: string;
     let sectionChars: number;
+    let pageHasImage = false;
 
     if (useTextMode) {
       // Text-overlay mode (1.11 default for books with extractable text):
@@ -505,7 +533,7 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
       const pageW = Math.round(viewport.width);
       const pageH = Math.round(viewport.height);
       const tc = await page.getTextContent();
-      const { spans, totalChars } = buildTextLayer(tc.items as any[], pageH);
+      const { spans, totalChars: pageChars } = buildTextLayer(tc.items as any[], pageH);
 
       let imgBlob = await renderPageToBlob(page, IMAGE_RENDER_WIDTH, 'image/jpeg', 0.82);
       if (!imgBlob) {
@@ -523,15 +551,15 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
           `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img book-page-image" data-pdf-page="${pageNum}" loading="lazy" decoding="async" />` +
           (spans ? `<div class="pdf-text-layer" data-page-w="${pageW}" data-page-h="${pageH}">${spans}</div>` : '') +
           `</div>`;
-        sectionChars = totalChars || 1;
-        hasAnyImage = true;
+        sectionChars = pageChars || 1;
+        pageHasImage = true;
       } else {
         // Image render failed — degrade to plain text paragraphs.
         const paragraphs = itemsToParagraphs(tc.items as any[]);
         bodyHtml = paragraphs.length
           ? paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('\n')
           : '<p>&nbsp;</p>';
-        sectionChars = totalChars;
+        sectionChars = pageChars;
       }
     } else {
       // Scanned / image-only mode: render page to image, no text layer.
@@ -548,13 +576,36 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
         const dummySrc = buildDummyBookImage(blobName);
         bodyHtml = `<img src="${dummySrc}" alt="第 ${pageNum} 页" class="pdf-page-img book-page-image" data-pdf-page="${pageNum}" loading="lazy" decoding="async" style="max-width:100%;height:auto;" />`;
         sectionChars = 1;
-        hasAnyImage = true;
+        pageHasImage = true;
       } else {
         bodyHtml = '<p>&nbsp;</p>';
         sectionChars = 0;
       }
     }
 
+    page.cleanup();
+    return { pageNum, bodyHtml, sectionChars, hasImage: pageHasImage };
+  }
+
+  const limiter = pLimit(3);
+  const pageNumbers = Array.from({ length: doc.numPages }, (_, i) => i + 1);
+  const rendered = await Promise.all(
+    pageNumbers.map((pageNum) =>
+      limiter(async () => {
+        const result = await renderPage(pageNum);
+        // Per-page progress still works with concurrent rendering: every page
+        // reports exactly once as it completes, so the 1/total increments
+        // sum correctly regardless of completion order.
+        onProgress?.(pageNum, doc.numPages);
+        return result;
+      })
+    )
+  );
+
+  for (const { pageNum, bodyHtml, sectionChars, hasImage } of rendered.sort(
+    (a, b) => a.pageNum - b.pageNum
+  )) {
+    const id = `pdf-page-${pageNum}`;
     htmlParts.push(
       `<div id="${id}" class="pdf-section"><h3 class="pdf-page-label">${pageNum}</h3>${bodyHtml}</div>`
     );
@@ -567,8 +618,7 @@ async function loadPdfInner(file: File, lastBookModified: number): Promise<LoadD
       characters: sectionChars
     });
     totalChars += sectionChars;
-
-    page.cleanup();
+    hasAnyImage = hasAnyImage || hasImage;
   }
 
   await doc.cleanup();

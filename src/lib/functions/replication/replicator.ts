@@ -92,7 +92,15 @@ export async function importData(
           } else if (/\.(mobi|azw3?)$/i.test(file.name)) {
             bookContent = await loadMobi(file, lastBookModified);
           } else if (/\.pdf$/i.test(file.name)) {
-            bookContent = await loadPdf(file, lastBookModified);
+            bookContent = await loadPdf(file, lastBookModified, (page, total) => {
+              // Surface per-page progress so a long scanned-PDF import shows a
+              // moving bar + live ETA instead of sitting on "load" with
+              // `~ ??:??:??`. The load step's budget is 1 progress unit; each
+              // page adds its slice, and completeStep() ceil-corrects at the end.
+              if (page < total) {
+                BaseStorageHandler.reportProgress(1 / total);
+              }
+            }, cancelSignal);
           } else if (/\.cbz$/i.test(file.name)) {
             bookContent = await loadCbz(file, lastBookModified);
           } else if (/\.(cbr|cb7|cbt)$/i.test(file.name)) {
@@ -102,7 +110,11 @@ export async function importData(
           } else {
             const sniffed = await sniffFormat(file);
             if (sniffed === 'pdf') {
-              bookContent = await loadPdf(file, lastBookModified);
+              bookContent = await loadPdf(file, lastBookModified, (page, total) => {
+                if (page < total) {
+                  BaseStorageHandler.reportProgress(1 / total);
+                }
+              }, cancelSignal);
             } else if (sniffed === 'mobi') {
               bookContent = await loadMobi(file, lastBookModified);
             } else if (sniffed === 'zip') {
