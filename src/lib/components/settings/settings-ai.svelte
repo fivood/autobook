@@ -23,6 +23,9 @@
     aiLocalModel$,
     aiModel$,
     aiProvider$,
+    qwenMtApiKey$,
+    qwenMtBaseUrl$,
+    qwenMtModel$,
     translateBatchSegments$,
     translateChunkChars$,
     translateDraftSource$,
@@ -242,4 +245,21 @@
       <input type="number" class={inputClasses} min="500" max="60000" step="500" bind:value={$translateMaxSourceChars$} />
     </label>
   </div>
+
+  <!-- ── Qwen-MT draft provider ────────────────────────────────────── -->
+  <h4 class="mb-1 mt-5 font-medium">{$t('settings.ai.qwenMtHeading')}</h4>
+  <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ai.qwenMtDescription')}</p>
+
+  <label class="mb-3 block">
+    <span class="text-xs opacity-70">{$t('settings.ai.qwenMtBaseUrl')}</span>
+    <input type="text" class={inputClasses} bind:value={$qwenMtBaseUrl$} spellcheck="false" placeholder="https://…/compatible-mode/v1" />
+  </label>
+  <label class="mb-3 block">
+    <span class="text-xs opacity-70">{$t('settings.ai.qwenMtApiKey')}</span>
+    <input type="password" class={inputClasses} bind:value={$qwenMtApiKey$} spellcheck="false" />
+  </label>
+  <label class="mb-3 block">
+    <span class="text-xs opacity-70">{$t('settings.ai.qwenMtModel')}</span>
+    <input type="text" class={inputClasses} bind:value={$qwenMtModel$} spellcheck="false" />
+  </label>
 </div>

@@ -52,6 +52,10 @@
   let reuseWorldGlossary = true;
   let saveToWorldGlossary = true;
   let selectedModel = translateLocalModel$.getValue() || '';
+  // Review pass uses its own local model — the draft defaults to a
+  // translation-specialized model (Hy-MT2), review should stay on a general
+  // chat model. Kept independent so picking one doesn't force the other.
+  let reviewLocalModel = '';
   let modelSelectionTouched = false;
   let targetLanguage = translateTargetLang$.getValue() || 'zh-CN';
   let translations = new Map<string, string>();
@@ -148,7 +152,7 @@
   // Draft pass: ready when the generic cloud LLM or the translation-specialized
   // Qwen-MT draft provider is configured.
   $: draftReady = draftIsCloud ? (cloudReady || qwenMtDraftReady()) : !!selectedModel;
-  $: precisionReady = reviewIsCloud ? cloudReady : !!selectedModel;
+  $: precisionReady = reviewIsCloud ? cloudReady : !!(reviewLocalModel || selectedModel);
 
   $: completedSegmentCount = translations.size;
   $: totalSegmentCount = translationDocument?.segments.length || 0;
@@ -805,7 +809,7 @@
   }
 
   function reviewModel() {
-    return reviewIsCloud ? cloudModel : selectedModel;
+    return reviewIsCloud ? cloudModel : (reviewLocalModel || selectedModel);
   }
 
   async function checkReviewProvider() {
@@ -815,7 +819,7 @@
       precisionMessage = tImmediate('translate.precision.needsSettings');
       return;
     }
-    if (!isCloud && !selectedModel) {
+    if (!isCloud && !(reviewLocalModel || selectedModel)) {
       precisionMessage = tImmediate('translate.precision.needsSettings');
       return;
     }
@@ -1319,7 +1323,7 @@
                 </button>
               {/if}
             </span>
-            <select class={inputClasses} bind:value={selectedModel} on:change={() => (modelSelectionTouched = true)}>{#each models as model}<option value={model.id}>{model.id}</option>{/each}</select>
+            <select class={inputClasses} bind:value={reviewLocalModel}>{#each models as model}<option value={model.id}>{model.id}</option>{/each}</select>
           </div>
         {/if}
       </div>
