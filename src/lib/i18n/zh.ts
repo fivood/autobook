@@ -332,6 +332,8 @@ export default {
   'models.confirmUninstall': '确定卸载「{name}」？下次使用会重新下载。',
   'models.ocrPaddle': 'PaddleOCR（OCR 识别）',
   'models.ocrPaddlePurpose': '扫描 PDF 与漫画的文字识别（det+rec 两个模型，首次使用下载）',
+  'models.ocrPaddleKorean': 'PaddleOCR 韩文（Korean PP-OCRv5）',
+  'models.ocrPaddleKoreanPurpose': '韩文漫画/扫描件的专用识别模型（korean rec，首次韩文 OCR 时下载）',
   'models.ttsKokoro': 'Kokoro-82M（离线朗读）',
   'models.ttsKokoroPurpose': '本地 TTS 朗读，中文/英文音色，首次使用下载',
   'models.llmOllama': 'Ollama（本地翻译 / AI）',

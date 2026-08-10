@@ -47,6 +47,16 @@ export const MODELS: ModelEntry[] = [
     uninstall: async () => clearOcrDownloadedFlag()
   },
   {
+    id: 'ocr-paddle-korean',
+    kind: 'ocr',
+    nameKey: 'models.ocrPaddleKorean',
+    purposeKey: 'models.ocrPaddleKoreanPurpose',
+    location: '浏览器 HTTP 缓存（不可直接访问，见指引）',
+    size: '~16 MB（korean rec）',
+    ready: async () => isOcrDownloaded('v5-korean'),
+    uninstall: async () => clearOcrDownloadedFlag('v5-korean')
+  },
+  {
     id: 'tts-kokoro',
     kind: 'tts',
     nameKey: 'models.ttsKokoro',
@@ -132,8 +142,12 @@ export function isOcrDownloaded(profile: string = 'v6-small'): boolean {
   }
 }
 
-function clearOcrDownloadedFlag(): boolean {
+function clearOcrDownloadedFlag(profile?: string): boolean {
   try {
+    if (profile) {
+      localStorage.removeItem(`${OCR_DOWNLOADED_KEY_PREFIX}${profile}`);
+      return true;
+    }
     localStorage.removeItem(LEGACY_OCR_DOWNLOADED_KEY);
     localStorage.removeItem(`${OCR_DOWNLOADED_KEY_PREFIX}v5-mobile`);
     localStorage.removeItem(`${OCR_DOWNLOADED_KEY_PREFIX}v6-small`);

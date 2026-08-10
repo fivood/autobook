@@ -249,6 +249,8 @@ export default {
   'models.confirmUninstall': 'Uninstall "{name}"? It will re-download on next use.',
   'models.ocrPaddle': 'PaddleOCR (OCR)',
   'models.ocrPaddlePurpose': 'Text recognition for scanned PDFs and comics (det+rec; downloaded on first use)',
+  'models.ocrPaddleKorean': 'PaddleOCR Korean (Korean PP-OCRv5)',
+  'models.ocrPaddleKoreanPurpose': 'Dedicated recognition model for Korean comics/scans (korean rec; downloaded on first Korean OCR)',
   'models.ttsKokoro': 'Kokoro-82M (offline TTS)',
   'models.ttsKokoroPurpose': 'Local read-aloud voices, Chinese/English, downloaded on first use',
   'models.llmOllama': 'Ollama (local translation / AI)',
