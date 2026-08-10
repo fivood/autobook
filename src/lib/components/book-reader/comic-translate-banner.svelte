@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
-  import { faArrowRightArrowLeft, faTimes } from '@fortawesome/free-solid-svg-icons';
+  import { faScroll, faTimes } from '@fortawesome/free-solid-svg-icons';
   import { writableSubject } from '$lib/functions/svelte/store';
   import { t } from '$lib/i18n';
 
@@ -47,7 +47,7 @@
 
 {#if !dismissed}
   <div class="banner">
-    <Fa icon={faArrowRightArrowLeft} class="ico" />
+    <Fa icon={faScroll} class="ico" />
     <div class="text">
       <div class="title">{$t('comicTranslateBanner.title')}</div>
       <div class="meta">{$t('comicTranslateBanner.meta', { title: bookTitle })}</div>

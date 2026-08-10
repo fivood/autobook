@@ -11,7 +11,6 @@
 // `$t()` at render time — untranslated identity is preserved on the
 // wire, only the visible strings switch locale.
 import {
-  faArrowRightArrowLeft,
   faBug,
   faChartLine,
   faClockRotateLeft,
@@ -23,6 +22,7 @@ import {
   faHashtag,
   faImages,
   faLightbulb,
+  faScroll,
   faSignOutAlt,
   faTriangleExclamation
 } from '@fortawesome/free-solid-svg-icons';
@@ -65,8 +65,9 @@ export const mergeEntries = {
     label: '翻译',
     labelKey: 'menu.translate.label',
     // Not faLanguage — that's the locale picker's icon (switching the app
-    // language). A bidirectional arrow reads as "convert this text" instead.
-    icon: faArrowRightArrowLeft,
+    // language). A scroll reads as "the translation workbench handles a
+    // document" more clearly than the old bidirectional arrow.
+    icon: faScroll,
     title: '打开翻译工作台',
     titleKey: 'menu.translate.title'
   },
