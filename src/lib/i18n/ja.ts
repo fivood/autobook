@@ -254,6 +254,8 @@ export default {
   'models.confirmUninstall': '「{name}」をアンインストールしますか？次回使用時に再ダウンロードされます。',
   'models.ocrPaddle': 'PaddleOCR（OCR 認識）',
   'models.ocrPaddlePurpose': 'スキャン PDF と漫画の文字認識（det+rec、初回使用時にダウンロード）',
+  'models.ocrPaddleKorean': 'PaddleOCR 韓国語（Korean PP-OCRv5）',
+  'models.ocrPaddleKoreanPurpose': '韓国語漫画・スキャン用の専用認識モデル（korean rec、初回韓国語 OCR 時にダウンロード）',
   'models.ttsKokoro': 'Kokoro-82M（オフライン読み上げ）',
   'models.ttsKokoroPurpose': 'ローカル読み上げ、中国語/英語音声、初回使用時にダウンロード',
   'models.llmOllama': 'Ollama（ローカル翻訳 / AI）',

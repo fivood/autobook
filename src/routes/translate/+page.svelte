@@ -340,6 +340,14 @@
     loading = true;
     errorMessage = '';
     statusMessage = tImmediate('translate.comic.extracting');
+    // Clear any previous document/job state so a comic import doesn't leave
+    // the last text book's title/language/segment counts on screen.
+    translationDocument = undefined;
+    documentAdapter = undefined;
+    applyJob(undefined);
+    translations = new Map();
+    glossaryCandidates = [];
+    glossaryTargets = {};
     try {
       const { title, pageBlobs } = await extractComicPages(file);
       activeFileName = file.name;
