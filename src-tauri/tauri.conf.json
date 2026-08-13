@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "AutoBook",
-  "version": "1.28.4",
+  "version": "1.28.5",
   "identifier": "io.github.fukki.ebookreader",
   "build": {
     "frontendDist": "../build",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "AutoBook v1.28.4",
+        "title": "AutoBook v1.28.5",
         "width": 1280,
         "height": 860,
         "resizable": true,
@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob: data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' https: http:;"
     }
   },
   "bundle": {

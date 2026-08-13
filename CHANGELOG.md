@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.28.5
+
+安全加固：CSP + 书内容清洗。
+
+- **启用 CSP**：原来 `security.csp` 为 `null`，完全无内容安全策略。现在设置 `default-src 'self'` + `script/style-src 'unsafe-inline'`（Svelte 组件内联样式与 hydration 内联脚本所需）+ `img/font/media-src blob: data:`（书图像/TTS 音频/用户字体）+ `worker-src blob:`（pdfjs/libarchive worker）+ `connect-src https: http:`（AI/翻译/同步/更新/OCR 模型下载 + 用户自定义端点）。能挡住 `file://`/`ftp://` 资源、`javascript:` 执行与 frame 嵌入
+- **书内容清洗（sanitize）**：epub/html 书内容经 `{@html}` 未清洗直接渲染，恶意书可携带 `<img onerror=…>`、`javascript:` 链接、`<meta http-equiv="refresh">` 等——这些 inline 事件和 `javascript:` URL 连 CSP 都挡不住。打开书时新增 sanitize 步骤：移除 `script/iframe/object/embed/meta/form/link` 等危险标签、剥掉所有 `on*` 事件属性、清除 `javascript:`/`vbscript:`/`data:text/html` URL、去掉内联 style 里的 `url(javascript:)`/`expression()` 与 `<style>` 里的 `@import`；保留 ruby/svg/表格/内联样式等正常排版
+
 ## 1.28.4
 
 补完剩余硬编码文案、主题色与无障碍清理。
