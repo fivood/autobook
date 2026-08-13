@@ -47,7 +47,7 @@
     showExternalPlaceholder$,
     statisticsMergeMode$
   } from '$lib/data/store';
-  import { t } from '$lib/i18n';
+  import { t, tImmediate } from '$lib/i18n';
   import { detectBookFormat } from '$lib/functions/book-format';
   import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
   import { cloneMutateSet } from '$lib/functions/clone-mutate-set';
@@ -403,7 +403,7 @@
 
         dialogManager.dialogs$.next([]);
       } catch (error: any) {
-        const message = `Error opening book: ${error.message}`;
+        const message = tImmediate('errors.openBook', { detail: error.message });
 
         logger.warn(message);
 

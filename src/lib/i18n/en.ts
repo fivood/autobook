@@ -75,6 +75,23 @@ export default {
   'bookCard.doneTooltip': 'Finished',
   'bookCard.unread': 'Unread',
   'bookCard.unreadTooltip': 'Never opened',
+  'bookCard.noData': 'No data',
+  'bookCard.never': 'Never',
+  'bookCard.justNow': 'Just now',
+  'bookCard.minutesAgo': '{n} min ago',
+  'bookCard.hoursAgo': '{n} h ago',
+  'bookCard.daysAgo': '{n} d ago',
+  'bookCard.monthsAgo': '{n} mo ago',
+  'bookCard.yearsAgo': '{n} y ago',
+  'bookCard.chars': '{n} chars',
+  'bookCard.wanChars': '{n}万 chars',
+  'bookCard.wordCount': 'Characters',
+  'bookCard.lastRead': 'Last read',
+  'bookCard.bookmarkTime': 'Bookmark',
+  'bookCard.lastModified': 'Updated',
+  'bookCard.format': 'Format',
+  'bookCard.progress': 'Progress',
+  'bookCard.remaining': '{n} left',
 
   'readerFooter.copyProgress': 'Click to copy progress',
   'readerFooter.statsMenu': 'Click to open stats menu · double-click to toggle tracking',
@@ -108,6 +125,7 @@ export default {
   'shortcuts.action.toggleTracking': 'Tracking on / off',
   'shortcuts.action.toggleTrackingFreeze': 'Tracking pause / resume',
 
+  'dialog.beforeUnload': 'Are you sure you want to leave?',
   'dialog.cancel': 'Cancel',
   'dialog.close': 'Close',
   'dialog.confirm': 'OK',
@@ -131,6 +149,12 @@ export default {
   'dialog.completeBook.bodyWithChars': 'Mark this book as finished? (and count {chars} chars)',
   'dialog.confirmExit.header': 'Confirm exit',
   'dialog.confirmExit.body': 'The current position isn\'t bookmarked. Leave anyway?',
+
+  // User-facing error dialogs
+  'errors.loadBook': 'Failed to load book: {detail}',
+  'errors.completeBook': 'Failed to finish book: {detail}',
+  'errors.openBook': 'Failed to open book: {detail}',
+  'errors.updateLastRead': 'Failed to update reading progress on external storage: {detail}',
 
   'highlight.color.yellow': 'Yellow',
   'highlight.color.blue': 'Blue',
@@ -551,6 +575,13 @@ export default {
   'pageTitle.manage': 'Library',
   'pageTitle.settings': 'Settings',
   'pageTitle.changelog': 'Changelog',
+
+  // Changelog page chrome (the CHANGELOG.md body itself stays source-language)
+  'changelog.count': '{count} versions',
+  'changelog.empty': 'CHANGELOG is empty',
+  'changelog.notes': 'Heads up',
+  'changelog.resetting': 'Resetting…',
+  'changelog.resetNow': 'Reset UI and restart now',
 
   'settings.item.fontGroup1': 'Font (group 1)',
   'settings.item.fontGroup2': 'Font (group 2)',

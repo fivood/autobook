@@ -80,6 +80,23 @@ export default {
   'bookCard.doneTooltip': '読み終えた',
   'bookCard.unread': '未読',
   'bookCard.unreadTooltip': '未読',
+  'bookCard.noData': 'データなし',
+  'bookCard.never': '未読',
+  'bookCard.justNow': 'たった今',
+  'bookCard.minutesAgo': '{n} 分前',
+  'bookCard.hoursAgo': '{n} 時間前',
+  'bookCard.daysAgo': '{n} 日前',
+  'bookCard.monthsAgo': '{n} か月前',
+  'bookCard.yearsAgo': '{n} 年前',
+  'bookCard.chars': '{n} 字',
+  'bookCard.wanChars': '{n} 万字',
+  'bookCard.wordCount': '文字数',
+  'bookCard.lastRead': '最終読了',
+  'bookCard.bookmarkTime': 'しおり',
+  'bookCard.lastModified': '更新日',
+  'bookCard.format': '形式',
+  'bookCard.progress': '進捗',
+  'bookCard.remaining': '残り {n}',
 
   'readerFooter.copyProgress': 'クリックで進捗をコピー',
   'readerFooter.statsMenu': 'クリックで統計メニュー、ダブルクリックで記録のオンオフ',
@@ -113,6 +130,7 @@ export default {
   'shortcuts.action.toggleTracking': '統計オンオフ',
   'shortcuts.action.toggleTrackingFreeze': '統計を一時停止 / 再開',
 
+  'dialog.beforeUnload': '本当に終了しますか？',
   'dialog.cancel': 'キャンセル',
   'dialog.close': '閉じる',
   'dialog.confirm': 'OK',
@@ -136,6 +154,12 @@ export default {
   'dialog.completeBook.bodyWithChars': 'この本を読了にしますか？（残り {chars} 字を統計に加算）',
   'dialog.confirmExit.header': '終了確認',
   'dialog.confirmExit.body': '現在位置にしおりがありません。このまま離れますか？',
+
+  // User-facing error dialogs
+  'errors.loadBook': '書籍の読み込みに失敗しました：{detail}',
+  'errors.completeBook': '書籍の読了処理に失敗しました：{detail}',
+  'errors.openBook': '書籍を開けませんでした：{detail}',
+  'errors.updateLastRead': '外部ストレージの進捗更新に失敗しました：{detail}',
 
   'highlight.color.yellow': '黄',
   'highlight.color.blue': '青',
@@ -556,6 +580,13 @@ export default {
   'pageTitle.manage': 'ライブラリ',
   'pageTitle.settings': '設定',
   'pageTitle.changelog': '更新履歴',
+
+  // Changelog page chrome (the CHANGELOG.md body itself stays source-language)
+  'changelog.count': '全 {count} バージョン',
+  'changelog.empty': 'CHANGELOG が空です',
+  'changelog.notes': '注意事項',
+  'changelog.resetting': 'リセット中…',
+  'changelog.resetNow': 'UI をリセットして今すぐ再起動',
 
   'settings.item.fontGroup1': 'フォント（グループ 1）',
   'settings.item.fontGroup2': 'フォント（グループ 2）',

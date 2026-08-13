@@ -43,11 +43,21 @@ pub async fn convert_with_calibre(bytes: Vec<u8>, filename: String) -> Result<Ve
     let converter = find_calibre_convert()
         .ok_or_else(|| "未检测到 Calibre，请安装 Calibre 或使用内置解析器".to_string())?;
 
+    // `filename` originates from the frontend import flow but is joined into a
+    // temp dir below — take only the basename so a value like `..\..\evil` or
+    // an absolute path can't escape `autobook_convert`.
+    let safe_name = std::path::Path::new(&filename)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty() && *n != "." && *n != "..")
+        .ok_or_else(|| "文件名无效".to_string())?
+        .to_string();
+
     let tmp_dir = std::env::temp_dir().join("autobook_convert");
     std::fs::create_dir_all(&tmp_dir).map_err(|e| format!("创建临时目录失败: {e}"))?;
 
-    let input_path = tmp_dir.join(&filename);
-    let epub_name = PathBuf::from(&filename).with_extension("epub");
+    let input_path = tmp_dir.join(&safe_name);
+    let epub_name = PathBuf::from(&safe_name).with_extension("epub");
     let output_path = tmp_dir.join(&epub_name);
 
     if output_path.exists() {

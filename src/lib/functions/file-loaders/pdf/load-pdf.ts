@@ -334,8 +334,13 @@ async function extractPageImage(page: any): Promise<Blob | undefined> {
     if (!bestObjId) return undefined;
 
     const imgData: any = await new Promise((resolve, reject) => {
-      page.objs.get(bestObjId!, resolve);
-      setTimeout(() => reject(new Error('timeout')), 5000);
+      const timer = setTimeout(() => reject(new Error('timeout')), 5000);
+      page.objs.get(bestObjId!, (data: any) => {
+        // Clear the guard so a slow-but-successful get (>5s) isn't converted
+        // into a spurious rejection, and the timer doesn't leak per page.
+        clearTimeout(timer);
+        resolve(data);
+      });
     });
 
     if (!imgData) return undefined;

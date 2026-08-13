@@ -80,8 +80,8 @@
 
 <div class="flex h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">
   <header class="flex flex-shrink-0 items-center gap-4 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
-    <h1 class="text-xl font-medium">更新历史</h1>
-    <span class="text-sm opacity-50">共 {sections.length} 个版本</span>
+    <h1 class="text-xl font-medium">{$t('pageTitle.changelog')}</h1>
+    <span class="text-sm opacity-50">{$t('changelog.count', { count: sections.length })}</span>
     <div class="flex-1" />
     <MergedHeaderIcon leavePageLink={prevPage} />
   </header>
@@ -106,14 +106,14 @@
 
     <main bind:this={mainEl} class="w-full max-w-3xl flex-1 overflow-y-auto px-6 py-6">
       {#if !sections.length}
-        <p class="py-12 text-center opacity-50">CHANGELOG 为空</p>
+        <p class="py-12 text-center opacity-50">{$t('changelog.empty')}</p>
       {:else}
         {@const current = sections[activeIdx]}
         <h2 class="mb-4 text-2xl font-medium">v{current.version}</h2>
         {#if current.callouts.length}
           <div class="mb-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
             <div class="mb-2 flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
-              <Fa icon={faTriangleExclamation} /> 注意事项
+              <Fa icon={faTriangleExclamation} /> {$t('changelog.notes')}
             </div>
             <ul class="space-y-1">
               {#each current.callouts as c (c)}
@@ -126,7 +126,7 @@
                 class="mt-3 flex items-center gap-2 rounded border border-amber-500/60 px-3 py-1.5 text-sm font-medium hover:bg-amber-500/20 disabled:opacity-50"
                 disabled={resetting}
                 on:click={performReset}
-              ><Fa icon={faRotateLeft} size="xs" /> {resetting ? '正在重置…' : '立即重置 UI 并重启'}</button>
+              ><Fa icon={faRotateLeft} size="xs" /> {resetting ? $t('changelog.resetting') : $t('changelog.resetNow')}</button>
             {/if}
           </div>
         {/if}

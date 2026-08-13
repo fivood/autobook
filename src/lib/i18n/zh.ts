@@ -147,6 +147,23 @@ export default {
   'bookCard.doneTooltip': '已读完',
   'bookCard.unread': '未读',
   'bookCard.unreadTooltip': '未读过',
+  'bookCard.noData': '无数据',
+  'bookCard.never': '从未',
+  'bookCard.justNow': '刚才',
+  'bookCard.minutesAgo': '{n} 分钟前',
+  'bookCard.hoursAgo': '{n} 小时前',
+  'bookCard.daysAgo': '{n} 天前',
+  'bookCard.monthsAgo': '{n} 个月前',
+  'bookCard.yearsAgo': '{n} 年前',
+  'bookCard.chars': '{n} 字',
+  'bookCard.wanChars': '{n} 万字',
+  'bookCard.wordCount': '字数',
+  'bookCard.lastRead': '上次阅读',
+  'bookCard.bookmarkTime': '书签时间',
+  'bookCard.lastModified': '最后更新',
+  'bookCard.format': '格式',
+  'bookCard.progress': '进度',
+  'bookCard.remaining': '剩 {n}',
 
   // Reader footer / progress strip
   'readerFooter.copyProgress': '点击复制进度',
@@ -184,6 +201,7 @@ export default {
   'shortcuts.action.toggleTrackingFreeze': '统计暂停 / 继续',
 
   // Reader dialogs
+  'dialog.beforeUnload': '确定要退出吗？',
   'dialog.cancel': '取消',
   'dialog.close': '关闭',
   'dialog.confirm': '确认',
@@ -207,6 +225,12 @@ export default {
   'dialog.completeBook.bodyWithChars': '确认完成本书？（计入 {chars} 字）',
   'dialog.confirmExit.header': '确认退出',
   'dialog.confirmExit.body': '当前位置未添加书签。继续离开吗？',
+
+  // User-facing error dialogs
+  'errors.loadBook': '加载书籍失败：{detail}',
+  'errors.completeBook': '完成书籍失败：{detail}',
+  'errors.openBook': '打开书籍失败：{detail}',
+  'errors.updateLastRead': '更新外部存储的阅读进度失败：{detail}',
 
   // Highlight context menu
   'highlight.color.yellow': '黄',
@@ -583,6 +607,13 @@ export default {
   'pageTitle.manage': '书库',
   'pageTitle.settings': '设置',
   'pageTitle.changelog': '更新历史',
+
+  // Changelog page chrome (the CHANGELOG.md body itself stays source-language)
+  'changelog.count': '共 {count} 个版本',
+  'changelog.empty': 'CHANGELOG 为空',
+  'changelog.notes': '注意事项',
+  'changelog.resetting': '正在重置…',
+  'changelog.resetNow': '立即重置 UI 并重启',
 
   // Settings item titles (SettingsItemGroup title="…"). Reused across
   // the vertical / horizontal duplicated blocks in settings-content.

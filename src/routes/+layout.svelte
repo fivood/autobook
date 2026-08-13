@@ -188,8 +188,11 @@
     try {
       const update = await checkForUpdate();
       if (update) {
+        // Backdrop/Escape close is disabled — a mid-download dismissal would
+        // leave the download running invisibly. The dialog's own "later" /
+        // "close" button is the only way out (guarded by phase in the dialog).
         dialogManager.dialogs$.next([
-          { component: UpdateDialog, props: { update } }
+          { component: UpdateDialog, props: { update }, disableCloseOnClick: true }
         ]);
       }
     } catch (err) {
@@ -222,7 +225,10 @@
 <OcrMiniStatus />
 
 {#if dialogs.length > 0}
-  <div class="writing-horizontal-tb fixed inset-0 z-50 h-full w-full" style:z-index={zIndex}>
+  <!-- Modal dialogs sit above every transient overlay (TOC/highlight drawers
+       z-60, dict popup z-80, notebook/editor modals z-90/95, toast z-100) so a
+       confirm never renders behind an open drawer. -->
+  <div class="writing-horizontal-tb fixed inset-0 z-[200] h-full w-full" style:z-index={zIndex}>
     <div
       aria-hidden="true"
       class="tap-highlight-transparent absolute inset-0 bg-black/[.32]"

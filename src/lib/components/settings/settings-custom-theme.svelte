@@ -299,7 +299,7 @@
   </div>
   <div class="mt-2 flex grow justify-between" slot="footer">
     <button
-      class="m-1 rounded-md border-2 border-gray-400 bg-white p-2 text-lg text-black transition-colors"
+      class="m-1 rounded-md border-2 border-current/20 p-2 text-lg transition-colors hover-soft"
       on:click={() => dispatch('close')}
     >
       取消

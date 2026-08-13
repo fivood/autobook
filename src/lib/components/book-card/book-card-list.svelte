@@ -5,6 +5,7 @@
   import Popover from '$lib/components/popover/popover.svelte';
   import { bookCoverMinWidth$ } from '$lib/data/store';
   import { activateOnKeyup } from '$lib/functions/utils';
+  import { t, tImmediate } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -95,30 +96,30 @@
   }
 
   function getCardDateInfo(dateTime: number) {
-    return dateTime ? new Date(dateTime).toLocaleString() : '无数据';
+    return dateTime ? new Date(dateTime).toLocaleString() : tImmediate('bookCard.noData');
   }
 
   function relativeTime(ms: number): string {
-    if (!ms) return '从未';
+    if (!ms) return tImmediate('bookCard.never');
     const diff = Date.now() - ms;
-    if (diff < 0) return '刚才';
+    if (diff < 0) return tImmediate('bookCard.justNow');
     const s = Math.floor(diff / 1000);
-    if (s < 60) return '刚才';
+    if (s < 60) return tImmediate('bookCard.justNow');
     const m = Math.floor(s / 60);
-    if (m < 60) return `${m} 分钟前`;
+    if (m < 60) return tImmediate('bookCard.minutesAgo', { n: m });
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h} 小时前`;
+    if (h < 24) return tImmediate('bookCard.hoursAgo', { n: h });
     const d = Math.floor(h / 24);
-    if (d < 30) return `${d} 天前`;
+    if (d < 30) return tImmediate('bookCard.daysAgo', { n: d });
     const mo = Math.floor(d / 30);
-    if (mo < 12) return `${mo} 个月前`;
-    return `${Math.floor(mo / 12)} 年前`;
+    if (mo < 12) return tImmediate('bookCard.monthsAgo', { n: mo });
+    return tImmediate('bookCard.yearsAgo', { n: Math.floor(mo / 12) });
   }
 
   function formatChars(n: number): string {
     if (!n) return '—';
-    if (n < 10_000) return `${n.toLocaleString()} 字`;
-    return `${(n / 10_000).toFixed(1)} 万字`;
+    if (n < 10_000) return tImmediate('bookCard.chars', { n: n.toLocaleString() });
+    return tImmediate('bookCard.wanChars', { n: (n / 10_000).toFixed(1) });
   }
 </script>
 
@@ -163,13 +164,13 @@
               icon={faCircleInfo}
             />
             <div class="p-4" slot="content">
-              <div>字数:</div>
-              <div class="w-40">{bookCard.characters || '无数据'}</div>
-              <div class="mt-4">上次阅读:</div>
+              <div>{$t('bookCard.wordCount')}:</div>
+              <div class="w-40">{bookCard.characters || $t('bookCard.noData')}</div>
+              <div class="mt-4">{$t('bookCard.lastRead')}:</div>
               <div class="w-40">{getCardDateInfo(bookCard.lastBookOpen)}</div>
-              <div class="mt-4">书签时间:</div>
+              <div class="mt-4">{$t('bookCard.bookmarkTime')}:</div>
               <div class="w-40">{getCardDateInfo(bookCard.lastBookmarkModified)}</div>
-              <div class="mt-4">最后更新:</div>
+              <div class="mt-4">{$t('bookCard.lastModified')}:</div>
               <div class="w-40">{getCardDateInfo(bookCard.lastBookModified)}</div>
             </div>
           </Popover>
@@ -204,18 +205,18 @@
     <div class="detail-title" title={detailCard.title}>{detailCard.title}</div>
     <div class="detail-grid">
       {#if detailFormat}
-        <span>格式</span><span>{detailFormat}</span>
+        <span>{$t('bookCard.format')}</span><span>{detailFormat}</span>
       {/if}
-      <span>字数</span><span>{formatChars(detailCard.characters)}</span>
-      <span>进度</span><span>
+      <span>{$t('bookCard.wordCount')}</span><span>{formatChars(detailCard.characters)}</span>
+      <span>{$t('bookCard.progress')}</span><span>
         {Math.round((detailCard.progress || 0) * 100)}%
         {#if detailCard.characters && detailCard.progress}
-          <span class="opacity-60">· 剩 {formatChars(detailCard.characters - Math.round(detailCard.characters * detailCard.progress))}</span>
+          <span class="opacity-60">· {$t('bookCard.remaining', { n: formatChars(detailCard.characters - Math.round(detailCard.characters * detailCard.progress)) })}</span>
         {/if}
       </span>
-      <span>上次阅读</span><span title={getCardDateInfo(detailCard.lastBookOpen)}>{relativeTime(detailCard.lastBookOpen)}</span>
-      <span>书签时间</span><span title={getCardDateInfo(detailCard.lastBookmarkModified)}>{relativeTime(detailCard.lastBookmarkModified)}</span>
-      <span>最后更新</span><span title={getCardDateInfo(detailCard.lastBookModified)}>{relativeTime(detailCard.lastBookModified)}</span>
+      <span>{$t('bookCard.lastRead')}</span><span title={getCardDateInfo(detailCard.lastBookOpen)}>{relativeTime(detailCard.lastBookOpen)}</span>
+      <span>{$t('bookCard.bookmarkTime')}</span><span title={getCardDateInfo(detailCard.lastBookmarkModified)}>{relativeTime(detailCard.lastBookmarkModified)}</span>
+      <span>{$t('bookCard.lastModified')}</span><span title={getCardDateInfo(detailCard.lastBookModified)}>{relativeTime(detailCard.lastBookModified)}</span>
     </div>
   </div>
 {/if}

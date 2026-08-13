@@ -485,7 +485,7 @@
           document.documentElement.lang = bookData.language;
         }
       } catch (error: any) {
-        const message = `Error loading book: ${error.message}`;
+        const message = tImmediate('errors.loadBook', { detail: error.message });
 
         logger.warn(message);
 
@@ -1194,7 +1194,7 @@
         (upSyncEnabled && dataToReplicateQueue.length))
     ) {
       event.preventDefault();
-      return (event.returnValue = '确定要退出吗？');
+      return (event.returnValue = tImmediate('dialog.beforeUnload'));
     }
 
     return event;
@@ -1425,13 +1425,13 @@
       }
     } catch ({ message }: any) {
       dialogManager.dialogs$.next([
-        {
-          component: MessageDialog,
-          props: {
-            title: '错误',
-            message: `Error completing Book: ${message}`
+          {
+            component: MessageDialog,
+            props: {
+              title: '错误',
+              message: tImmediate('errors.completeBook', { detail: message })
+            }
           }
-        }
       ]);
     }
   }
@@ -1597,7 +1597,7 @@
     const dataToReturn = { id, ...bookData };
 
     await storageHandler.updateLastRead(dataToReturn).catch((error: any) => {
-      const message = `Failed to update last read on external storage: ${error.message}`;
+      const message = tImmediate('errors.updateLastRead', { detail: error.message });
 
       logger.warn(message);
 
