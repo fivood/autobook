@@ -137,19 +137,19 @@
 
 {#if summary}
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 my-4">
-    <div class="rounded border border-gray-500/30 p-3">
+    <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.summary.readDays')}</div>
       <div class="text-xl font-medium tabular-nums">{summary.activeDays}</div>
     </div>
-    <div class="rounded border border-gray-500/30 p-3">
+    <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.summary.totalTime')}</div>
       <div class="text-xl font-medium tabular-nums">{formatDuration(summary.totalSeconds)}</div>
     </div>
-    <div class="rounded border border-gray-500/30 p-3">
+    <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.summary.totalChars')}</div>
       <div class="text-xl font-medium tabular-nums">{formatChars(summary.totalChars)}</div>
     </div>
-    <div class="rounded border border-gray-500/30 p-3">
+    <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.summary.completedBooks')}</div>
       <div class="text-xl font-medium tabular-nums">{summary.totalCompleted}</div>
     </div>
@@ -158,9 +158,9 @@
   {#if summary.rows.length === 0}
     <div class="opacity-60 text-sm py-6">{$t('stats.empty.period')}</div>
   {:else}
-    <div class="rounded border border-gray-500/25 overflow-hidden">
+    <div class="rounded border border-current/25 overflow-hidden">
       <div
-        class="grid gap-2 px-3 py-2 text-[11px] opacity-60 border-b border-gray-500/25"
+        class="grid gap-2 px-3 py-2 text-[11px] opacity-60 border-b border-current/25"
         style="grid-template-columns: 1.25rem 6rem 1.5rem 1fr 1fr 1fr 1fr 2rem;"
       >
         <div></div>
@@ -175,7 +175,7 @@
       {#each summary.rows as row (row.dateKey)}
         {@const open = expanded.has(row.dateKey)}
         <div
-          class="grid gap-2 px-3 py-2 text-sm tabular-nums items-center hover:bg-gray-500/5 border-b border-gray-500/15"
+          class="grid gap-2 px-3 py-2 text-sm tabular-nums items-center hover:bg-current/5 border-b border-current/15"
           style="grid-template-columns: 1.25rem 6rem 1.5rem 1fr 1fr 1fr 1fr 2rem;"
         >
           <button
@@ -202,7 +202,7 @@
           </div>
           <button
             type="button"
-            class="opacity-50 hover:opacity-100 hover:text-red-500 text-xs"
+            class="opacity-50 hover:opacity-100 hover-danger text-xs"
             title={$t('stats.summary.deleteDay')}
             on:click={() => requestDeleteDay(row)}
           >
@@ -210,7 +210,7 @@
           </button>
         </div>
         {#if open}
-          <div class="bg-gray-500/5 px-3 pt-2 pb-3 border-b border-gray-500/15">
+          <div class="bg-current/5 px-3 pt-2 pb-3 border-b border-current/15">
             {#each row.titles as tc (tc.title)}
               {@const isEditing =
                 editing && editing.dateKey === row.dateKey && editing.title === tc.title}
@@ -224,7 +224,7 @@
                     type="number"
                     min="0"
                     step="1"
-                    class="px-1 py-0.5 rounded border border-gray-500/40 bg-transparent tabular-nums w-full"
+                    class="px-1 py-0.5 rounded border border-current/40 bg-transparent tabular-nums w-full"
                     bind:value={editMinutes}
                     placeholder={tImmediate('stats.summary.minutesPh')}
                   />
@@ -232,7 +232,7 @@
                     type="number"
                     min="0"
                     step="1"
-                    class="px-1 py-0.5 rounded border border-gray-500/40 bg-transparent tabular-nums w-full"
+                    class="px-1 py-0.5 rounded border border-current/40 bg-transparent tabular-nums w-full"
                     bind:value={editChars}
                     placeholder={tImmediate('stats.summary.charsPh')}
                   />
@@ -243,14 +243,14 @@
                   <div class="flex gap-1 justify-end">
                     <button
                       type="button"
-                      class="px-2 py-0.5 rounded border border-gray-500/40 text-[10px] hover:bg-gray-500/10"
+                      class="px-2 py-0.5 rounded border border-current/40 text-[10px] hover:bg-current/10"
                       on:click={saveEdit}
                     >
                       {$t('stats.summary.save')}
                     </button>
                     <button
                       type="button"
-                      class="px-2 py-0.5 rounded border border-gray-500/40 text-[10px] hover:bg-gray-500/10"
+                      class="px-2 py-0.5 rounded border border-current/40 text-[10px] hover:bg-current/10"
                       on:click={cancelEdit}
                     >
                       {$t('stats.summary.cancel')}
@@ -273,7 +273,7 @@
                     </button>
                     <button
                       type="button"
-                      class="opacity-50 hover:opacity-100 hover:text-red-500"
+                      class="opacity-50 hover:opacity-100 hover-danger"
                       title={$t('stats.summary.deleteRow')}
                       on:click={() => requestDelete(row.dateKey, tc.title)}
                     >

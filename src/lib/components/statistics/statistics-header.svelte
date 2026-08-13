@@ -113,7 +113,7 @@
       <div
         tabindex="0"
         role="button"
-        title={$t('stats.header.manualEntry')}
+        aria-label={$t('stats.header.manualEntry')} title={$t('stats.header.manualEntry')}
         class={baseIconClasses}
         on:click={() => openManualStatisticsEntry$.next()}
         on:keyup={activateOnKeyup}
@@ -123,7 +123,7 @@
       <div
         tabindex="0"
         role="button"
-        title={$t('stats.header.exportReport')}
+        aria-label={$t('stats.header.exportReport')} title={$t('stats.header.exportReport')}
         class={baseIconClasses}
         on:click={() => exportYearReport$.next()}
         on:keyup={activateOnKeyup}
@@ -133,7 +133,7 @@
       <div
         tabindex="0"
         role="button"
-        title={$t('stats.header.openSettings')}
+        aria-label={$t('stats.header.openSettings')} title={$t('stats.header.openSettings')}
         class={baseIconClasses}
         on:click={() => (showStatisticsSettings = true)}
         on:keyup={activateOnKeyup}

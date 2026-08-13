@@ -2816,7 +2816,7 @@
           {loadProgress.label || STAGE_LABELS[loadProgress.stage]}
           <span class="opacity-60">· {loadProgress.pct}%</span>
         </div>
-        <div class="w-full h-1.5 rounded bg-gray-500/20 overflow-hidden">
+        <div class="w-full h-1.5 rounded bg-current/20 overflow-hidden">
           <div
             class="h-full rounded transition-[width] duration-150"
             style="width:{loadProgress.pct}%;background:var(--accent-color, #5f7e7b)"
@@ -2842,7 +2842,7 @@
         role="button"
         title={$t('readerFooter.statsMenu')}
         class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
-        class:text-red-500={$isTrackerPaused$}
+        class:text-danger={$isTrackerPaused$}
         class:animate-pulse={frozenPosition > -1}
         use:multiClickHandler={[trackerSingleClickHandler, trackerDblClickHandler]}
       >
@@ -2854,7 +2854,7 @@
         tabindex="0"
         role="button"
         class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
-        class:text-red-500={externalStorageErrors > 1}
+        class:text-danger={externalStorageErrors > 1}
         class:animate-pulse={externalStorageErrors > 1 || isReplicating}
         on:click|stopPropagation={() => {
           if ($statisticsEnabled$) {

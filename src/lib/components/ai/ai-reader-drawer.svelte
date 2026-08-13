@@ -272,7 +272,7 @@
         {:else}
           <div
             class="whitespace-pre-wrap break-words leading-relaxed"
-            class:text-red-500={m.error}
+            class:text-danger={m.error}
           >{m.content || (streaming && i === messages.length - 1 ? '…' : '')}</div>
         {/if}
       </div>

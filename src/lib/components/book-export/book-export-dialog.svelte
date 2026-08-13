@@ -12,10 +12,11 @@
   } from '$lib/data/store';
   import { executeReplicate$ } from '$lib/functions/replication/replication-progress';
   import { createEventDispatcher } from 'svelte';
+  import { t } from '$lib/i18n';
 
   let icons = [
-    { ...getStorageIconData(StorageKey.BACKUP), source: StorageKey.BACKUP, label: 'ZIP 文件' },
-    { ...getStorageIconData(StorageKey.BROWSER), source: StorageKey.BROWSER, label: '浏览器数据库' }
+    { ...getStorageIconData(StorageKey.BACKUP), source: StorageKey.BACKUP, label: $t('bookExport.target.zip') },
+    { ...getStorageIconData(StorageKey.BROWSER), source: StorageKey.BROWSER, label: $t('bookExport.target.browser') }
   ];
 
   const dispatch = createEventDispatcher<{
@@ -45,7 +46,7 @@
   </svelte:fragment>
   <div class="flex grow justify-between" slot="footer">
     <button class={buttonClasses} on:click={() => dispatch('close')}>
-      取消
+      {$t('dialog.cancel')}
       <Ripple />
     </button>
     <button
@@ -54,7 +55,7 @@
       disabled={!$lastExportedTypes$.length}
       on:click={replicateData}
     >
-      开始
+      {$t('bookExport.start')}
       <Ripple />
     </button>
   </div>

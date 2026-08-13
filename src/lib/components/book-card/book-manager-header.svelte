@@ -402,8 +402,8 @@
                       tabindex="0"
                       role="button"
                       class="menu-icon-button self-center justify-self-start"
-                      class:text-red-500={isCurrentSortAsc}
-                      class:hover:text-red-500={!isCurrentSortAsc}
+                      class:text-danger={isCurrentSortAsc}
+                      class:hover-danger={!isCurrentSortAsc}
                       on:click={() => {
                         changeSortOptions(sortMenuItem.property, SortDirection.ASC);
                       }}
@@ -417,9 +417,9 @@
                     <div
                       tabindex="0"
                       role="button"
-                      class="menu-icon-button justify-self-end hover:text-red-500"
-                      class:text-red-500={isCurrentSort && !isCurrentSortAsc}
-                      class:hover:text-red-500={!isCurrentSort || isCurrentSortAsc}
+                      class="menu-icon-button justify-self-end hover-danger"
+                      class:text-danger={isCurrentSort && !isCurrentSortAsc}
+                      class:hover-danger={!isCurrentSort || isCurrentSortAsc}
                       on:click={() => {
                         changeSortOptions(sortMenuItem.property, SortDirection.DESC);
                       }}

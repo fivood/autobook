@@ -3,6 +3,7 @@
   import Fa from 'svelte-fa';
   import { faMagnifyingGlassPlus, faMagnifyingGlassMinus, faExpand } from '@fortawesome/free-solid-svg-icons';
   import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-number-local-storage-subject';
+  import { t } from '$lib/i18n';
 
   // Persisted globally so the user's preferred zoom carries across books.
   const scale$ = writableNumberLocalStorageSubject()('bookImageScale', 1);
@@ -42,15 +43,15 @@
 
 <div class="zoom-control" class:collapsed>
   {#if collapsed}
-    <button class="pill" on:click={() => (collapsed = false)} title="图片缩放">
+    <button class="pill" on:click={() => (collapsed = false)} title={$t('imageZoom.toggle')}>
       <Fa icon={faExpand} />
       <span>{Math.round($scale$ * 100)}%</span>
     </button>
   {:else}
-    <button class="btn" on:click={() => step(-1)} title="缩小"><Fa icon={faMagnifyingGlassMinus} /></button>
-    <button class="btn val" on:click={reset} title="恢复 100%">{Math.round($scale$ * 100)}%</button>
-    <button class="btn" on:click={() => step(1)} title="放大"><Fa icon={faMagnifyingGlassPlus} /></button>
-    <button class="btn close" on:click={() => (collapsed = true)} title="收起">×</button>
+    <button class="btn" on:click={() => step(-1)} title={$t('imageZoom.zoomOut')}><Fa icon={faMagnifyingGlassMinus} /></button>
+    <button class="btn val" on:click={reset} title={$t('imageZoom.reset')}>{Math.round($scale$ * 100)}%</button>
+    <button class="btn" on:click={() => step(1)} title={$t('imageZoom.zoomIn')}><Fa icon={faMagnifyingGlassPlus} /></button>
+    <button class="btn close" on:click={() => (collapsed = true)} title={$t('imageZoom.collapse')}>×</button>
   {/if}
 </div>
 

@@ -90,7 +90,7 @@
   </button>
   <div class="flex flex-1 justify-end">
     <button
-      class="mr-2 sm:mr-4 hover:text-red-500"
+      class="mr-2 sm:mr-4 hover-danger"
       class:opacity-40={!$statisticsTitleFilterEnabled$}
       disabled={!$statisticsTitleFilterEnabled$}
       title={$statisticsTitleFilterEnabled$ ? '按书名筛选' : '当前视图无可筛选内容'}
@@ -98,16 +98,16 @@
     >
       筛选书籍
     </button>
-    <button class="mr-2 sm:mr-4 hover:text-red-500" on:click={() => exportStatisticsData(false)}>
+    <button class="mr-2 sm:mr-4 hover-danger" on:click={() => exportStatisticsData(false)}>
       导出选中项
     </button>
-    <button class="mr-2 sm:mr-4 hover:text-red-500" on:click={() => deleteStatisticsData(false)}>
+    <button class="mr-2 sm:mr-4 hover-danger" on:click={() => deleteStatisticsData(false)}>
       删除选中项
     </button>
-    <button class="mr-2 sm:mr-4 hover:text-red-500" on:click={() => exportStatisticsData()}>
+    <button class="mr-2 sm:mr-4 hover-danger" on:click={() => exportStatisticsData()}>
       导出全部
     </button>
-    <button class="hover:text-red-500" on:click={() => deleteStatisticsData()}>删除全部</button>
+    <button class="hover-danger" on:click={() => deleteStatisticsData()}>删除全部</button>
   </div>
 </div>
 <div class="flex-1 p-4 overflow-auto">
@@ -192,7 +192,7 @@
     </div>
   </div>
   <button
-    class="text-left mt-3 hover:text-red-500"
+    class="text-left mt-3 hover-danger"
     on:click={() => setStatisticsDatesToAllTime$.next()}
   >
     设置为所选书籍的全部时间

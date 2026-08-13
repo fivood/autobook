@@ -132,7 +132,7 @@
       <div
         tabindex="0"
         role="button"
-        title={$t('reader.editText')}
+        aria-label={$t('reader.editText')} title={$t('reader.editText')}
         class={baseIconClasses}
         on:click={() => dispatch('editTextClick')}
         on:keyup={activateOnKeyup}
@@ -144,7 +144,7 @@
       <div
         tabindex="0"
         role="button"
-        title={$t('reader.toc')}
+        aria-label={$t('reader.toc')} title={$t('reader.toc')}
         class={baseIconClasses}
         on:click={() => dispatch('tocClick')}
         on:keyup={activateOnKeyup}
@@ -155,7 +155,7 @@
     <div
       tabindex="0"
       role="button"
-      title={$t('reader.highlights')}
+      aria-label={$t('reader.highlights')} title={$t('reader.highlights')}
       class={baseIconClasses}
       on:click={() => dispatch('highlightClick')}
       on:keyup={activateOnKeyup}
@@ -166,7 +166,7 @@
       <div
         tabindex="0"
         role="button"
-        title={$t('reader.ai')}
+        aria-label={$t('reader.ai')} title={$t('reader.ai')}
         class={baseIconClasses}
         on:click={() => dispatch('aiClick')}
         on:keyup={activateOnKeyup}
@@ -177,7 +177,7 @@
     <div
       tabindex="0"
       role="button"
-      title={$t('reader.bookmark')}
+      aria-label={$t('reader.bookmark')} title={$t('reader.bookmark')}
       class={baseIconClasses}
       on:click={() => dispatch('bookmarkClick')}
       on:keyup={activateOnKeyup}
@@ -188,7 +188,7 @@
       <div
         tabindex="0"
         role="button"
-        title={$t('reader.bookmarkReturn')}
+        aria-label={$t('reader.bookmarkReturn')} title={$t('reader.bookmarkReturn')}
         class={baseIconClasses}
         on:click={() => dispatch('scrollToBookmarkClick')}
         on:keyup={activateOnKeyup}
@@ -199,7 +199,7 @@
     {#if $viewMode$ === ViewMode.Continuous && !$isMobile$}
       <div
         class="flex items-center px-4 text-xl xl:px-3 xl:text-lg"
-        title={$t('reader.autoScrollSpeed')}
+        aria-label={$t('reader.autoScrollSpeed')} title={$t('reader.autoScrollSpeed')}
       >
         {autoScrollMultiplier}x
       </div>
@@ -219,7 +219,7 @@
     <div
       tabindex="0"
       role="button"
-      title={$t('reader.finishBook')}
+      aria-label={$t('reader.finishBook')} title={$t('reader.finishBook')}
       class={baseIconClasses}
       on:click={() => dispatch('completeBook')}
       on:keyup={activateOnKeyup}
@@ -234,7 +234,7 @@
           yOffset={0}
           bind:this={customReadingPointMenuElm}
         >
-          <div slot="icon" title={$t('reader.customReadingPointMenu')} class={baseIconClasses}>
+          <div slot="icon" aria-label={$t('reader.customReadingPointMenu')} title={$t('reader.customReadingPointMenu')} class={baseIconClasses}>
             <Fa icon={faCrosshairs} />
           </div>
           <div class="menu-list w-40 md:w-32" slot="content">
@@ -257,7 +257,7 @@
       <div
         tabindex="0"
         role="button"
-        title={$t('reader.fullscreen')}
+        aria-label={$t('reader.fullscreen')} title={$t('reader.fullscreen')}
         class={baseIconClasses}
         on:click={() => dispatch('fullscreenClick')}
         on:keyup={activateOnKeyup}

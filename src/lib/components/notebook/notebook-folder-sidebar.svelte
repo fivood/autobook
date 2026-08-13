@@ -141,7 +141,7 @@
         ><Fa icon={faPen} size="xs" /></button>
         <button
           type="button"
-          class="pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-50 hover:!opacity-100 hover:text-red-500"
+          class="pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-50 hover:!opacity-100 hover-danger"
           title={$t('folders.delete')}
           on:click={() => startDelete(f)}
         ><Fa icon={faTrash} size="xs" /></button>

@@ -90,7 +90,7 @@
 {:else}
   <div class="flex flex-col gap-2">
     {#each authors as row (row.author)}
-      <div class="rounded border border-gray-500/25 p-3">
+      <div class="rounded border border-current/25 p-3">
         <div class="flex items-baseline justify-between gap-3">
           <div class="text-base font-medium truncate">
             {row.author === UNKNOWN_AUTHOR_KEY ? $t('stats.authors.unknown') : row.author}
@@ -110,7 +110,7 @@
         <div class="flex flex-wrap gap-1 mt-2">
           {#each row.books as title (title)}
             <span
-              class="text-[11px] px-2 py-0.5 rounded-full border border-gray-500/25 truncate max-w-[16rem]"
+              class="text-[11px] px-2 py-0.5 rounded-full border border-current/25 truncate max-w-[16rem]"
               title={title}
             >
               {title}

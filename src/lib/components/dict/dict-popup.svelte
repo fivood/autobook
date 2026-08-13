@@ -209,7 +209,7 @@
         <p class="mt-3 text-xs opacity-50">{$t('dict.emptyLine3')}</p>
       </div>
     {:else if !results.length}
-      <p class="py-4 text-center text-sm opacity-50">{message || '未找到'}</p>
+      <p class="py-4 text-center text-sm opacity-50">{message || $t('dict.notFoundShort')}</p>
     {:else}
       {#each results as r (r.dict)}
         <section class="mb-3">
@@ -239,7 +239,7 @@
             {endpoint?.label ?? ''}{sentence ? '' : ` · ${$t('dict.glossNoSentence')}`}
           </p>
         {:else if glossError}
-          <p class="text-xs text-red-500">{glossError}</p>
+          <p class="text-xs text-danger">{glossError}</p>
         {:else}
           <button
             type="button"

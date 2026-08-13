@@ -186,7 +186,7 @@
   <div class="flex justify-between mt-6 text-2xl">
     <button
       title="应用筛选"
-      class="hover:text-red-500"
+      class="hover-danger"
       on:click={() => {
         dispatch('applyFilter', titlesToFilter);
         dispatch('close');
@@ -194,17 +194,17 @@
     >
       <Fa icon={faCircleCheck} />
     </button>
-    <button title="全选" class="hover:text-red-500" on:click={() => handleSelectAll(true)}>
+    <button title="全选" class="hover-danger" on:click={() => handleSelectAll(true)}>
       <Fa icon={faListCheck} />
     </button>
-    <button title="取消全选" class="hover:text-red-500" on:click={() => handleSelectAll(false)}>
+    <button title="取消全选" class="hover-danger" on:click={() => handleSelectAll(false)}>
       <Fa icon={faList} />
     </button>
     <button
       title={$lastStatisticsFilterDateRangeOnly$
         ? '显示所有时间的标题'
         : '仅显示所选日期范围的标题'}
-      class="hover:text-red-500"
+      class="hover-danger"
       on:click={() => ($lastStatisticsFilterDateRangeOnly$ = !$lastStatisticsFilterDateRangeOnly$)}
     >
       <Fa icon={$lastStatisticsFilterDateRangeOnly$ ? faCalendarXmark : faCalendar} />
@@ -213,7 +213,7 @@
       title={$lastStatisticsFilterShowSelectedTitlesOnly$
         ? '显示所有标题'
         : '仅显示选中的标题'}
-      class="hover:text-red-500"
+      class="hover-danger"
       on:click={() =>
         ($lastStatisticsFilterShowSelectedTitlesOnly$ =
           !$lastStatisticsFilterShowSelectedTitlesOnly$)}
@@ -223,7 +223,7 @@
     {#if $preFilteredTitlesForStatistics$.size}
       <button
         title="移除预筛选"
-        class="hover:text-red-500"
+        class="hover-danger"
         on:click={() => dispatch('clearPrefilter')}
       >
         <Fa icon={faTrash} />

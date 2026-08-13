@@ -84,29 +84,29 @@
 
 {#if summary?.sessionStats}
   <div class="grid grid-cols-2 md:grid-cols-5 gap-3 my-4">
-    <div class="rounded border border-gray-500/30 p-3">
+    <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.sessions.count')}</div>
       <div class="text-xl font-medium tabular-nums">{summary.sessionStats.count}</div>
     </div>
-    <div class="rounded border border-gray-500/30 p-3">
+    <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.sessions.totalTime')}</div>
       <div class="text-xl font-medium tabular-nums">
         {formatDuration(summary.sessionStats.totalSeconds)}
       </div>
     </div>
-    <div class="rounded border border-gray-500/30 p-3">
+    <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.sessions.median')}</div>
       <div class="text-xl font-medium tabular-nums">
         {formatDuration(summary.sessionStats.medianSeconds)}
       </div>
     </div>
-    <div class="rounded border border-gray-500/30 p-3">
+    <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.sessions.p95')}</div>
       <div class="text-xl font-medium tabular-nums">
         {formatDuration(summary.sessionStats.p95Seconds)}
       </div>
     </div>
-    <div class="rounded border border-gray-500/30 p-3">
+    <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.sessions.longest')}</div>
       <div class="text-xl font-medium tabular-nums">
         {formatDuration(summary.sessionStats.longestSeconds)}
@@ -136,7 +136,7 @@
     <div class="overflow-x-auto">
       <table class="w-full text-sm tabular-nums border-collapse">
         <thead>
-          <tr class="text-left opacity-60 text-xs border-b border-gray-500/25">
+          <tr class="text-left opacity-60 text-xs border-b border-current/25">
             <th class="py-1.5 pr-3">{$t('stats.sessions.colStart')}</th>
             <th class="py-1.5 pr-3">{$t('stats.sessions.colWeek')}</th>
             <th class="py-1.5 pr-3">{$t('stats.sessions.colDur')}</th>
@@ -146,7 +146,7 @@
         </thead>
         <tbody>
           {#each inRangeSessions.slice(0, visible) as s (s.id)}
-            <tr class="border-b border-gray-500/15 hover:bg-gray-500/5">
+            <tr class="border-b border-current/15 hover:bg-current/5">
               <td class="py-1 pr-3 whitespace-nowrap">{formatDateTime(s.startTs)}</td>
               <td class="py-1 pr-3 opacity-70">{weekdayLabel(s.startTs)}</td>
               <td class="py-1 pr-3">{formatDuration(s.durationSec)}</td>
@@ -160,7 +160,7 @@
     {#if inRangeSessions.length > visible}
       <div class="flex justify-center mt-3">
         <button
-          class="text-sm px-4 py-1.5 rounded border border-gray-500/40 hover:bg-gray-500/10"
+          class="text-sm px-4 py-1.5 rounded border border-current/40 hover:bg-current/10"
           on:click={() => (visible = Math.min(inRangeSessions.length, visible + PAGE_SIZE))}
         >
           {$t('stats.sessions.more', {

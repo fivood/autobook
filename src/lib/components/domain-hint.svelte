@@ -4,6 +4,7 @@
   import { dialogManager } from '$lib/data/dialog-manager';
   import { domainHintSeen$ } from '$lib/data/store';
   import { isOnOldUrl } from '$lib/functions/utils';
+  import { tImmediate } from '$lib/i18n';
 
   $: if (browser && isOnOldUrl(window) && !$domainHintSeen$) {
     $domainHintSeen$ = true;
@@ -11,9 +12,8 @@
       {
         component: MessageDialog,
         props: {
-          title: '旧域名',
-          message:
-            '您正在使用 ッツ 阅读器的旧域名 - 建议切换到 https://reader.ttsu.app 以避免问题并确保完整功能'
+          title: tImmediate('domainHint.title'),
+          message: tImmediate('domainHint.message')
         },
         disableCloseOnClick: true
       }

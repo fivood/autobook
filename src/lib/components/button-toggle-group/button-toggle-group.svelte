@@ -5,6 +5,7 @@
   import { availableThemes } from '$lib/data/theme-option';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
 
   export let options: ToggleOption<any>[];
   export let selectedOptionId: any;
@@ -49,7 +50,7 @@
       {#if option.showIcons && option.id === selectedOptionId}
         <div class="flex flex-col justify-around mr-2 gap-1">
           <button
-            title={availableThemes.has(option.id) ? '编辑（基于内置主题创建覆盖）' : '编辑主题'}
+            title={availableThemes.has(option.id) ? $t('theme.editOverride') : $t('theme.edit')}
             class="p-1 opacity-70 hover:opacity-100"
             on:click={() => dispatch('edit', option.id)}
           >
@@ -57,8 +58,8 @@
           </button>
           {#if !availableThemes.has(option.id)}
             <button
-              title="删除主题"
-              class="p-1 opacity-70 hover:opacity-100 text-red-600"
+              title={$t('theme.delete')}
+              class="p-1 opacity-70 hover:opacity-100 text-danger"
               on:click={() => dispatch('delete', option.id)}
             >
               <Fa icon={faTrash} />

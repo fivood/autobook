@@ -232,7 +232,7 @@
   let fileInputEl: HTMLInputElement | undefined;
   let replicationProgress = 0;
   let replicationToProgress = 0;
-  let replicationProgressRemaining = '准备中…';
+  let replicationProgressRemaining = tImmediate('manager.progressPreparing');
   let replicationDone = new Subject<void>();
   let progressBase = 0;
   let executionStart: number;
@@ -273,13 +273,13 @@
     await removeBooksFromFolder(ids, folderId);
     selectedBookIds = new Set();
     activeFolderFilter$.next('uncategorized');
-    flashToast(`已移出当前分类（${ids.length} 本），已切到未分类视图`);
+    flashToast(tImmediate('manager.toast.removedFromFolder', { n: ids.length }));
   }
 
   async function addSelectedToFolder(folderId: number) {
     const ids = Array.from(selectedBookIds);
     await addBooksToFolder(ids, folderId);
-    flashToast(`已加入分类（${ids.length} 本）`);
+    flashToast(tImmediate('manager.toast.addedToFolder', { n: ids.length }));
   }
 
   let toastMessage = '';
@@ -475,7 +475,7 @@
       return;
     }
 
-    cancelTooltip = `取消当前导入\n已导入的数据不会被删除`;
+    cancelTooltip = tImmediate('manager.cancelImport');
 
     initializeReplicationProgressData();
 
@@ -656,7 +656,7 @@
       if (Number.isFinite(folderId)) {
         await removeBooksFromFolder(bookIds, folderId);
         selectedBookIds = new Set();
-        flashToast(`已从当前分类移出（${bookIds.length} 本，未删除）`);
+        flashToast(tImmediate('manager.toast.removedFromCurrentFolder', { n: bookIds.length }));
         return;
       }
     }
@@ -668,7 +668,7 @@
       return;
     }
 
-    cancelTooltip = `取消删除\n已删除的数据无法恢复`;
+    cancelTooltip = tImmediate('manager.cancelDelete');
 
     initializeReplicationProgressData();
 
@@ -713,7 +713,7 @@
 
     const errorTitle = '导入失败';
 
-    cancelTooltip = `Cancels the current Import\nAlready imported data will not be deleted`;
+    cancelTooltip = tImmediate('manager.cancelImport');
 
     initializeReplicationProgressData();
 
@@ -787,12 +787,8 @@
           {
             component: ConfirmDialog,
             props: {
-              dialogHeader: '删除数据',
-              dialogMessage: `This will delete all Statistics for the selected ${pluralize(
-                titles.length,
-                '书籍',
-                false
-              )} (which may include start and/or completion Data)\n\nExecute a one time Sync with an export behavior of "replace" and/or statistics merge mode of "replace" to apply deletions to other devices`,
+              dialogHeader: tImmediate('manager.deleteStatisticsConfirm.header'),
+              dialogMessage: tImmediate('manager.deleteStatisticsConfirm.body', { n: titles.length }),
               contentStyles: 'white-space: pre-line;',
               resolver
             }
@@ -805,7 +801,7 @@
       return;
     }
 
-    cancelTooltip = `取消当前操作`;
+    cancelTooltip = tImmediate('manager.cancelOperation');
 
     initializeReplicationProgressData();
 
@@ -882,7 +878,7 @@
       const eta = getTimestamp(Math.ceil(remainingTime));
       replicationProgressRemaining =
         replicationToProgress > replicationProgress
-          ? (eta === '准备中…' ? eta : `~ ${eta}`)
+          ? (eta === tImmediate('manager.progressPreparing') ? eta : `~ ${eta}`)
           : '~ 00:00:01';
     }
   }
@@ -893,7 +889,7 @@
         return;
       }
 
-      cancelTooltip = '取消当前导出';
+      cancelTooltip = tImmediate('manager.cancelExport');
 
       initializeReplicationProgressData();
 
@@ -931,7 +927,7 @@
   function getTimestamp(seconds: number) {
     return seconds && Number.isFinite(seconds)
       ? new Date(seconds * 1000).toISOString().substr(11, 8)
-      : '准备中…';
+      : tImmediate('manager.progressPreparing');
   }
 </script>
 
@@ -959,7 +955,7 @@
     on:cancelReplication={() => {
       if (!cancelSignal.aborted) {
         cancelToken.abort();
-        replicationProgressRemaining = '正在取消 ...';
+        replicationProgressRemaining = tImmediate('manager.progressCanceling');
       }
     }}
     on:selectionToStatistics={() => {
@@ -978,7 +974,7 @@
 <div class="flex min-h-screen pt-16 xl:pt-14">
   <FolderSidebar
     totalBookCount={$bookCards$?.length ?? 0}
-    on:booksAddedToFolder={({ detail }) => flashToast(`已加入分类（${detail.count} 本）`)}
+    on:booksAddedToFolder={({ detail }) => flashToast(tImmediate('manager.toast.addedToFolder', { n: detail.count }))}
   />
   <!-- svelte-ignore a11y-no-static-element-interactions — this is the library
        drop target; drag-and-drop is pointer-only, so no keyboard role applies. -->
@@ -1013,7 +1009,7 @@
       <span class="opacity-70">将选中的 {selectedBookIds.size} 本加入分类：</span>
       {#each $folders$ as folder (folder.id)}
         <button
-          class="rounded-full border-2 border-gray-400 px-3 py-1 text-xs hover:bg-gray-400/20"
+          class="rounded-full border-2 border-current/40 px-3 py-1 text-xs hover-soft"
           on:click={() => addSelectedToFolder(folder.id)}
         >
           + {folder.name}
@@ -1021,7 +1017,7 @@
       {/each}
       {#if $activeFolderFilter$ !== 'all' && $activeFolderFilter$ !== 'uncategorized'}
         <button
-          class="rounded-full border-2 border-red-400 px-3 py-1 text-xs text-red-500 hover:bg-red-400/20"
+          class="rounded-full border-2 border-red-400 px-3 py-1 text-xs text-danger hover:bg-red-400/20"
           on:click={removeSelectedFromActiveFolder}
         >
           从当前分类移出

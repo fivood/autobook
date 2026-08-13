@@ -171,7 +171,7 @@
       <span
         class="format-chip"
         style="background:{palette.accent}"
-        title="原文件格式：{detectedFormat}"
+        title={$t('bookCard.originalFormat', { format: detectedFormat })}
       >{detectedFormat}</span>
     {/if}
 

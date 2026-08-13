@@ -703,7 +703,7 @@
                               </p>
                               <button
                                 type="button"
-                                class="opacity-50 hover:text-red-500 hover:opacity-100"
+                                class="opacity-50 hover-danger hover:opacity-100"
                                 title={$t('notebook.unlink')}
                                 on:click={() => unlinkOne(h, lnk.id)}
                               ><Fa icon={faUnlink} size="xs" /></button>
@@ -746,7 +746,7 @@
                         </label>
                         <button
                           type="button"
-                          class="flex items-center gap-1 hover:text-red-500 hover:opacity-100"
+                          class="flex items-center gap-1 hover-danger hover:opacity-100"
                           on:click={() => removeOne(h)}
                         ><Fa icon={faTrash} size="xs" /> {$t('notebook.delete')}</button>
                       </div>

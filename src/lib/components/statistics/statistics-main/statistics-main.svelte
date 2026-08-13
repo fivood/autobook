@@ -86,7 +86,7 @@
 
   <!-- Hero 4 cards -->
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 my-4">
-    <div class="rounded border border-gray-500/30 p-4">
+    <div class="rounded border border-current/30 p-4">
       <div class="text-xs opacity-70">{$t('stats.main.totalTime')}</div>
       <div class="text-2xl font-medium tabular-nums">
         {formatHours(summary.totalSeconds)}
@@ -95,7 +95,7 @@
         {secondsToMinutes(summary.totalSeconds)} {$t('stats.summary.minutesPh')}
       </div>
     </div>
-    <div class="rounded border border-gray-500/30 p-4">
+    <div class="rounded border border-current/30 p-4">
       <div class="text-xs opacity-70">{$t('stats.main.readDays')}</div>
       <div class="text-2xl font-medium tabular-nums">{summary.activeDays}</div>
       {#if summary.longestStreak}
@@ -104,13 +104,13 @@
         </div>
       {/if}
     </div>
-    <div class="rounded border border-gray-500/30 p-4">
+    <div class="rounded border border-current/30 p-4">
       <div class="text-xs opacity-70">{$t('stats.main.totalChars')}</div>
       <div class="text-2xl font-medium tabular-nums">
         {summary.totalChars.toLocaleString()}
       </div>
     </div>
-    <div class="rounded border border-gray-500/30 p-4">
+    <div class="rounded border border-current/30 p-4">
       <div class="text-xs opacity-70">{$t('stats.main.completedBooks')}</div>
       <div class="text-2xl font-medium tabular-nums">{summary.completedBooks}</div>
       {#if summary.topBooks.length}
@@ -139,7 +139,7 @@
             <div class="text-[11px] opacity-60 text-right pr-1 leading-4">{label}</div>
             {#each summary.sessionStats.dowHourMatrix[dow] as sec, hour (dow + '-' + hour)}
               <div
-                class="h-4 rounded-sm border border-gray-500/10"
+                class="h-4 rounded-sm border border-current/10"
                 style={cellStyle(sec, heatmapMax)}
                 title={tImmediate('stats.main.dowHourTooltip', { dow: label, hour, duration: formatDuration(sec) })}
               ></div>
@@ -190,7 +190,7 @@
       <div class="flex flex-col gap-1">
         {#each summary.topBooks as book, i (book.title)}
           <div
-            class="grid grid-cols-[2rem_1fr_auto] gap-3 items-center text-sm py-1 border-b border-gray-500/20"
+            class="grid grid-cols-[2rem_1fr_auto] gap-3 items-center text-sm py-1 border-b border-current/20"
           >
             <div class="opacity-60 tabular-nums">#{i + 1}</div>
             <div class="truncate" title={book.title}>{book.title}</div>
@@ -206,7 +206,7 @@
   {#if summary.bestDay || summary.firstDay}
     <section class="my-6 grid grid-cols-1 md:grid-cols-3 gap-3">
       {#if summary.longestStreak}
-        <div class="rounded border border-gray-500/30 p-4">
+        <div class="rounded border border-current/30 p-4">
           <div class="text-xs opacity-70">{$t('stats.main.longestStreak')}</div>
           <div class="text-xl font-medium tabular-nums">
             {$t('stats.main.longestStreakLabel', { n: summary.longestStreak.length })}
@@ -217,7 +217,7 @@
         </div>
       {/if}
       {#if summary.bestDay}
-        <div class="rounded border border-gray-500/30 p-4">
+        <div class="rounded border border-current/30 p-4">
           <div class="text-xs opacity-70">{$t('stats.main.bestDay')}</div>
           <div class="text-xl font-medium tabular-nums">
             {formatDuration(summary.bestDay.seconds)}
@@ -226,7 +226,7 @@
         </div>
       {/if}
       {#if summary.firstDay}
-        <div class="rounded border border-gray-500/30 p-4">
+        <div class="rounded border border-current/30 p-4">
           <div class="text-xs opacity-70">{$t('stats.main.firstDay')}</div>
           <div class="text-xl font-medium">{summary.firstDay.dateKey}</div>
           {#if summary.firstDay.titles.length}

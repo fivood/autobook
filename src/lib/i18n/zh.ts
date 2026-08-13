@@ -47,6 +47,17 @@ export default {
   'manager.deleteStatistics': '删除所选书籍的阅读统计',
   'manager.deleteBooks': '删除所选书籍',
   'manager.cancelOperation': '取消操作',
+  'manager.cancelImport': '取消当前导入\n已导入的数据不会被删除',
+  'manager.cancelDelete': '取消删除\n已删除的数据无法恢复',
+  'manager.cancelExport': '取消当前导出',
+  'manager.progressPreparing': '准备中…',
+  'manager.progressCanceling': '正在取消…',
+  'manager.deleteStatisticsConfirm.header': '删除数据',
+  'manager.deleteStatisticsConfirm.body':
+    '将删除所选 {n} 本书的全部阅读统计（可能包含开始和/或完成数据）\n\n如需将删除同步到其他设备，请以「覆盖」的导出行为或「覆盖」的统计合并方式执行一次同步',
+  'manager.toast.addedToFolder': '已加入分类（{n} 本）',
+  'manager.toast.removedFromFolder': '已移出当前分类（{n} 本），已切到未分类视图',
+  'manager.toast.removedFromCurrentFolder': '已从当前分类移出（{n} 本，未删除）',
 
   // Update dialogs (invoked from the top-bar update-check button)
   // Merge-icon entries shared across manager / reader headers
@@ -78,6 +89,24 @@ export default {
   'menu.checkUpdate.title': '检查桌面端更新',
   'menu.changelog.label': '更新历史',
   'menu.changelog.title': '查看版本更新记录',
+
+  // Book export dialog
+  'bookExport.target.zip': 'ZIP 文件',
+  'bookExport.target.browser': '浏览器数据库',
+  'bookExport.targetHeading': '导出目标',
+  'bookExport.contentHeading': '导出内容',
+  'bookExport.content.bookData': '书籍数据',
+  'bookExport.content.bookmarks': '书签',
+  'bookExport.content.statistics': '统计',
+  'bookExport.content.audioBooks': '有声书',
+  'bookExport.content.subtitles': '字幕',
+  'bookExport.content.highlights': '高亮笔记',
+  'bookExport.start': '开始',
+
+  // Old-domain hint dialog
+  'domainHint.title': '旧域名',
+  'domainHint.message':
+    '您正在使用 ッツ 阅读器的旧域名 - 建议切换到 https://reader.ttsu.app 以避免问题并确保完整功能',
 
   // Library search
   'library.search.placeholder': '搜索书名…',
@@ -164,6 +193,10 @@ export default {
   'bookCard.format': '格式',
   'bookCard.progress': '进度',
   'bookCard.remaining': '剩 {n}',
+  'bookCard.selectedTitle': '已选中书籍',
+  'bookCard.clickDetails': '点击查看详情',
+  'bookCard.originalFormat': '原文件格式：{format}',
+  'bookCard.dragToFolder': '可拖入左侧分类',
 
   // Reader footer / progress strip
   'readerFooter.copyProgress': '点击复制进度',
@@ -176,6 +209,13 @@ export default {
   'toc.prevChapter': '上一章',
   'toc.nextChapter': '下一章',
   'toc.chapterProgress': '章节进度: {chars} ({pct}%)',
+
+  // Book image zoom control (left rail)
+  'imageZoom.toggle': '图片缩放',
+  'imageZoom.zoomOut': '缩小',
+  'imageZoom.reset': '恢复 100%',
+  'imageZoom.zoomIn': '放大',
+  'imageZoom.collapse': '收起',
 
   // Keyboard shortcuts help panel
   'shortcuts.trigger': '显示键盘快捷键（?）',
@@ -245,6 +285,14 @@ export default {
   'highlight.dict.tooltip': '查词典',
   'highlight.dict.short': '查词',
   'highlight.delete': '删除',
+  'highlight.sidebar.title': '高亮笔记',
+  'highlight.sidebar.all': '全部',
+  'highlight.sidebar.section': '第 {n} 节',
+  'highlight.sidebar.count': '{n} 条',
+  'highlight.sidebar.empty': '暂无高亮，选中文字右键添加',
+  'highlight.memo.placeholder': '写点备注…',
+  'highlight.memo.tagsPlaceholder': '标签，空格或逗号分隔（如 写作 叙事 结构）',
+  'highlight.memo.save': '保存 (Ctrl+Enter)',
 
   // PDF page context menu (re-OCR)
   'pdfCtx.pageLabel': '第 {n} 页',
@@ -255,12 +303,20 @@ export default {
   'pdfCtx.reOcrEmpty': '第 {n} 页未检测到文字（图片 / 空白页），即将刷新…',
   'pdfCtx.reOcrFailed': '第 {n} 页识别失败：{err}',
 
+  // OCR mini status pill (shown outside the reader while a job runs)
+  'ocrMini.jumpToBook': '点击跳到对应书',
+  'ocrMini.finished': 'OCR 完成 · {title}',
+  'ocrMini.failed': 'OCR 失败 · {title}',
+  'ocrMini.apply': '应用',
+  'ocrMini.clear': '清除',
+
   // Dictionary popup
   'dict.loadingFirst': '首次载入词典中…',
   'dict.loaded': '已载入 {n} 个词典',
   'dict.loadedWithErrors': '已载入 {n} 个词典，{e} 出错',
   'dict.loadFailed': '加载失败：{err}',
   'dict.notFound': '「{word}」未在已载入的 {n} 个词典中找到',
+  'dict.notFoundShort': '未找到',
   'dict.notConfigured': '未配置词典',
   'dict.glossHeading': '结合语境',
   'dict.glossAction': '看这句里的意思',
@@ -292,6 +348,10 @@ export default {
 
   // Settings section headers (appearance)
   'settings.section.theme': '主题',
+  'theme.editOverride': '编辑（基于内置主题创建覆盖）',
+  'theme.edit': '编辑主题',
+  'theme.delete': '删除主题',
+  'settings.theme.editHint': '点击主题按钮旁的笔形图标可直接在下方编辑配色，无需弹窗。',
   'settings.section.fontGroup1': '字体（组 1）',
   'settings.section.fontGroup2': '字体（组 2）',
   'settings.section.fontSize': '字号',
@@ -932,6 +992,9 @@ export default {
   'settings.item.confirmClose': '关闭确认',
   'settings.item.preferReaderStyle': '优先阅读器样式',
   'settings.item.customReadingPointPause': '自定义阅读点暂停统计',
+  'settings.item.customReadingPoint': '自定义阅读点',
+  'settings.tip.customReadingPoint': '开启后可在阅读器中设置固定起算点，进度和书签从该点开始计算',
+  'settings.button.resetReadingPoint': '重置阅读点',
   'settings.value.wm.horizontal': '横排',
   'settings.value.wm.vertical': '竖排',
   'settings.value.textMargin.auto': '自动',

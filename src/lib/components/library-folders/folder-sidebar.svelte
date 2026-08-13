@@ -114,16 +114,15 @@
 </script>
 
 <aside
-  class="flex w-52 shrink-0 flex-col gap-1 border-r-2 border-gray-400/60 py-3 pr-2 pl-3 text-sm"
-  style="background: rgba(127, 127, 127, 0.08); min-height: calc(100vh - 4rem);"
+  class="flex w-52 shrink-0 flex-col gap-1 border-r-2 border-current/20 bg-current/5 py-3 pr-2 pl-3 text-sm"
+  style="min-height: calc(100vh - 4rem);"
 >
   <div class="px-3 pb-1 text-xs uppercase tracking-wide opacity-60">{$t('folders.section')}</div>
 
   <button
     type="button"
-    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover:bg-gray-400/20"
-    class:bg-gray-400={'all' === $activeFolderFilter$}
-    class:bg-opacity-30={'all' === $activeFolderFilter$}
+    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover-soft"
+    class:bg-soft-active={'all' === $activeFolderFilter$}
     on:click={() => activeFolderFilter$.next('all')}
   >
     <span>{$t('folders.allBooks')}</span>
@@ -132,9 +131,8 @@
 
   <button
     type="button"
-    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover:bg-gray-400/20"
-    class:bg-gray-400={'uncategorized' === $activeFolderFilter$}
-    class:bg-opacity-30={'uncategorized' === $activeFolderFilter$}
+    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover-soft"
+    class:bg-soft-active={'uncategorized' === $activeFolderFilter$}
     on:click={() => activeFolderFilter$.next('uncategorized')}
   >
     <span>{$t('folders.uncategorized')}</span>
@@ -146,7 +144,7 @@
     <button
       type="button"
       title={$t('folders.new')}
-      class="rounded p-1 hover:bg-gray-400/20"
+      class="rounded p-1 hover-soft"
       on:click={onCreateFolder}
     >
       <Fa icon={faPlus} />
@@ -159,10 +157,9 @@
       {@const dragOver = dragOverFolderId === folder.id}
       <div
         class="group flex items-center gap-1 rounded px-2 py-1.5 transition-colors"
-        class:bg-gray-400={active}
-        class:bg-opacity-30={active}
+        class:bg-soft-active={active}
         class:ring-2={dragOver}
-        class:ring-blue-400={dragOver}
+        class:ring-current={dragOver}
         on:dragover={(ev) => onDragOverFolder(ev, folder.id)}
         on:dragleave={() => (dragOverFolderId = null)}
         on:drop={(ev) => onDropToFolder(ev, folder.id)}
@@ -172,7 +169,7 @@
         <Fa icon={active ? faFolderOpen : faFolder} class="opacity-70 shrink-0" />
         {#if renamingId === folder.id}
           <input
-            class="min-w-0 flex-1 rounded border border-gray-400/50 bg-background-color px-1 py-0.5 text-sm"
+            class="min-w-0 flex-1 rounded border border-current/30 bg-background-color px-1 py-0.5 text-sm"
             bind:value={renameDraft}
             on:keydown={(ev) => {
               if (ev.key === 'Enter') commitRename();

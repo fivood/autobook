@@ -107,7 +107,7 @@
         <span>{$t('notebook.editor.draftRestored')}</span>
         <button
           type="button"
-          class="hover:text-red-500"
+          class="hover-danger"
           on:click={discardDraft}
         >{$t('notebook.editor.discard')}</button>
       </div>

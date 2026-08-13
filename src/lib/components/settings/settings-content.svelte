@@ -1037,7 +1037,7 @@
             <div class="flex">
               <button
                 title="新建主题"
-                class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+                class="m-1 rounded-md border-2 border-current/40 p-2 text-lg"
                 on:click={handleNewTheme}
               >
                 <Fa icon={faPlus} class="mx-2" />
@@ -1045,7 +1045,7 @@
               </button>
               <button
                 title="导出自定义主题"
-                class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+                class="m-1 rounded-md border-2 border-current/40 p-2 text-lg"
                 disabled={!Object.keys($customThemes$).length}
                 class:opacity-40={!Object.keys($customThemes$).length}
                 on:click={exportCustomThemes}
@@ -1055,7 +1055,7 @@
               </button>
               <button
                 title="导入自定义主题"
-                class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+                class="m-1 rounded-md border-2 border-current/40 p-2 text-lg"
                 on:click={() => themeImportInput?.click()}
               >
                 <Fa icon={faFileArrowDown} class="mx-2" />
@@ -1081,7 +1081,7 @@
             />
           {/key}
         {:else}
-          <p class="mt-2 text-xs opacity-60">点击主题按钮旁的笔形图标可直接在下方编辑配色，无需弹窗。</p>
+          <p class="mt-2 text-xs opacity-60">{$t('settings.theme.editHint')}</p>
         {/if}
       </SettingsItemGroup>
     </div>
@@ -1272,8 +1272,8 @@
     <SettingsSectionHeader title={$t(viewMode === ViewMode.Continuous ? 'settings.section.readerBehavior.continuous' : 'settings.section.readerBehavior.paginated')} hint={$t(viewMode === ViewMode.Continuous ? 'settings.section.readerBehavior.continuousHint' : 'settings.section.readerBehavior.paginatedHint')} />
     {#if viewMode === ViewMode.Continuous}
       <SettingsItemGroup
-        title="自定义阅读点"
-        tooltip={'开启后可在阅读器中设置固定起算点，进度和书签从该点开始计算'}
+        title={$t('settings.item.customReadingPoint')}
+        tooltip={$t('settings.tip.customReadingPoint')}
       >
         <div class="flex items-center">
           <ButtonToggleGroup
@@ -1291,7 +1291,7 @@
               }}
               on:keyup={activateOnKeyup}
             >
-              重置阅读点
+              {$t('settings.button.resetReadingPoint')}
             </div>
           {/if}
         </div>
@@ -1500,7 +1500,7 @@
           </button>
         </div>
         {#if previewState === 'error'}
-          <p class="text-red-500 text-xs">{previewMessage}</p>
+          <p class="text-danger text-xs">{previewMessage}</p>
         {/if}
       </div>
     </SettingsItemGroup>
@@ -1533,9 +1533,8 @@
       <div class="flex items-center gap-2 flex-wrap">
         <button
           type="button"
-          class="rounded border-2 px-3 py-1 text-sm min-w-[8rem] text-center font-mono"
-          class:border-red-500={recordingShortcut}
-          class:border-gray-400={!recordingShortcut}
+          class="rounded border-2 border-current/40 px-3 py-1 text-sm min-w-[8rem] text-center font-mono"
+          class:border-danger={recordingShortcut}
           on:click={startRecordShortcut}
           on:keydown={onShortcutKeydown}
         >
@@ -1605,7 +1604,7 @@
                 </div>
               {/if}
             {:else if $kokoroLoadStatus$.phase === 'errored'}
-              <p class="text-red-500 text-xs">{$t('settings.tts.kokoro.downloadFailed')}：{$kokoroLoadStatus$.message}</p>
+              <p class="text-danger text-xs">{$t('settings.tts.kokoro.downloadFailed')}：{$kokoroLoadStatus$.message}</p>
               <button class="settings-input px-3 py-1 text-sm" on:click={kokoroRetryLoad}>{$t('common.retry')}</button>
             {:else if $kokoroLoadStatus$.phase === 'ready'}
               <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs">
@@ -1712,7 +1711,7 @@
           tooltip={$t('settings.tip.systemTtsVoice')}
         >
           {#if sapiVoicesError}
-            <p class="text-red-500 text-sm">{sapiVoicesError}</p>
+            <p class="text-danger text-sm">{sapiVoicesError}</p>
           {:else if !sapiVoices.length}
             <p class="text-sm opacity-60">{$t('settings.tts.noVoices')}</p>
           {:else}
@@ -1933,7 +1932,7 @@
       tooltip={$t('settings.tip.resetUi')}
     >
       <button
-        class="m-1 rounded-md border-2 border-gray-400 p-2 text-red-600"
+        class="m-1 rounded-md border-2 border-current/40 p-2 text-danger"
         on:click={resetUiSettings}
       >
         {$t('settings.button.resetAndReload')}
@@ -1992,7 +1991,7 @@
     <SettingsSectionHeader title={$t('settings.section.diagnostics')} hint={$t('settings.section.diagnosticsHint')} />
     <SettingsItemGroup title={$t('settings.item.diagnosticLog')} tooltip={$t('settings.tip.diagnosticLog')}>
       <button
-        class="m-1 rounded-md border-2 border-gray-400 p-2"
+        class="m-1 rounded-md border-2 border-current/40 p-2"
         on:click={() =>
           dialogManager.dialogs$.next([
             {

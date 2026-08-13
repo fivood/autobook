@@ -145,20 +145,20 @@
       type="text"
       bind:value={tokenInput}
       placeholder={$t('sync.tokenPlaceholder')}
-      class="flex-1 rounded border-2 border-gray-400 px-2 py-1 text-sm font-mono"
+      class="flex-1 rounded border-2 border-current/40 px-2 py-1 text-sm font-mono"
     />
     <button
-      class="rounded border-2 border-gray-400 px-3 py-1 text-sm hover:bg-gray-400/10"
+      class="rounded border-2 border-current/40 px-3 py-1 text-sm hover:bg-gray-400/10"
       on:click={applyToken}
       disabled={busy}
     >{$t('sync.save')}</button>
     <button
-      class="rounded border-2 border-gray-400 px-3 py-1 text-sm hover:bg-gray-400/10"
+      class="rounded border-2 border-current/40 px-3 py-1 text-sm hover:bg-gray-400/10"
       on:click={genNew}
       disabled={busy}
     >{$t('sync.generate')}</button>
     <button
-      class="rounded border-2 border-gray-400 px-3 py-1 text-sm hover:bg-gray-400/10"
+      class="rounded border-2 border-current/40 px-3 py-1 text-sm hover:bg-gray-400/10"
       title={$t('sync.copyToken')}
       on:click={copyToken}
       disabled={!tokenInput}
@@ -183,12 +183,12 @@
 
   <div class="mb-3 flex flex-wrap items-center gap-2">
     <button
-      class="flex items-center gap-1 rounded border-2 border-gray-400 px-3 py-1 text-sm hover:bg-gray-400/10"
+      class="flex items-center gap-1 rounded border-2 border-current/40 px-3 py-1 text-sm hover:bg-gray-400/10"
       on:click={manualPush}
       disabled={busy || !$syncEnabled$ || !$syncToken$}
     ><Fa icon={faUpload} size="xs" /> {$t('sync.pushNow')}</button>
     <button
-      class="flex items-center gap-1 rounded border-2 border-gray-400 px-3 py-1 text-sm hover:bg-gray-400/10"
+      class="flex items-center gap-1 rounded border-2 border-current/40 px-3 py-1 text-sm hover:bg-gray-400/10"
       on:click={manualPull}
       disabled={busy || !$syncEnabled$ || !$syncToken$}
     ><Fa icon={faDownload} size="xs" /> {$t('sync.pullNow')}</button>

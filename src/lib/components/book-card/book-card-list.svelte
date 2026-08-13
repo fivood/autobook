@@ -130,7 +130,7 @@
       class="book-grid-item relative cursor-grab active:cursor-grabbing"
       class:opacity-60={bookCard.isPlaceholder}
       draggable="true"
-      title="可拖入左侧分类"
+      title={$t('bookCard.dragToFolder')}
       on:dragstart={(ev) => dispatch('cardDragStart', { id: bookCard.id, event: ev })}
       on:mouseenter={(ev) => onCardEnter(bookCard, ev)}
       on:mouseleave={onCardLeave}
@@ -146,21 +146,21 @@
           <div
             tabindex="0"
             role="button"
-            title="已选中书籍"
-            class="absolute inset-0 bg-gray-700 bg-opacity-20"
+            title={$t('bookCard.selectedTitle')}
+            class="absolute inset-0 bg-current/10"
             on:click={() => onBookCardClick(bookCard.id)}
             on:keyup={activateOnKeyup}
           >
-            <Fa class="absolute left-2 top-2 flex text-xl text-white" icon={faCheckCircle} />
+            <Fa class="absolute left-2 top-2 flex text-xl text-menu" icon={faCheckCircle} />
           </div>
         {/if}
       </div>
       {#if selectedBookIds.has(bookCard.id)}
-        <div class="absolute top-10 left-2" title="点击查看详情">
+        <div class="absolute top-10 left-2" title={$t('bookCard.clickDetails')}>
           <Popover placement="right" fallbackPlacements={['bottom']} yOffset={5}>
             <Fa
               slot="icon"
-              class="mdc-elevation--z2 hover:mdc-elevation--z8 mdc-elevation-transition left-2 top-10 rounded-full bg-blue-400 text-xl text-white"
+              class="mdc-elevation--z2 hover:mdc-elevation--z8 mdc-elevation-transition left-2 top-10 rounded-full bg-menu text-xl text-menu"
               icon={faCircleInfo}
             />
             <div class="p-4" slot="content">
@@ -180,7 +180,8 @@
         <div
           tabindex="0"
           role="button"
-          class="mdc-elevation--z2 hover:mdc-elevation--z8 mdc-elevation-transition absolute top-1 right-1 h-6 w-6 rounded-full bg-red-400"
+          class="mdc-elevation--z2 hover:mdc-elevation--z8 mdc-elevation-transition absolute top-1 right-1 h-6 w-6 rounded-full"
+          style="background:var(--danger-color);"
           on:click={() => dispatch('removeBookClick', { id: bookCard.id })}
           on:keyup={activateOnKeyup}
         >

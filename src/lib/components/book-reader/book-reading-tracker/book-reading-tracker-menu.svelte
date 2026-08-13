@@ -199,7 +199,7 @@
     tabindex="0"
     role="button"
     title={$t('tracker.close')}
-    class="flex items-center hover:text-red-500 md:items-center"
+    class="flex items-center hover-danger md:items-center"
     on:click={() => dispatch('trackerMenuClosed')}
     on:keyup={activateOnKeyup}
   >
@@ -273,7 +273,7 @@
               <div
                 tabindex="0"
                 role="button"
-                class="ml-4 hover:text-red-500"
+                class="ml-4 hover-danger"
                 title={$t(action.titleKey)}
                 on:click={() => executeAction(action.event)}
                 on:keyup={activateOnKeyup}
@@ -385,20 +385,20 @@
               <div>{trackingHistoryItem.dateTimeKey}</div>
               <div
                 class:text-green-500={trackingHistoryItem.timeDiff > 0}
-                class:text-red-500={trackingHistoryItem.timeDiff < 0}
+                class:text-danger={trackingHistoryItem.timeDiff < 0}
               >
                 {trackingHistoryItem.timeDiff}
               </div>
               <div
                 class:text-green-500={trackingHistoryItem.characterDiff > 0}
-                class:text-red-500={trackingHistoryItem.characterDiff < 0}
+                class:text-danger={trackingHistoryItem.characterDiff < 0}
               >
                 {trackingHistoryItem.characterDiff}
               </div>
               <div class="flex">
                 <button
                   title={$t('tracker.undoItem')}
-                  class="hover:text-red-500"
+                  class="hover-danger"
                   on:click={() => dispatch('revertStatistic', trackingHistoryItem)}
                 >
                   <Fa icon={faTrash} />

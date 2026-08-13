@@ -368,6 +368,18 @@ input[type='range'] {
   .hover-soft-strong:hover {
     background-color: color-mix(in srgb, currentColor 16%, transparent);
   }
+  /* Danger affordances on page-color surfaces. Use these instead of
+   * Tailwind's text-red-* so the destructive hue follows the theme's
+   * --danger-color (and thus theme swaps) rather than a fixed palette. */
+  .text-danger {
+    color: var(--danger-color);
+  }
+  .hover-danger:hover {
+    color: var(--danger-color);
+  }
+  .border-danger {
+    border-color: var(--danger-color);
+  }
   /* Selected/active row on page-color surfaces. Same idiom as hover-soft
      but slightly stronger so it reads through a hover. */
   .bg-soft-active {

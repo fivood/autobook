@@ -55,19 +55,19 @@
   <div class="my-4 opacity-80">高亮 &amp; 笔记 · {statisticsDateRangeLabel}</div>
 
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 my-4">
-    <div class="rounded border border-gray-500/30 p-4">
+    <div class="rounded border border-current/30 p-4">
       <div class="text-xs opacity-70">高亮</div>
       <div class="text-2xl font-medium">{summary.totalHighlights}</div>
     </div>
-    <div class="rounded border border-gray-500/30 p-4">
+    <div class="rounded border border-current/30 p-4">
       <div class="text-xs opacity-70">笔记</div>
       <div class="text-2xl font-medium">{summary.totalNotes}</div>
     </div>
-    <div class="rounded border border-gray-500/30 p-4">
+    <div class="rounded border border-current/30 p-4">
       <div class="text-xs opacity-70">摘录字数</div>
       <div class="text-2xl font-medium">{summary.totalCharacters}</div>
     </div>
-    <div class="rounded border border-gray-500/30 p-4">
+    <div class="rounded border border-current/30 p-4">
       <div class="text-xs opacity-70">有高亮的天数</div>
       <div class="text-2xl font-medium">{summary.daysWithHighlights}</div>
     </div>
@@ -86,7 +86,7 @@
             : 0}
           <div class="flex items-center gap-3 text-sm">
             <div class="w-14 opacity-70">{highlightColorLabels[color]}</div>
-            <div class="flex-1 h-3 rounded bg-gray-500/15 overflow-hidden">
+            <div class="flex-1 h-3 rounded bg-current/15 overflow-hidden">
               <div
                 class="h-full rounded"
                 style="width:{(count / colorMax) * 100}%;background:{highlightColorSwatch[color]}"
@@ -121,7 +121,7 @@
         <h3 class="text-lg mb-2">Top 划线最多的书</h3>
         <div class="flex flex-col gap-1">
           {#each topBooks as book, i (book.title)}
-            <div class="grid grid-cols-[2rem_1fr_auto] gap-3 items-center text-sm py-1 border-b border-gray-500/20">
+            <div class="grid grid-cols-[2rem_1fr_auto] gap-3 items-center text-sm py-1 border-b border-current/20">
               <div class="opacity-60 tabular-nums">#{i + 1}</div>
               <div class="truncate" title={book.title}>{book.title}</div>
               <div class="opacity-80 tabular-nums text-right">
@@ -138,7 +138,7 @@
         <h3 class="text-lg mb-2">Top 标签</h3>
         <div class="flex flex-wrap gap-2">
           {#each topTags as t (t.tag)}
-            <span class="rounded-full border border-gray-500/40 px-3 py-1 text-sm">
+            <span class="rounded-full border border-current/40 px-3 py-1 text-sm">
               {t.tag} <span class="opacity-60 tabular-nums">{t.count}</span>
             </span>
           {/each}

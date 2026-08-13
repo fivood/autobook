@@ -127,7 +127,7 @@
   <div class="overflow-x-auto">
     <table class="w-full text-sm border-collapse">
       <thead>
-        <tr class="text-left opacity-60 text-xs border-b border-gray-500/25">
+        <tr class="text-left opacity-60 text-xs border-b border-current/25">
           <th class="py-1.5 pr-3 w-12"></th>
           <th
             class="py-1.5 pr-3 cursor-pointer select-none hover:opacity-100"
@@ -171,7 +171,7 @@
       <tbody>
         {#each sortedRows as row (row.title)}
           {@const coverUrl = row.coverBlob ? coverUrlCache.get(row.title) : undefined}
-          <tr class="border-b border-gray-500/15 hover:bg-gray-500/5">
+          <tr class="border-b border-current/15 hover:bg-current/5">
             <td class="py-1.5 pr-3">
               {#if coverUrl}
                 <img
@@ -182,7 +182,7 @@
                 />
               {:else}
                 <div
-                  class="h-10 w-7 rounded-sm border border-gray-500/25 opacity-50"
+                  class="h-10 w-7 rounded-sm border border-current/25 opacity-50"
                   aria-hidden="true"
                 ></div>
               {/if}
@@ -220,7 +220,7 @@
             <td class="py-1.5 pr-3">
               {#if row.totalCharacters}
                 <div class="flex items-center gap-2">
-                  <div class="flex-1 h-1.5 bg-gray-500/20 rounded overflow-hidden">
+                  <div class="flex-1 h-1.5 bg-current/20 rounded overflow-hidden">
                     <div
                       class="h-full"
                       style="width:{Math.round(row.progress * 100)}%;background:var(--accent-color, #5f7e7b)"

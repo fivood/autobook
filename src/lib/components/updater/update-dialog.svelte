@@ -150,7 +150,7 @@
       {:else if phase === 'done'}
         <p class="border-t pt-2 text-sm">{$t('update.done')}</p>
       {:else if phase === 'error'}
-        <div class="border-t pt-2 text-sm text-red-600">
+        <div class="border-t pt-2 text-sm text-danger">
           <p class="font-medium">{$t('update.failed')}</p>
           <div class="font-sans whitespace-pre-wrap mt-1">{errorMessage}</div>
         </div>

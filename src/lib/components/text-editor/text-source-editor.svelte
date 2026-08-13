@@ -205,7 +205,7 @@
           style:max-height={`calc(${minHeight} + 12rem)`}
         >
           {#if previewError}
-            <p class="text-red-500">{previewError}</p>
+            <p class="text-danger">{previewError}</p>
           {:else if previewHtml}
             {@html previewHtml}
           {:else}

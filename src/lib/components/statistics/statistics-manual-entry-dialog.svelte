@@ -397,7 +397,7 @@
     {/if}
 
     <!-- Book metadata (collapsible) -->
-    <div class="mt-2 border-t border-gray-500/25 pt-2">
+    <div class="mt-2 border-t border-current/25 pt-2">
       <button
         type="button"
         class="w-full flex items-center justify-between text-xs opacity-70 hover:opacity-100 py-1"
@@ -474,11 +474,11 @@
           <div class="flex items-start gap-3">
             <div class="flex-shrink-0">
               {#if coverPreviewUrl}
-                <img src={coverPreviewUrl} alt="cover preview" class="h-24 w-16 object-cover rounded border border-gray-500/40" />
+                <img src={coverPreviewUrl} alt="cover preview" class="h-24 w-16 object-cover rounded border border-current/40" />
               {:else if existingCoverUrl && !clearCover}
-                <img src={existingCoverUrl} alt="existing cover" class="h-24 w-16 object-cover rounded border border-gray-500/40" />
+                <img src={existingCoverUrl} alt="existing cover" class="h-24 w-16 object-cover rounded border border-current/40" />
               {:else}
-                <div class="h-24 w-16 rounded border border-dashed border-gray-500/40 flex items-center justify-center text-[10px] opacity-40">
+                <div class="h-24 w-16 rounded border border-dashed border-current/40 flex items-center justify-center text-[10px] opacity-40">
                   无封面
                 </div>
               {/if}
@@ -519,7 +519,7 @@
     {/if}
 
     {#if error}
-      <div class="text-red-500 text-xs">{error}</div>
+      <div class="text-danger text-xs">{error}</div>
     {/if}
   </div>
   <div class="flex grow justify-between items-center gap-2" slot="footer">
