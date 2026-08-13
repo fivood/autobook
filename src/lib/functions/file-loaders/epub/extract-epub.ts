@@ -15,6 +15,7 @@ import {
 import type { Entry } from '@zip.js/zip.js';
 import { XMLParser } from 'fast-xml-parser';
 import initZipSettings from '../utils/init-zip-settings';
+import pLimit from 'p-limit';
 import path from 'path-browserify';
 
 initZipSettings();
@@ -70,54 +71,60 @@ export default async function extractEpub(blob: Blob) {
       ? new Set(spineItemRefs.map((item) => item['@_idref']))
       : undefined;
 
+    // Bound decompression concurrency — image-heavy EPUBs otherwise inflate
+    // every manifest entry at once and spike memory/jank the main thread.
+    // Same pLimit(3) ceiling the PDF loader uses for page rendering.
+    const limiter = pLimit(3);
     await Promise.all(
       (isOPFType(contents)
         ? contents['opf:package']['opf:manifest']['opf:item']
         : contents.package.manifest.item
-      ).map(async (item) => {
-        const fileRelativePath = item['@_href'];
-        // OCF requires hrefs in content.opf to be percent-encoded while zip entry
-        // names are stored as raw UTF-8 — try the encoded form first, then decoded.
-        let entry = fileMap[path.join(contentsDirectory, fileRelativePath)];
+      ).map((item) =>
+        limiter(async () => {
+          const fileRelativePath = item['@_href'];
+          // OCF requires hrefs in content.opf to be percent-encoded while zip entry
+          // names are stored as raw UTF-8 — try the encoded form first, then decoded.
+          let entry = fileMap[path.join(contentsDirectory, fileRelativePath)];
 
-        if (!entry) {
-          try {
-            entry = fileMap[path.join(contentsDirectory, decodeURIComponent(fileRelativePath))];
-          } catch {
-            // malformed percent-encoding — fall through to the not-found handling
+          if (!entry) {
+            try {
+              entry = fileMap[path.join(contentsDirectory, decodeURIComponent(fileRelativePath))];
+            } catch {
+              // malformed percent-encoding — fall through to the not-found handling
+            }
           }
-        }
 
-        if (!entry) {
-          const mediaType: string = item['@_media-type'] || '';
-          const isNonCritical =
-            mediaType.startsWith('image/') ||
-            mediaType.startsWith('font/') ||
-            mediaType.startsWith('audio/') ||
-            mediaType.startsWith('video/') ||
-            mediaType === 'text/css' ||
-            mediaType === 'application/vnd.ms-opentype' ||
-            mediaType === 'application/font-woff' ||
-            (!!spineIds && !spineIds.has(item['@_id']));
+          if (!entry) {
+            const mediaType: string = item['@_media-type'] || '';
+            const isNonCritical =
+              mediaType.startsWith('image/') ||
+              mediaType.startsWith('font/') ||
+              mediaType.startsWith('audio/') ||
+              mediaType.startsWith('video/') ||
+              mediaType === 'text/css' ||
+              mediaType === 'application/vnd.ms-opentype' ||
+              mediaType === 'application/font-woff' ||
+              (!!spineIds && !spineIds.has(item['@_id']));
 
-          if (isNonCritical) {
-            console.warn(`[epub] skipping missing resource: ${fileRelativePath}`);
-            return;
+            if (isNonCritical) {
+              console.warn(`[epub] skipping missing resource: ${fileRelativePath}`);
+              return;
+            }
+            throw new Error(`item ${fileRelativePath} not found`);
           }
-          throw new Error(`item ${fileRelativePath} not found`);
-        }
 
-        if (entry.getData && !entry.directory) {
-          let value: string | Blob;
-          const mediaType: string = item['@_media-type'];
-          if (mediaType.startsWith('image/')) {
-            value = await entry.getData(new BlobWriter(mediaType));
-          } else {
-            value = await entry.getData(new TextWriter());
+          if (entry.getData && !entry.directory) {
+            let value: string | Blob;
+            const mediaType: string = item['@_media-type'];
+            if (mediaType.startsWith('image/')) {
+              value = await entry.getData(new BlobWriter(mediaType));
+            } else {
+              value = await entry.getData(new TextWriter());
+            }
+            result[fileRelativePath] = value;
           }
-          result[fileRelativePath] = value;
-        }
-      })
+        })
+      )
     );
   }
 

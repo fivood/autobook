@@ -21,7 +21,7 @@
   import { baseHeaderClasses, baseIconClasses, pxScreen } from '$lib/css-classes';
   import { pagePath } from '$lib/data/env';
   import { lastStatisticsTab$ } from '$lib/data/store';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
   import { t } from '$lib/i18n';
 
@@ -41,7 +41,7 @@
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.MAIN}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.MAIN)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faGaugeHigh} />
       </div>
@@ -54,7 +54,7 @@
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.SUMMARY}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.SUMMARY)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faCalendarDays} />
       </div>
@@ -67,7 +67,7 @@
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.BOOKS}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.BOOKS)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faBook} />
       </div>
@@ -80,7 +80,7 @@
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.AUTHORS}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.AUTHORS)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faUserPen} />
       </div>
@@ -93,7 +93,7 @@
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.SESSIONS}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.SESSIONS)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faClock} />
       </div>
@@ -106,7 +106,7 @@
         class={baseIconClasses}
         class:bg-gray-900={$lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS}
         on:click={() => ($lastStatisticsTab$ = StatisticsTab.HIGHLIGHTS)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faHighlighter} />
       </div>
@@ -116,7 +116,7 @@
         title={$t('stats.header.manualEntry')}
         class={baseIconClasses}
         on:click={() => openManualStatisticsEntry$.next()}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faPenToSquare} />
       </div>
@@ -126,7 +126,7 @@
         title={$t('stats.header.exportReport')}
         class={baseIconClasses}
         on:click={() => exportYearReport$.next()}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faFileArrowDown} />
       </div>
@@ -136,7 +136,7 @@
         title={$t('stats.header.openSettings')}
         class={baseIconClasses}
         on:click={() => (showStatisticsSettings = true)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faSliders} />
       </div>
@@ -149,7 +149,7 @@
           viewBox="0 0 24 24"
           class={baseIconClasses}
           on:click={() => goto(`${pagePath}/b?id=${currentBookId}`)}
-          on:keyup={dummyFn}
+          on:keyup={activateOnKeyup}
         >
           <title>{$t('stats.header.backToBook')}</title>
           <path

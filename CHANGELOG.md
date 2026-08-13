@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.28.2
+
+整体审计后修复一批数据正确性、性能与无障碍问题。
+
+- **修复多端同步阅读时长无限累加**：本地 `readingTime` 在 pull 后是跨设备总和，push 却把它当本设备贡献上报，服务端按设备取 max 导致总量单调增长不收敛。改为 push 时用「总和 - 其他设备贡献」还原本设备增量，pull 时持久化「其他设备贡献」基线
+- **修复字数跨端同步静默失效**：客户端发送 `charsClients`，但 Worker 从不读取/合并它，`charactersRead` 跨设备永远不同步且无报错。Worker 现在用与秒数相同的按设备 max 规则合并 `charsClients`
+- **修复旧库升级缺表**：IndexedDB 迁移 `case 2/3/4` 以 `break` 结尾，从 v2/v3/v4 升到 v12 时后续新增的 store（audioBook/subtitle/handle/folder/highlight/session 等）从未创建，首次访问即抛错。补 `contains` 保护并 fall through 到 v12 完整建表
+- **修复 PalmDoc 解压重叠回引少拷 + 除零 panic**：LZ77 回引的结束位置只计算一次，重叠引用（重复字符/短语）被截断；`offset % text_pos` 在 `text_pos==0` 时 panic。改为逐字节推进拷贝，并补 `text_pos==0` 保护（与 kf8_parser 对齐）
+- **修复 MOBI/KF8 封面取错**：图片 `index` 是「相对首个图像记录」的 1-based，EXTH CoverOffset 却是「绝对记录号」，两者只在首个图像恰好是记录 1 时相等。封面解析时把绝对记录号换算回相对索引
+- **书库加载不再全量读正文**：`getBookList` 用 `getAll('data')` 一次性把每本书的 `elementHtml` + `blobs` 载入内存只为生成卡片，大书库启动内存尖峰。改为 cursor 逐条遍历只取标量字段
+- **EPUB 导入并发与二次替换**：manifest 全部条目并发解压无上限（图片多的 EPUB 内存尖峰），且每个章节对每个图片做一次全文 `replaceAll`（章节×图片 次遍历）。解压加 `pLimit(3)`，图片路径改写合并为单次正则
+- **打字机/滚动热路径节流**：`exploredCharCount` 每字符变化都同步 dispatch `PAGE_CHANGE` 自定义事件，扇出到所有订阅者（约 60 次/秒）。改为 150ms 节流后 dispatch（无消费者读事件 detail）
+- **MutationObserver 只观察 style 属性**：原来观察整棵正文树所有属性，打字机每字符改 class 都触发同步回调；实际只关心外部模糊工具注入的 inline `filter`。加 `attributeFilter: ['style']`
+- **键盘可达性**：58+ 处 `role="button"` 的 div 用空 `on:keyup`（只为消 a11y 警告），键盘用户无法激活任何图标按钮/书卡/菜单项。统一换成 Enter/Space 触发 click 的激活处理器
+- **对话框语义与 Escape 关闭**：对话框缺 `role="dialog"/aria-modal`，无 Escape 关闭、背景被读屏器误报为按钮。补齐语义，加全局 Escape 关闭，背景改 `aria-hidden`
+- **对话框按钮与更新弹窗 i18n**：取消/确认/关闭等高频按钮及整段更新弹窗硬编码中文，切换语言不生效。全部接入三语言词条
+- **隐形但可点的 hover 控件**：分类侧栏重命名/删除按钮 `opacity-0` 但仍可命中（误触），空状态「点击添加书籍」提示仅 hover 可见。隐藏态加 `pointer-events-none`，空状态改真按钮并常显提示
+
 ## 1.28.1
 
 - **韩文模型管理入口**：设置 → AI → 模型管理新增「PaddleOCR 韩文」卡片，可查看韩文模型状态、卸载（只清韩文，不影响其他语言）；下载由首次韩文 OCR 自动触发

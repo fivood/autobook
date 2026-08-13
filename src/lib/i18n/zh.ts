@@ -184,7 +184,24 @@ export default {
   'shortcuts.action.toggleTrackingFreeze': '统计暂停 / 继续',
 
   // Reader dialogs
+  'dialog.cancel': '取消',
+  'dialog.close': '关闭',
+  'dialog.confirm': '确认',
   'dialog.jumpToProgress.header': '跳转到进度（当前 {pct}%）',
+  'dialog.numberRange': '必须在 {min} 和 {max} 之间',
+
+  // Updater dialog
+  'update.header': '发现新版本 {version}',
+  'update.currentToNew': '当前版本 {current} → 新版本 {target}',
+  'update.changelog.multi': '更新内容（共 {count} 个版本）',
+  'update.changelog.single': '更新内容',
+  'update.downloading': '正在下载…',
+  'update.installing': '正在安装，应用稍后会自动重启…',
+  'update.done': '安装完成，正在重启…',
+  'update.failed': '更新失败',
+  'update.later': '稍后',
+  'update.retry': '重试',
+  'update.installNow': '立即更新',
   'dialog.completeBook.header': '完成本书',
   'dialog.completeBook.body': '确认完成本书？',
   'dialog.completeBook.bodyWithChars': '确认完成本书？（计入 {chars} 字）',

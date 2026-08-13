@@ -39,6 +39,9 @@ interface ReportPayload {
 interface DayEntry {
   /** Per-device daily totals; server keeps max(client-reported) per device. */
   clients: Record<string, number>;
+  /** Per-device chars-read totals; merged with the same max-by-device rule.
+   * Absent for days only pushed by pre-chars-sync clients. */
+  charsClients?: Record<string, number>;
   /** Server-side last update millis. */
   updatedAt: number;
 }
@@ -95,7 +98,10 @@ async function saveState(env: Env, token: string, state: UserState): Promise<voi
 }
 
 interface IncomingPayload {
-  books?: Record<string, Record<string, { clients?: Record<string, number> }>>;
+  books?: Record<
+    string,
+    Record<string, { clients?: Record<string, number>; charsClients?: Record<string, number> }>
+  >;
 }
 
 function mergeInto(server: UserState, incoming: IncomingPayload, now: number): UserState {
@@ -123,6 +129,16 @@ function mergeInto(server: UserState, incoming: IncomingPayload, now: number): U
         const prior = day.clients[clientId] || 0;
         if (capped > prior) {
           day.clients[clientId] = capped;
+          changed = true;
+        }
+      }
+      const incomingChars = entry.charsClients || {};
+      for (const [clientId, chars] of Object.entries(incomingChars)) {
+        if (typeof chars !== 'number' || !isFinite(chars) || chars < 0) continue;
+        const prior = day.charsClients?.[clientId] || 0;
+        if (chars > prior) {
+          if (!day.charsClients) day.charsClients = {};
+          day.charsClients[clientId] = chars;
           changed = true;
         }
       }

@@ -10,7 +10,7 @@
   import { dialogManager } from '$lib/data/dialog-manager';
   import { PAGE_CHANGE } from '$lib/data/events';
   import { skipKeyDownListener$, statisticsEnabled$ } from '$lib/data/store';
-  import { dummyFn, getWeightedAverage } from '$lib/functions/utils';
+  import { activateOnKeyup, getWeightedAverage } from '$lib/functions/utils';
   import { debounceTime, fromEvent, merge, take } from 'rxjs';
   import { onMount } from 'svelte';
   import Fa from 'svelte-fa';
@@ -136,7 +136,7 @@
     title={$t('toc.close')}
     class="flex items-end md:items-center"
     on:click={closeTocMenu}
-    on:keyup={dummyFn}
+    on:keyup={activateOnKeyup}
   >
     <Fa icon={faXmark} />
   </div>
@@ -154,7 +154,7 @@
         class:hover:opacity-100={chapter.progress === 100 && chapter !== currentChapter}
         class:hover:opacity-60={chapter.progress < 100 || chapter === currentChapter}
         on:click={() => goToChapter(chapter.reference, true)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         {chapter.label}
       </div>
@@ -171,7 +171,7 @@
     title={verticalMode ? $t('toc.nextChapter') : $t('toc.prevChapter')}
     class:opacity-30={!prevChapterAvailable}
     on:click={() => changeChapter(prevChapterAvailable, verticalMode ? 1 : -1)}
-    on:keyup={dummyFn}
+    on:keyup={activateOnKeyup}
   >
     <Fa icon={faChevronLeft} />
   </div>
@@ -181,7 +181,7 @@
     title={verticalMode ? $t('toc.prevChapter') : $t('toc.nextChapter')}
     class:opacity-30={!nextChapterAvailable}
     on:click={() => changeChapter(nextChapterAvailable, verticalMode ? -1 : 1)}
-    on:keyup={dummyFn}
+    on:keyup={activateOnKeyup}
   >
     <Fa icon={faChevronRight} />
   </div>

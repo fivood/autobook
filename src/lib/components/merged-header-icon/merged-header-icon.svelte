@@ -7,7 +7,7 @@
   import Popover from '$lib/components/popover/popover.svelte';
   import { baseIconClasses } from '$lib/css-classes';
   import { pagePath } from '$lib/data/env';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import { t } from '$lib/i18n';
 
   // Merge-entry items carry sidecar `labelKey` / `titleKey` for i18n
@@ -81,7 +81,7 @@
         title={actionItem.titleKey ? $t(actionItem.titleKey) : actionItem.title}
         class={baseIconClasses}
         on:click={() => handleActionMenuItem(actionItem.label)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={actionItem.icon} />
       </div>
@@ -105,7 +105,7 @@
             class="menu-item"
             title={actionItem.titleKey ? $t(actionItem.titleKey) : actionItem.title}
             on:click={() => handleActionMenuItem(actionItem.label)}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
           >
             {actionItem.labelKey ? $t(actionItem.labelKey) : actionItem.label}
           </div>

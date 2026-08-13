@@ -3,6 +3,7 @@
   import { onDestroy } from 'svelte';
   import Fa from 'svelte-fa';
   import { t } from '$lib/i18n';
+  import { activateOnKeyup } from '$lib/functions/utils';
 
   export let imagePath: string | Blob;
   export let title: string;
@@ -111,7 +112,7 @@
   title={detectedFormat === 'BOOK' ? cleanTitle : `${cleanTitle} · ${detectedFormat}`}
   class="book-card-root aspect-w-2 aspect-h-3 relative overflow-hidden rounded-lg"
   on:click
-  on:keyup
+  on:keyup={activateOnKeyup}
 >
   <div class="inline">
     <div class="h-full w-full text-5xl sm:text-7xl">

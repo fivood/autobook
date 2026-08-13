@@ -9,7 +9,7 @@
   import { locale$, LOCALES, t, type Locale } from '$lib/i18n';
   import { faLanguage } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
 
   let picker: Popover;
 
@@ -36,7 +36,7 @@
         class="menu-item"
         class:menu-item-active={$locale$ === loc}
         on:click={() => pick(loc)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         {$t('locale.' + loc)}
       </div>

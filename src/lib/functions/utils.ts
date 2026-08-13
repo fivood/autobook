@@ -40,7 +40,18 @@ export function isOnOldUrl(window: Window) {
   return window.location.href.startsWith('https://ttu-ebook.web.app');
 }
 
-export function dummyFn() {}
+/**
+ * Keyboard activation for `role="button"` divs. Enter / Space fire a synthetic
+ * click on the focused element, matching native `<button>` behaviour. Replaces
+ * the old no-op `dummyFn` that only silenced Svelte's a11y warnings while
+ * leaving the controls keyboard-dead.
+ */
+export function activateOnKeyup(event: KeyboardEvent) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    (event.currentTarget as HTMLElement).click();
+  }
+}
 
 export const isMobile$ = writableSubject<boolean>(false);
 

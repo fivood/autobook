@@ -3,7 +3,7 @@
   import { dialogManager } from '$lib/data/dialog-manager';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import TextInputDialog from '$lib/components/text-input-dialog.svelte';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
   import { createEventDispatcher } from 'svelte';
   import { tick } from 'svelte';
@@ -179,7 +179,7 @@
               if (ev.key === 'Escape') (renamingId = null);
             }}
             on:blur={commitRename}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
             bind:this={renameInput}
           />
         {:else}
@@ -195,7 +195,7 @@
         <button
           type="button"
           title={$t('folders.rename')}
-          class="opacity-0 group-hover:opacity-60 hover:opacity-100 px-1"
+          class="pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-60 hover:opacity-100 px-1"
           on:click|stopPropagation={() => startRename(folder.id, folder.name)}
         >
           <Fa icon={faPencil} />
@@ -203,7 +203,7 @@
         <button
           type="button"
           title={$t('folders.delete')}
-          class="opacity-0 group-hover:opacity-60 hover:opacity-100 px-1"
+          class="pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-60 hover:opacity-100 px-1"
           on:click|stopPropagation={() => confirmDelete(folder.id, folder.name)}
         >
           <Fa icon={faTrash} />

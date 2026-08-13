@@ -97,6 +97,19 @@ export default function generateEpubHtml(
     return acc;
   }, []);
 
+  // Pre-build a single alternation regex for blob path → dummy URL so the
+  // per-section rewrite below is one pass instead of one replaceAll per blob
+  // (chapters × images full-walks, quadratic on image-heavy books).
+  const blobRelativeToKey = new Map<string, string>();
+  for (const blobLocation of blobLocations) {
+    blobRelativeToKey.set(relative(contentsDirectory, blobLocation), blobLocation);
+  }
+  // Longest path first so a more specific `ab.jpg` matches before `a.jpg`.
+  const blobRelativePaths = [...blobRelativeToKey.keys()].sort((a, b) => b.length - a.length);
+  const blobRelativeRe = blobRelativePaths.length
+    ? new RegExp(blobRelativePaths.map(reEscape).join('|'), 'g')
+    : null;
+
   const parser = new DOMParser();
   const spineItemRef = isOPFType(contents)
     ? contents['opf:package']['opf:spine']['opf:itemref']
@@ -235,12 +248,12 @@ export default function generateEpubHtml(
 
     let innerHtml = body.innerHTML || '';
 
-    blobLocations.forEach((blobLocation) => {
-      innerHtml = innerHtml.replaceAll(
-        relative(contentsDirectory, blobLocation),
-        buildDummyBookImage(blobLocation)
-      );
-    });
+    if (blobRelativeRe) {
+      innerHtml = innerHtml.replace(blobRelativeRe, (match) => {
+        const key = blobRelativeToKey.get(match);
+        return key ? buildDummyBookImage(key) : match;
+      });
+    }
 
     const childBodyDiv = document.createElement('div');
     childBodyDiv.className = `ttu-book-body-wrapper ${bodyClass}`;
@@ -345,6 +358,12 @@ function flattenAnchorHref(el: HTMLElement) {
     if (!oldHref) return;
     tag.setAttribute('href', `#${oldHref.replace(/.+#/, '')}`);
   });
+}
+
+// Escape regex metacharacters in a literal path string. Book blob keys/paths
+// can contain periods, hyphens, brackets.
+function reEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

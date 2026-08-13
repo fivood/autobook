@@ -99,19 +99,22 @@ fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
                 dist_len_bytes &= 0x3fff;
                 let offset = (dist_len_bytes >> 3) as usize;
                 let len = ((dist_len_bytes & 0x0007) + 3) as usize;
-                let start = if offset > text_pos {
+                let mut start = if offset > text_pos {
+                    if text_pos == 0 {
+                        return text;
+                    }
                     offset % text_pos
                 } else {
                     text_pos - offset
                 };
-                let end = if start + len >= text.len() {
-                    text.len()
-                } else {
-                    start + len
-                };
-                for i in start..end {
-                    text.push(text[i]);
+                // Copy len bytes, advancing `start` as `text` grows so
+                // overlapping back-references (repeated chars/phrases) copy
+                // the full run instead of freezing `end` at the old length.
+                for _ in 0..len {
+                    let byte = text[start];
+                    text.push(byte);
                     text_pos += 1;
+                    start += 1;
                 }
             }
             0x0 | 0x09..=0x7f => {
@@ -646,7 +649,11 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
             });
         }
     }
+    // EXTH CoverOffset is a 0-based record number (+1 inside the parser), but
+    // images[].index is 1-based relative to `scan_start`. Convert the absolute
+    // record number into that relative space so the cover actually resolves.
     let cover_index = crate::kf8_parser::parse_exth_cover_offset(rec0)
+        .map(|abs_one_based| abs_one_based.saturating_sub(scan_start))
         .filter(|&idx| idx > 0 && idx <= images.len())
         .unwrap_or_else(|| if images.is_empty() { 0 } else { 1 });
 

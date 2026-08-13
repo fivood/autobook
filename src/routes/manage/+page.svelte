@@ -229,6 +229,7 @@
   let cancelSignal = cancelToken.signal;
   let cancelTooltip = '';
   let isDragOver = false;
+  let fileInputEl: HTMLInputElement | undefined;
   let replicationProgress = 0;
   let replicationToProgress = 0;
   let replicationProgressRemaining = '准备中…';
@@ -979,9 +980,9 @@
     totalBookCount={$bookCards$?.length ?? 0}
     on:booksAddedToFolder={({ detail }) => flashToast(`已加入分类（${detail.count} 本）`)}
   />
+  <!-- svelte-ignore a11y-no-static-element-interactions — this is the library
+       drop target; drag-and-drop is pointer-only, so no keyboard role applies. -->
   <div
-    tabindex="0"
-    role="button"
     class="px-4 md:px-8 mx-auto w-full relative flex-1 overflow-auto"
     on:dragenter={(ev) => {
       ev.preventDefault();
@@ -1065,23 +1066,30 @@
   {:else if $activeFolderFilter$ !== 'all'}
     <div class="mt-20 text-center text-sm opacity-60">这个分类还是空的；拖书过来或框选后点上面的胶囊加入</div>
   {:else}
-    <label
-      class="group mx-auto mt-44 flex w-3/6 cursor-pointer flex-col items-center justify-center text-gray-400 text-opacity-40 hover:text-opacity-60 xl:w-3/12"
+    <div
+      class="mx-auto mt-44 flex w-3/6 flex-col items-center justify-center text-gray-400 text-opacity-40 hover:text-opacity-60 xl:w-3/12"
     >
-      <div class="flex w-full justify-center transition-transform group-hover:scale-105">
-        <Fa icon={faUpload} style="width: 100%; height: auto" />
-      </div>
-      <span class="mt-4 text-sm opacity-0 transition-opacity group-hover:opacity-100">
-        点击添加书籍
-      </span>
+      <button
+        type="button"
+        class="flex w-full cursor-pointer flex-col items-center justify-center"
+        on:click={() => fileInputEl?.click()}
+      >
+        <div class="flex w-full justify-center transition-transform">
+          <Fa icon={faUpload} style="width: 100%; height: auto" />
+        </div>
+        <span class="mt-4 text-sm opacity-60">
+          点击添加书籍
+        </span>
+      </button>
       <input
         type="file"
         accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,.cbz,.cbr,.cb7,.cbt,application/zip,.zip"
         multiple
         hidden
+        bind:this={fileInputEl}
         use:inputFile={onFilesChange}
       />
-    </label>
+    </div>
   {/if}
   </div>
 </div>
@@ -1092,8 +1100,7 @@
     style="transition: opacity 200ms ease;"
   >
     <div
-      class="flex items-center gap-2 rounded-full px-4 py-2 shadow-lg"
-      style="background: rgba(95,126,123,0.95); color: #f0efe6;"
+      class="flex items-center gap-2 rounded-full bg-menu px-4 py-2 text-menu shadow-lg"
     >
       <Fa icon={faCheck} />
       <span class="text-sm">{toastMessage}</span>

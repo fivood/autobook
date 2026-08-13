@@ -104,34 +104,49 @@ export function createBooksDb(name = 'books') {
           break;
         }
         case 2: {
-          await upgradeBooksDbFromV2(oldDb, oldVersion, newVersion, transaction);
-          break;
+          // The v1→v2 migration only applies to databases still on the old
+          // keyvaluepairs (localforage) layout. A db already at v2 has
+          // data/bookmark/lastItem and must not re-run it (the stores exist).
+          // `keyvaluepairs` isn't part of the current BooksDb type, so the
+          // cast widens the typed name list for this one legacy lookup.
+          if ((oldDb.objectStoreNames as unknown as string[]).includes('keyvaluepairs')) {
+            await upgradeBooksDbFromV2(oldDb, oldVersion, newVersion, transaction);
+          }
+          // Fall through to build any stores added after v2.
         }
         case 3: {
-          oldDb.createObjectStore('storageSource', {
-            keyPath: 'name'
-          });
-          break;
+          if (!oldDb.objectStoreNames.contains('storageSource')) {
+            oldDb.createObjectStore('storageSource', {
+              keyPath: 'name'
+            });
+          }
+          // Fall through to v4 → v5 upgrade.
         }
         case 4: {
-          const statisticsStore = oldDb.createObjectStore('statistic', {
-            keyPath: ['title', 'dateKey']
-          });
+          if (!oldDb.objectStoreNames.contains('statistic')) {
+            const statisticsStore = oldDb.createObjectStore('statistic', {
+              keyPath: ['title', 'dateKey']
+            });
 
-          statisticsStore.createIndex('dateKey', 'dateKey');
-          statisticsStore.createIndex('completedBook', ['completedBook', 'title']);
+            statisticsStore.createIndex('dateKey', 'dateKey');
+            statisticsStore.createIndex('completedBook', ['completedBook', 'title']);
+          }
 
-          const readingGoalsStore = oldDb.createObjectStore('readingGoal', {
-            keyPath: 'goalStartDate'
-          });
+          if (!oldDb.objectStoreNames.contains('readingGoal')) {
+            const readingGoalsStore = oldDb.createObjectStore('readingGoal', {
+              keyPath: 'goalStartDate'
+            });
 
-          readingGoalsStore.createIndex('goalEndDate', 'goalEndDate');
+            readingGoalsStore.createIndex('goalEndDate', 'goalEndDate');
+          }
 
-          oldDb.createObjectStore('lastModified', {
-            keyPath: ['title', 'dataType']
-          });
+          if (!oldDb.objectStoreNames.contains('lastModified')) {
+            oldDb.createObjectStore('lastModified', {
+              keyPath: ['title', 'dataType']
+            });
+          }
 
-          break;
+          // Fall through to v5 → v6 upgrade.
         }
         case 5: {
           if (!oldDb.objectStoreNames.contains('audioBook')) {

@@ -15,6 +15,8 @@
 </script>
 
 <section
+  role="dialog"
+  aria-modal="true"
   class="mdc-elevation--z24 rounded p-6"
   style="background-color: {resolved.backgroundColor || '#fff'}; color: {resolved.fontColor || '#000'};"
 >

@@ -3,6 +3,7 @@
   import { buttonClasses } from '$lib/css-classes';
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
+  import { t } from '$lib/i18n';
 
   export let title: string;
 
@@ -20,7 +21,7 @@
   </svelte:fragment>
   <svelte:fragment slot="footer">
     <button class={buttonClasses} on:click={() => dispatch('close')}>
-      关闭
+      {$t('dialog.close')}
       <Ripple />
     </button>
   </svelte:fragment>

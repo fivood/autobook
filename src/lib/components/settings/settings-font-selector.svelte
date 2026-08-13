@@ -2,7 +2,7 @@
   import { faFont } from '@fortawesome/free-solid-svg-icons';
   import Popover from '$lib/components/popover/popover.svelte';
   import { LocalFont } from '$lib/data/fonts';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
 
   export let availableFonts: LocalFont[] = [LocalFont.NOTOSANSJP];
@@ -26,7 +26,7 @@
           fontValue = font;
           element.toggleOpen();
         }}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         {font}
       </div>

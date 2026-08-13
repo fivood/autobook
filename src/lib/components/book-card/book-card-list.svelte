@@ -4,7 +4,7 @@
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import Popover from '$lib/components/popover/popover.svelte';
   import { bookCoverMinWidth$ } from '$lib/data/store';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -148,7 +148,7 @@
             title="已选中书籍"
             class="absolute inset-0 bg-gray-700 bg-opacity-20"
             on:click={() => onBookCardClick(bookCard.id)}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
           >
             <Fa class="absolute left-2 top-2 flex text-xl text-white" icon={faCheckCircle} />
           </div>
@@ -181,7 +181,7 @@
           role="button"
           class="mdc-elevation--z2 hover:mdc-elevation--z8 mdc-elevation-transition absolute top-1 right-1 h-6 w-6 rounded-full bg-red-400"
           on:click={() => dispatch('removeBookClick', { id: bookCard.id })}
-          on:keyup={dummyFn}
+          on:keyup={activateOnKeyup}
         >
           <svg role="img" class="w-full" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 504 504">
             <path

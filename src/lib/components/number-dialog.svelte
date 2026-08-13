@@ -2,6 +2,7 @@
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { buttonClasses, inputClasses } from '$lib/css-classes';
+  import { t } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 
   export let dialogHeader: string;
@@ -19,7 +20,7 @@
 
   function closeDialog(position?: number) {
     if (typeof position === 'number' && (position < minValue || position > maxValue)) {
-      error = `必须在 ${minValue} 和 ${maxValue} 之间`;
+      error = $t('dialog.numberRange', { min: minValue, max: maxValue });
       return;
     }
     resolver(position);
@@ -50,11 +51,11 @@
       class:invisible={!showCancel}
       on:click={() => closeDialog(undefined)}
     >
-      取消
+      {$t('dialog.cancel')}
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog(target)}>
-      确认
+      {$t('dialog.confirm')}
       <Ripple />
     </button>
   </div>

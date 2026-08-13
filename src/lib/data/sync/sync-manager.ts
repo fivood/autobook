@@ -33,6 +33,12 @@ interface MyContribState {
   /** books[title][dateKey] = charsThisDeviceContributedSoFar. Optional — an
    * older cache on disk simply won't have it, and reads must tolerate that. */
   booksChars?: Record<string, Record<string, number>>;
+  /** othersBooks[title][dateKey] = seconds contributed by OTHER devices (sum),
+   * recorded on the last pull. `readingTime` in the DB is the cross-device sum,
+   * so our own contribution must be recovered as `readingTime - others`. */
+  othersBooks?: Record<string, Record<string, number>>;
+  /** othersBooksChars[title][dateKey] = chars contributed by OTHER devices (sum). */
+  othersBooksChars?: Record<string, Record<string, number>>;
 }
 
 function loadMyContrib(): MyContribState {
@@ -93,22 +99,31 @@ async function buildPushPayload(): Promise<{
   > = {};
   const changed: Array<[string, string, number, number]> = [];
   for (const s of stats) {
-    const localTime = s.readingTime || 0;
-    const localChars = s.charactersRead || 0;
-    if (localTime <= 0 && localChars <= 0) continue;
+    const totalTime = s.readingTime || 0;
+    const totalChars = s.charactersRead || 0;
+    if (totalTime <= 0 && totalChars <= 0) continue;
+    // Our own contribution = local total minus what other devices already
+    // contributed (captured on the last pull). Pushing the raw `readingTime`
+    // would send the cross-device sum as "this device", and the worker's
+    // per-device max() merge would then grow monotonically forever.
+    const othersTime = cache.othersBooks?.[s.title]?.[s.dateKey] ?? 0;
+    const othersChars = cache.othersBooksChars?.[s.title]?.[s.dateKey] ?? 0;
+    const myTime = Math.max(0, totalTime - othersTime);
+    const myChars = Math.max(0, totalChars - othersChars);
+    if (myTime <= 0 && myChars <= 0) continue;
     const priorTime = cache.books[s.title]?.[s.dateKey] ?? -1;
     const priorChars = cache.booksChars?.[s.title]?.[s.dateKey] ?? -1;
-    if (localTime === priorTime && localChars === priorChars) continue;
+    if (myTime === priorTime && myChars === priorChars) continue;
     books[s.title] = books[s.title] || {};
     const entry: {
       clients: Record<string, number>;
       charsClients?: Record<string, number>;
-    } = { clients: { [deviceId]: localTime } };
-    if (localChars > 0) {
-      entry.charsClients = { [deviceId]: localChars };
+    } = { clients: { [deviceId]: myTime } };
+    if (myChars > 0) {
+      entry.charsClients = { [deviceId]: myChars };
     }
     books[s.title][s.dateKey] = entry;
-    changed.push([s.title, s.dateKey, localTime, localChars]);
+    changed.push([s.title, s.dateKey, myTime, myChars]);
   }
   if (!changed.length) return null;
   return { books, changedKeys: changed };
@@ -130,6 +145,14 @@ async function applyRemoteToLocal(remote: RemoteState) {
     const otherDevicesChars = Object.entries(row.charsClients)
       .filter(([id]) => id !== deviceId)
       .reduce((sum, [, c]) => sum + c, 0);
+    // Persist the "others" baseline so buildPushPayload can subtract it from
+    // the (summed) readingTime to recover our own contribution.
+    contrib.othersBooks = contrib.othersBooks || {};
+    contrib.othersBooks[row.book] = contrib.othersBooks[row.book] || {};
+    contrib.othersBooks[row.book][row.date] = otherDevicesTime;
+    contrib.othersBooksChars = contrib.othersBooksChars || {};
+    contrib.othersBooksChars[row.book] = contrib.othersBooksChars[row.book] || {};
+    contrib.othersBooksChars[row.book][row.date] = otherDevicesChars;
     if (!existing) {
       if (otherDevicesTime > 0 || otherDevicesChars > 0) {
         const speed =
@@ -164,6 +187,7 @@ async function applyRemoteToLocal(remote: RemoteState) {
     }
   }
   await tx.done;
+  saveMyContrib(contrib);
   saveCachedRemote(remote);
 }
 

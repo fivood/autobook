@@ -2,7 +2,7 @@
   import { inputClasses } from '$lib/css-classes';
   import { reservedFontNames } from '$lib/data/fonts';
   import { userFonts$ } from '$lib/data/store';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
 
@@ -131,7 +131,7 @@
           addFont();
         }
       }}
-      on:keyup={dummyFn}
+      on:keyup={activateOnKeyup}
     >
       <Fa class="text-xl mx-2" icon={faFloppyDisk} />
     </div>

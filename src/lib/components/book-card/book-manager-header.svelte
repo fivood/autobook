@@ -56,7 +56,7 @@
   ];
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import { inputFile } from '$lib/functions/file-dom/input-file';
-  import { dummyFn, isMobile$, isOnOldUrl } from '$lib/functions/utils';
+  import { activateOnKeyup, isMobile$, isOnOldUrl } from '$lib/functions/utils';
   import {
     faArrowDownShortWide,
     faArrowDownWideShort,
@@ -276,7 +276,7 @@
             class:opacity-60={!selectMode}
             class={baseIconClasses}
             on:click={() => (selectMode = hasBooks && !selectMode)}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
           >
             <title>{$t('manager.selectMode.aria')}</title>
             <path
@@ -297,7 +297,7 @@
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
             on:click={() => (selectMode = !selectMode)}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
           >
             <Fa icon={faTimes} />
           </div>
@@ -322,7 +322,7 @@
                 in:scale={inAnimationParams}
                 out:scale={outAnimationParams}
                 on:click={() => dispatch('backToBookClick')}
-                on:keyup={dummyFn}
+                on:keyup={activateOnKeyup}
               >
                 <path
                   class="fill-current"
@@ -342,7 +342,7 @@
               in:scale={inAnimationParams}
               out:scale={outAnimationParams}
               on:click={() => dispatch('selectAllClick')}
-              on:keyup={dummyFn}
+              on:keyup={activateOnKeyup}
             >
               <path
                 class="fill-current"
@@ -584,7 +584,7 @@
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
             on:click={() => dispatch('replicateData')}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
           >
             <Fa icon={faCloudArrowUp} />
           </div>
@@ -597,7 +597,7 @@
               in:scale={inAnimationParams}
               out:scale={outAnimationParams}
               on:click={() => dispatch('selectionToStatistics')}
-              on:keyup={dummyFn}
+              on:keyup={activateOnKeyup}
             >
               <Fa icon={faChartLine} />
             </div>
@@ -609,7 +609,7 @@
               in:scale={inAnimationParams}
               out:scale={outAnimationParams}
               on:click={() => dispatch('deleteStatistics')}
-              on:keyup={dummyFn}
+              on:keyup={activateOnKeyup}
             >
               <Fa icon={faCalendarXmark} />
             </div>
@@ -622,7 +622,7 @@
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
             on:click={() => dispatch('removeClick')}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
           >
             <Fa icon={faTrash} />
           </div>
@@ -641,7 +641,7 @@
           tabindex="0"
           role="button"
           on:click={() => dispatch('cancelReplication')}
-          on:keyup={dummyFn}
+          on:keyup={activateOnKeyup}
         >
           <Fa icon={faCircleXmark} class="cursor-pointer" />
         </div>

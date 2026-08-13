@@ -25,7 +25,7 @@
   } from '$lib/css-classes';
   import { customReadingPointEnabled$, viewMode$ } from '$lib/data/store';
   import { ViewMode } from '$lib/data/view-mode';
-  import { dummyFn, isMobile$, isOnOldUrl } from '$lib/functions/utils';
+  import { activateOnKeyup, isMobile$, isOnOldUrl } from '$lib/functions/utils';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
   import { t } from '$lib/i18n';
@@ -135,7 +135,7 @@
         title={$t('reader.editText')}
         class={baseIconClasses}
         on:click={() => dispatch('editTextClick')}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faPenToSquare} />
       </div>
@@ -147,7 +147,7 @@
         title={$t('reader.toc')}
         class={baseIconClasses}
         on:click={() => dispatch('tocClick')}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faList} />
       </div>
@@ -158,7 +158,7 @@
       title={$t('reader.highlights')}
       class={baseIconClasses}
       on:click={() => dispatch('highlightClick')}
-      on:keyup={dummyFn}
+      on:keyup={activateOnKeyup}
     >
       <Fa icon={faHighlighter} />
     </div>
@@ -169,7 +169,7 @@
         title={$t('reader.ai')}
         class={baseIconClasses}
         on:click={() => dispatch('aiClick')}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faRobot} />
       </div>
@@ -180,7 +180,7 @@
       title={$t('reader.bookmark')}
       class={baseIconClasses}
       on:click={() => dispatch('bookmarkClick')}
-      on:keyup={dummyFn}
+      on:keyup={activateOnKeyup}
     >
       <Fa icon={isBookmarkScreen ? fasBookmark : farBookmark} />
     </div>
@@ -191,7 +191,7 @@
         title={$t('reader.bookmarkReturn')}
         class={baseIconClasses}
         on:click={() => dispatch('scrollToBookmarkClick')}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faRotateLeft} />
       </div>
@@ -222,7 +222,7 @@
       title={$t('reader.finishBook')}
       class={baseIconClasses}
       on:click={() => dispatch('completeBook')}
-      on:keyup={dummyFn}
+      on:keyup={activateOnKeyup}
     >
       <Fa icon={faFlag} />
     </div>
@@ -244,7 +244,7 @@
                 role="button"
                 class="menu-item"
                 on:click={() => dispatchCustomReadingPointAction(actionItem.action)}
-                on:keyup={dummyFn}
+                on:keyup={activateOnKeyup}
               >
                 {$t(actionItem.labelKey)}
               </div>
@@ -260,7 +260,7 @@
         title={$t('reader.fullscreen')}
         class={baseIconClasses}
         on:click={() => dispatch('fullscreenClick')}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faExpand} />
       </div>

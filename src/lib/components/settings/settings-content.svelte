@@ -93,7 +93,7 @@
   import { t, tImmediate, locale$, LOCALES } from '$lib/i18n';
   import type { WritingMode } from '$lib/data/writing-mode';
   import { secondsToMinutes } from '$lib/functions/statistic-util';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import {
     ReplicationSaveBehavior,
     AutoReplicationType
@@ -1110,7 +1110,7 @@
                   props: { fontFamily: fontFamilyGroupOne$ }
                 }
               ])}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
           >
             <Fa icon={faComputer} />
           </div>
@@ -1140,7 +1140,7 @@
                   props: { fontFamily: fontFamilyGroupTwo$ }
                 }
               ])}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
           >
             <Fa icon={faComputer} />
           </div>
@@ -1289,7 +1289,7 @@
                 verticalCustomReadingPosition$.next(100);
                 horizontalCustomReadingPosition$.next(0);
               }}
-              on:keyup={dummyFn}
+              on:keyup={activateOnKeyup}
             >
               重置阅读点
             </div>

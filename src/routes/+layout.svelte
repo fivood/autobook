@@ -24,7 +24,7 @@
   import { HIGHLIGHT_COLOR_RGB } from '$lib/data/highlight-color';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
-  import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
+  import { isMobile, isMobile$ } from '$lib/functions/utils';
   import { MetaTags } from 'svelte-meta-tags';
   import '../app.scss';
 
@@ -120,6 +120,13 @@
     zIndex = '';
   }
 
+  function handleDialogKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && dialogs.length > 0 && !clickOnCloseDisabled) {
+      event.preventDefault();
+      closeAllDialogs();
+    }
+  }
+
   // Remove only the dialog that dispatched 'close' (by identity), not the whole
   // stack. This lets a dialog's resolver push a follow-up dialog before close
   // fires — closeAllDialogs would wipe that just-pushed dialog (the chaining bug
@@ -192,7 +199,7 @@
   });
 </script>
 
-<svelte:window bind:online={$isOnline$} />
+<svelte:window bind:online={$isOnline$} on:keydown={handleDialogKeydown} />
 
 <MetaTags
   title="AutoBook"
@@ -217,15 +224,13 @@
 {#if dialogs.length > 0}
   <div class="writing-horizontal-tb fixed inset-0 z-50 h-full w-full" style:z-index={zIndex}>
     <div
-      tabindex="0"
-      role="button"
+      aria-hidden="true"
       class="tap-highlight-transparent absolute inset-0 bg-black/[.32]"
       on:click={() => {
         if (!clickOnCloseDisabled) {
           closeAllDialogs();
         }
       }}
-      on:keyup={dummyFn}
     />
 
     <div

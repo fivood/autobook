@@ -283,7 +283,7 @@
   import { clickOutside } from '$lib/functions/use-click-outside';
   import {
     convertRemToPixels,
-    dummyFn,
+    activateOnKeyup,
     isMobile$,
     limitToRange,
     getWeightedAverage
@@ -781,8 +781,21 @@
     autoReader?.off();
   }
 
+  // Throttle the explored-char PAGE_CHANGE dispatch. exploredCharCount is
+  // bumped per-character during typewriter/scroll, and a synchronous
+  // CustomEvent per change allocates + fans out to every fromEvent(PAGE_CHANGE)
+  // subscriber (~60/s). No consumer reads the event's detail — they all treat
+  // it as a "position changed" signal with their own debounce/throttle — so
+  // emitting at most once per 150ms is safe.
+  const exploredPageChange$ = new Subject<number>();
+  exploredPageChange$.pipe(debounceTime(150)).subscribe((explored) => {
+    document.dispatchEvent(
+      new CustomEvent(PAGE_CHANGE, { detail: { exploredCharCount: explored } })
+    );
+  });
+
   $: if (browser && bookCharCount) {
-    document.dispatchEvent(new CustomEvent(PAGE_CHANGE, { detail: { exploredCharCount } }));
+    exploredPageChange$.next(exploredCharCount);
   }
 
   $: if (browser) {
@@ -2413,7 +2426,7 @@
   }}
   on:mouseleave={() => clearTimeout(headerEnterTimer)}
   on:click={() => (showHeader = true)}
-  on:keyup={dummyFn}
+  on:keyup={activateOnKeyup}
 ></div>
 {#if $rawBookData$ && isScannedPdf($rawBookData$)}
   <PdfOcrBanner
@@ -2821,7 +2834,7 @@
   class="writing-horizontal-tb fixed bottom-0 left-0 z-10 flex h-8 w-full items-center justify-between text-xs leading-none"
   style:color={$themeOption$?.tooltipTextFontColor}
   on:click={() => (showFooter = !showFooter)}
-  on:keyup={dummyFn}
+  on:keyup={activateOnKeyup}
 >
   <div class="flex h-full">
     {#if showTrackerIcon}
@@ -2855,7 +2868,7 @@
             }
           });
         }}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faCloudBolt} />
       </div>
@@ -2890,7 +2903,7 @@
           pulseElement(target.parentElement || target, 'add', 0.5, 500);
         }
       }}
-      on:keyup={dummyFn}
+      on:keyup={activateOnKeyup}
     >
       <span class="mr-4" class:invisible={!footerChapterProgress}>{footerChapterProgress}</span>
       <span class:invisible={!$showCharacterCounter$ && !$showPercentage$}>{currentProgress}</span>

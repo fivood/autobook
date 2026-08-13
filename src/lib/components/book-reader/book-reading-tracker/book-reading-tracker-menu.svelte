@@ -22,7 +22,7 @@
   import type { ReadingGoal } from '$lib/data/reading-goal';
   import { lastBlurredTrackerItems$, skipKeyDownListener$ } from '$lib/data/store';
   import { secondsToMinutes, toTimeString } from '$lib/functions/statistic-util';
-  import { caluclatePercentage, dummyFn } from '$lib/functions/utils';
+  import { caluclatePercentage, activateOnKeyup } from '$lib/functions/utils';
   import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
   import { t } from '$lib/i18n';
@@ -201,7 +201,7 @@
     title={$t('tracker.close')}
     class="flex items-center hover:text-red-500 md:items-center"
     on:click={() => dispatch('trackerMenuClosed')}
-    on:keyup={dummyFn}
+    on:keyup={activateOnKeyup}
   >
     <Fa icon={faXmark} />
   </div>
@@ -276,7 +276,7 @@
                 class="ml-4 hover:text-red-500"
                 title={$t(action.titleKey)}
                 on:click={() => executeAction(action.event)}
-                on:keyup={dummyFn}
+                on:keyup={activateOnKeyup}
               >
                 <Fa icon={getActionIcon(action, wasTrackerPaused)} />
               </div>
@@ -307,7 +307,7 @@
           class:blur={$lastBlurredTrackerItems$.has('charactersRead')}
           class:mt-3={statistic.id !== '累计' && statistic.id !== '已完成'}
           on:click={() => handleBlurredKey('charactersRead')}
-          on:keyup={dummyFn}
+          on:keyup={activateOnKeyup}
         >
           {#if statistic.sectionsTotal}
             {statistic.sectionsRead ?? 0} / {statistic.sectionsTotal}
@@ -323,7 +323,7 @@
           tabindex="0"
           class:blur={$lastBlurredTrackerItems$.has('lastReadingSpeed')}
           on:click={() => handleBlurredKey('lastReadingSpeed')}
-          on:keyup={dummyFn}
+          on:keyup={activateOnKeyup}
         >
           {statistic.lastReadingSpeed} / h
         </div>
@@ -335,7 +335,7 @@
           tabindex="0"
           class:blur={$lastBlurredTrackerItems$.has('readingTime')}
           on:click={() => handleBlurredKey('readingTime')}
-          on:keyup={dummyFn}
+          on:keyup={activateOnKeyup}
         >
           {toTimeString(statistic.readingTime)}
         </div>
@@ -348,7 +348,7 @@
             tabindex="0"
             class:blur={$lastBlurredTrackerItems$.has('finishETA')}
             on:click={() => handleBlurredKey('finishETA')}
-            on:keyup={dummyFn}
+            on:keyup={activateOnKeyup}
           >
             {timeToFinishBook}
           </div>
@@ -361,7 +361,7 @@
               tabindex="0"
               class:blur={$lastBlurredTrackerItems$.has('finishChapterETA')}
               on:click={() => handleBlurredKey('finishChapterETA')}
-              on:keyup={dummyFn}
+              on:keyup={activateOnKeyup}
             >
               {timeToFinishChapter}
             </div>

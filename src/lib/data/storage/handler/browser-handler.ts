@@ -41,10 +41,15 @@ export class BrowserStorageHandler extends BaseStorageHandler {
 
       try {
         const db = await database.db;
-        const data = await db.getAll('data');
+        // Iterate with a cursor rather than getAll('data') so a large library
+        // doesn't materialize every book's elementHtml + blobs at once. The
+        // card list only needs lightweight scalar fields, and a single book
+        // can carry tens of MB of HTML/images — getAll holds them all resident.
+        const tx = db.transaction('data');
+        let cursor = await tx.store.openCursor();
 
-        for (let index = 0, { length } = data; index < length; index += 1) {
-          const book = data[index];
+        while (cursor) {
+          const book = cursor.value;
 
           this.addBookCard(book.title, {
             id: book.id,
@@ -58,6 +63,8 @@ export class BrowserStorageHandler extends BaseStorageHandler {
             isPlaceholder: !book.elementHtml,
             originalFormat: book.originalFormat
           });
+
+          cursor = await cursor.continue();
         }
 
         this.dataListFetched = true;
