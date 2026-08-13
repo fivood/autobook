@@ -23,7 +23,7 @@ export class PageManagerPaginated implements PageManager {
   constructor(
     private contentEl: HTMLElement,
     private scrollEl: HTMLElement,
-    private sections: Element[],
+    private sections: ReadonlyArray<{ id: string }>,
     private sectionIndex$: BehaviorSubject<number>,
     private virtualScrollPos$: BehaviorSubject<number>,
     private width: number,
