@@ -62,6 +62,107 @@ fn allow_paths(app: &tauri::AppHandle, paths: &[String]) {
   }
 }
 
+/// Roots the user pointed us at themselves — custom library folder, Obsidian
+/// vault, dictionary folder. The static fs scope only covers
+/// `Documents/AutoBook`, and the grant the dialog plugin adds when a folder is
+/// picked dies with the process, so the choices are remembered here and
+/// re-granted on the next launch.
+///
+/// Rust owns this list deliberately. An "allow this path" command callable
+/// from the webview would hand any injected script the whole disk back for the
+/// price of one `invoke`, which is exactly what dropping the `**` scope was
+/// meant to prevent. The list can only grow through `pick_user_dir`, and that
+/// cannot return a path the user did not select in a native dialog.
+fn allowed_roots_path() -> std::path::PathBuf {
+  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/allowed-roots.json")
+}
+
+fn read_allowed_roots() -> Vec<String> {
+  std::fs::read_to_string(allowed_roots_path())
+    .ok()
+    .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+    .unwrap_or_default()
+}
+
+fn remember_allowed_root(path: &str) {
+  let mut roots = read_allowed_roots();
+  if roots.iter().any(|r| r == path) {
+    return;
+  }
+  roots.push(path.to_string());
+  // Someone who reorganizes their folders often should not accumulate grants
+  // forever; oldest choice falls off first.
+  while roots.len() > 32 {
+    roots.remove(0);
+  }
+  let file = allowed_roots_path();
+  if let Some(parent) = file.parent() {
+    let _ = std::fs::create_dir_all(parent);
+  }
+  if let Ok(json) = serde_json::to_string(&roots) {
+    let _ = std::fs::write(file, json);
+  }
+}
+
+/// Re-grant remembered roots at startup. A folder the user has since deleted
+/// is skipped rather than granted back.
+fn grant_remembered_roots(app: &tauri::AppHandle) {
+  let scope = app.fs_scope();
+  for root in read_allowed_roots() {
+    let path = std::path::PathBuf::from(&root);
+    if path.is_dir() {
+      let _ = scope.allow_directory(&path, true);
+    }
+  }
+}
+
+/// Open a native folder picker, grant the choice, and remember it for next
+/// launch. Replaces the frontend calling the dialog plugin directly: the pick
+/// and the persistence of its grant have to happen together, or a vault picked
+/// today stops working after a restart.
+#[tauri::command]
+async fn pick_user_dir(
+  app: tauri::AppHandle,
+  title: Option<String>,
+  default_path: Option<String>,
+) -> Result<Option<String>, String> {
+  use tauri_plugin_dialog::DialogExt;
+
+  let mut builder = app.dialog().file();
+  if let Some(title) = title {
+    builder = builder.set_title(title);
+  }
+  if let Some(default_path) = default_path {
+    let candidate = std::path::PathBuf::from(&default_path);
+    if candidate.is_dir() {
+      builder = builder.set_directory(candidate);
+    }
+  }
+
+  let (tx, rx) = tokio::sync::oneshot::channel();
+  builder.pick_folder(move |picked| {
+    let _ = tx.send(picked);
+  });
+
+  let Some(picked) = rx.await.map_err(|e| e.to_string())? else {
+    return Ok(None);
+  };
+  let path = picked.into_path().map_err(|e| e.to_string())?;
+
+  // The dialog plugin already widened the live scope for this pick; the
+  // explicit grant covers the recursive flag and keeps this command honest on
+  // its own terms.
+  app
+    .fs_scope()
+    .allow_directory(&path, true)
+    .map_err(|e| e.to_string())?;
+
+  let path_str = path.to_string_lossy().into_owned();
+  remember_allowed_root(&path_str);
+  Ok(Some(path_str))
+}
+
 /// Path to the marker file that signals "delete WebView2 Local Storage on next launch".
 fn reset_flag_path() -> std::path::PathBuf {
   let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
@@ -429,12 +530,18 @@ pub fn run() {
       get_data_paths,
       open_data_folder,
       default_fs_root,
+      pick_user_dir,
       move_directory,
       mobi_parser::parse_mobi,
       calibre_converter::check_calibre,
       calibre_converter::convert_with_calibre
     ])
     .setup(|app| {
+      // Before any window can ask for them: the static scope is
+      // Documents/AutoBook only, so a custom library root, vault or dictionary
+      // folder is unreachable until its remembered grant is restored.
+      grant_remembered_roots(app.handle());
+
       if cfg!(debug_assertions) {
         // The log plugin writes to AppData/<identifier>/logs. A leftover file
         // from a prior crashed run can make its rotator hit `os error 183`

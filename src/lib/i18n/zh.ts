@@ -108,6 +108,19 @@ export default {
   'domainHint.message':
     '您正在使用 ッツ 阅读器的旧域名 - 建议切换到 https://reader.ttsu.app 以避免问题并确保完整功能',
 
+  // Re-authorize folders picked before the fs scope was narrowed
+  'fsReauth.title': '文件夹需要重新授权',
+  'fsReauth.message':
+    '为收窄文件读写权限，本次更新去掉了「整盘可访问」。以下你此前选过的文件夹因此暂时无法读写，重新选一次同一个文件夹即可恢复，之后不会再问。',
+  'fsReauth.library': '书库文件夹',
+  'fsReauth.vault': 'Obsidian vault',
+  'fsReauth.dict': '词典文件夹',
+  'fsReauth.repick': '重新选择',
+  'fsReauth.restored': '已恢复',
+  'fsReauth.later': '稍后处理',
+  'fsReauth.note': '在恢复之前，这些目录的同步与读写会保持停止，本地书库不受影响。',
+  'fsReauth.failed': '授权失败：{err}',
+
   // Library search
   'library.search.placeholder': '搜索书名…',
   'library.search.clear': '清空搜索',

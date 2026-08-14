@@ -8,6 +8,7 @@
   import { resolveEndpoint, type ResolvedEndpoint } from '$lib/data/ai/endpoint';
   import { probeLocalModels } from '$lib/data/ai/local-model';
   import { requestGloss, type GlossResult } from '$lib/data/ai/gloss';
+  import { pickUserDir } from '$lib/functions/pick-user-dir';
   import { t, tImmediate } from '$lib/i18n';
 
   export let word: string;
@@ -75,9 +76,8 @@
       alert(tImmediate('dict.desktopOnly'));
       return;
     }
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const picked = await open({ directory: true, multiple: false, title: tImmediate('dict.pickFolder') });
-    if (typeof picked !== 'string') return;
+    const picked = await pickUserDir({ title: tImmediate('dict.pickFolder') });
+    if (!picked) return;
     dictFolderPath$.next(picked);
     busy = true;
     message = tImmediate('dict.scanning');

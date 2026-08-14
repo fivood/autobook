@@ -12,6 +12,7 @@
   import { dialogManager } from '$lib/data/dialog-manager';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import { fsRoot$ } from '$lib/data/store';
+  import { pickUserDir } from '$lib/functions/pick-user-dir';
   import { t, tImmediate } from '$lib/i18n';
 
   interface DataPaths {
@@ -75,13 +76,8 @@
     if (!isTauri() || !paths) return;
     busy = true;
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const picked = await open({
-        directory: true,
-        multiple: false,
-        defaultPath: paths.fsRoot
-      });
-      if (!picked || typeof picked !== 'string') return;
+      const picked = await pickUserDir({ defaultPath: paths.fsRoot });
+      if (!picked) return;
       const nextRoot = picked;
       if (nextRoot === paths.fsRoot) return;
       await applyFsRoot(nextRoot, paths.fsRoot, paths.fsRootExists);

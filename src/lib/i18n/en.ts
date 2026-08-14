@@ -612,6 +612,20 @@ export default {
   'tts.rateSlower': 'Speech rate −0.1',
   'tts.rateFaster': 'Speech rate +0.1',
 
+  // Re-authorize folders picked before the fs scope was narrowed
+  'fsReauth.title': 'Folders need re-authorizing',
+  'fsReauth.message':
+    'This update drops the app’s whole-disk file access in favour of a much narrower scope. Folders you picked earlier are temporarily unreadable as a result — pick the same folder once more to restore it, and you won’t be asked again.',
+  'fsReauth.library': 'Library folder',
+  'fsReauth.vault': 'Obsidian vault',
+  'fsReauth.dict': 'Dictionary folder',
+  'fsReauth.repick': 'Choose again',
+  'fsReauth.restored': 'Restored',
+  'fsReauth.later': 'Not now',
+  'fsReauth.note':
+    'Until restored, syncing to these folders stays stopped. Your local library is unaffected.',
+  'fsReauth.failed': 'Authorization failed: {err}',
+
   'library.search.placeholder': 'Search titles…',
   'library.search.clear': 'Clear search',
 

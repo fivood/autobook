@@ -36,6 +36,7 @@
   import { t, tImmediate } from '$lib/i18n';
   import { obsidianVaultPath$ } from '$lib/data/store';
   import { buildSyncPlan } from '$lib/functions/notebook/obsidian-sync';
+  import { pickUserDir } from '$lib/functions/pick-user-dir';
   import {
     STANDALONE_GROUP_TITLE,
     parseNotebookQuery,
@@ -379,9 +380,8 @@
       alert(tImmediate('notebook.desktopFolderOnly'));
       return;
     }
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const picked = await open({ directory: true, multiple: false, title: tImmediate('notebook.pickVaultTitle') });
-    if (typeof picked === 'string') {
+    const picked = await pickUserDir({ title: tImmediate('notebook.pickVaultTitle') });
+    if (picked) {
       obsidianVaultPath$.next(picked);
     }
   }

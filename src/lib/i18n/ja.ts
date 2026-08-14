@@ -617,6 +617,20 @@ export default {
   'tts.rateSlower': '読み上げ速度 −0.1',
   'tts.rateFaster': '読み上げ速度 +0.1',
 
+  // Re-authorize folders picked before the fs scope was narrowed
+  'fsReauth.title': 'フォルダの再認可が必要です',
+  'fsReauth.message':
+    'このアップデートでディスク全体へのアクセス権を廃止し、範囲を大幅に狭めました。そのため以前に選んだフォルダが一時的に読み書きできません。同じフォルダをもう一度選べば復旧し、次回以降は尋ねません。',
+  'fsReauth.library': 'ライブラリフォルダ',
+  'fsReauth.vault': 'Obsidian vault',
+  'fsReauth.dict': '辞書フォルダ',
+  'fsReauth.repick': '選び直す',
+  'fsReauth.restored': '復旧済み',
+  'fsReauth.later': '後で',
+  'fsReauth.note':
+    '復旧するまで、これらのフォルダへの同期は停止したままです。ローカルのライブラリには影響しません。',
+  'fsReauth.failed': '認可に失敗しました: {err}',
+
   'library.search.placeholder': 'タイトルを検索…',
   'library.search.clear': '検索をクリア',
 

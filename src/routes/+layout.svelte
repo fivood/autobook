@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import DomainHint from '$lib/components/domain-hint.svelte';
+  import FsReauthorize from '$lib/components/fs-reauthorize.svelte';
   import OcrMiniStatus from '$lib/components/ocr-mini-status.svelte';
   import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
   import { basePath, clearConsoleOnReload, isTauri, pagePath } from '$lib/data/env';
@@ -256,3 +257,5 @@
 <span style={`font-family: ${$fontFamilyGroupOne$ || 'Noto Serif JP'}`} />
 
 <DomainHint />
+
+<FsReauthorize />
