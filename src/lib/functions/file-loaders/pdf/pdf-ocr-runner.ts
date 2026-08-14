@@ -18,7 +18,7 @@
  * a string-level rewrite is both faster and lossless.
  */
 
-import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
+import type { BooksDbBookData, Section } from '$lib/data/database/books-db/versions/books-db';
 import { ocrImageBlob, type OcrLanguage } from './pdf-ocr';
 
 export interface OcrProgress {
@@ -66,6 +66,21 @@ interface PageMatch {
   pageNum: number;
   /** Whether this img already has OCR text inserted before it. */
   hasOcr: boolean;
+  /** Characters of OCR text already present, so a re-run can restate the
+   * section table for books OCR'd before it was being maintained. */
+  existingOcrChars: number;
+}
+
+/** Count the visible characters inside the `<p class="pdf-ocr-text">` blocks
+ * of an HTML span, matching how a fresh OCR pass counts what it inserts. */
+function countOcrText(html: string): number {
+  let total = 0;
+  const re = /<p\s+class="pdf-ocr-text"[^>]*>([\s\S]*?)<\/p>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    total += Array.from(m[1].replace(/<[^>]+>/g, '')).length;
+  }
+  return total;
 }
 
 function findPageImages(html: string): PageMatch[] {
@@ -78,11 +93,21 @@ function findPageImages(html: string): PageMatch[] {
     const start = m.index;
     const end = re.lastIndex;
     const pageNum = Number(m[1]);
-    // Look backwards a few hundred chars for an existing OCR insertion
-    // (a <p class="pdf-ocr-text">) belonging to the same section.
-    const lookback = html.slice(Math.max(0, start - 800), start);
-    const hasOcr = /<p\s+class="pdf-ocr-text"/.test(lookback);
-    result.push({ imgTag: m[0], start, end, pageNum, hasOcr });
+    // Does this page already carry OCR text? Look only at the span between
+    // the previous page image and this one — a fixed-size lookback window
+    // either catches the *previous* page's text (and skips this page forever)
+    // or misses our own when the last paragraph is long enough to fill it.
+    const spanStart = result.length ? result[result.length - 1].end : 0;
+    const between = html.slice(spanStart, start);
+    const hasOcr = /<p\s+class="pdf-ocr-text"/.test(between);
+    result.push({
+      imgTag: m[0],
+      start,
+      end,
+      pageNum,
+      hasOcr,
+      existingOcrChars: hasOcr ? countOcrText(between) : 0
+    });
   }
   return result;
 }
@@ -120,6 +145,8 @@ export async function runOcr(
   // is touched.
   const chunks: string[] = [];
   let cursor = 0;
+  /** page number → characters the OCR pass added for that page. */
+  const charsByPage = new Map<number, number>();
 
   for (let i = 0; i < pages.length; i++) {
     if (signal?.aborted) throw new DOMException('OCR aborted', 'AbortError');
@@ -132,6 +159,7 @@ export async function runOcr(
       onProgress({ page: page.pageNum, total, text: '' });
       // No insertion needed; just emit the original img tag.
       chunks.push(page.imgTag);
+      charsByPage.set(page.pageNum, page.existingOcrChars);
       cursor = page.end;
       continue;
     }
@@ -171,6 +199,9 @@ export async function runOcr(
         .join('\n');
       chunks.push(ocrHtml);
       chunks.push(page.imgTag);
+      // Same measure load-pdf uses for text-mode pages: code points of the
+      // rendered text, so the recomputed sections stay in one unit system.
+      charsByPage.set(page.pageNum, Array.from(paragraphs.join('')).length);
     } else {
       chunks.push(page.imgTag);
     }
@@ -192,12 +223,57 @@ export async function runOcr(
     );
   }
 
-  const newCharacters = newHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, '').length;
+  const sections = recomputeSections(book.sections, charsByPage);
+  // `characters` is the sum of the sections by construction, the same
+  // invariant load-pdf establishes. Recomputing it independently is how the
+  // two drifted apart before: an image-mode page counts 1 character, so a
+  // 900-page scan claimed 900 characters while the top-level count jumped to
+  // six figures after OCR, and every progress readout disagreed with the next.
+  const characters = sections.length
+    ? sections.reduce((sum, s) => sum + (s.characters || 0), 0)
+    : Array.from(newHtml.replace(/<[^>]+>/g, '')).length;
 
   return {
     ...book,
     elementHtml: newHtml,
-    characters: newCharacters,
+    characters,
+    sections,
     lastBookModified: Date.now()
   };
+}
+
+/**
+ * Rebuild the section table against the OCR'd text. Sections keep their
+ * reference, label and order — only the character counts and the running
+ * `startCharacter` offsets change, since those are what the reader uses to
+ * map a scroll position onto a progress number.
+ */
+function recomputeSections(
+  sections: Section[] | undefined,
+  charsByPage: Map<number, number>
+): Section[] {
+  if (!sections?.length) return sections || [];
+
+  let startCharacter = 0;
+  return sections.map((section) => {
+    const pageNum = pageNumberOf(section.reference);
+    const ocrChars = pageNum === undefined ? undefined : charsByPage.get(pageNum);
+    // A page we didn't OCR (already done, no blob, empty result) keeps the
+    // count it had, so re-running only ever refines the table.
+    const characters = ocrChars ?? section.characters ?? 0;
+    const next: Section = {
+      ...section,
+      characters,
+      charactersWeight: characters || 1,
+      startCharacter
+    };
+    startCharacter += characters;
+    return next;
+  });
+}
+
+/** Section references are `pdf-page-12` / `cbz-page-12`; pull the number out. */
+function pageNumberOf(reference: string | undefined): number | undefined {
+  const match = /(\d+)$/.exec(reference || '');
+  return match ? Number(match[1]) : undefined;
 }

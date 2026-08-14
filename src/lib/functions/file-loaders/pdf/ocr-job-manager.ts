@@ -19,7 +19,7 @@ import { writable, type Readable } from 'svelte/store';
 import { database } from '$lib/data/store';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
 import { runOcr, type OcrProgress } from './pdf-ocr-runner';
-import type { OcrLanguage } from './pdf-ocr';
+import { disposeOcrWorker, type OcrLanguage } from './pdf-ocr';
 
 export type OcrJobStatus = 'running' | 'finished' | 'errored';
 
@@ -79,6 +79,11 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
       _store.update((s) => (s ? { ...s, status: 'errored', error: msg } : s));
     } finally {
       abortCtrl = undefined;
+      // The worker holds the language model in memory — hundreds of MB for the
+      // Chinese packs — and nothing else will release it.
+      disposeOcrWorker().catch(() => {
+        /* teardown is best-effort */
+      });
     }
   })();
 
