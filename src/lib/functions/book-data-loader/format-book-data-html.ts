@@ -9,6 +9,7 @@ import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books
 import { Observable, type Subject } from 'rxjs';
 import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import { isElementGaiji } from '$lib/functions/is-element-gaiji';
+import { parseSanitized } from '$lib/functions/sanitize-html';
 import { map } from 'rxjs/operators';
 import type { LoadProgress } from './load-progress';
 import { progress } from './load-progress';
@@ -38,11 +39,13 @@ export default function formatBookDataHtml(
   return getHtmlWithImageSource(bookData, isPaginated, progress$).pipe(
     map(({ html, objectUrls }) => {
       progress$?.next(progress('format-parse', 50));
-      const element = document.createElement('div');
-      element.innerHTML = html;
-      // Strip executable/exfiltrating constructs before any other pass runs,
-      // so later DOM walks don't trip over nodes we're about to remove.
-      sanitizeBookHtml(element);
+      // Parse in an inert document rather than assigning to a detached div and
+      // cleaning after: `innerHTML` still starts image loads and arms
+      // `onerror`, so disarming afterwards is a race we don't need to run.
+      // Books already in the library are covered here too, not just freshly
+      // imported ones — this is the single chokepoint every format renders
+      // through.
+      const element = parseSanitized(html, document);
 
       progress$?.next(progress('format-clean', 65));
       addImageContainerClass(element);
@@ -259,72 +262,6 @@ function stripInlineColor(el: HTMLElement) {
     else node.removeAttribute('style');
   });
   el.querySelectorAll('font[color]').forEach((node) => node.removeAttribute('color'));
-}
-
-/**
- * Remove executable / exfiltrating constructs from imported book content.
- * `{@html}` renders this HTML unescaped, so an untrusted EPUB can carry
- * `<img onerror=…>`, `javascript:` links, or a `<meta http-equiv="refresh">`.
- * innerHTML never runs injected `<script>` tags, but inline event handlers
- * and `javascript:` URLs do run (CSP can't stop those either — only a
- * sanitizer can), and remote images / `@import` leak the reader's IP. Strip
- * the known-bad surface while leaving EPUB layout (ruby, svg, tables, inline
- * styles) intact.
- */
-function sanitizeBookHtml(el: HTMLElement) {
-  // Fully drop elements that are always dangerous or meaningless in a book
-  // body. `<style>` stays because some books put layout CSS inline, but its
-  // @import rules are neutralized below.
-  const DROP_TAGS = [
-    'script', 'iframe', 'object', 'embed', 'applet', 'base', 'meta',
-    'form', 'input', 'button', 'textarea', 'select', 'option', 'template',
-    'frame', 'frameset'
-  ];
-  el.querySelectorAll(DROP_TAGS.join(',')).forEach((node) => node.remove());
-
-  // <link> is only meaningful in <head>; in a body it's a tracker / stylesheet
-  // injection vector.
-  el.querySelectorAll('link').forEach((node) => node.remove());
-
-  const DANGEROUS_SCHEME = /(javascript:|vbscript:|data:\s*text\/html)/i;
-  const STYLE_EXFIL = /(javascript:|expression\s*\()/i;
-
-  el.querySelectorAll('*').forEach((node) => {
-    const elm = node as HTMLElement;
-
-    // Inline event handlers fire on load/error/click regardless of CSP.
-    const attrs = elm.attributes;
-    for (let i = attrs.length - 1; i >= 0; i -= 1) {
-      const name = attrs[i].name;
-      if (name.toLowerCase().startsWith('on')) {
-        elm.removeAttribute(name);
-      }
-    }
-
-    // Neutralize executable URLs on URL-bearing attributes. `srcset` is a
-    // comma-separated list — drop it wholesale if any entry is dangerous.
-    for (const attr of ['href', 'src', 'xlink:href', 'action', 'formaction', 'poster', 'background', 'srcset']) {
-      const value = elm.getAttribute(attr);
-      if (value && DANGEROUS_SCHEME.test(value.trim())) {
-        elm.removeAttribute(attr);
-      }
-    }
-
-    // CSS exfil: url(javascript:) / expression() in inline style.
-    const style = elm.getAttribute('style');
-    if (style && STYLE_EXFIL.test(style)) {
-      elm.removeAttribute('style');
-    }
-  });
-
-  // Neutralize @import in inline <style> (loads remote CSS) while keeping the
-  // rest of the rule sheet.
-  el.querySelectorAll('style').forEach((styleEl) => {
-    const text = styleEl.textContent || '';
-    if (/@import/i.test(text)) {
-      styleEl.textContent = text.replace(/@import[^;]*;?/gi, '');
-    }
-  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

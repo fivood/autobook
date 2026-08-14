@@ -8,11 +8,15 @@
   import { relaunchApp } from '$lib/functions/updater/check-for-update';
   import { submitReport } from '$lib/functions/report-error';
   import { marked } from 'marked';
+  import { sanitizeHtml } from '$lib/functions/sanitize-html';
 
   marked.setOptions({ breaks: true, gfm: true });
 
+  // marked passes raw HTML in the source straight through, and these notes
+  // arrive over the network from the update server, so they get the same
+  // treatment as book content before hitting `{@html}`.
   function renderMd(text: string): string {
-    return marked.parse(text || '') as string;
+    return sanitizeHtml(marked.parse(text || '') as string);
   }
 
   export let update: UpdateInfo;
