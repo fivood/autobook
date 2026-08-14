@@ -14,7 +14,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use crate::mobi_parser::{extract_raw_content_bytes_direct, parse_mobi};
+use crate::mobi_parser::{extract_raw_content_bytes_direct, parse_mobi_bytes};
 use crate::kf8_parser::{parse_palmdb_records, try_parse_kf8};
 use crate::kf8_indx::{parse_fdst, parse_skeleton_indx, primary_indx_data_count};
 
@@ -117,7 +117,7 @@ fn scan_e_book_quality() {
         // joint = MOBI6 + BOUNDARY + KF8. Detect the 8-byte BOUNDARY marker.
         let joint = bytes.windows(8).any(|w| w == b"BOUNDARY");
 
-        match parse_mobi(bytes) {
+        match parse_mobi_bytes(&bytes) {
             Ok(p) => {
                 n_ok += 1;
                 let html = &p.html;
@@ -206,7 +206,7 @@ fn deep_dive_errors() {
         };
 
         // Only deep-dive files that error.
-        let parse_err: String = match crate::mobi_parser::parse_mobi(bytes.clone()) {
+        let parse_err: String = match crate::mobi_parser::parse_mobi_bytes(&bytes) {
             Ok(_) => continue,
             Err(e) => e.chars().take(120).collect::<String>().replace('\n', " "),
         };
@@ -730,7 +730,7 @@ fn inspect_error_records() {
             Err(_) => continue,
         };
         // Only inspect error files.
-        if crate::mobi_parser::parse_mobi(bytes.clone()).is_ok() {
+        if crate::mobi_parser::parse_mobi_bytes(&bytes).is_ok() {
             continue;
         }
         found += 1;
