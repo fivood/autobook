@@ -228,8 +228,9 @@ fn collect_data_paths() -> serde_json::Value {
           truncated = true;
           break;
         }
-        // symlink_metadata: don't follow links out of the tree we're measuring.
-        if let Ok(md) = entry.symlink_metadata() {
+        // DirEntry::metadata does not traverse symlinks, so a link pointing
+        // outside the tree is counted as a link, not as whatever it targets.
+        if let Ok(md) = entry.metadata() {
           if md.is_file() {
             total = total.saturating_add(md.len());
           } else if md.is_dir() {

@@ -1,0 +1,19 @@
+{
+  // Self-contained on purpose. esbuild walks up from a source file looking for
+  // the nearest tsconfig.json, and without this it finds the repo root's — which
+  // extends ./.svelte-kit/tsconfig.json, a generated file that only exists after
+  // the desktop app has been synced. The mobile PWA builds from its own
+  // subdirectory and never generates it, so importing shared/ from there failed
+  // the build. Stopping the lookup here keeps both projects independent.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM"],
+    "strict": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": false
+  },
+  "include": ["**/*.ts"]
+}
