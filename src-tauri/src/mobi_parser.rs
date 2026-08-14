@@ -478,15 +478,30 @@ fn detect_image_ext(bytes: &[u8]) -> &'static str {
     }
 }
 
+/// Takes the book as a raw IPC body rather than a command argument: a `Vec<u8>`
+/// parameter arrives as a JSON array of numbers, so a 30 MB AZW3 crossed the
+/// bridge as a hundred-megabyte string and was rebuilt byte by byte.
+/// Async + `spawn_blocking` because parsing runs for seconds on a big AZW3 and
+/// a sync command would hold the main thread for all of it.
 #[tauri::command]
-pub fn parse_mobi(bytes: Vec<u8>) -> Result<ParsedMobi, String> {
+pub async fn parse_mobi(request: tauri::ipc::Request<'_>) -> Result<ParsedMobi, String> {
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        _ => return Err("parse_mobi 需要原始字节负载".into()),
+    };
+    tokio::task::spawn_blocking(move || parse_mobi_bytes(&bytes))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn parse_mobi_bytes(bytes: &[u8]) -> Result<ParsedMobi, String> {
     // Wrap the WHOLE pipeline. The mobi crate panics on certain malformed
     // files (esp. AZW3) at various stages — raw_records, palmdoc decode,
     // image extraction — not just Mobi::new. Without an outer catch_unwind,
     // a panic crashes the Tauri command worker and JS sees `null` (which
     // renders as "undefined" through error.message).
     let result: std::thread::Result<Result<ParsedMobi, String>> =
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse_mobi_inner(&bytes)));
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse_mobi_inner(bytes)));
     match result {
         Ok(inner) => inner,
         Err(panic) => {
