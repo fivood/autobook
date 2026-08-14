@@ -508,8 +508,16 @@ fn detect_image_ext(bytes: &[u8]) -> &'static str {
     }
 }
 
+/// Takes the file as the raw IPC body rather than a `Vec<u8>` argument: as a
+/// command argument the bytes arrived as a JSON array of numbers, so a 30 MB
+/// AZW3 became a thirty-million-element array to build and parse. The reply
+/// stays JSON — image payloads in `ParsedMobi` are already base64.
 #[tauri::command]
-pub fn parse_mobi(bytes: Vec<u8>) -> Result<ParsedMobi, String> {
+pub fn parse_mobi(request: tauri::ipc::Request<'_>) -> Result<ParsedMobi, String> {
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        _ => return Err("parse_mobi 需要原始字节负载".into()),
+    };
     // Wrap the WHOLE pipeline. The mobi crate panics on certain malformed
     // files (esp. AZW3) at various stages — raw_records, palmdoc decode,
     // image extraction — not just Mobi::new. Without an outer catch_unwind,

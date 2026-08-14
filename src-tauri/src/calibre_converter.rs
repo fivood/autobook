@@ -38,27 +38,64 @@ pub fn check_calibre() -> bool {
     find_calibre_convert().is_some()
 }
 
+/// Keep only what can legally be an extension. Anything else collapses to
+/// `bin` — the value crosses from the frontend and is about to be joined into
+/// a path, so `..`, separators and the rest never survive.
+fn sanitize_ext(raw: &str) -> String {
+    let cleaned: String = raw
+        .trim()
+        .trim_start_matches('.')
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(8)
+        .collect();
+    if cleaned.is_empty() {
+        "bin".to_string()
+    } else {
+        cleaned.to_ascii_lowercase()
+    }
+}
+
+/// The book rides in as the raw IPC body and the EPUB comes back the same way.
+/// As a `Vec<u8>` command argument the bytes were serialized as a JSON array
+/// of numbers, so importing a 30 MB AZW3 meant building — and parsing — a
+/// thirty-million-element array on each side of the bridge.
+///
+/// Only the source extension crosses now, never the filename: the temp file is
+/// named here from a counter, so nothing user-controlled reaches `join()`.
 #[tauri::command]
-pub async fn convert_with_calibre(bytes: Vec<u8>, filename: String) -> Result<Vec<u8>, String> {
+pub async fn convert_with_calibre(
+    request: tauri::ipc::Request<'_>,
+) -> Result<tauri::ipc::Response, String> {
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        _ => return Err("convert_with_calibre 需要原始字节负载".into()),
+    };
+
+    let ext = request
+        .headers()
+        .get("x-source-ext")
+        .and_then(|value| value.to_str().ok())
+        .map(sanitize_ext)
+        .unwrap_or_else(|| "mobi".to_string());
+
     let converter = find_calibre_convert()
         .ok_or_else(|| "未检测到 Calibre，请安装 Calibre 或使用内置解析器".to_string())?;
-
-    // `filename` originates from the frontend import flow but is joined into a
-    // temp dir below — take only the basename so a value like `..\..\evil` or
-    // an absolute path can't escape `autobook_convert`.
-    let safe_name = std::path::Path::new(&filename)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .filter(|n| !n.is_empty() && *n != "." && *n != "..")
-        .ok_or_else(|| "文件名无效".to_string())?
-        .to_string();
 
     let tmp_dir = std::env::temp_dir().join("autobook_convert");
     std::fs::create_dir_all(&tmp_dir).map_err(|e| format!("创建临时目录失败: {e}"))?;
 
-    let input_path = tmp_dir.join(&safe_name);
-    let epub_name = PathBuf::from(&safe_name).with_extension("epub");
-    let output_path = tmp_dir.join(&epub_name);
+    // A counter rather than the book's name: two imports running at once would
+    // otherwise write the same temp path and clobber each other's output.
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let stem = format!(
+        "in_{}_{}",
+        std::process::id(),
+        SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    );
+
+    let input_path = tmp_dir.join(format!("{stem}.{ext}"));
+    let output_path = tmp_dir.join(PathBuf::from(&stem).with_extension("epub"));
 
     if output_path.exists() {
         let _ = std::fs::remove_file(&output_path);
@@ -100,5 +137,5 @@ pub async fn convert_with_calibre(bytes: Vec<u8>, filename: String) -> Result<Ve
         std::fs::read(&output_path).map_err(|e| format!("读取转换结果失败: {e}"))?;
     let _ = std::fs::remove_file(&output_path);
 
-    Ok(epub_bytes)
+    Ok(tauri::ipc::Response::new(epub_bytes))
 }

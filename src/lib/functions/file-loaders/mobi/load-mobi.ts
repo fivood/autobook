@@ -293,12 +293,17 @@ async function tryCalibConvert(file: File, lastBookModified: number): Promise<Lo
     const hasCalibre = await invoke<boolean>('check_calibre');
     if (!hasCalibre) return null;
 
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const epubBytes = await invoke<number[]>('convert_with_calibre', {
-      bytes: Array.from(bytes),
-      filename: file.name
-    });
-    const epubBlob = new Blob([new Uint8Array(epubBytes)], {
+    // Raw body, not a `{ bytes: [...] }` argument: as a command argument the
+    // file was serialized to a JSON array of numbers, which for a 30 MB book
+    // meant a thirty-million-element array on each side of the bridge. Only
+    // the extension is sent — Rust names the temp file itself.
+    const sourceExt = /\.([^.]+)$/.exec(file.name)?.[1] || 'mobi';
+    const epubBuffer = await invoke<ArrayBuffer>(
+      'convert_with_calibre',
+      await file.arrayBuffer(),
+      { headers: { 'x-source-ext': sourceExt } }
+    );
+    const epubBlob = new Blob([epubBuffer], {
       type: 'application/epub+zip'
     });
     const epubFile = new File([epubBlob], file.name.replace(/\.[^.]+$/, '.epub'), {
@@ -336,10 +341,9 @@ function extractTauriError(e: unknown): string {
 }
 
 async function nativeParse(file: File, lastBookModified: number): Promise<LoadData> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
   let parsed: ParsedMobi;
   try {
-    parsed = await invoke<ParsedMobi>('parse_mobi', { bytes: Array.from(bytes) });
+    parsed = await invoke<ParsedMobi>('parse_mobi', await file.arrayBuffer());
   } catch (e) {
     throw new Error(extractTauriError(e) + CALIBRE_HINT);
   }
