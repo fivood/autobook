@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "node scripts/selftest.mjs",
+    "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml",
+    "check:rust:cross": "cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-gnu",
     "check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
