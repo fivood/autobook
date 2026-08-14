@@ -56,7 +56,7 @@ interface UserState {
 const corsHeaders: HeadersInit = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'content-type',
+  'Access-Control-Allow-Headers': 'content-type, authorization',
   'Access-Control-Max-Age': '86400'
 };
 
@@ -69,6 +69,21 @@ function json(data: unknown, init: ResponseInit = {}): Response {
       ...(init.headers || {})
     }
   });
+}
+
+/**
+ * The token is the whole credential, so it belongs in a header — a query
+ * string lands in access logs, proxy logs and `Referer`.
+ *
+ * The query parameter stays supported indefinitely, not just transitionally:
+ * the PWA client lives on the `release/1.6.0` branch and ships on its own
+ * schedule, and older desktop builds in the wild never stop sending it.
+ * Dropping it here would silently break their sync.
+ */
+function readToken(request: Request, url: URL): string {
+  const bearer = /^\s*Bearer\s+(\S+)\s*$/i.exec(request.headers.get('authorization') || '');
+  const raw = bearer?.[1] || url.searchParams.get('token') || '';
+  return raw.trim().toLowerCase();
 }
 
 function emptyState(): UserState {
@@ -209,7 +224,7 @@ export default {
     if (url.pathname !== '/sync') {
       return json({ error: 'not found' }, { status: 404 });
     }
-    const token = (url.searchParams.get('token') || '').trim().toLowerCase();
+    const token = readToken(request, url);
     if (!TOKEN_RE.test(token)) {
       return json({ error: 'token must be 32 hex characters' }, { status: 400 });
     }

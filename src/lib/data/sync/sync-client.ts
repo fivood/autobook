@@ -44,11 +44,24 @@ export function generateDeviceId(): string {
     .join('');
 }
 
+/**
+ * The token is the entire credential, so it travels in a header — as a query
+ * parameter it ends up in Cloudflare access logs, any intermediary's logs, and
+ * `Referer` on anything the response links to.
+ *
+ * The worker still accepts `?token=` because older desktop builds and the PWA
+ * (which ships from `release/1.6.0` on its own schedule) keep sending it, so
+ * this change is safe to deploy in either order.
+ */
+function authHeader(token: string): Record<string, string> {
+  return { authorization: `Bearer ${token}` };
+}
+
 export async function pullState(token: string, signal?: AbortSignal): Promise<RemoteState> {
   if (!isValidToken(token)) {
     throw { status: 400, message: 'token 格式无效（应为 32 字符 hex）' } satisfies SyncError;
   }
-  const res = await fetch(`${SYNC_ENDPOINT}?token=${token}`, { signal });
+  const res = await fetch(SYNC_ENDPOINT, { headers: authHeader(token), signal });
   if (!res.ok) {
     throw { status: res.status, message: await safeMessage(res) } satisfies SyncError;
   }
@@ -80,9 +93,9 @@ export async function pushDelta(
   if (!isValidToken(token)) {
     throw { status: 400, message: 'token 格式无效（应为 32 字符 hex）' } satisfies SyncError;
   }
-  const res = await fetch(`${SYNC_ENDPOINT}?token=${token}`, {
+  const res = await fetch(SYNC_ENDPOINT, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...authHeader(token) },
     body: JSON.stringify(payload),
     signal
   });
