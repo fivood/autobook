@@ -11,7 +11,11 @@ import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
 import { database, requestPersistentStorage$ } from '$lib/data/store';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
-import loadMd from '$lib/functions/file-loaders/md/load-md';
+// Markdown pulls in marked, KaTeX and highlight.js. Statically importing it
+// here put all of that in the shared entry chunk, so every route paid for it
+// whether or not the user ever opened a .md file.
+const loadMd = async (file: File, lastBookModified: number) =>
+  (await import('$lib/functions/file-loaders/md/load-md')).default(file, lastBookModified);
 import loadMobi, { setForceNativeParser } from '$lib/functions/file-loaders/mobi/load-mobi';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import loadPdf from '$lib/functions/file-loaders/pdf/load-pdf';
@@ -82,9 +86,12 @@ export async function importData(
           // Step 1: try by extension (fast path, covers 99% of cases).
           // Step 2: if the extension didn't match anything, sniff the magic
           // bytes so renamed/extensionless files still load correctly.
-          if (file.name.endsWith('.epub')) {
+          // Case-insensitive throughout: a file named BOOK.TXT used to miss
+          // every branch, fall through to sniffing (which can't identify plain
+          // text), and end up in the EPUB last resort, where it failed.
+          if (/\.epub$/i.test(file.name)) {
             bookContent = await loadEpub(file, document, lastBookModified);
-          } else if (file.name.endsWith('.txt')) {
+          } else if (/\.txt$/i.test(file.name)) {
             bookContent = await loadTxt(file, lastBookModified);
           } else if (/\.(md|markdown)$/i.test(file.name)) {
             bookContent = await loadMd(file, lastBookModified);

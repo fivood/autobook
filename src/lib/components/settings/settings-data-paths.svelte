@@ -7,11 +7,14 @@
   interface DataPaths {
     webviewRoot: string;
     localStorageDirs: string[];
+    localStorageBytes: number;
     indexeddbDirs: string[];
     indexeddbBytes: number;
     documentsRoot: string;
     documentsBytes: number;
     documentsExists: boolean;
+    /** True when a directory was too large or too deep to walk fully. */
+    sizesTruncated: boolean;
   }
 
   let paths: DataPaths | undefined;
@@ -82,6 +85,12 @@
     }
   }
 
+  /** Sizes are approximate when the walk hit its entry or depth cap. */
+  function size(bytes: number): string {
+    const formatted = formatBytes(bytes);
+    return paths?.sizesTruncated ? `≥ ${formatted}` : formatted;
+  }
+
   function formatBytes(b: number): string {
     if (!b) return '0';
     if (b < 1024) return `${b} B`;
@@ -99,7 +108,7 @@
   <div class="space-y-3 text-sm">
     <div class="row">
       <div class="label">书库 + 高亮 + 笔记本 + 统计（IndexedDB）</div>
-      <div class="meta">{formatBytes(paths.indexeddbBytes)} · {paths.indexeddbDirs.length} 个 webview profile</div>
+      <div class="meta">{size(paths.indexeddbBytes)} · {paths.indexeddbDirs.length} 个 webview profile</div>
       {#each paths.indexeddbDirs as p (p)}
         <div class="path-row">
           <code class="path">{p}</code>
@@ -112,6 +121,7 @@
 
     <div class="row">
       <div class="label">UI 设置 / token / API key（localStorage）</div>
+      <div class="meta">{size(paths.localStorageBytes)}</div>
       {#each paths.localStorageDirs as p (p)}
         <div class="path-row">
           <code class="path">{p}</code>
@@ -125,7 +135,7 @@
     <div class="row">
       <div class="label">本地 FS 同步副本（Documents/AutoBook/）</div>
       <div class="meta">
-        {paths.documentsExists ? formatBytes(paths.documentsBytes) : '（目录还未创建）'}
+        {paths.documentsExists ? size(paths.documentsBytes) : '（目录还未创建）'}
       </div>
       <div class="path-row">
         <code class="path">{paths?.documentsRoot}</code>

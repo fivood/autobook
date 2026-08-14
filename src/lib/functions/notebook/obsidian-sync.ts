@@ -3,25 +3,52 @@ import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/book
 const ROOT_DIR_NAME = 'AutoBook';
 const STANDALONE_DIR_NAME = 'StandaloneNotes';
 
+/**
+ * Book titles come from file metadata, so they are attacker-controlled as far
+ * as this code is concerned. Beyond the usual illegal characters, a name made
+ * only of dots has to go: `..` as a directory would put the write one level
+ * above the vault's AutoBook folder. Windows also rejects trailing dots and a
+ * handful of reserved device names.
+ */
+const RESERVED_NAMES = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
 function sanitizeFilename(s: string): string {
-  return s
-    .replace(/[\\/:*?"<>|]/g, '_')
+  const cleaned = s
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 100);
+    .slice(0, 100)
+    // Trailing dots and spaces are silently dropped by Windows, which would
+    // make two different titles collide on one file.
+    .replace(/[. ]+$/, '')
+    .trim();
+
+  if (!cleaned || /^\.+$/.test(cleaned) || RESERVED_NAMES.test(cleaned)) return '_';
+  // A leading dot would make the note hidden and, for `.`/`..`, navigate.
+  return cleaned.startsWith('.') ? `_${cleaned.slice(1)}` : cleaned;
 }
 
 function slugFromText(text: string): string {
   const slug = text
     .replace(/\s+/g, '-')
-    .replace(/[\\/:*?"<>|#`]/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\\/:*?"<>|#`\u0000-\u001f]/g, '')
     .slice(0, 40)
+    .replace(/[. ]+$/, '')
     .trim();
   return slug || 'note';
 }
 
-function escapeYaml(s: string): string {
-  return s.replace(/"/g, '\\"').replace(/\n/g, ' ');
+/**
+ * Emit a YAML double-quoted scalar. The hand-rolled escaping only covered
+ * quotes and newlines, so a title containing a backslash produced an invalid
+ * escape sequence and Obsidian failed to parse the whole frontmatter block.
+ * JSON string syntax is a subset of YAML's double-quoted style, so this is
+ * both correct and shorter.
+ */
+function yamlString(s: string): string {
+  return JSON.stringify(String(s ?? ''));
 }
 
 export function highlightFilename(h: BooksDbHighlight): string {
@@ -50,8 +77,8 @@ export function highlightToMarkdown(
   const fmLines: string[] = ['---'];
   fmLines.push(`id: ${h.id}`);
   fmLines.push(`kind: ${h.kind === 'note' ? 'note' : 'highlight'}`);
-  if (h.bookTitle) fmLines.push(`book: "${escapeYaml(h.bookTitle)}"`);
-  if (folderName) fmLines.push(`folder: "${escapeYaml(folderName)}"`);
+  if (h.bookTitle) fmLines.push(`book: ${yamlString(h.bookTitle)}`);
+  if (folderName) fmLines.push(`folder: ${yamlString(folderName)}`);
   fmLines.push(`color: ${h.color}`);
   fmLines.push(`created: ${new Date(h.createdAt).toISOString()}`);
   fmLines.push(`modified: ${new Date(h.lastModified).toISOString()}`);
@@ -60,12 +87,12 @@ export function highlightToMarkdown(
   }
   if (h.tags && h.tags.length) {
     fmLines.push(`tags:`);
-    for (const t of h.tags) fmLines.push(`  - ${t}`);
+    for (const t of h.tags) fmLines.push(`  - ${yamlString(t)}`);
   }
   const linkRefs = buildLinkRefs(h.linkedIds, byId);
   if (linkRefs.length) {
     fmLines.push(`links:`);
-    for (const r of linkRefs) fmLines.push(`  - "${escapeYaml(r)}"`);
+    for (const r of linkRefs) fmLines.push(`  - ${yamlString(r)}`);
   }
   fmLines.push('---', '');
 
@@ -92,6 +119,8 @@ export function highlightToMarkdown(
 export interface VaultSyncFile {
   relativePath: string;
   content: string;
+  /** When the note last changed, so a sync can skip files already up to date. */
+  lastModified: number;
 }
 
 export interface VaultSyncPlan {
@@ -111,7 +140,8 @@ export function buildSyncPlan(
     const file = highlightFilename(h);
     files.push({
       relativePath: `${dir}/${file}`,
-      content: highlightToMarkdown(h, byId, folderName)
+      content: highlightToMarkdown(h, byId, folderName),
+      lastModified: h.lastModified || h.createdAt || 0
     });
   }
   return { rootDirName: ROOT_DIR_NAME, files };

@@ -19,6 +19,11 @@ export interface Env {
 const TOKEN_RE = /^[0-9a-f]{32}$/i;
 const MAX_BODY_BYTES = 64 * 1024; // 64 KB per push is plenty for daily deltas
 const MAX_STATE_BYTES = 2 * 1024 * 1024; // hard cap to keep KV reads cheap
+// Growth caps. Without these a single token's blob can be inflated until it
+// trips MAX_STATE_BYTES, at which point every later push for that user fails.
+const MAX_BOOKS = 2000;
+const MAX_DAYS_PER_BOOK = 800;
+const MAX_CLIENTS_PER_DAY = 32;
 
 interface DayEntry {
   /** Per-device daily totals; server keeps max(client-reported) per device. */
@@ -88,6 +93,7 @@ function mergeInto(server: UserState, incoming: IncomingPayload, now: number): U
     if (!book || typeof dates !== 'object' || dates === null) continue;
     let serverBook = server.books[book];
     if (!serverBook) {
+      if (Object.keys(server.books).length >= MAX_BOOKS) continue;
       serverBook = {};
       server.books[book] = serverBook;
     }
@@ -96,6 +102,7 @@ function mergeInto(server: UserState, incoming: IncomingPayload, now: number): U
       if (!entry || typeof entry !== 'object') continue;
       let day = serverBook[date];
       if (!day) {
+        if (Object.keys(serverBook).length >= MAX_DAYS_PER_BOOK) continue;
         day = { clients: {}, updatedAt: now };
         serverBook[date] = day;
       }
@@ -105,6 +112,7 @@ function mergeInto(server: UserState, incoming: IncomingPayload, now: number): U
         if (typeof sec !== 'number' || !isFinite(sec) || sec < 0) continue;
         const capped = Math.min(sec, 86400); // can't read more than 24h in a day
         const prior = day.clients[clientId] || 0;
+        if (!prior && Object.keys(day.clients).length >= MAX_CLIENTS_PER_DAY) continue;
         if (capped > prior) {
           day.clients[clientId] = capped;
           changed = true;
@@ -114,6 +122,42 @@ function mergeInto(server: UserState, incoming: IncomingPayload, now: number): U
     }
   }
   return server;
+}
+
+/**
+ * The token is the only credential, so it belongs in a header rather than the
+ * query string, where it lands in every access log along the way. The query
+ * parameter still works: clients older than 1.10.8 only know how to send it
+ * that way, and they keep syncing until they update.
+ */
+function readToken(request: Request, url: URL): string {
+  const auth = request.headers.get('authorization') || '';
+  const bearer = /^bearer\s+(.+)$/i.exec(auth.trim());
+  const raw = bearer ? bearer[1] : url.searchParams.get('token') || '';
+  return raw.trim().toLowerCase();
+}
+
+/**
+ * Read the body with a real ceiling. The old check trusted `content-length`,
+ * which a chunked request simply omits.
+ */
+async function readBoundedText(request: Request): Promise<string> {
+  const reader = request.body?.getReader();
+  if (!reader) return '';
+  const decoder = new TextDecoder();
+  let out = '';
+  let total = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_BODY_BYTES) {
+      await reader.cancel();
+      throw new Error('payload too large');
+    }
+    out += decoder.decode(value, { stream: true });
+  }
+  return out + decoder.decode();
 }
 
 export default {
@@ -128,7 +172,7 @@ export default {
     if (url.pathname !== '/sync') {
       return json({ error: 'not found' }, { status: 404 });
     }
-    const token = (url.searchParams.get('token') || '').trim().toLowerCase();
+    const token = readToken(request, url);
     if (!TOKEN_RE.test(token)) {
       return json({ error: 'token must be 32 hex characters' }, { status: 400 });
     }
@@ -139,13 +183,15 @@ export default {
     }
 
     if (request.method === 'POST') {
-      const contentLength = Number(request.headers.get('content-length') || 0);
-      if (contentLength > MAX_BODY_BYTES) {
+      let raw: string;
+      try {
+        raw = await readBoundedText(request);
+      } catch {
         return json({ error: 'payload too large' }, { status: 413 });
       }
       let body: IncomingPayload;
       try {
-        body = (await request.json()) as IncomingPayload;
+        body = JSON.parse(raw) as IncomingPayload;
       } catch {
         return json({ error: 'invalid json' }, { status: 400 });
       }

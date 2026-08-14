@@ -112,11 +112,15 @@ function findPageImages(html: string): PageMatch[] {
   return result;
 }
 
+/** How often to hand the caller a partial result it can persist. */
+const CHECKPOINT_EVERY_PAGES = 25;
+
 export async function runOcr(
   book: BooksDbBookData,
   lang: OcrLanguage,
   onProgress: (p: OcrProgress) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onCheckpoint?: (partial: BooksDbBookData) => Promise<void> | void
 ): Promise<BooksDbBookData> {
   const original = book.elementHtml;
   const pages = findPageImages(original);
@@ -208,6 +212,14 @@ export async function runOcr(
 
     cursor = page.end;
     onProgress({ page: page.pageNum, total, text: recognized });
+
+    // Persist partial work. An 894-page scan runs for hours; losing all of it
+    // to a closed window meant starting over, and the runner already skips
+    // pages that carry OCR text, so a resumed job picks up where this left off.
+    if (onCheckpoint && (i + 1) % CHECKPOINT_EVERY_PAGES === 0 && i + 1 < pages.length) {
+      const partialHtml = chunks.join('') + original.slice(cursor);
+      await onCheckpoint(buildBook(book, partialHtml, charsByPage));
+    }
   }
 
   // Append the tail (everything after the last img).
@@ -223,19 +235,30 @@ export async function runOcr(
     );
   }
 
+  return buildBook(book, newHtml, charsByPage);
+}
+
+/**
+ * Assemble the updated record. `characters` is the sum of the sections by
+ * construction, the same invariant load-pdf establishes — recomputing it
+ * independently is how the two drifted apart before: an image-mode page counts
+ * 1 character, so a 900-page scan claimed 900 characters while the top-level
+ * count jumped to six figures after OCR, and every progress readout disagreed
+ * with the next.
+ */
+function buildBook(
+  book: BooksDbBookData,
+  elementHtml: string,
+  charsByPage: Map<number, number>
+): BooksDbBookData {
   const sections = recomputeSections(book.sections, charsByPage);
-  // `characters` is the sum of the sections by construction, the same
-  // invariant load-pdf establishes. Recomputing it independently is how the
-  // two drifted apart before: an image-mode page counts 1 character, so a
-  // 900-page scan claimed 900 characters while the top-level count jumped to
-  // six figures after OCR, and every progress readout disagreed with the next.
   const characters = sections.length
     ? sections.reduce((sum, s) => sum + (s.characters || 0), 0)
-    : Array.from(newHtml.replace(/<[^>]+>/g, '')).length;
+    : Array.from(elementHtml.replace(/<[^>]+>/g, '')).length;
 
   return {
     ...book,
-    elementHtml: newHtml,
+    elementHtml,
     characters,
     sections,
     lastBookModified: Date.now()

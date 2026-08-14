@@ -75,6 +75,12 @@ fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
                 dist_len_bytes &= 0x3fff;
                 let offset = (dist_len_bytes >> 3) as usize;
                 let len = ((dist_len_bytes & 0x0007) + 3) as usize;
+                // Nothing to copy from yet: a length-distance pair before any
+                // literal has been emitted. `offset % text_pos` divided by zero
+                // here, which panics — on a file the user merely opened.
+                if text_pos == 0 {
+                    continue;
+                }
                 let start = if offset > text_pos {
                     offset % text_pos
                 } else {
@@ -210,6 +216,18 @@ impl HuffCdic {
     }
 
     fn unpack(&mut self, data: &[u8]) -> Vec<u8> {
+        self.unpack_at(data, 0)
+    }
+
+    /// Dictionary entries can reference other entries, and a crafted (or just
+    /// corrupt) CDIC can make that cycle. Unbounded recursion here overflows
+    /// the stack, which aborts the process outright — catch_unwind can't save
+    /// it. 32 levels is far past anything a real book produces.
+    fn unpack_at(&mut self, data: &[u8], depth: u32) -> Vec<u8> {
+        const MAX_DEPTH: u32 = 32;
+        if depth >= MAX_DEPTH {
+            return Vec::new();
+        }
         let mut bitsleft = (data.len() as i64) * 8;
         let mut padded = data.to_vec();
         padded.extend_from_slice(&[0u8; 8]);
@@ -251,7 +269,7 @@ impl HuffCdic {
             if flag {
                 result.extend_from_slice(&slice_data);
             } else {
-                let unpacked = self.unpack(&slice_data);
+                let unpacked = self.unpack_at(&slice_data, depth + 1);
                 result.extend_from_slice(&unpacked);
                 self.dictionary[r] = (unpacked, true);
             }
@@ -382,10 +400,11 @@ fn decode_utf8_cp1252_fallback(raw: &[u8]) -> String {
             }
             Err(e) => {
                 let valid_up_to = e.valid_up_to();
-                // Safe: from_utf8 guarantees [pos..pos+valid_up_to] is valid UTF-8
-                result.push_str(unsafe {
-                    std::str::from_utf8_unchecked(&raw[pos..pos + valid_up_to])
-                });
+                // from_utf8 already told us this prefix is valid, so the safe
+                // call can't fail — no reason to reach for unsafe here.
+                if let Ok(valid) = std::str::from_utf8(&raw[pos..pos + valid_up_to]) {
+                    result.push_str(valid);
+                }
                 pos += valid_up_to;
                 // Decode the invalid byte(s) as CP1252
                 let error_len = e.error_len().unwrap_or(1);
