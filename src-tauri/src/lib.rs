@@ -137,6 +137,10 @@ fn run_pending_reset() {
       let _ = std::fs::remove_dir_all(&dir);
     }
     let _ = std::fs::remove_file(&full_flag);
+    // The full wipe covers everything the UI-only flag would do, so clear that
+    // one too — leaving it behind wiped localStorage a second time on the next
+    // launch, taking settings the user had just set up again.
+    let _ = std::fs::remove_file(reset_flag_path());
     return;
   }
   let flag = reset_flag_path();

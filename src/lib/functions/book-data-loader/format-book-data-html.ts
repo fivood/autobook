@@ -32,7 +32,6 @@ export default function formatBookDataHtml(
       element.innerHTML = sanitizeHtml(elementHtml);
 
       addImageContainerClass(element);
-      // combineImagePairs(element);
       removeSvgDimensions(element);
       addSpoilerTags(element, document, blurMode);
       removeOldBrTagSolution(element);
@@ -177,100 +176,4 @@ function stripInlineColor(el: HTMLElement) {
     else node.removeAttribute('style');
   });
   el.querySelectorAll('font[color]').forEach((node) => node.removeAttribute('color'));
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function combineImagePairs(el: HTMLElement) {
-  const imagePairs: [Element, Element][] = [];
-
-  let startingIndex = 1;
-
-  if (el.children.item(0)?.id.startsWith('ttu-')) {
-    // Skip first page (index 0) as it's probably cover
-    startingIndex = 2;
-  }
-
-  for (let i = startingIndex; i < el.children.length; i += 2) {
-    const leftChild = el.children.item(i - 1)!;
-    const rightChild = el.children.item(i)!;
-
-    if (
-      hasNoText(leftChild) &&
-      hasNoText(rightChild) &&
-      hasSingleImage(leftChild) &&
-      hasSingleImage(rightChild)
-    ) {
-      imagePairs.push([leftChild, rightChild]);
-    }
-  }
-
-  if (
-    imagePairs.some(([leftPair, rightPair]) => {
-      const leftImages = leftPair.querySelectorAll('image');
-      const rightImages = rightPair.querySelectorAll('image');
-
-      if (leftImages.length !== 1 || rightImages.length !== 1) {
-        // Not supported
-        return true;
-      }
-
-      if (!isImagePortrait(leftImages[0]) || !isImagePortrait(rightImages[0])) {
-        return true;
-      }
-
-      return false;
-    })
-  ) {
-    return;
-  }
-
-  imagePairs.forEach(([leftPair, rightPair]) => {
-    el.removeChild(rightPair);
-
-    leftPair.classList.add('grouped-image');
-
-    const images = extractImageChildren(leftPair).concat(extractImageChildren(rightPair));
-
-    clearChildren(leftPair);
-
-    images.forEach((image) => leftPair.appendChild(image));
-  });
-}
-
-function hasNoText(el: Element) {
-  return typeof el.textContent === 'string' ? el.textContent.trim().length === 0 : !el.textContent;
-}
-
-function getImageChildren(el: Element) {
-  const imageChilds = el.querySelectorAll('svg');
-  return imageChilds;
-}
-
-function hasSingleImage(el: Element) {
-  return getImageChildren(el).length === 1;
-}
-
-function extractImageChildren(el: Element) {
-  const imageChildren = getImageChildren(el);
-  const result: Element[] = [];
-  imageChildren.forEach((child) => {
-    if (child.parentNode) {
-      child.parentNode.removeChild(child);
-      result.push(child);
-    }
-  });
-  return result;
-}
-
-function clearChildren(el: Element) {
-  Array.from(el.children).forEach((child) => {
-    if (child.parentNode) {
-      child.parentNode.removeChild(child);
-    }
-  });
-  return el;
-}
-
-function isImagePortrait(el: SVGImageElement) {
-  return el.height.baseVal.value > el.width.baseVal.value;
 }

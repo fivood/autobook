@@ -28,13 +28,23 @@ export interface OcrProgress {
   text: string;
 }
 
-/** Heuristic: is this book a scanned PDF that hasn't been OCRed yet? */
+/**
+ * Heuristic: is this book a scanned PDF that hasn't been OCRed yet?
+ *
+ * Memoized on the exact string it was asked about. The reader calls this from
+ * a template expression, and it runs several full-document regex passes — on a
+ * multi-megabyte scan that is a visible hitch every time it re-evaluates.
+ */
+let lastScanCheck: { html: string; result: boolean } | undefined;
+
 export function isScannedPdf(book: Pick<BooksDbBookData, 'elementHtml'>): boolean {
   const html = book.elementHtml || '';
+  if (lastScanCheck?.html === html) return lastScanCheck.result;
+
   const imgCount = countPageImages(html);
-  if (imgCount === 0) return false;
-  const realText = stripStructuralText(html);
-  return realText.length / imgCount < 50;
+  const result = imgCount === 0 ? false : stripStructuralText(html).length / imgCount < 50;
+  lastScanCheck = { html, result };
+  return result;
 }
 
 function countPageImages(html: string): number {

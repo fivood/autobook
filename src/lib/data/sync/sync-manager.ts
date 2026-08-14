@@ -189,11 +189,15 @@ export function scheduleDebouncedPush() {
 }
 
 let started = false;
+/** Kept so stopSyncLoop can actually detach; without this a stop/start cycle
+ * left the old subscriptions running and pushed once per duplicate. */
+let subscriptions: Array<{ unsubscribe(): void }> = [];
+
 export function startSyncLoop() {
   if (started || typeof window === 'undefined') return;
   started = true;
   ensureDeviceId();
-  syncEnabled$.subscribe((on) => {
+  const enabledSub = syncEnabled$.subscribe((on) => {
     if (!on) {
       if (pullTimer) clearInterval(pullTimer);
       pullTimer = undefined;
@@ -206,12 +210,15 @@ export function startSyncLoop() {
       }, PULL_INTERVAL_MS);
     }
   });
-  database.statisticsChanged$.subscribe(() => scheduleDebouncedPush());
+  const statsSub = database.statisticsChanged$.subscribe(() => scheduleDebouncedPush());
+  subscriptions = [enabledSub, statsSub];
 }
 
 export function stopSyncLoop() {
   if (pushTimer) clearTimeout(pushTimer);
   if (pullTimer) clearInterval(pullTimer);
+  for (const subscription of subscriptions) subscription.unsubscribe();
+  subscriptions = [];
   pushTimer = undefined;
   pullTimer = undefined;
   inFlight = false;
