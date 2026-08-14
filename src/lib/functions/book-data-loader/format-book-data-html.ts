@@ -11,6 +11,7 @@ import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
 import { isElementGaiji } from '$lib/functions/is-element-gaiji';
 import { map } from 'rxjs/operators';
+import { sanitizeHtml } from '$lib/functions/sanitize-html';
 import {
   readerImageGalleryPictures$,
   type ReaderImageGalleryPicture
@@ -25,7 +26,10 @@ export default function formatBookDataHtml(
   return getHtmlWithImageSource(bookData, isPaginated).pipe(
     map((elementHtml) => {
       const element = document.createElement('div');
-      element.innerHTML = elementHtml;
+      // Last line of defense before book markup reaches the live document.
+      // Books imported by older versions were stored unsanitized, so this has
+      // to happen on every render, not just at import.
+      element.innerHTML = sanitizeHtml(elementHtml);
 
       addImageContainerClass(element);
       // combineImagePairs(element);

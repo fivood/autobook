@@ -30,6 +30,7 @@
   import { isTauri } from '$lib/data/env';
   import { obsidianVaultPath$ } from '$lib/data/store';
   import { buildSyncPlan } from '$lib/functions/notebook/obsidian-sync';
+  import { grantDirAccess } from '$lib/functions/tauri-fs-scope';
 
   const STANDALONE_TITLE = '__standalone__';
   const REVIEW_BATCH = 10;
@@ -343,6 +344,7 @@
     const { open } = await import('@tauri-apps/plugin-dialog');
     const picked = await open({ directory: true, multiple: false, title: '选择 Obsidian vault 目录' });
     if (typeof picked === 'string') {
+      await grantDirAccess(picked);
       obsidianVaultPath$.next(picked);
     }
   }
@@ -360,6 +362,9 @@
     syncing = true;
     syncMessage = '';
     try {
+      // The vault sits outside the app's static fs scope; grant access first
+      // (also covers a vault path restored from localStorage).
+      await grantDirAccess(vault);
       const folderNameById = new Map(folders.map((f) => [f.id, f.name]));
       const plan = buildSyncPlan(highlights, folderNameById);
       const { writeTextFile, mkdir, exists } = await import('@tauri-apps/plugin-fs');

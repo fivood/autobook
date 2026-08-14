@@ -12,6 +12,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
+import { sanitizeElement } from '$lib/functions/sanitize-html';
 
 interface ParsedMobiImage {
   index: number;
@@ -98,6 +99,8 @@ function cleanHtml(raw: string): string {
     if (!root) return raw;
     stripAttributeLeaks(root);
     stripEmbeddedFonts(root);
+    // Still inside the inert DOMParser document — safe place to strip handlers.
+    sanitizeElement(root);
     return root.innerHTML;
   } catch {
     return raw;

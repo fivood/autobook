@@ -53,6 +53,23 @@ fn allow_paths(app: &tauri::AppHandle, paths: &[String]) {
   }
 }
 
+/// Widen the fs scope to a directory the user explicitly picked in a folder
+/// dialog (Obsidian vault, dictionary folder). The static scope in
+/// `capabilities/default.json` only covers the app's own data directory, so
+/// anything the user points us at has to be granted at runtime — that keeps a
+/// compromised page from reaching arbitrary paths on its own.
+#[tauri::command]
+fn allow_user_dir(app: tauri::AppHandle, path: String) -> Result<(), String> {
+  let p = std::path::PathBuf::from(&path);
+  if !p.is_dir() {
+    return Err(format!("不是一个目录: {path}"));
+  }
+  app
+    .fs_scope()
+    .allow_directory(&p, true)
+    .map_err(|e| e.to_string())
+}
+
 /// Path to the marker file that signals "delete WebView2 Local Storage on next launch".
 fn reset_flag_path() -> std::path::PathBuf {
   let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
@@ -337,6 +354,7 @@ pub fn run() {
       schedule_full_reset,
       get_data_paths,
       open_data_folder,
+      allow_user_dir,
       mobi_parser::parse_mobi,
       calibre_converter::check_calibre,
       calibre_converter::convert_with_calibre

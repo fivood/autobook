@@ -11,6 +11,7 @@ import { Marked } from 'marked';
 import hljs from 'highlight.js';
 import katex from 'katex';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
+import { sanitizeHtml } from '$lib/functions/sanitize-html';
 
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*$/;
 
@@ -110,7 +111,9 @@ export function getFormattedElementMd(data: string) {
     const wrapper = document.createElement('div');
     wrapper.id = sectionId;
     wrapper.className = 'md-section';
-    wrapper.innerHTML = html;
+    // Markdown allows raw HTML passthrough, so marked's output carries
+    // whatever the author wrote.
+    wrapper.innerHTML = sanitizeHtml(html);
     const text = wrapper.textContent || '';
     const chars = charCountOf(text);
     sections.push({

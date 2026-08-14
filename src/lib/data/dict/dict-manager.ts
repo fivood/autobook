@@ -5,6 +5,7 @@ import {
   parseIfo,
   type StarDict
 } from '$lib/data/dict/stardict';
+import { grantDirAccess } from '$lib/functions/tauri-fs-scope';
 
 export interface LoadedDict {
   name: string;
@@ -62,6 +63,10 @@ export async function scanDictFolder(rootPath: string): Promise<DictScanResult> 
   const result: DictScanResult = { loaded: [], errors: [] };
   let fsApi: any;
   try {
+    // The dictionary folder lives outside the app's static fs scope, so grant
+    // access before touching it — this covers both a fresh pick and a path
+    // restored from localStorage on the next launch.
+    await grantDirAccess(rootPath);
     fsApi = await import('@tauri-apps/plugin-fs');
   } catch (e) {
     result.errors.push('Tauri fs 不可用');
