@@ -16,6 +16,8 @@
  *   - 'chi_sim+eng'       中英混排（最常见的国产扫描书）
  */
 
+import { base } from '$app/paths';
+
 export type OcrLanguage = string;
 
 interface WorkerLike {
@@ -39,12 +41,41 @@ async function getWorker(lang: OcrLanguage): Promise<WorkerLike> {
   workerLang = lang;
   workerPromise = (async () => {
     const tesseract = await import('tesseract.js');
-    const worker = await tesseract.createWorker(lang, undefined, {
-      // Default CDN; cached by service worker / browser after first use
-    });
+    const worker = await tesseract.createWorker(lang, undefined, await workerOptions());
     return worker as unknown as WorkerLike;
   })();
   return workerPromise;
+}
+
+/**
+ * Tesseract's defaults fetch the wasm core and the language models from a
+ * public CDN at run time, which is the one thing in the app that silently
+ * needs the network. If a packager (or the user) drops the files under
+ * `static/tesseract/`, we use those instead and OCR works offline.
+ *
+ * Layout expected when present:
+ *   static/tesseract/worker.min.js
+ *   static/tesseract/tesseract-core-simd.wasm.js
+ *   static/tesseract/<lang>.traineddata.gz
+ */
+async function workerOptions(): Promise<Record<string, string> | undefined> {
+  const localBase = `${base}/tesseract`;
+  try {
+    const probe = await fetch(`${localBase}/worker.min.js`, { method: 'HEAD' });
+    if (!probe.ok) return undefined;
+  } catch {
+    return undefined;
+  }
+  return {
+    workerPath: `${localBase}/worker.min.js`,
+    corePath: localBase,
+    langPath: localBase
+  };
+}
+
+/** True when OCR will have to pull its language model over the network. */
+export async function ocrNeedsNetwork(): Promise<boolean> {
+  return (await workerOptions()) === undefined;
 }
 
 export async function ocrImageBlob(blob: Blob, lang: OcrLanguage): Promise<string> {

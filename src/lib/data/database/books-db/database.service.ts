@@ -513,7 +513,25 @@ export class DatabaseService {
 
   async deleteHighlight(id: number): Promise<void> {
     const db = await this.db;
-    await db.delete('highlight', id);
+    const tx = db.transaction('highlight', 'readwrite');
+    const store = tx.store;
+    // Links are stored on both ends, so dropping the row alone leaves every
+    // partner pointing at an id that no longer resolves. The notebook filters
+    // those out silently, which reads as "a link disappeared" and leaves the
+    // dangling ids to accumulate — including in the Obsidian frontmatter.
+    const all = await store.getAll();
+    const now = Date.now();
+    for (const other of all) {
+      if (other.id === id || !other.linkedIds?.includes(id)) continue;
+      const next = other.linkedIds.filter((linked) => linked !== id);
+      await store.put({
+        ...other,
+        linkedIds: next.length ? next : undefined,
+        lastModified: now
+      });
+    }
+    await store.delete(id);
+    await tx.done;
     this.highlightsChanged$.next();
   }
 
@@ -552,6 +570,9 @@ export class DatabaseService {
   async deleteHighlightFolder(id: number): Promise<void> {
     const db = await this.db;
     const all = await db.getAll('highlight');
+    const folders = await db.getAll('highlightFolder');
+    const deleted = folders.find((folder) => folder.id === id);
+
     const tx = db.transaction(['highlight', 'highlightFolder'], 'readwrite');
     for (const h of all) {
       if (h.folderId === id) {
@@ -559,6 +580,22 @@ export class DatabaseService {
         await tx.objectStore('highlight').put(rest as BooksDbHighlight);
       }
     }
+
+    // Child folders would otherwise keep a parentId that resolves to nothing
+    // and drop out of the sidebar tree along with everything filed under them.
+    // Promote them to the deleted folder's own parent instead.
+    for (const folder of folders) {
+      if (folder.parentId !== id) continue;
+      const { parentId: _drop, ...rest } = folder;
+      const promoted =
+        deleted?.parentId === undefined
+          ? rest
+          : { ...rest, parentId: deleted.parentId };
+      await tx
+        .objectStore('highlightFolder')
+        .put({ ...promoted, lastModified: Date.now() } as BooksDbHighlightFolder);
+    }
+
     await tx.objectStore('highlightFolder').delete(id);
     await tx.done;
     this.highlightsChanged$.next();

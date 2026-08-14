@@ -81,20 +81,36 @@ async function* streamOpenAi(
     { role: 'system', content: req.system },
     ...req.messages
   ];
-  const res = await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${opts.apiKey}`
-    },
-    body: JSON.stringify({
-      model: opts.model,
-      stream: true,
-      messages,
-      max_tokens: req.maxTokens ?? 4096
-    }),
-    signal: req.signal
-  });
+
+  const send = (tokenField: 'max_tokens' | 'max_completion_tokens') =>
+    fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${opts.apiKey}`
+      },
+      body: JSON.stringify({
+        model: opts.model,
+        stream: true,
+        messages,
+        [tokenField]: req.maxTokens ?? 4096
+      }),
+      signal: req.signal
+    });
+
+  // OpenAI's newer models reject `max_tokens` and want `max_completion_tokens`,
+  // while local and third-party OpenAI-compatible servers (Ollama, older
+  // proxies) generally only know the original name. Lead with the widely
+  // supported one and switch when the server tells us to.
+  let res = await send('max_tokens');
+  if (res.status === 400) {
+    const detail = await safeReadBody(res);
+    if (/max_completion_tokens/i.test(detail)) {
+      res = await send('max_completion_tokens');
+    } else {
+      throw new Error(`OpenAI 400: ${detail}`);
+    }
+  }
   if (!res.ok || !res.body) {
     throw new Error(`OpenAI ${res.status}: ${await safeReadBody(res)}`);
   }

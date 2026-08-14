@@ -30,6 +30,7 @@
   import { isTauri } from '$lib/data/env';
   import { obsidianVaultPath$ } from '$lib/data/store';
   import { buildSyncPlan } from '$lib/functions/notebook/obsidian-sync';
+  import { grantDirAccess } from '$lib/functions/tauri-fs-scope';
 
   const STANDALONE_TITLE = '__standalone__';
   const REVIEW_BATCH = 10;
@@ -343,6 +344,7 @@
     const { open } = await import('@tauri-apps/plugin-dialog');
     const picked = await open({ directory: true, multiple: false, title: '选择 Obsidian vault 目录' });
     if (typeof picked === 'string') {
+      await grantDirAccess(picked);
       obsidianVaultPath$.next(picked);
     }
   }
@@ -360,17 +362,37 @@
     syncing = true;
     syncMessage = '';
     try {
+      // The vault sits outside the app's static fs scope; grant access first
+      // (also covers a vault path restored from localStorage).
+      await grantDirAccess(vault);
       const folderNameById = new Map(folders.map((f) => [f.id, f.name]));
       const plan = buildSyncPlan(highlights, folderNameById);
-      const { writeTextFile, mkdir, exists } = await import('@tauri-apps/plugin-fs');
+      const { writeTextFile, mkdir, exists, stat } = await import('@tauri-apps/plugin-fs');
       const rootPath = `${vault}/${plan.rootDirName}`;
       if (!(await exists(rootPath))) {
         await mkdir(rootPath, { recursive: true });
       }
       const dirsCreated = new Set<string>();
+      let written = 0;
+      let skipped = 0;
       for (const f of plan.files) {
         const fullPath = `${rootPath}/${f.relativePath}`;
         const dirPath = fullPath.slice(0, fullPath.lastIndexOf('/'));
+
+        // Rewriting every note on every sync meant thousands of IPC round trips
+        // for a library that had barely changed. Skip files the vault already
+        // has at or past this note's timestamp.
+        try {
+          const info = await stat(fullPath);
+          const mtime = info.mtime ? new Date(info.mtime).getTime() : 0;
+          if (mtime >= f.lastModified) {
+            skipped++;
+            continue;
+          }
+        } catch {
+          // Not there yet — fall through and write it.
+        }
+
         if (!dirsCreated.has(dirPath)) {
           if (!(await exists(dirPath))) {
             await mkdir(dirPath, { recursive: true });
@@ -378,8 +400,11 @@
           dirsCreated.add(dirPath);
         }
         await writeTextFile(fullPath, f.content);
+        written++;
       }
-      syncMessage = `已同步 ${plan.files.length} 条到 ${plan.rootDirName}/`;
+      syncMessage = skipped
+        ? `已同步 ${written} 条到 ${plan.rootDirName}/（${skipped} 条无变化已跳过）`
+        : `已同步 ${written} 条到 ${plan.rootDirName}/`;
     } catch (err: any) {
       syncMessage = `同步失败：${err?.message || err}`;
     } finally {

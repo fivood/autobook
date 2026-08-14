@@ -6,11 +6,14 @@
   import type { UpdateInfo, ProgressEvent } from '$lib/functions/updater/check-for-update';
   import { relaunchApp } from '$lib/functions/updater/check-for-update';
   import { marked } from 'marked';
+  import { sanitizeHtml } from '$lib/functions/sanitize-html';
 
   marked.setOptions({ breaks: true, gfm: true });
 
+  /** Release notes come off the network, so the rendered HTML gets sanitized
+   * before it goes through `{@html}`. */
   function renderMd(text: string): string {
-    return marked.parse(text || '') as string;
+    return sanitizeHtml(marked.parse(text || '') as string);
   }
 
   export let update: UpdateInfo;

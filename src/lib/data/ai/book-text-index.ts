@@ -1,6 +1,7 @@
 import {
   buildIndex,
   chunkBookText,
+  clampChunkToCutoff,
   searchIndex,
   extractRecentTail,
   type Bm25IndexShape,
@@ -37,11 +38,23 @@ export interface BookTextIndex {
   plaintextLen: number;
 }
 
+/**
+ * An index holds the book's full plaintext plus per-chunk term maps, so a few
+ * of them add up. Only the open book needs one; keep a second around so
+ * flipping back to the previous book doesn't pay for a rebuild.
+ */
+const MAX_CACHED_INDEXES = 2;
 const cache = new Map<number, BookTextIndex>();
 
 export function buildBookTextIndex(bookId: number, bookTitle: string, elementHtml: string): BookTextIndex {
   const cached = cache.get(bookId);
-  if (cached && cached.bookTitle === bookTitle) return cached;
+  if (cached && cached.bookTitle === bookTitle) {
+    // Refresh recency: Map iterates in insertion order, so re-inserting moves
+    // this entry to the back of the eviction queue.
+    cache.delete(bookId);
+    cache.set(bookId, cached);
+    return cached;
+  }
   const plaintext = htmlToPlaintext(elementHtml);
   const chunks = chunkBookText(plaintext);
   const index = buildIndex(chunks);
@@ -52,6 +65,11 @@ export function buildBookTextIndex(bookId: number, bookTitle: string, elementHtm
     plaintextLen: plaintext.length
   };
   cache.set(bookId, value);
+  while (cache.size > MAX_CACHED_INDEXES) {
+    const oldest = cache.keys().next();
+    if (oldest.done) break;
+    cache.delete(oldest.value);
+  }
   return value;
 }
 
@@ -96,7 +114,15 @@ export function retrieveSpoilerSafe(
 ): RetrievalResult {
   const ratio = bookCharCount > 0 ? Math.min(1, exploredCharCount / bookCharCount) : 1;
   const cutoff = Math.max(1, Math.floor(bti.plaintextLen * ratio));
-  const topChunks = searchIndex(bti.index, query, { maxChar: cutoff, topK: 6 });
-  const recentTail = extractRecentTail(bti.index.chunks, cutoff, 2000);
+  // Both retrieval paths filter on where a chunk starts, which leaves the part
+  // of a straddling chunk that lies past the cutoff in the result. Clamping
+  // here is what makes the spoiler boundary hold for the text we hand the model.
+  const clamp = (chunks: Chunk[]) =>
+    chunks
+      .map((chunk) => clampChunkToCutoff(chunk, cutoff))
+      .filter((chunk): chunk is Chunk => !!chunk);
+
+  const topChunks = clamp(searchIndex(bti.index, query, { maxChar: cutoff, topK: 6 }));
+  const recentTail = clamp(extractRecentTail(bti.index.chunks, cutoff, 2000));
   return { topChunks, recentTail, cutoffPlaintextPos: cutoff };
 }

@@ -5,6 +5,7 @@
   import { isTauri } from '$lib/data/env';
   import { dictFolderPath$ } from '$lib/data/store';
   import { lookupAll, scanDictFolder, loadedDicts$ } from '$lib/data/dict/dict-manager';
+  import { grantDirAccess } from '$lib/functions/tauri-fs-scope';
 
   export let word: string;
   export let x = 0;
@@ -70,6 +71,7 @@
     const { open } = await import('@tauri-apps/plugin-dialog');
     const picked = await open({ directory: true, multiple: false, title: '选择词典文件夹（含 StarDict 子目录或 .dict.json 文件）' });
     if (typeof picked !== 'string') return;
+    await grantDirAccess(picked);
     dictFolderPath$.next(picked);
     busy = true;
     message = '扫描中…';

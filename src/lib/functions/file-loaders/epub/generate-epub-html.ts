@@ -14,6 +14,7 @@ import { ImportHTMLFixMode } from '$lib/data/import-html-fix-mode';
 import { getCharacterCount } from '$lib/functions/get-character-count';
 import { getParagraphNodes } from '../../../components/book-reader/get-paragraph-nodes';
 import path from 'path-browserify';
+import { sanitizeElement } from '$lib/functions/sanitize-html';
 
 export const prependValue = 'ttu-';
 
@@ -233,6 +234,11 @@ export default function generateEpubHtml(
         }
       }
     }
+
+    // `body` still belongs to the inert DOMParser document here, so stripping
+    // handlers and dangerous elements now means nothing hazardous ever reaches
+    // the live document below.
+    sanitizeElement(body);
 
     let innerHtml = body.innerHTML || '';
 

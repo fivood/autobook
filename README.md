@@ -121,7 +121,27 @@ EPUB/MOBI/AZW3/PDF/MD/TXT  ──读──→  阅读器
 npm install
 npm run tauri dev    # 启 Vite + 编 Rust
 npm run check        # svelte-check 类型检查
+npm test             # 消毒器 + 剧透截断的自测
 ```
+
+### 在 Linux / macOS 上检查 Rust
+
+`src-tauri` 依赖 WinRT（系统 TTS）和 explorer.exe，在非 Windows 机器上 `cargo check`
+会直接失败在 GTK 依赖上——但那个报错是假象：真正编不过的是 Windows 专属代码，装 GTK
+也没用。正确做法是交叉检查 Windows target，不需要 Windows 机器：
+
+```sh
+rustup target add x86_64-pc-windows-gnu
+sudo apt-get install -y mingw-w64          # 构建脚本要 windres
+
+npm run check:rust:cross                   # 全量约 80 秒，增量约 1 秒
+```
+
+在 Windows 上直接 `npm run check:rust` 即可（原生 MSVC target）。
+
+`cargo check` 不做链接，所以 MSVC 那套导入库用不上；Windows 侧的类型错误照样能抓到。
+CI 里的 `cargo check` 跑在 windows-latest 上用 MSVC target，那个才是权威结果——本地这条
+只是让你不用每次都等一轮 CI。
 
 ## 构建
 

@@ -12,6 +12,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
+import { sanitizeElement } from '$lib/functions/sanitize-html';
 
 interface ParsedMobiImage {
   index: number;
@@ -98,6 +99,8 @@ function cleanHtml(raw: string): string {
     if (!root) return raw;
     stripAttributeLeaks(root);
     stripEmbeddedFonts(root);
+    // Still inside the inert DOMParser document — safe place to strip handlers.
+    sanitizeElement(root);
     return root.innerHTML;
   } catch {
     return raw;
@@ -168,19 +171,27 @@ async function tryCalibConvert(file: File, lastBookModified: number): Promise<Lo
     const hasCalibre = await invoke<boolean>('check_calibre');
     if (!hasCalibre) return null;
 
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const epubBytes = await invoke<number[]>('convert_with_calibre', {
-      bytes: Array.from(bytes),
-      filename: file.name
+    // Raw ArrayBuffer payload, not a JSON array of numbers — see the command's
+    // doc comment. Only the extension travels with it; Calibre picks its input
+    // parser from that and the temp filename is generated on the Rust side.
+    const buffer = await file.arrayBuffer();
+    const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1] || 'mobi';
+    const epubBytes = await invoke<ArrayBuffer>('convert_with_calibre', buffer, {
+      headers: { 'x-source-ext': ext }
     });
-    const epubBlob = new Blob([new Uint8Array(epubBytes)], {
+    const epubBlob = new Blob([epubBytes], {
       type: 'application/epub+zip'
     });
     const epubFile = new File([epubBlob], file.name.replace(/\.[^.]+$/, '.epub'), {
       type: 'application/epub+zip'
     });
     return await loadEpub(epubFile, document, lastBookModified);
-  } catch {
+  } catch (err) {
+    // Falling back to the built-in parser is the right move, but swallowing the
+    // reason entirely made "Calibre is installed and still didn't help" look
+    // identical to "Calibre isn't installed".
+    // eslint-disable-next-line no-console
+    console.warn('[mobi] Calibre conversion failed, falling back to the built-in parser', err);
     return null;
   }
 }
@@ -188,10 +199,10 @@ async function tryCalibConvert(file: File, lastBookModified: number): Promise<Lo
 const CALIBRE_HINT = '\n\n提示：安装 Calibre（https://calibre-ebook.com）可获得更好的 MOBI/AZW3 兼容性，导入时会自动调用 Calibre 转换。';
 
 async function nativeParse(file: File, lastBookModified: number): Promise<LoadData> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const buffer = await file.arrayBuffer();
   let parsed: ParsedMobi;
   try {
-    parsed = await invoke<ParsedMobi>('parse_mobi', { bytes: Array.from(bytes) });
+    parsed = await invoke<ParsedMobi>('parse_mobi', buffer);
   } catch (e) {
     const msg = typeof e === 'string' ? e : JSON.stringify(e);
     throw new Error(msg + CALIBRE_HINT);

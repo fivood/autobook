@@ -13,6 +13,9 @@ export interface DictMetadata {
   bookname: string;
   wordCount: number;
   sameTypeSequence: string;
+  /** 32 or 64. Big dictionaries declare `idxoffsetbits=64` in the .ifo and
+   * store 8-byte offsets; reading those as 4 bytes yields garbage entries. */
+  idxOffsetBits: 32 | 64;
 }
 
 export interface StarDict {
@@ -26,7 +29,12 @@ export interface StarDict {
 }
 
 export function parseIfo(text: string): DictMetadata {
-  const meta: DictMetadata = { bookname: 'Dictionary', wordCount: 0, sameTypeSequence: 'm' };
+  const meta: DictMetadata = {
+    bookname: 'Dictionary',
+    wordCount: 0,
+    sameTypeSequence: 'm',
+    idxOffsetBits: 32
+  };
   for (const line of text.split(/\r?\n/)) {
     const m = /^([a-zA-Z_]+)\s*=\s*(.+)$/.exec(line);
     if (!m) continue;
@@ -34,27 +42,37 @@ export function parseIfo(text: string): DictMetadata {
     if (k === 'bookname') meta.bookname = v;
     else if (k === 'wordcount') meta.wordCount = parseInt(v, 10) || 0;
     else if (k === 'sametypesequence') meta.sameTypeSequence = v;
+    else if (k === 'idxoffsetbits') meta.idxOffsetBits = parseInt(v, 10) === 64 ? 64 : 32;
   }
   return meta;
 }
 
-export function parseIdx(buf: Uint8Array): {
+export function parseIdx(
+  buf: Uint8Array,
+  idxOffsetBits: 32 | 64 = 32
+): {
   index: Map<string, Array<[number, number]>>;
   originalCase: Map<string, string>;
 } {
   const index = new Map<string, Array<[number, number]>>();
   const originalCase = new Map<string, string>();
   const decoder = new TextDecoder('utf-8');
+  const offsetBytes = idxOffsetBits === 64 ? 8 : 4;
+  const recordBytes = offsetBytes + 4;
   let i = 0;
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   while (i < buf.length) {
     // find zero terminator
     let j = i;
     while (j < buf.length && buf[j] !== 0) j++;
-    if (j >= buf.length - 8) break;
+    // The record is the NUL at j followed by offset + length; bail if it's cut off.
+    if (j + recordBytes >= buf.length) break;
     const word = decoder.decode(buf.subarray(i, j));
-    const offset = dv.getUint32(j + 1, false);
-    const length = dv.getUint32(j + 5, false);
+    // 64-bit offsets come back as BigInt; dictionaries are far below 2^53 bytes
+    // so narrowing to a number is safe and keeps the rest of the code simple.
+    const offset =
+      offsetBytes === 8 ? Number(dv.getBigUint64(j + 1, false)) : dv.getUint32(j + 1, false);
+    const length = dv.getUint32(j + 1 + offsetBytes, false);
     const key = word.toLowerCase();
     const entries = index.get(key);
     if (entries) entries.push([offset, length]);
@@ -62,7 +80,7 @@ export function parseIdx(buf: Uint8Array): {
       index.set(key, [[offset, length]]);
       originalCase.set(key, word);
     }
-    i = j + 9;
+    i = j + 1 + recordBytes;
   }
   return { index, originalCase };
 }

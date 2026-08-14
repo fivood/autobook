@@ -56,6 +56,7 @@
   import { keyBy } from '$lib/functions/key-by';
   import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
   import { importBackup, importData, replicateData } from '$lib/functions/replication/replicator';
+  import { sniffFormat } from '$lib/functions/file-loaders/utils/sniff-format';
   import { throwIfAborted } from '$lib/functions/replication/replication-error';
   import {
     replicationProgress$,
@@ -397,7 +398,18 @@
       logger.warn(`Error expanding zip: ${err.message}`);
       return Array.from(fileList);
     });
-    const files = expanded.filter((f) => supportedExtRegex.test(f.name));
+    // Files whose extension we recognize go straight through. Anything else
+    // gets its magic bytes read here — the importer has known how to sniff
+    // renamed and extensionless files since 1.10.2, but this filter rejected
+    // them before it ever got the chance, so that path was unreachable.
+    const files: File[] = [];
+    for (const file of expanded) {
+      if (supportedExtRegex.test(file.name)) {
+        files.push(file);
+      } else if (await sniffFormat(file)) {
+        files.push(file);
+      }
+    }
 
     if (!files.length) {
       resetProgress();

@@ -1,57 +1,19 @@
-// Twin of the desktop sync client. Lives in mobile-typewriter so the PWA
-// doesn't need to import across project boundaries; the wire protocol is
-// owned by stats-sync/src/index.ts (the Cloudflare Worker).
+/**
+ * Mobile-side entry point for the sync protocol. The implementation lives in
+ * the repo's shared/sync-protocol.ts, which the desktop app imports too — this
+ * used to be a hand-maintained twin and the two had already drifted apart.
+ */
 
-export const SYNC_ENDPOINT = 'https://sync.fivood.com/sync';
-
-export interface DayClients {
-  clients: Record<string, number>;
-  updatedAt?: number;
-}
-export interface RemoteState {
-  v: 1;
-  books: Record<string, Record<string, DayClients>>;
-}
-
-export function generateToken(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-export function generateDeviceId(): string {
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-export function isValidToken(t: string): boolean {
-  return /^[0-9a-f]{32}$/i.test(t);
-}
-
-export async function pullState(token: string, signal?: AbortSignal): Promise<RemoteState> {
-  const res = await fetch(`${SYNC_ENDPOINT}?token=${token}`, { signal });
-  if (!res.ok) throw new Error(`pull ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const data = await res.json();
-  if (!data || data.v !== 1) return { v: 1, books: {} };
-  return data as RemoteState;
-}
-
-export async function pushDelta(
-  token: string,
-  payload: { books: Record<string, Record<string, { clients: Record<string, number> }>> },
-  signal?: AbortSignal
-): Promise<RemoteState> {
-  const res = await fetch(`${SYNC_ENDPOINT}?token=${token}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal
-  });
-  if (!res.ok) throw new Error(`push ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  return (await res.json()) as RemoteState;
-}
+export {
+  SYNC_ENDPOINT,
+  SyncError,
+  flattenRemote,
+  generateDeviceId,
+  generateToken,
+  isValidToken,
+  pullState,
+  pushDelta,
+  type DayClients,
+  type PushPayload,
+  type RemoteState
+} from '../../../shared/sync-protocol';

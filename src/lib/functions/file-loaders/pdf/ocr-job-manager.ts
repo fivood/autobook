@@ -19,7 +19,7 @@ import { writable, type Readable } from 'svelte/store';
 import { database } from '$lib/data/store';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
 import { runOcr, type OcrProgress } from './pdf-ocr-runner';
-import type { OcrLanguage } from './pdf-ocr';
+import { disposeOcrWorker, type OcrLanguage } from './pdf-ocr';
 
 export type OcrJobStatus = 'running' | 'finished' | 'errored';
 
@@ -69,20 +69,43 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
         (p) => {
           _store.update((s) => (s ? { ...s, progress: p } : s));
         },
-        signal
+        signal,
+        (partial) => saveOcrResult(partial)
       );
-      const db = await database.db;
-      await db.put('data', updated);
+      await saveOcrResult(updated);
       _store.update((s) => (s ? { ...s, status: 'finished' } : s));
     } catch (err: any) {
       const msg = err?.name === 'AbortError' ? '已中止' : err?.message || String(err);
       _store.update((s) => (s ? { ...s, status: 'errored', error: msg } : s));
     } finally {
       abortCtrl = undefined;
+      // The worker holds the language model in memory — hundreds of MB for the
+      // Chinese packs — and nothing else will release it.
+      disposeOcrWorker().catch(() => {
+        /* teardown is best-effort */
+      });
     }
   })();
 
   return true;
+}
+
+/**
+ * Write back only the fields OCR owns. The job holds the book record it was
+ * started with, and a long run gives anything else — an FS sync, a re-import,
+ * a progress write — time to touch the same row; putting the whole snapshot
+ * back would silently roll those changes away.
+ */
+async function saveOcrResult(updated: BooksDbBookData): Promise<void> {
+  const db = await database.db;
+  const current = await db.get('data', updated.id);
+  await db.put('data', {
+    ...(current ?? updated),
+    elementHtml: updated.elementHtml,
+    characters: updated.characters,
+    sections: updated.sections,
+    lastBookModified: updated.lastBookModified
+  });
 }
 
 export function abortOcrJob() {

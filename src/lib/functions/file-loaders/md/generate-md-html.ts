@@ -8,9 +8,59 @@
  */
 
 import { Marked } from 'marked';
-import hljs from 'highlight.js';
+import hljs from 'highlight.js/lib/core';
 import katex from 'katex';
+import bash from 'highlight.js/lib/languages/bash';
+import c from 'highlight.js/lib/languages/c';
+import cpp from 'highlight.js/lib/languages/cpp';
+import csharp from 'highlight.js/lib/languages/csharp';
+import css from 'highlight.js/lib/languages/css';
+import diff from 'highlight.js/lib/languages/diff';
+import go from 'highlight.js/lib/languages/go';
+import java from 'highlight.js/lib/languages/java';
+import javascript from 'highlight.js/lib/languages/javascript';
+import json from 'highlight.js/lib/languages/json';
+import markdown from 'highlight.js/lib/languages/markdown';
+import php from 'highlight.js/lib/languages/php';
+import python from 'highlight.js/lib/languages/python';
+import ruby from 'highlight.js/lib/languages/ruby';
+import rust from 'highlight.js/lib/languages/rust';
+import shell from 'highlight.js/lib/languages/shell';
+import sql from 'highlight.js/lib/languages/sql';
+import typescript from 'highlight.js/lib/languages/typescript';
+import xml from 'highlight.js/lib/languages/xml';
+import yaml from 'highlight.js/lib/languages/yaml';
+
+// The full highlight.js bundle carries nearly two hundred grammars — Dockerfile,
+// Erlang, the lot — and it landed in the shared entry chunk. Register the
+// languages a reading app plausibly meets and skip the rest; anything else
+// falls back to plaintext, which is what unrecognized languages did anyway.
+for (const [name, language] of Object.entries({
+  bash,
+  c,
+  cpp,
+  csharp,
+  css,
+  diff,
+  go,
+  java,
+  javascript,
+  json,
+  markdown,
+  php,
+  python,
+  ruby,
+  rust,
+  shell,
+  sql,
+  typescript,
+  xml,
+  yaml
+})) {
+  hljs.registerLanguage(name, language);
+}
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
+import { sanitizeHtml } from '$lib/functions/sanitize-html';
 
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*$/;
 
@@ -110,7 +160,9 @@ export function getFormattedElementMd(data: string) {
     const wrapper = document.createElement('div');
     wrapper.id = sectionId;
     wrapper.className = 'md-section';
-    wrapper.innerHTML = html;
+    // Markdown allows raw HTML passthrough, so marked's output carries
+    // whatever the author wrote.
+    wrapper.innerHTML = sanitizeHtml(html);
     const text = wrapper.textContent || '';
     const chars = charCountOf(text);
     sections.push({

@@ -41,40 +41,87 @@ function tokenize(text: string): string[] {
   return tokens;
 }
 
+/**
+ * A chunk that starts before the reading cutoff but runs past it is the whole
+ * reason `MAX_CHUNK_CHARS` exists: the retrieval filter can only reason about
+ * where a chunk begins, so an oversized one drags unread text along with it.
+ * Paragraphs longer than this get split.
+ */
+const MAX_CHUNK_CHARS = 1200;
+
 export function chunkBookText(plainText: string): Chunk[] {
   const chunks: Chunk[] = [];
-  const paragraphs = plainText.split(/\n+/);
+  // Split keeping the separators so offsets stay exact. The old code advanced
+  // the cursor by `para.length + 1`, assuming a single newline between
+  // paragraphs — but htmlToPlaintext emits one before and one after every
+  // block element, so every paragraph shifted the recorded offsets a little
+  // further below the truth, and chunks that should have been past the
+  // spoiler cutoff tested as being before it.
+  const parts = plainText.split(/(\n+)/);
   let bufferStart = 0;
   let buffer = '';
   let cursor = 0;
   let id = 0;
-  for (const para of paragraphs) {
-    const paraStart = cursor;
-    cursor += para.length + 1; // +1 for the consumed newline (approximation)
-    if (!para.trim()) {
-      continue;
-    }
-    if (!buffer) bufferStart = paraStart;
-    buffer = buffer ? `${buffer}\n${para}` : para;
-    if (buffer.length >= TARGET_CHUNK_CHARS) {
-      chunks.push({
-        id: id++,
-        startChar: bufferStart,
-        endChar: bufferStart + buffer.length,
-        text: buffer
-      });
+
+  const flush = () => {
+    if (!buffer.trim()) {
       buffer = '';
+      return;
     }
-  }
-  if (buffer.trim()) {
     chunks.push({
       id: id++,
       startChar: bufferStart,
       endChar: bufferStart + buffer.length,
       text: buffer
     });
+    buffer = '';
+  };
+
+  for (let i = 0; i < parts.length; i++) {
+    const piece = parts[i];
+    // Odd indices are the captured `\n+` separators — they only move the cursor.
+    if (i % 2 === 1) {
+      cursor += piece.length;
+      continue;
+    }
+
+    const paraStart = cursor;
+    cursor += piece.length;
+    if (!piece.trim()) continue;
+
+    let para = piece;
+    let offset = paraStart;
+
+    // A single huge paragraph would otherwise become one giant chunk.
+    while (para.length > MAX_CHUNK_CHARS) {
+      flush();
+      bufferStart = offset;
+      buffer = para.slice(0, MAX_CHUNK_CHARS);
+      flush();
+      para = para.slice(MAX_CHUNK_CHARS);
+      offset += MAX_CHUNK_CHARS;
+    }
+
+    if (!buffer) bufferStart = offset;
+    buffer = buffer ? `${buffer}\n${para}` : para;
+    if (buffer.length >= TARGET_CHUNK_CHARS) flush();
   }
+
+  flush();
   return chunks;
+}
+
+/**
+ * Cut a chunk down to the part the reader has actually reached. Returns
+ * undefined when nothing of it is readable yet.
+ */
+export function clampChunkToCutoff(chunk: Chunk, maxChar: number): Chunk | undefined {
+  if (chunk.startChar >= maxChar) return undefined;
+  const keep = maxChar - chunk.startChar;
+  if (keep >= chunk.text.length) return chunk;
+  const text = chunk.text.slice(0, keep);
+  if (!text.trim()) return undefined;
+  return { ...chunk, text, endChar: chunk.startChar + text.length };
 }
 
 export function buildIndex(chunks: Chunk[]): Bm25IndexShape {

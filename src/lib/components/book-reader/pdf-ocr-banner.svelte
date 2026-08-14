@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { ocrNeedsNetwork } from '$lib/functions/file-loaders/pdf/pdf-ocr';
   import Fa from 'svelte-fa';
   import { faTimes, faMagnifyingGlass, faStop } from '@fortawesome/free-solid-svg-icons';
   import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
@@ -28,6 +29,12 @@
   ];
 
   let dismissed = false;
+  // Whether the language model still has to come over the network — false once
+  // the wasm + traineddata files are shipped under static/tesseract/.
+  let needsNetwork = true;
+  onMount(async () => {
+    needsNetwork = await ocrNeedsNetwork();
+  });
   // Job state for THIS book only — ignore jobs belonging to other books.
   $: jobForThisBook = $ocrJob$ && $ocrJob$.bookId === book.id ? $ocrJob$ : null;
   $: otherBookRunning = !!$ocrJob$ && $ocrJob$.bookId !== book.id && $ocrJob$.status === 'running';
@@ -88,7 +95,9 @@
         <div class="meta">
           {otherBookRunning
             ? `「${$ocrJob$?.bookTitle}」正在 OCR — 中止后才能开始这本`
-            : '运行 OCR 后可被打字机 / AI / 词典使用，首次会下载语言模型'}
+            : needsNetwork
+              ? '运行 OCR 后可被打字机 / AI / 词典使用。首次运行需要联网下载语言模型（约 15–30MB）'
+              : '运行 OCR 后可被打字机 / AI / 词典使用（语言模型已随程序安装，无需联网）'}
         </div>
       </div>
       <label class="lang">

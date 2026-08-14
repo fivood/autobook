@@ -58,10 +58,13 @@ jobs:
             }
             found { print }
           ' CHANGELOG.md > release-notes.txt
+          # Random delimiter: a changelog line that happened to read "EOF" would
+          # otherwise terminate the heredoc early and mangle the step output.
+          DELIM="notes-$(openssl rand -hex 8)"
           {
-            echo "notes<<EOF"
+            echo "notes<<$DELIM"
             cat release-notes.txt
-            echo "EOF"
+            echo "$DELIM"
           } >> "$GITHUB_OUTPUT"
 
       - uses: tauri-apps/tauri-action@v0

@@ -53,6 +53,23 @@ fn allow_paths(app: &tauri::AppHandle, paths: &[String]) {
   }
 }
 
+/// Widen the fs scope to a directory the user explicitly picked in a folder
+/// dialog (Obsidian vault, dictionary folder). The static scope in
+/// `capabilities/default.json` only covers the app's own data directory, so
+/// anything the user points us at has to be granted at runtime — that keeps a
+/// compromised page from reaching arbitrary paths on its own.
+#[tauri::command]
+fn allow_user_dir(app: tauri::AppHandle, path: String) -> Result<(), String> {
+  let p = std::path::PathBuf::from(&path);
+  if !p.is_dir() {
+    return Err(format!("不是一个目录: {path}"));
+  }
+  app
+    .fs_scope()
+    .allow_directory(&p, true)
+    .map_err(|e| e.to_string())
+}
+
 /// Path to the marker file that signals "delete WebView2 Local Storage on next launch".
 fn reset_flag_path() -> std::path::PathBuf {
   let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
@@ -120,6 +137,10 @@ fn run_pending_reset() {
       let _ = std::fs::remove_dir_all(&dir);
     }
     let _ = std::fs::remove_file(&full_flag);
+    // The full wipe covers everything the UI-only flag would do, so clear that
+    // one too — leaving it behind wiped localStorage a second time on the next
+    // launch, taking settings the user had just set up again.
+    let _ = std::fs::remove_file(reset_flag_path());
     return;
   }
   let flag = reset_flag_path();
@@ -177,21 +198,50 @@ fn schedule_full_reset(app: tauri::AppHandle) -> Result<(), String> {
 /// user knows where their books and settings actually live. Sizes are
 /// computed best-effort; huge directories may report 0 to avoid blocking.
 #[tauri::command]
-fn get_data_paths() -> serde_json::Value {
-  fn dir_size(p: &std::path::Path) -> u64 {
+async fn get_data_paths() -> serde_json::Value {
+  // Walking the IndexedDB tree takes real time on a large library, and a sync
+  // command would do it on the main thread — freezing the window every time
+  // the settings page opened or the user hit refresh.
+  tokio::task::spawn_blocking(collect_data_paths)
+    .await
+    .unwrap_or_else(|e| serde_json::json!({ "error": e.to_string() }))
+}
+
+fn collect_data_paths() -> serde_json::Value {
+  /// Depth cap keeps a symlink loop or a pathological tree from running away.
+  const MAX_DEPTH: u32 = 12;
+  const MAX_ENTRIES_PER_DIR: usize = 20_000;
+
+  /// Returns (bytes, truncated) — truncated is true when a directory had more
+  /// entries than we were willing to walk, so the UI can say "at least".
+  fn dir_size(p: &std::path::Path, depth: u32) -> (u64, bool) {
     let mut total: u64 = 0;
+    let mut truncated = false;
+    if depth >= MAX_DEPTH {
+      return (0, true);
+    }
     if let Ok(entries) = std::fs::read_dir(p) {
-      for entry in entries.flatten().take(20000) {
+      let mut seen = 0usize;
+      for entry in entries.flatten() {
+        seen += 1;
+        if seen > MAX_ENTRIES_PER_DIR {
+          truncated = true;
+          break;
+        }
+        // DirEntry::metadata does not traverse symlinks, so a link pointing
+        // outside the tree is counted as a link, not as whatever it targets.
         if let Ok(md) = entry.metadata() {
           if md.is_file() {
             total = total.saturating_add(md.len());
           } else if md.is_dir() {
-            total = total.saturating_add(dir_size(&entry.path()));
+            let (sub, sub_truncated) = dir_size(&entry.path(), depth + 1);
+            total = total.saturating_add(sub);
+            truncated |= sub_truncated;
           }
         }
       }
     }
-    total
+    (total, truncated)
   }
 
   let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
@@ -201,26 +251,49 @@ fn get_data_paths() -> serde_json::Value {
     .map(|h| std::path::PathBuf::from(h).join("Documents").join("AutoBook"))
     .unwrap_or_default();
 
-  let ls_dirs: Vec<String> = webview_local_storage_dirs()
-    .into_iter()
+  let ls_paths = webview_local_storage_dirs();
+  let idb_paths = webview_indexeddb_dirs();
+
+  let ls_dirs: Vec<String> = ls_paths
+    .iter()
     .map(|p| p.to_string_lossy().into_owned())
     .collect();
-  let idb_dirs: Vec<String> = webview_indexeddb_dirs()
-    .into_iter()
+  let idb_dirs: Vec<String> = idb_paths
+    .iter()
     .map(|p| p.to_string_lossy().into_owned())
     .collect();
 
-  let idb_size: u64 = webview_indexeddb_dirs().iter().map(|p| dir_size(p)).sum();
-  let docs_size = if docs_root.exists() { dir_size(&docs_root) } else { 0 };
+  let mut truncated = false;
+  let mut measure = |paths: &[std::path::PathBuf]| -> u64 {
+    paths
+      .iter()
+      .map(|p| {
+        let (size, cut) = dir_size(p, 0);
+        truncated |= cut;
+        size
+      })
+      .sum()
+  };
+
+  let idb_size = measure(&idb_paths);
+  // localStorage was listed without a size, even though the panel promised one.
+  let ls_size = measure(&ls_paths);
+  let (docs_size, docs_truncated) = if docs_root.exists() {
+    dir_size(&docs_root, 0)
+  } else {
+    (0, false)
+  };
 
   serde_json::json!({
     "webviewRoot": webview_root.to_string_lossy(),
     "localStorageDirs": ls_dirs,
+    "localStorageBytes": ls_size,
     "indexeddbDirs": idb_dirs,
     "indexeddbBytes": idb_size,
     "documentsRoot": docs_root.to_string_lossy(),
     "documentsBytes": docs_size,
     "documentsExists": docs_root.exists(),
+    "sizesTruncated": truncated || docs_truncated,
   })
 }
 
@@ -337,6 +410,7 @@ pub fn run() {
       schedule_full_reset,
       get_data_paths,
       open_data_folder,
+      allow_user_dir,
       mobi_parser::parse_mobi,
       calibre_converter::check_calibre,
       calibre_converter::convert_with_calibre
