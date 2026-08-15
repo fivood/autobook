@@ -51,6 +51,19 @@ export function detectSourceFormat(title: string): string {
   return EXT_MAP[ext] || 'other';
 }
 
+/**
+ * Drop a trailing known book extension from a display title. Kept beside
+ * EXT_MAP so the set of recognized extensions is defined once — the book card
+ * used to carry its own inline regex, which had silently drifted and no longer
+ * covered comic archives or `.kfx`.
+ */
+export function stripBookExtension(title: string): string {
+  const lastDot = title.lastIndexOf('.');
+  if (lastDot < 0 || lastDot === title.length - 1) return title;
+  const ext = title.slice(lastDot + 1).toLowerCase();
+  return ext in EXT_MAP ? title.slice(0, lastDot) : title;
+}
+
 export const BOOK_FORMAT_LABELS: Record<BookFormat, string> = {
   pdf: 'PDF',
   epub: 'EPUB',

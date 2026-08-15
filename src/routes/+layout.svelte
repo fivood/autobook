@@ -23,6 +23,11 @@
   import { startSyncLoop } from '$lib/data/sync/sync-manager';
   import { availableThemes } from '$lib/data/theme-option';
   import { HIGHLIGHT_COLOR_RGB } from '$lib/data/highlight-color';
+  import {
+    FORMAT_HUE,
+    FORMAT_SATURATION_SCALE,
+    stopsForBackground
+  } from '$lib/data/format-color';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
   import { isMobile, isMobile$ } from '$lib/functions/utils';
@@ -63,6 +68,22 @@
     // there's no second place to edit if the palette changes.
     for (const [name, [r, g, b]] of Object.entries(HIGHLIGHT_COLOR_RGB)) {
       s.setProperty(`--hl-${name}-rgb`, `${r}, ${g}, ${b}`);
+    }
+
+    // Book-format identity colors. The hue carries "which format is this";
+    // the lightness/saturation stops come from whether this theme is light or
+    // dark, so a custom theme gets sensible format colors without declaring
+    // any. Emitted as finished hsl() values rather than raw channels so the
+    // consuming CSS stays readable.
+    const stops = stopsForBackground(theme.backgroundColor);
+    s.setProperty('--fmt-cover-shade', String(stops.coverShade));
+    for (const [name, hue] of Object.entries(FORMAT_HUE)) {
+      const scale = FORMAT_SATURATION_SCALE[name] ?? 1;
+      const sat = (v: number) => `${Math.round(v * scale)}%`;
+      s.setProperty(`--fmt-${name}-chip-bg`, `hsl(${hue} ${sat(stops.chipBgSaturation)} ${stops.chipBgLightness}%)`);
+      s.setProperty(`--fmt-${name}-chip-ring`, `hsl(${hue} ${sat(stops.chipRingSaturation)} ${stops.chipRingLightness}%)`);
+      s.setProperty(`--fmt-${name}-cover-bg`, `hsl(${hue} ${sat(stops.coverBgSaturation)} ${stops.coverBgLightness}%)`);
+      s.setProperty(`--fmt-${name}-cover-accent`, `hsl(${hue} ${sat(stops.coverAccentSaturation)} ${stops.coverAccentLightness}%)`);
     }
   }
 

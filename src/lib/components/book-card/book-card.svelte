@@ -4,6 +4,8 @@
   import Fa from 'svelte-fa';
   import { t } from '$lib/i18n';
   import { activateOnKeyup } from '$lib/functions/utils';
+  import { detectSourceFormat, stripBookExtension } from '$lib/functions/book-format';
+  import { formatColorKey } from '$lib/data/format-color';
 
   export let imagePath: string | Blob;
   export let title: string;
@@ -72,33 +74,29 @@
 
   /** Prefer the import-time originalFormat (added 1.20.2); fall back to
    * extension-in-title detection for older imports whose data row was
-   * saved before the field existed. */
+   * saved before the field existed. Both paths go through book-format.ts so
+   * comic archives and `.kfx` are recognized here too. */
   $: detectedFormat = (() => {
-    if (originalFormat) {
-      const up = originalFormat.toUpperCase();
-      return up === 'MARKDOWN' ? 'MD' : up;
-    }
-    const match = title.match(/\.(epub|txt|htmlz|mobi|azw3?|pdf|markdown|md)$/i);
-    if (!match) return 'BOOK';
-    const ext = match[1].toUpperCase();
-    return ext === 'MARKDOWN' ? 'MD' : ext;
+    const raw = originalFormat || detectSourceFormat(title);
+    if (!raw || raw === 'other') return 'BOOK';
+    const up = raw.toUpperCase();
+    return up === 'MARKDOWN' ? 'MD' : up;
   })();
 
-  $: cleanTitle = title.replace(/\.(epub|txt|htmlz|mobi|azw3?|pdf|markdown|md)$/i, '');
+  $: cleanTitle = stripBookExtension(title);
 
-  const FORMAT_PALETTE: Record<string, { bg: string; accent: string }> = {
-    EPUB: { bg: '#2b5a69', accent: '#5fb0a7' },
-    TXT: { bg: '#5a4a3c', accent: '#c39a55' },
-    MD: { bg: '#2d4a2b', accent: '#7ab86d' },
-    HTMLZ: { bg: '#4a2b5a', accent: '#a574c0' },
-    MOBI: { bg: '#7a3f25', accent: '#e08545' },
-    AZW: { bg: '#7a3f25', accent: '#e08545' },
-    AZW3: { bg: '#7a3f25', accent: '#e08545' },
-    PDF: { bg: '#7a2828', accent: '#d05050' },
-    CBZ: { bg: '#1f3d5a', accent: '#4c8cb8' },
-    BOOK: { bg: '#3f4a5a', accent: '#7090b0' }
+  /** Colours live in CSS variables set per theme by +layout.svelte; this only
+   * picks which set of them applies. See data/format-color.ts. */
+  $: colorKey = formatColorKey(originalFormat || detectSourceFormat(title));
+  // The neutral fallbacks only apply before the layout's first reactive pass
+  // (and during prerender, where nothing is painted anyway) — without them an
+  // unset variable resolves to `invalid`, which paints transparent.
+  $: palette = {
+    chipBg: `var(--fmt-${colorKey}-chip-bg, #2f3742)`,
+    chipRing: `var(--fmt-${colorKey}-chip-ring, #7a8794)`,
+    coverBg: `var(--fmt-${colorKey}-cover-bg, #2f3742)`,
+    coverAccent: `var(--fmt-${colorKey}-cover-accent, #9fb0bd)`
   };
-  $: palette = FORMAT_PALETTE[detectedFormat] || FORMAT_PALETTE.BOOK;
 
   // Status badge: at-a-glance "done" or "未读" marker. Anything in progress
   // is already conveyed by the bottom progress bar — no badge there.
@@ -117,28 +115,53 @@
   <div class="inline">
     <div class="h-full w-full text-5xl sm:text-7xl">
       {#if !imagePath}
-        <!-- Generated placeholder: format-color background + title + format chip -->
+        <!-- Generated cover for books with no artwork. Everything sits above
+             y=200: the title bar overlay (h-16 / sm:h-21) covers roughly the
+             bottom quarter of the card, and the old layout put the format
+             wordmark at y=280 — squarely underneath it, which is why these
+             covers looked blank. -->
         <svg
           viewBox="0 0 200 300"
           preserveAspectRatio="xMidYMid slice"
           class="absolute inset-0 h-full w-full"
         >
           <defs>
-            <linearGradient id="grad-{detectedFormat}" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color={palette.bg} />
-              <stop offset="100%" stop-color="black" stop-opacity="0.35" />
+            <linearGradient id="grad-{colorKey}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color={palette.coverBg} />
+              <stop offset="100%" stop-color="black" stop-opacity="var(--fmt-cover-shade, 0.45)" />
             </linearGradient>
           </defs>
-          <rect width="200" height="300" fill="url(#grad-{detectedFormat})" />
-          <rect x="0" y="0" width="6" height="300" fill={palette.accent} />
+          <rect width="200" height="300" fill="url(#grad-{colorKey})" />
+          <rect x="0" y="0" width="6" height="300" fill={palette.coverAccent} />
+
+          <!-- Page-stack motif: three offset sheets, tinted by the format's
+               accent so formats stay tellable apart at thumbnail size even
+               before the wordmark is legible. -->
+          <g opacity="0.22" fill="none" stroke={palette.coverAccent} stroke-width="3">
+            <rect x="62" y="52" width="80" height="104" rx="4" />
+            <rect x="54" y="62" width="80" height="104" rx="4" />
+          </g>
+          <rect
+            x="46"
+            y="72"
+            width="80"
+            height="104"
+            rx="4"
+            fill="black"
+            fill-opacity="0.18"
+            stroke={palette.coverAccent}
+            stroke-width="3"
+          />
+
           <text
-            x="100"
-            y="280"
+            x="86"
+            y="132"
             text-anchor="middle"
-            font-size="20"
+            font-size={detectedFormat.length > 4 ? 20 : 26}
             font-weight="700"
-            fill={palette.accent}
+            fill={palette.coverAccent}
             font-family="system-ui, sans-serif"
+            letter-spacing="1"
           >{detectedFormat}</text>
         </svg>
       {/if}
@@ -167,10 +190,10 @@
       <span class="status-badge unread" title={$t('bookCard.unreadTooltip')}>{$t('bookCard.unread')}</span>
     {/if}
 
-    {#if imagePath && detectedFormat !== 'BOOK'}
+    {#if detectedFormat !== 'BOOK'}
       <span
         class="format-chip"
-        style="background:{palette.accent}"
+        style="--chip-bg:{palette.chipBg}; --chip-ring:{palette.chipRing}"
         title={$t('bookCard.originalFormat', { format: detectedFormat })}
       >{detectedFormat}</span>
     {/if}
@@ -189,10 +212,13 @@
 </div>
 
 <style>
+  /* Top-right: the top-left corner belongs to the format chip, which is on
+     every card, while this one only appears at the two ends of the progress
+     range. */
   .status-badge {
     position: absolute;
     top: 0.4rem;
-    left: 0.4rem;
+    right: 0.4rem;
     z-index: 2;
     padding: 0.12rem 0.45rem;
     border-radius: 999px;
@@ -210,13 +236,14 @@
     background: rgba(255, 255, 255, 0.92);
     color: #444;
   }
-  /* Hover-revealed chip in the top-right showing the original file format.
-     Only shown when the card has a real cover (imagePath) — the placeholder
-     branch already renders the format prominently in its SVG label. */
+  /* Always visible, top-left: the point is to tell formats apart while
+     scanning the grid. It used to be opacity:0 until hover, which made the
+     feature effectively invisible — you had to already be pointing at the
+     book to learn what it was. */
   .format-chip {
     position: absolute;
     top: 0.4rem;
-    right: 0.4rem;
+    left: 0.4rem;
     z-index: 2;
     padding: 0.12rem 0.5rem;
     border-radius: 999px;
@@ -224,14 +251,18 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     color: #fff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    /* Dark base, accent only as a ring. The accent colours were picked in
+       1.2.6 as decoration on the placeholder's dark background, never as a
+       text background — white on them measures 2.4:1 to 4.3:1, i.e. every
+       format fails WCAG AA for text this size. Against the matching dark
+       `bg` tone the same white text is 7.6:1 at worst, and the ring keeps
+       the accent doing its "which format is this" job. */
+    background: var(--chip-bg);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.45),
+      inset 0 0 0 1px var(--chip-ring);
     pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-  }
-  .book-card-root:hover .format-chip,
-  .book-card-root:focus-within .format-chip {
-    opacity: 0.95;
+    opacity: 0.96;
   }
   .progress-track {
     height: 0.45rem;
