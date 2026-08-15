@@ -21,6 +21,7 @@
     wakeLockSupported
   } from '$lib/wake-lock';
   import {
+    formatOf,
     getPosition,
     hashContent,
     listRecent,
@@ -28,6 +29,7 @@
     savePosition,
     type SavedPosition
   } from '$lib/persist';
+  import { FORMAT_HUE, FORMAT_LABEL, type BookFormat } from '$lib/book-format';
   import { deleteStoredBook, getStoredBook, storeBook } from '$lib/book-store';
   import { t, tImmediate, locale$, LOCALES } from '$lib/i18n';
 
@@ -316,6 +318,28 @@
   }
 
   let pendingCover: string | undefined;
+  /** Format of the book currently open, carried from `loadFile` to the
+   * debounced save so the recents list can label it. */
+  let pendingFormat: BookFormat | undefined;
+
+  /** Only the hue varies per format; lightness and saturation are decided in
+   * CSS so `prefers-color-scheme` can flip them without any JS. Unknown
+   * (legacy entry) gets a neutral hue that the stylesheet also desaturates. */
+  function fmtVars(format: BookFormat | undefined): string {
+    return `--fmt-h:${format ? FORMAT_HUE[format] : 220};--fmt-s-scale:${format ? 1 : 0.25}`;
+  }
+
+  /** Resolve the format once per row. Doing it here rather than in the markup
+   * keeps the template free of non-null assertions, which Svelte's expression
+   * parser rejects. */
+  $: recentRows = recents.map((r) => {
+    const fmt = formatOf(r);
+    return {
+      ...r,
+      fmtLabel: fmt ? FORMAT_LABEL[fmt] : '',
+      fmtStyle: fmtVars(fmt)
+    };
+  });
 
   let pdfLoadProgress = '';
 
@@ -340,6 +364,7 @@
       const loaded = await loadFile(file, (loadedPages, totalPages) => {
         pdfLoadProgress = tImmediate('ingest.pdfProgress', { loaded: loadedPages, total: totalPages });
       });
+      pendingFormat = loaded.format;
       if (loaded.kind === 'pdf') {
         await openPdf(loaded.pdf);
       } else {
@@ -479,6 +504,11 @@
         (pdfBook?.coverDataUrl as string | undefined) ||
         pendingCover ||
         existing?.coverDataUrl;
+      // Same "this session wins, else keep what was stored" rule as the
+      // cover: resuming from a cached blob re-runs the loader, but a book
+      // saved before this field existed must not lose it on a plain
+      // position update.
+      const format = pendingFormat || existing?.format;
       if (pdfBook) {
         savePosition(bookHash, {
           title,
@@ -488,6 +518,7 @@
           preview: tImmediate('ingest.pdfPreview', { n: pdfBook.pages.length }),
           kind: 'pdf',
           page: pdfCurrentPage,
+          format: 'pdf',
           ...(coverDataUrl ? { coverDataUrl } : {})
         });
       } else if (book) {
@@ -498,6 +529,7 @@
           updatedAt: Date.now(),
           preview: book.flatText.slice(0, 60).replace(/\n/g, ' '),
           kind: 'text',
+          ...(format ? { format } : {}),
           ...(coverDataUrl ? { coverDataUrl } : {})
         });
       }
@@ -814,13 +846,24 @@
       <section class="recents">
         <h2>{$t('landing.recentTitle')}</h2>
         <ul>
-          {#each recents as r (r.hash)}
+          {#each recentRows as r (r.hash)}
             <li>
               <button class="recent" on:click={() => resumeFromRecent(r)}>
                 {#if r.coverDataUrl}
-                  <img class="recent-cover" src={r.coverDataUrl} alt="" loading="lazy" />
+                  <div class="recent-cover-wrap">
+                    <img class="recent-cover" src={r.coverDataUrl} alt="" loading="lazy" />
+                    {#if r.fmtLabel}
+                      <span class="fmt-chip" style={r.fmtStyle}>{r.fmtLabel}</span>
+                    {/if}
+                  </div>
                 {:else}
-                  <div class="recent-cover placeholder">📖</div>
+                  <!-- No artwork: the tile itself becomes the format marker.
+                       Books without a cover are exactly Markdown and plain
+                       text, so this is the only place their format shows. -->
+                  <div class="recent-cover generated" style={r.fmtStyle}>
+                    <span class="generated-rule" />
+                    <span class="generated-label">{r.fmtLabel || '—'}</span>
+                  </div>
                 {/if}
                 <div class="recent-text">
                   <div class="recent-title">{r.title}</div>
@@ -1199,13 +1242,78 @@
     border-radius: 0.25rem;
     background: var(--chip-bg);
   }
-  .recent-cover.placeholder {
+  /* Format colours. Only the hue comes from JS; these stops decide how a hue
+     becomes a colour, and they invert for dark mode. Lightening the dark
+     recipe instead of inverting it does not work — the tile and its label
+     converge and the label stops being readable. Measured on the desktop
+     build, which uses the same hues: inverted gives >= 4.9:1, "just lighter"
+     gives 2.6:1. */
+  :root {
+    --fmt-tile-l: 88%;
+    --fmt-tile-s: 34%;
+    --fmt-ink-l: 28%;
+    --fmt-ink-s: 52%;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fmt-tile-l: 22%;
+      --fmt-tile-s: 38%;
+      --fmt-ink-l: 70%;
+      --fmt-ink-s: 45%;
+    }
+  }
+
+  .recent-cover-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    line-height: 0;
+  }
+  .recent-cover-wrap .recent-cover {
+    display: block;
+  }
+
+  /* Chip over real artwork. Kept dark in both schemes on purpose: it sits on
+     an arbitrary cover image, not on the page, so its contrast has nothing to
+     do with the colour scheme. */
+  .fmt-chip {
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    padding: 0.05rem 0.25rem;
+    border-radius: 999px;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.5;
+    color: #fff;
+    background: hsl(var(--fmt-h) calc(42% * var(--fmt-s-scale, 1)) 22%);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.45),
+      inset 0 0 0 1px hsl(var(--fmt-h) calc(45% * var(--fmt-s-scale, 1)) 55%);
+  }
+
+  /* No artwork: the tile is the marker. Markdown and plain text never carry a
+     cover, so without this they would be indistinguishable rectangles. */
+  .recent-cover.generated {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: 1.3rem;
-    color: var(--chip-text);
-    opacity: 0.7;
+    gap: 0.22rem;
+    background: hsl(var(--fmt-h) calc(var(--fmt-tile-s) * var(--fmt-s-scale, 1)) var(--fmt-tile-l));
+    color: hsl(var(--fmt-h) calc(var(--fmt-ink-s) * var(--fmt-s-scale, 1)) var(--fmt-ink-l));
+  }
+  .generated-rule {
+    width: 1.15rem;
+    height: 2px;
+    border-radius: 1px;
+    background: currentColor;
+    opacity: 0.55;
+  }
+  .generated-label {
+    font-size: 0.56rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
   }
   .recent-text {
     flex: 1 1 0;

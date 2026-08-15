@@ -2,6 +2,7 @@ import { extractTxt } from './extract-txt';
 import { loadEpub } from './load-epub';
 import { loadMd } from './load-md';
 import { loadPdf, type ParsedPdf } from './load-pdf';
+import type { BookFormat } from './book-format';
 
 /** Reflowable text books (txt / epub / md) take the typewriter path:
  * concatenated plain text + chapter starts. PDFs take the page-scroll
@@ -9,8 +10,8 @@ import { loadPdf, type ParsedPdf } from './load-pdf';
  * discriminator lets the caller switch reader UI without sniffing
  * filename twice. */
 export type LoadedFile =
-  | { kind: 'text'; title: string; text: string; coverDataUrl?: string }
-  | { kind: 'pdf'; pdf: ParsedPdf };
+  | { kind: 'text'; format: BookFormat; title: string; text: string; coverDataUrl?: string }
+  | { kind: 'pdf'; format: 'pdf'; pdf: ParsedPdf };
 
 async function isZipMagic(file: File): Promise<boolean> {
   // EPUB is a ZIP. iOS share-sheet often strips or renames the extension
@@ -49,7 +50,7 @@ export async function loadFile(
   if (isPdfByExt || isPdfByMime || (await isPdfMagic(file))) {
     const pdf = await loadPdf(file, onPdfProgress);
     if (!pdf.title) pdf.title = stem;
-    return { kind: 'pdf', pdf };
+    return { kind: 'pdf', format: 'pdf', pdf };
   }
 
   const isEpubByMime = /epub\+zip/i.test(file.type);
@@ -58,13 +59,14 @@ export async function loadFile(
     const epub = await loadEpub(file);
     return {
       kind: 'text',
+      format: 'epub',
       title: epub.title || stem,
       text: epub.text,
       coverDataUrl: epub.coverDataUrl
     };
   }
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
-    return { kind: 'text', title: stem, text: await loadMd(file) };
+    return { kind: 'text', format: 'md', title: stem, text: await loadMd(file) };
   }
-  return { kind: 'text', title: stem, text: await extractTxt(file) };
+  return { kind: 'text', format: 'txt', title: stem, text: await extractTxt(file) };
 }

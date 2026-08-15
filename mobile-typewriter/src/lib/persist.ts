@@ -1,6 +1,8 @@
 // localStorage-backed reading positions, keyed by content hash so the same
 // file resumes regardless of where the user re-uploaded it from.
 
+import type { BookFormat } from './book-format';
+
 const PREFIX = 'tw-book:';
 
 export interface SavedPosition {
@@ -24,6 +26,23 @@ export interface SavedPosition {
    * clarity in storage tooling / sync inspection. For text books this
    * is undefined. */
   page?: number;
+  /** Source format, recorded at import. `kind` cannot stand in for this:
+   * EPUB, Markdown and plain text all store as `'text'`, so without this
+   * field the three are indistinguishable in the recents list — which is
+   * exactly the set that has no cover image to fall back on. Absent on
+   * entries saved before this field existed; see `formatOf`. */
+  format?: BookFormat;
+}
+
+/**
+ * Best-effort format for a stored entry. Old entries predate the `format`
+ * field, and for those `kind` can only prove PDF — an EPUB and a .txt both
+ * look like `'text'`, so they resolve to undefined rather than being guessed
+ * at, and the UI shows no badge instead of a wrong one.
+ */
+export function formatOf(pos: Pick<SavedPosition, 'format' | 'kind'>): BookFormat | undefined {
+  if (pos.format) return pos.format;
+  return pos.kind === 'pdf' ? 'pdf' : undefined;
 }
 
 export async function hashContent(text: string): Promise<string> {
