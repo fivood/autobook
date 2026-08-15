@@ -1024,6 +1024,7 @@
       <SettingsItemGroup title={$t('settings.section.theme')}>
         <ButtonToggleGroup
           options={optionsForTheme}
+          dimUnselected={false}
           bind:selectedOptionId={selectedTheme}
           on:edit={({ detail }) => (inlineEditTheme = detail)}
           on:delete={({ detail }) => {

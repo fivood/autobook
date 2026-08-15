@@ -10,6 +10,14 @@
   export let options: ToggleOption<any>[];
   export let selectedOptionId: any;
   export let invertColors = false;
+  /**
+   * Dimming unselected options is the usual "off" affordance, but it is wrong
+   * for swatches: the theme picker's whole job is to show each theme's real
+   * colours, and rendering them at 50% shows colours no theme actually has.
+   * Callers whose option styling *is* the content turn this off; selection
+   * then reads from the thick border alone.
+   */
+  export let dimUnselected = true;
 
   const dispatch = createEventDispatcher<{
     edit: string;
@@ -39,6 +47,7 @@
         title={option.id}
         class="toggle-btn m-1 rounded-md border-2 p-2 text-lg transition-colors"
         class:selected={option.id === selectedOptionId}
+        class:no-dim={!dimUnselected}
         class:invert-mode={invertColors}
         class:border-4={option.thickBorders && option.id === selectedOptionId}
         style={btnStyle(option.id === selectedOptionId, option.style)}
@@ -94,6 +103,21 @@
   .toggle-btn:not(.selected):hover {
     opacity: 0.85;
     background: color-mix(in srgb, currentColor 7%, transparent);
+  }
+
+  /* Swatch mode: colours shown at full strength, selection carried by the
+     border. The hover tint is dropped too — it would wash the swatch the same
+     way the dimming did. */
+  .toggle-btn.no-dim,
+  .toggle-btn.no-dim:not(.selected):hover {
+    opacity: 1;
+    background: none;
+  }
+  .toggle-btn.no-dim:not(.selected) {
+    border-color: color-mix(in srgb, currentColor 22%, transparent);
+  }
+  .toggle-btn.no-dim:not(.selected):hover {
+    border-color: color-mix(in srgb, currentColor 55%, transparent);
   }
 
   /* Inverted mode: caller wants the "selected" pill to be the bright white one
