@@ -5,6 +5,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+import { asBookCardId, type BookCardId } from '$lib/data/book-id';
 import {
   currentDbVersion,
   type BooksDbBookData,
@@ -118,6 +119,11 @@ export abstract class BaseStorageHandler {
     lastHighlightModified: number;
   }>;
 
+  /** Returns the id the library card for this book carries — see book-id.ts.
+   * NOT necessarily the IDB row id: external file storage has no IDB row and
+   * derives the id from the title. Left as a plain `number` because branding
+   * it drags every handler, the factory and the reader route along for no
+   * extra safety; the single consumer tags it with `asBookCardId`. */
   abstract saveBook(
     data: Omit<BooksDbBookData, 'id'> | File,
     skipTimestampFallback?: boolean,
@@ -682,13 +688,15 @@ export abstract class BaseStorageHandler {
     return Math.floor(Date.now() * Math.random());
   }
 
-  protected static stableIdFromTitle(title: string): number {
+  /** The one place library-card ids are minted. Returns the branded type so a
+   * card id can't drift into a slot that wants the IDB `data.id`. */
+  protected static stableIdFromTitle(title: string): BookCardId {
     let hash = 0x811c9dc5;
     for (let i = 0; i < title.length; i++) {
       hash ^= title.charCodeAt(i);
       hash = Math.imul(hash, 0x01000193);
     }
-    return (hash >>> 0) || 1;
+    return asBookCardId((hash >>> 0) || 1);
   }
 
   protected static sanitizeForFilename(title: string) {

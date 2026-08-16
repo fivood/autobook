@@ -16,6 +16,7 @@
     deleteFolder,
     addBooksToFolder
   } from '$lib/data/library-folders';
+  import { asBookCardId, type BookCardId } from '$lib/data/book-id';
   import { t, tImmediate } from '$lib/i18n';
 
   /** Total book count in the library — shown next to "全部书籍". */
@@ -105,13 +106,17 @@
     ]);
   }
 
-  function readDraggedBookIds(ev: DragEvent): number[] {
+  function readDraggedBookIds(ev: DragEvent): BookCardId[] {
     if (!ev.dataTransfer) return [];
     try {
       const raw = ev.dataTransfer.getData('application/x-autobook-book-ids');
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.filter((n) => typeof n === 'number') : [];
+      // The payload is written from card ids, so tagging on the way back in
+      // is the audited crossing for drag-and-drop.
+      return Array.isArray(parsed)
+        ? parsed.filter((n) => typeof n === 'number').map(asBookCardId)
+        : [];
     } catch {
       return [];
     }

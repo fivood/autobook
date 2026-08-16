@@ -10,6 +10,7 @@
 import { BehaviorSubject } from 'rxjs';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import type { BooksDbBookFolder, BooksDbFolder } from '$lib/data/database/books-db/versions/books-db';
+import type { BookCardId } from '$lib/data/book-id';
 import { database } from '$lib/data/store';
 
 export const folders$ = new BehaviorSubject<BooksDbFolder[]>([]);
@@ -107,7 +108,7 @@ export async function deleteFolder(id: number) {
   await refreshFolders();
 }
 
-export async function addBooksToFolder(bookIds: number[], folderId: number) {
+export async function addBooksToFolder(bookIds: BookCardId[], folderId: number) {
   if (!bookIds.length) return;
   const db = await getDb();
   const tx = db.transaction('bookFolder', 'readwrite');
@@ -120,7 +121,7 @@ export async function addBooksToFolder(bookIds: number[], folderId: number) {
   await refreshFolders();
 }
 
-export async function removeBooksFromFolder(bookIds: number[], folderId: number) {
+export async function removeBooksFromFolder(bookIds: BookCardId[], folderId: number) {
   if (!bookIds.length) return;
   const db = await getDb();
   const tx = db.transaction('bookFolder', 'readwrite');
@@ -133,7 +134,7 @@ export async function removeBooksFromFolder(bookIds: number[], folderId: number)
 
 /** Drop all folder assignments for a book — call when the book itself is
  * deleted from the library. */
-export async function clearBookFolderAssignments(bookId: number) {
+export async function clearBookFolderAssignments(bookId: BookCardId) {
   const db = await getDb();
   const tx = db.transaction('bookFolder', 'readwrite');
   const idx = tx.store.index('bookId');

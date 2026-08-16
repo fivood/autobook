@@ -10,6 +10,7 @@
 
 import type { DBSchema } from 'idb';
 import type BooksDbV6 from '$lib/data/database/books-db/versions/v6/books-db-v6';
+import type { BookCardId } from '$lib/data/book-id';
 
 export interface BooksDbV7Folder {
   id: number;
@@ -24,7 +25,10 @@ export interface BooksDbV7Folder {
 }
 
 export interface BooksDbV7BookFolder {
-  bookId: number;
+  /** Library-card id, not the IDB `data.id` — under external file storage
+   * these differ. Means folder assignments are scoped to the storage source
+   * they were made under; see book-id.ts. */
+  bookId: BookCardId;
   folderId: number;
   addedAt: number;
 }

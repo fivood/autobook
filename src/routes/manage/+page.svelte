@@ -15,6 +15,7 @@
     clearBookFolderAssignments
   } from '$lib/data/library-folders';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+  import { asBookCardId, type BookCardId } from '$lib/data/book-id';
   import BookManagerHeader from '$lib/components/book-card/book-manager-header.svelte';
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
@@ -200,7 +201,7 @@
     share()
   );
 
-  let selectedBookIds: ReadonlySet<number> = new Set();
+  let selectedBookIds: ReadonlySet<BookCardId> = new Set();
   let selectMode = false;
   /** True while a book-click's prepareBookForReading is in flight. Guards
    * against double-click stacking a second loading dialog / prepare. */
@@ -258,12 +259,12 @@
   /** Book IDs to assign when the user drags onto a folder. If the dragged
    * book is part of the current selection, drag the whole selection;
    * otherwise drag just that one book. */
-  function buildDragPayload(bookId: number): number[] {
+  function buildDragPayload(bookId: BookCardId): BookCardId[] {
     if (selectedBookIds.has(bookId)) return Array.from(selectedBookIds);
     return [bookId];
   }
 
-  function onCardDragStart(ev: DragEvent, bookId: number) {
+  function onCardDragStart(ev: DragEvent, bookId: BookCardId) {
     if (!ev.dataTransfer) return;
     const ids = buildDragPayload(bookId);
     ev.dataTransfer.setData('application/x-autobook-book-ids', JSON.stringify(ids));
@@ -355,7 +356,7 @@
     return sortDiff;
   }
 
-  async function onBookClick(bookId: number) {
+  async function onBookClick(bookId: BookCardId) {
     if (!operationAllowed()) {
       return;
     }
@@ -374,7 +375,11 @@
         }
       ]);
 
-      let idToOpen = bookId;
+      // The reader is addressed by the IDB row id, which is a different space
+      // from the card id we were clicked with — prepareBookForReading is the
+      // conversion. Seeded with 0 rather than bookId to make that explicit;
+      // every path that reaches openBook() assigns it first.
+      let idToOpen = 0;
 
       try {
         const bookItem = $bookCards$.find((book) => book.id === bookId);
@@ -494,7 +499,7 @@
 
   /** Mirror the imported directory tree into library categories. */
   async function assignImportedFolders(imported: ImportedBook[]) {
-    const byPath = new Map<string, number[]>();
+    const byPath = new Map<string, BookCardId[]>();
     for (const { file, id } of imported) {
       const path = categoryPathOf(file);
       if (!path) continue;
@@ -699,7 +704,7 @@
   /** Card X / multi-select "remove" inside a folder view: only detach from the
    * current folder, don't delete the book. Library-wide views (全部 / 未分类)
    * still delete. */
-  async function handleRemove(bookIds: number[]) {
+  async function handleRemove(bookIds: BookCardId[]) {
     const filter = $activeFolderFilter$;
     if (filter !== 'all' && filter !== 'uncategorized') {
       const folderId = Number(filter);
@@ -739,15 +744,18 @@
 
     await tick();
 
-    // Strip folder assignments for any book we just removed. deleted[] is
-    // book IDs (numbers).
-    await Promise.all(deleted.map((id: number) => clearBookFolderAssignments(id).catch(() => {})));
+    // deleteBookData reports the cards it removed, so these are card ids —
+    // the same space bookFolder is keyed by. Tagged here rather than branding
+    // the handler's return, which would spread through every storage source.
+    await Promise.all(
+      deleted.map((id: number) => clearBookFolderAssignments(asBookCardId(id)).catch(() => {}))
+    );
 
     if (deleted.length === currentBookCount) {
       selectMode = false;
     } else {
       selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
-        deleted.forEach((deletedBookId) => set.delete(deletedBookId));
+        deleted.forEach((deletedBookId: number) => set.delete(asBookCardId(deletedBookId)));
       });
     }
 

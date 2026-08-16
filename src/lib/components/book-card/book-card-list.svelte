@@ -2,6 +2,7 @@
   import { faCheckCircle, faCircleInfo } from '@fortawesome/free-solid-svg-icons';
   import BookCard from '$lib/components/book-card/book-card.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+  import type { BookCardId } from '$lib/data/book-id';
   import Popover from '$lib/components/popover/popover.svelte';
   import { bookCoverMinWidth$ } from '$lib/data/store';
   import { activateOnKeyup } from '$lib/functions/utils';
@@ -16,12 +17,12 @@
   $: minWidth = Math.max(110, Math.min(360, Number($bookCoverMinWidth$) || 170));
 
   const dispatch = createEventDispatcher<{
-    bookClick: { id: number };
-    removeBookClick: { id: number };
-    cardDragStart: { id: number; event: DragEvent };
+    bookClick: { id: BookCardId };
+    removeBookClick: { id: BookCardId };
+    cardDragStart: { id: BookCardId; event: DragEvent };
   }>();
 
-  let hoveringBookId: number | undefined;
+  let hoveringBookId: BookCardId | undefined;
 
   // Hover-detail popover: shows on 600ms hover hold, hides instantly on
   // leave or click. Skipped while in select mode to keep the click target
@@ -89,7 +90,7 @@
     detailId = undefined;
   }
 
-  function onBookCardClick(id: number) {
+  function onBookCardClick(id: BookCardId) {
     clearTimeout(hoverTimer);
     detailId = undefined;
     dispatch('bookClick', { id });

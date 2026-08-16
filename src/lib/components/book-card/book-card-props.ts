@@ -4,8 +4,12 @@
  * All rights reserved.
  */
 
+import type { BookCardId } from '$lib/data/book-id';
+
 export interface BookCardProps {
-  id: number;
+  /** Library-grid id. Equals the IDB `data.id` only under browser storage —
+   * see book-id.ts. */
+  id: BookCardId;
   imagePath: string | Blob;
   title: string;
   characters: number;

@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+import { asBookCardId, type BookCardId } from '$lib/data/book-id';
 import { BackupStorageHandler } from '$lib/data/storage/handler/backup-handler';
 import { BaseStorageHandler, FilePrefix } from '$lib/data/storage/handler/base-handler';
 import { storage } from '$lib/data/window/navigator/storage';
@@ -52,7 +53,9 @@ export const exporterVersion = 1;
 
 export interface ImportedBook {
   file: File;
-  id: number;
+  /** Whatever id this storage source gives the library card — the IDB row id
+   * under browser storage, `stableIdFromTitle` under external file storage. */
+  id: BookCardId;
 }
 
 export async function importData(
@@ -188,7 +191,10 @@ export async function importData(
             cancelSignal
           );
 
-          imported.push({ file, id: await targetHandler.saveBook(bookContent, false) });
+          // saveBook hands back the library-card id for whichever storage
+          // source this handler is; tagging it here is the one audited
+          // crossing between the raw number and the branded space.
+          imported.push({ file, id: asBookCardId(await targetHandler.saveBook(bookContent, false)) });
 
           if (extractedMetadata) {
             try {
