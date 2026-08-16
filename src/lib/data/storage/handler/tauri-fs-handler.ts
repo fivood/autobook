@@ -448,7 +448,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
         existingBookModified >= lastBookModified &&
         (existingBookOpen || 0) >= (lastBookOpen || 0)
       ) {
-        return 0;
+        return BaseStorageHandler.stableIdFromTitle(this.currentContext.title);
       }
     }
 
@@ -463,7 +463,12 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
 
     await this.writeFileTo(dirPath, filename, bookBytes, files, file, isFile ? 0.6 : 0.4);
     this.addBookCard(this.currentContext.title, { characters, lastBookModified, lastBookOpen });
-    return 0;
+    // Must be the same id `addBookCard` gives the library card — anything
+    // keyed on the returned id (folder assignments) has to line up with what
+    // the grid shows. Books live as files here, so there is no IDB row and no
+    // autoincrement id to hand back; this used to return a constant 0, which
+    // was harmless only because the single caller discarded it.
+    return BaseStorageHandler.stableIdFromTitle(this.currentContext.title);
   }
 
   async saveProgress(data: BooksDbBookmarkData | File) {
