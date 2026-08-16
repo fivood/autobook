@@ -51,6 +51,12 @@ interface BooksDbV6BookData {
   /** Immutable import-time source captured on the first edit, used by the
    * editor's "restore original" action. */
   sourceTextOriginal?: string;
+  /** Path of the file this book mirrors, relative to the vault sync root.
+   * Present only on books that came from vault sync — it is what makes the
+   * book identifiable across scans, since two notes in different folders can
+   * easily share a filename (and therefore a title). Absent on normally
+   * imported books, which sync never touches. */
+  sourcePath?: string;
   /** Original file extension at import time (epub/mobi/pdf/txt/…). Added
    * 1.20.2 as an optional field — old rows have undefined, back-compat via
    * IDB schemalessness (no migration needed). Used by the hover popover

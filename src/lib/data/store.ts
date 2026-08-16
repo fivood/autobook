@@ -550,6 +550,17 @@ export const showExternalPlaceholder$ = writableBooleanLocalStorageSubject()(
  */
 export const fsRoot$ = writableStringLocalStorageSubject()('fsRoot', '');
 
+/**
+ * Folder of plain-text notes mirrored into the library (an Obsidian vault or,
+ * more usefully, a subfolder of one). Empty = feature off.
+ *
+ * Deliberately not `obsidianVaultPath$`: that one is where notebook export
+ * *writes*, under `<vault>/AutoBook`. Pointing sync at the same root would
+ * re-import AutoBook's own exported notes as books, and then export them
+ * again.
+ */
+export const vaultSyncRoot$ = writableStringLocalStorageSubject()('vaultSyncRoot', '');
+
 export const keepLocalStatisticsOnDeletion$ = writableBooleanLocalStorageSubject()(
   'keepLocalStatisticsOnDeletion',
   true
