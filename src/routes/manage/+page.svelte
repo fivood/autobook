@@ -10,6 +10,7 @@
     activeFolderFilter$,
     refreshFolders,
     addBooksToFolder,
+    findOrCreateLocalFolder,
     removeBooksFromFolder,
     clearBookFolderAssignments
   } from '$lib/data/library-folders';
@@ -56,7 +57,12 @@
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
   import { submitReport } from '$lib/functions/report-error';
-  import { importBackup, importData, replicateData } from '$lib/functions/replication/replicator';
+  import {
+    importBackup,
+    importData,
+    replicateData,
+    type ImportedBook
+  } from '$lib/functions/replication/replicator';
   import { throwIfAborted } from '$lib/functions/replication/replication-error';
   import {
     replicationProgress$,
@@ -470,6 +476,46 @@
     await goto(`${pagePath}/b?id=${id}`);
   }
 
+  /**
+   * Category path for an imported file, or '' when it carries no directory.
+   *
+   * `webkitRelativePath` is `<picked dir>/<sub…>/<file>`; the first segment is
+   * the folder the user pointed at, which is the same for every file in the
+   * import and so says nothing — drop it along with the filename. What is
+   * left mirrors the tree the user chose to build, at whatever depth they
+   * built it. Files from a plain multi-select (or unpacked from a zip) have no
+   * relative path and stay uncategorized.
+   */
+  function categoryPathOf(file: File): string {
+    const rel = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+    if (!rel) return '';
+    return rel.split('/').slice(1, -1).join('/');
+  }
+
+  /** Mirror the imported directory tree into library categories. */
+  async function assignImportedFolders(imported: ImportedBook[]) {
+    const byPath = new Map<string, number[]>();
+    for (const { file, id } of imported) {
+      const path = categoryPathOf(file);
+      if (!path) continue;
+      const ids = byPath.get(path);
+      if (ids) ids.push(id);
+      else byPath.set(path, [id]);
+    }
+    // Grouped by path so each folder is resolved and refreshed once, not once
+    // per book — refreshFolders re-reads both stores every call.
+    for (const [path, ids] of byPath) {
+      try {
+        const folder = await findOrCreateLocalFolder(path);
+        if (folder) await addBooksToFolder(ids, folder.id);
+      } catch (err: any) {
+        // The books themselves imported fine; losing a category assignment is
+        // not worth failing the import over.
+        logger.warn(`folder assignment failed for ${path}: ${err?.message}`);
+      }
+    }
+  }
+
   async function onFilesChange(fileList: FileList | File[]) {
     if (!operationAllowed()) {
       return;
@@ -498,7 +544,7 @@
       return;
     }
 
-    const error = await importData(
+    const result = await importData(
       document,
       getStorageHandler(
         window,
@@ -513,7 +559,11 @@
       files,
       cancelSignal,
       $fileCountData$
-    ).catch((catchedError) => catchedError.message);
+    ).catch((catchedError) => ({ error: catchedError.message as string, imported: [] }));
+
+    const error = result.error;
+
+    await assignImportedFolders(result.imported);
 
     resetProgress();
 

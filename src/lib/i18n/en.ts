@@ -631,6 +631,7 @@ export default {
 
   'folders.section': 'Library',
   'folders.groupHeader': 'Folders',
+  'folders.groupLocal': 'From folders',
   'folders.allBooks': 'All books',
   'folders.uncategorized': 'Uncategorized',
   'folders.new': 'New folder',

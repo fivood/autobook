@@ -16,6 +16,11 @@ export interface BooksDbV7Folder {
   name: string;
   sortOrder: number;
   createdAt: number;
+  /** `'local'` = mirrored from a directory during a folder import, where the
+   * name is the relative path inside the picked folder (`读书/技术`). Absent
+   * = created by hand in the reader. Only affects grouping in the sidebar;
+   * optional so existing rows need no migration. */
+  source?: 'local';
 }
 
 export interface BooksDbV7BookFolder {

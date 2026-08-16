@@ -128,6 +128,7 @@ export default {
   // Library sidebar (folders)
   'folders.section': '书库',
   'folders.groupHeader': '分类',
+  'folders.groupLocal': '本地引入',
   'folders.allBooks': '全部书籍',
   'folders.uncategorized': '未分类',
   'folders.new': '新建分类',

@@ -50,6 +50,11 @@ import pLimit from 'p-limit';
 
 export const exporterVersion = 1;
 
+export interface ImportedBook {
+  file: File;
+  id: number;
+}
+
 export async function importData(
   document: Document,
   targetHandler: BaseStorageHandler,
@@ -57,7 +62,9 @@ export async function importData(
   cancelSignal: AbortSignal,
   fileCountData?: Record<string, number>
 ) {
-  const dataIds: number[] = [];
+  // Paired with the source File so the caller can map an import back to the
+  // folder it came from. `dataIds` was collected here and never read.
+  const imported: ImportedBook[] = [];
   const tasks: Promise<void>[] = [];
   const lastBookModified = new Date().getTime();
   const progressBase = 3; // load -> save -> cover;
@@ -181,7 +188,7 @@ export async function importData(
             cancelSignal
           );
 
-          dataIds.push(await targetHandler.saveBook(bookContent, false));
+          imported.push({ file, id: await targetHandler.saveBook(bookContent, false) });
 
           if (extractedMetadata) {
             try {
@@ -231,7 +238,7 @@ export async function importData(
     });
   }
 
-  return errorMessage;
+  return { error: errorMessage, imported };
 }
 
 export async function importBackup(

@@ -36,6 +36,27 @@
     return $bookFolders$.filter((bf) => bf.folderId === folderId).length;
   }
 
+  /**
+   * Hand-made categories above, directory-mirrored ones below. A vault with a
+   * deep tree produces a lot of folders, and mixed into one list they bury the
+   * handful the user actually created. The local group is hidden entirely
+   * until something has been folder-imported.
+   */
+  $: folderGroups = [
+    {
+      key: 'reader',
+      label: $t('folders.groupHeader'),
+      items: $folders$.filter((f) => f.source !== 'local'),
+      canCreate: true
+    },
+    {
+      key: 'local',
+      label: $t('folders.groupLocal'),
+      items: $folders$.filter((f) => f.source === 'local'),
+      canCreate: false
+    }
+  ];
+
   $: assignedBookIds = new Set($bookFolders$.map((bf) => bf.bookId));
   $: uncategorizedCount = Math.max(0, totalBookCount - assignedBookIds.size);
 
@@ -139,20 +160,26 @@
     <span class="opacity-60">{uncategorizedCount}</span>
   </button>
 
-  <div class="mt-3 flex items-center justify-between px-3 pb-1 text-xs uppercase tracking-wide opacity-60">
-    <span>{$t('folders.groupHeader')}</span>
-    <button
-      type="button"
-      title={$t('folders.new')}
-      class="rounded p-1 hover-soft"
-      on:click={onCreateFolder}
-    >
-      <Fa icon={faPlus} />
-    </button>
-  </div>
-
   <div class="flex-1 overflow-y-auto pr-1">
-    {#each $folders$ as folder (folder.id)}
+    {#each folderGroups as group (group.key)}
+      {#if group.items.length || group.canCreate}
+        <div
+          class="mt-3 flex items-center justify-between px-3 pb-1 text-xs uppercase tracking-wide opacity-60"
+        >
+          <span>{group.label}</span>
+          {#if group.canCreate}
+            <button
+              type="button"
+              title={$t('folders.new')}
+              class="rounded p-1 hover-soft"
+              on:click={onCreateFolder}
+            >
+              <Fa icon={faPlus} />
+            </button>
+          {/if}
+        </div>
+      {/if}
+    {#each group.items as folder (folder.id)}
       {@const active = $activeFolderFilter$ === String(folder.id)}
       {@const dragOver = dragOverFolderId === folder.id}
       <div
@@ -207,8 +234,9 @@
         </button>
       </div>
     {/each}
-    {#if !$folders$.length}
-      <div class="px-3 pt-2 text-xs opacity-50">{$t('folders.empty')}</div>
-    {/if}
+      {#if group.canCreate && !group.items.length}
+        <div class="px-3 pt-2 text-xs opacity-50">{$t('folders.empty')}</div>
+      {/if}
+    {/each}
   </div>
 </aside>

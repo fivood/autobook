@@ -636,6 +636,7 @@ export default {
 
   'folders.section': 'ライブラリ',
   'folders.groupHeader': 'フォルダ',
+  'folders.groupLocal': '取り込み元',
   'folders.allBooks': 'すべての本',
   'folders.uncategorized': '未分類',
   'folders.new': '新規フォルダ',
