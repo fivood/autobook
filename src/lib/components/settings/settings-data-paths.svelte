@@ -11,7 +11,7 @@
   import { isTauri } from '$lib/data/env';
   import { dialogManager } from '$lib/data/dialog-manager';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
-  import { fsRoot$ } from '$lib/data/store';
+  import { fsRoot$, vaultSyncRoot$ } from '$lib/data/store';
   import { pickUserDir } from '$lib/functions/pick-user-dir';
   import { t, tImmediate } from '$lib/i18n';
 
@@ -67,6 +67,21 @@
       await invoke('open_data_folder', { path: p });
     } catch (err: any) {
       message = tImmediate('dataPaths.openFail', { err: err?.message || err });
+    } finally {
+      busy = false;
+    }
+  }
+
+  /** Notes folder mirrored into the library. Read-only on our side, so this
+   * only needs the same directory grant the picker already hands out. */
+  async function pickVaultRoot() {
+    if (!isTauri()) return;
+    busy = true;
+    try {
+      const picked = await pickUserDir({ defaultPath: $vaultSyncRoot$ || undefined });
+      if (picked) vaultSyncRoot$.next(picked);
+    } catch (err: any) {
+      message = tImmediate('dataPaths.pickFail', { err: err?.message || err });
     } finally {
       busy = false;
     }
@@ -238,6 +253,35 @@
           {/if}
         </div>
         <p class="hint">{$t('dataPaths.section.fs.hint')}</p>
+      </div>
+
+      <div class="row">
+        <div class="label">{$t('vaultSync.label')}</div>
+        {#if $vaultSyncRoot$}
+          <div class="path-row">
+            <code class="path" title={$vaultSyncRoot$}>{$vaultSyncRoot$}</code>
+            <button
+              class="btn icon"
+              on:click={() => openInExplorer($vaultSyncRoot$)}
+              disabled={busy}
+              title={$t('dataPaths.openInExplorer')}
+            >
+              <Fa icon={faFolderOpen} size="xs" />
+            </button>
+          </div>
+        {/if}
+        <div class="fs-actions">
+          <button class="btn" on:click={pickVaultRoot} disabled={busy}>
+            <Fa icon={faPen} size="xs" />
+            {$vaultSyncRoot$ ? $t('vaultSync.change') : $t('vaultSync.choose')}
+          </button>
+          {#if $vaultSyncRoot$}
+            <button class="btn" on:click={() => vaultSyncRoot$.next('')} disabled={busy}>
+              <Fa icon={faArrowRotateLeft} size="xs" /> {$t('vaultSync.disable')}
+            </button>
+          {/if}
+        </div>
+        <p class="hint">{$t('vaultSync.hint')}</p>
       </div>
 
       <div class="row">

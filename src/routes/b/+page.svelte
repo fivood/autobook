@@ -2303,6 +2303,20 @@
     if (!book) return;
     const format = getEditableTextFormat(book);
     if (!format) return;
+    // Vault-synced books are read-only here: the file is authoritative, so the
+    // next scan would overwrite whatever was typed in.
+    if (book.sourcePath) {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: tImmediate('bookEditor.saveFailedTitle'),
+            message: tImmediate('vaultSync.editDisabled')
+          }
+        }
+      ]);
+      return;
+    }
 
     pauseTracker();
     showHeader = false;

@@ -24,7 +24,7 @@
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { preFilteredTitlesForStatistics$ } from '$lib/components/statistics/statistics-types';
-  import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
+  import type { BooksDbBookData, BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
@@ -47,10 +47,13 @@
     readingGoalsMergeMode$,
     replicationSaveBehavior$,
     showExternalPlaceholder$,
+    vaultSyncRoot$,
     statisticsMergeMode$
   } from '$lib/data/store';
   import { t, tImmediate } from '$lib/i18n';
   import { detectBookFormat } from '$lib/functions/book-format';
+  import { categoryOfPath, planVaultSync, readVaultFiles } from '$lib/functions/vault-sync';
+  import { formatTextSource, getEditableTextFormat } from '$lib/functions/file-loaders/text-source';
   import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
   import { cloneMutateSet } from '$lib/functions/clone-mutate-set';
   import { getDropEventFiles } from '$lib/functions/file-dom/get-drop-event-files';
@@ -253,7 +256,11 @@
   onDestroy(() => dialogManager.dialogs$.next([]));
 
   onMount(() => {
-    refreshFolders().catch(() => {});
+    refreshFolders()
+      // Once per library visit, after folders are loaded so newly synced books
+      // land in their categories immediately. Failure is logged inside.
+      .then(() => runVaultSync())
+      .catch(() => {});
   });
 
   /** Book IDs to assign when the user drags onto a folder. If the dragged
@@ -519,6 +526,161 @@
         logger.warn(`folder assignment failed for ${path}: ${err?.message}`);
       }
     }
+  }
+
+  // ponytail: vault sync lives here because the import pipeline, the delete
+  // pipeline, the progress bar and the dialog manager all already do. Worth
+  // extracting together with those if this file is ever split.
+  let vaultSyncing = false;
+
+  /** Books that mirror a file under the current sync root. */
+  async function syncedBooks(): Promise<BooksDbBookData[]> {
+    const db = await database.db;
+    const all = await db.getAll('data');
+    return all.filter((b) => typeof b.sourcePath === 'string' && b.sourcePath);
+  }
+
+  /**
+   * Pull the sync root into the library. One-way: the files win, and nothing
+   * is ever written back to them.
+   */
+  async function runVaultSync(manual = false) {
+    const root = $vaultSyncRoot$.trim();
+    if (!root || vaultSyncing || !isTauri()) return;
+    vaultSyncing = true;
+    try {
+      const [files, books] = await Promise.all([readVaultFiles(root), syncedBooks()]);
+      const plan = planVaultSync(
+        files,
+        books.map((b) => ({ id: b.id, sourcePath: b.sourcePath as string, sourceText: b.sourceText }))
+      );
+
+      const db = await database.db;
+
+      // Edited in the vault: re-render in place so reading progress, folder
+      // membership and highlights all survive.
+      for (const { book, content } of plan.changed) {
+        const current = await db.get('data', book.id);
+        if (!current) continue;
+        const format = getEditableTextFormat(current);
+        if (!format) continue;
+        const formatted = formatTextSource(content, format);
+        await db.put('data', {
+          ...current,
+          sourceText: content,
+          elementHtml: formatted.elementHtml,
+          characters: formatted.characters,
+          sections: formatted.sections,
+          lastBookModified: Date.now()
+        });
+      }
+
+      // Moved or renamed with the content untouched: only the path and the
+      // category change.
+      for (const { book, path } of plan.moved) {
+        const current = await db.get('data', book.id);
+        if (!current) continue;
+        await db.put('data', { ...current, sourcePath: path });
+        await reassignVaultCategory(asBookCardId(current.id), path);
+      }
+
+      if (plan.added.length) await importVaultFiles(plan.added);
+
+      // Deletions mirror the vault, but only for books that would cost the
+      // user nothing. A rename the content match failed to catch looks exactly
+      // like a deletion, so anything carrying reading progress or highlights
+      // is left alone and reported instead.
+      const removable: BooksDbBookData[] = [];
+      const kept: BooksDbBookData[] = [];
+      for (const orphan of plan.removed) {
+        const current = await db.get('data', orphan.id);
+        if (!current) continue;
+        const hlCount = await db.countFromIndex('highlight', 'dataId', current.id);
+        const read = (current.lastBookOpen || 0) > 0;
+        (hlCount || read ? kept : removable).push(current);
+      }
+      if (removable.length) await removeBooks(removable.map((b) => asBookCardId(b.id)));
+
+      if (plan.changed.length || plan.moved.length || plan.added.length || removable.length) {
+        await refreshFolders();
+        database.dataListChanged$.next(undefined as any);
+      }
+
+      if (kept.length) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: tImmediate('vaultSync.keptTitle'),
+              message: tImmediate('vaultSync.keptMessage', {
+                titles: kept.map((b) => b.title).join('\n')
+              })
+            }
+          }
+        ]);
+      } else if (manual) {
+        flashToast(
+          tImmediate('vaultSync.done', {
+            changed: plan.changed.length + plan.moved.length,
+            added: plan.added.length,
+            removed: removable.length
+          })
+        );
+      }
+    } catch (err: any) {
+      logger.warn(`vault sync failed: ${err?.message || err}`);
+      if (manual) showError(tImmediate('vaultSync.failedTitle'), err?.message || String(err), '');
+    } finally {
+      vaultSyncing = false;
+    }
+  }
+
+  /** Import notes the library has never seen, tagging each with its path. */
+  async function importVaultFiles(added: { path: string; content: string }[]) {
+    const files = added.map(
+      (f) => new File([f.content], f.path.split('/').pop() || 'note.md', { type: 'text/plain' })
+    );
+    const result = await importData(
+      document,
+      getStorageHandler(
+        window,
+        $storageSource$,
+        '',
+        $storageSource$ === StorageKey.BROWSER,
+        $cacheStorageData$,
+        $replicationSaveBehavior$,
+        $statisticsMergeMode$,
+        $readingGoalsMergeMode$
+      ),
+      files,
+      cancelSignal
+    ).catch((err) => ({ error: err.message as string, imported: [] as ImportedBook[] }));
+    resetProgress();
+
+    const db = await database.db;
+    for (let i = 0; i < result.imported.length; i += 1) {
+      const entry = result.imported[i];
+      const source = added[files.indexOf(entry.file)];
+      if (!source) continue;
+      // importData returns the library-card id; the row we need to stamp is
+      // keyed by the IDB id, so find it by title rather than by that number.
+      const row = (await db.getAll('data')).find((b) => b.title === entry.file.name && !b.sourcePath);
+      if (row) await db.put('data', { ...row, sourcePath: source.path });
+      await reassignVaultCategory(entry.id, source.path);
+    }
+    if (result.error) logger.warn(`vault import: ${result.error}`);
+  }
+
+  /** Put a synced book in the folder matching its directory, and only there. */
+  async function reassignVaultCategory(cardId: BookCardId, path: string) {
+    const category = categoryOfPath(path);
+    for (const bf of $bookFolders$.filter((b) => b.bookId === cardId)) {
+      const folder = $folders$.find((f) => f.id === bf.folderId);
+      if (folder?.source === 'local') await removeBooksFromFolder([cardId], folder.id);
+    }
+    if (!category) return;
+    const folder = await findOrCreateLocalFolder(category);
+    if (folder) await addBooksToFolder([cardId], folder.id);
   }
 
   async function onFilesChange(fileList: FileList | File[]) {
