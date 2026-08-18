@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { loadFile } from '$lib/load-file';
+  import { loadFile, type LoadedText } from '$lib/load-file';
   import type { ParsedPdf } from '$lib/load-pdf';
   import { parseText, type ParsedBook } from '$lib/parse-text';
   import { pdfPageShell } from '$lib/pdf-page-shell';
@@ -13,6 +13,7 @@
   } from '$lib/stats';
   import type { RemoteState } from '$lib/sync-client';
   import SyncSettings from '$lib/sync-settings.svelte';
+  import SegmentBody from '$lib/segment-body.svelte';
   import { createTypewriter, type TypewriterEngine } from '$lib/typewriter';
   import {
     acquireWakeLock,
@@ -57,7 +58,14 @@
   let speed = 8;
   let stopAtChapter = false;
   let viewport: HTMLDivElement;
-  let cursorEl: HTMLSpanElement | undefined;
+  /** EPUB side-channels: asset key → blob URL, and footnote id → body text.
+   * Neither is persisted — reopening re-extracts them from the cached
+   * original file, which is also what keeps blob URLs from outliving the
+   * book they belong to. */
+  let imageUrls = new Map<string, string>();
+  let noteBodies = new Map<string, string>();
+  /** Footnote currently shown in the sheet; '' = closed. */
+  let openNote = '';
   let recents: Array<SavedPosition & { hash: string }> = [];
   let busy = false;
   let error = '';
@@ -91,24 +99,18 @@
     ? book.segments
         .filter((seg) => seg.startChar < revealed + 1500)
         .map((seg) => {
-          if (seg.endChar <= revealed) {
-            return { ...seg, revealed: seg.text, pending: '', hasCursor: false };
-          }
+          const len = seg.text.length;
+          if (seg.endChar <= revealed) return { seg, cut: len, pendingEnd: len, hasCursor: false };
           if (seg.startChar >= revealed) {
             return {
-              ...seg,
-              revealed: '',
-              pending: seg.text.slice(0, Math.max(0, revealed + 800 - seg.startChar)),
+              seg,
+              cut: 0,
+              pendingEnd: Math.max(0, Math.min(len, revealed + 800 - seg.startChar)),
               hasCursor: false
             };
           }
           const cut = revealed - seg.startChar;
-          return {
-            ...seg,
-            revealed: seg.text.slice(0, cut),
-            pending: seg.text.slice(cut, cut + 800),
-            hasCursor: true
-          };
+          return { seg, cut, pendingEnd: Math.min(len, cut + 800), hasCursor: true };
         })
     : [];
 
@@ -369,7 +371,7 @@
         await openPdf(loaded.pdf);
       } else {
         pendingCover = loaded.coverDataUrl;
-        await loadBook(loaded.title, loaded.text);
+        await loadBook(loaded.title, loaded);
       }
       // Cache the original Blob so "最近阅读" can reopen without
       // re-prompting for the file. Fire-and-forget; storage quota
@@ -447,6 +449,10 @@
     engine?.destroy();
     engine = undefined;
     book = undefined;
+    for (const url of imageUrls.values()) URL.revokeObjectURL(url);
+    imageUrls = new Map();
+    noteBodies = new Map();
+    openNote = '';
     if (pdfPageUrls.length) {
       for (const u of pdfPageUrls) URL.revokeObjectURL(u);
       pdfPageUrls = [];
@@ -458,9 +464,9 @@
     playing = false;
   }
 
-  async function loadBook(name: string, text: string) {
+  async function loadBook(name: string, loaded: LoadedText) {
     closeAnyBook();
-    const parsed = parseText(text);
+    const parsed = parseText(loaded.text);
     if (!parsed.totalChars) {
       error = tImmediate('ingest.noReadableContent');
       return;
@@ -472,6 +478,13 @@
     const saved = getPosition(bookHash);
     revealed = saved?.revealed && saved.revealed < total ? saved.revealed : 0;
     chapterIdx = 0;
+
+    // Blob URLs are minted after closeAnyBook() has revoked the last book's,
+    // so the map is never a mix of two books' assets.
+    if (loaded.images) {
+      imageUrls = new Map([...loaded.images].map(([key, blob]) => [key, URL.createObjectURL(blob)]));
+    }
+    noteBodies = loaded.notes ?? new Map();
 
     engine = createTypewriter({ total, speed });
     engine.setStopAtChapter(stopAtChapter);
@@ -542,6 +555,9 @@
     if (scrollRaf) return;
     scrollRaf = requestAnimationFrame(() => {
       scrollRaf = 0;
+      // The caret lives inside SegmentBody now, so find it rather than
+      // threading a binding out through an {#each}.
+      const cursorEl = viewport?.querySelector('.cursor');
       if (!viewport || !cursorEl) return;
       const cursorRect = cursorEl.getBoundingClientRect();
       const vpRect = viewport.getBoundingClientRect();
@@ -596,6 +612,15 @@
 
   function togglePlay() {
     engine?.toggle();
+  }
+
+  /** Open the footnote sheet. Stops the typewriter first — the reader
+   * broke off to read a note, and letting it run on would cost them the
+   * line they were on. */
+  function showNote(id: string) {
+    if (!noteBodies.has(id)) return;
+    engine?.stop();
+    openNote = id;
   }
 
   function toggleReadMode() {
@@ -776,7 +801,7 @@
               error = tImmediate('ingest.hashMismatch');
               return;
             }
-            await loadBook(item.title, loaded.text);
+            await loadBook(item.title, loaded);
           }
         } catch (e: any) {
           error = tImmediate('ingest.readFail', { err: e?.message || e });
@@ -984,9 +1009,25 @@
         <div class="page">
           {#each book.segments as seg (seg.startChar)}
             {#if seg.type === 'h2'}
-              <h2 class="ch-title" data-seg-start={seg.startChar}>{seg.text}</h2>
+              <h2 class="ch-title" data-seg-start={seg.startChar}>
+                <SegmentBody
+                  {seg}
+                  cut={seg.text.length}
+                  pendingEnd={seg.text.length}
+                  {imageUrls}
+                  onNote={showNote}
+                />
+              </h2>
             {:else}
-              <p class="ch-para" data-seg-start={seg.startChar}>{seg.text}</p>
+              <p class="ch-para" data-seg-start={seg.startChar}>
+                <SegmentBody
+                  {seg}
+                  cut={seg.text.length}
+                  pendingEnd={seg.text.length}
+                  {imageUrls}
+                  onNote={showNote}
+                />
+              </p>
             {/if}
           {/each}
         </div>
@@ -999,22 +1040,30 @@
         on:pointerup={onViewportPointerUp}
       >
         <div class="page">
-          {#each visibleSegments as seg (seg.startChar)}
-            {#if seg.type === 'h2'}
+          {#each visibleSegments as v (v.seg.startChar)}
+            {#if v.seg.type === 'h2'}
               <h2 class="ch-title">
-                <span class="revealed">{seg.revealed}</span>{#if seg.hasCursor}<span
-                    class="cursor"
-                    bind:this={cursorEl}
-                    class:cursor-on={playing}
-                  />{/if}{#if seg.pending}<span class="pending">{seg.pending}</span>{/if}
+                <SegmentBody
+                  seg={v.seg}
+                  cut={v.cut}
+                  pendingEnd={v.pendingEnd}
+                  hasCursor={v.hasCursor}
+                  cursorOn={playing}
+                  {imageUrls}
+                  onNote={showNote}
+                />
               </h2>
             {:else}
               <p class="ch-para">
-                <span class="revealed">{seg.revealed}</span>{#if seg.hasCursor}<span
-                    class="cursor"
-                    bind:this={cursorEl}
-                    class:cursor-on={playing}
-                  />{/if}{#if seg.pending}<span class="pending">{seg.pending}</span>{/if}
+                <SegmentBody
+                  seg={v.seg}
+                  cut={v.cut}
+                  pendingEnd={v.pendingEnd}
+                  hasCursor={v.hasCursor}
+                  cursorOn={playing}
+                  {imageUrls}
+                  onNote={showNote}
+                />
               </p>
             {/if}
           {/each}
@@ -1127,6 +1176,24 @@
       {/if}
     {/if}
     <button class="sync-fab" title={$t('landing.syncFab')} on:click={() => (syncOpen = true)}>⇅</button>
+  </div>
+{/if}
+
+{#if openNote}
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+  <div
+    class="note-overlay"
+    on:click={(ev) => {
+      if (ev.target === ev.currentTarget) openNote = '';
+    }}
+  >
+    <div class="note-sheet" role="dialog" aria-modal="true">
+      <header>
+        <h2>{$t('note.title')}</h2>
+        <button on:click={() => (openNote = '')} aria-label={$t('note.close')}>✕</button>
+      </header>
+      <p class="note-text">{noteBodies.get(openNote) ?? ''}</p>
+    </div>
   </div>
 {/if}
 
@@ -1606,24 +1673,48 @@
     text-indent: 2em;
     white-space: pre-wrap;
   }
-  .pending {
-    opacity: 0.12;
+  /* The reveal split, caret and footnote markers live in SegmentBody, and
+     so do their styles — Svelte scoping stops this file's rules from
+     reaching into a child component. */
+
+  .note-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
   }
-  .cursor {
-    display: inline-block;
-    width: 2px;
-    height: 1.1em;
-    margin: 0 1px;
-    vertical-align: -0.15em;
-    background: var(--accent);
-    opacity: 0;
+  .note-sheet {
+    width: 100%;
+    max-width: 30rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    border-radius: 1rem 1rem 0 0;
+    padding: 1rem 1rem calc(env(safe-area-inset-bottom) + 1rem);
+    background: var(--bg);
+    color: var(--fg);
   }
-  .cursor-on {
-    opacity: 0.85;
-    animation: blink 1s steps(2) infinite;
+  .note-sheet header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
   }
-  @keyframes blink {
-    50% { opacity: 0; }
+  .note-sheet header h2 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--fg-dim);
+  }
+  .note-sheet header button {
+    padding: 0.4rem;
+    opacity: 0.7;
+  }
+  .note-text {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.7;
   }
 
   .controls {

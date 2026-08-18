@@ -37,6 +37,10 @@ export default {
   'ingest.hashMismatch': '这不是同一本书：哈希不对。换个文件再试。',
   'ingest.pdfPreview': '共 {n} 页',
 
+  // Footnote sheet (EPUB notes lifted out of the text)
+  'note.title': '注释',
+  'note.close': '关闭',
+
   // Reader top bar
   'reader.close': '‹ 关闭',
   'reader.immersiveOn': '沉浸模式',

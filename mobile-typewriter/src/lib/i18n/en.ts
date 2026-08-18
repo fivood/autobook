@@ -30,6 +30,10 @@ export default {
   'ingest.hashMismatch': "That's not the same book — hash mismatch. Try a different file.",
   'ingest.pdfPreview': '{n} pages',
 
+  // Footnote sheet (EPUB notes lifted out of the text)
+  'note.title': 'Note',
+  'note.close': 'Close',
+
   'reader.close': '‹ Close',
   'reader.immersiveOn': 'Immersive mode',
   'reader.immersiveOff': 'Exit immersive',

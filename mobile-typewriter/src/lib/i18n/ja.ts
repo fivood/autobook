@@ -30,6 +30,10 @@ export default {
   'ingest.hashMismatch': '同じ本ではありません：ハッシュが一致しません。別のファイルをお試しください。',
   'ingest.pdfPreview': '全 {n} ページ',
 
+  // Footnote sheet (EPUB notes lifted out of the text)
+  'note.title': '注釈',
+  'note.close': '閉じる',
+
   'reader.close': '‹ 閉じる',
   'reader.immersiveOn': '没入モード',
   'reader.immersiveOff': '没入モードを終了',

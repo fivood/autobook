@@ -2,14 +2,25 @@
 // rootfile, walk the spine in reading order, and concatenate the textContent
 // of each chapter's HTML. Section headings (h1/h2/h3) become standalone lines
 // so the chapter detector in parse-text.ts picks them up automatically.
+//
+// Two things don't survive a plain string, so they travel beside it:
+//   - images, as a key → Blob map the reader turns into blob URLs
+//   - footnote bodies, as an id → text map the reader shows in a sheet
+// Their *positions* do ride inside the text, as the private-use sentinels
+// defined in parse-text.ts, which strips them back out before any offset is
+// measured. Footnote bodies are lifted out of the flow entirely — left in,
+// they land as a wall of unlabelled paragraphs at the end of every chapter.
 
 import { BlobReader, BlobWriter, TextWriter, ZipReader, type Entry } from '@zip.js/zip.js';
+import { MARK_END, MARK_IMG, MARK_NOTE, MARK_SEP } from './parse-text';
 
 interface FileEntry {
   filename: string;
   directory: boolean;
+  // zip.js's shipped types don't expose Entry.getData; declare the two
+  // writer shapes we use. The writer decides the return type.
   getData(writer: TextWriter): Promise<string>;
-  getDataBlob(writer: BlobWriter): Promise<Blob>;
+  getData(writer: BlobWriter): Promise<Blob>;
 }
 
 export interface LoadedEpub {
@@ -18,7 +29,18 @@ export interface LoadedEpub {
   /** Data-URL (base64) form of the cover image so it can survive a JSON
    * round-trip into localStorage with the recent-read entry. */
   coverDataUrl?: string;
+  /** Resolved, lower-cased zip path → image blob, for every image the text
+   * actually references. Not persisted: reopening re-extracts from the
+   * cached original file. */
+  images: Map<string, Blob>;
+  /** Footnote id → body text, keyed to the markers embedded in `text`. */
+  notes: Map<string, string>;
 }
+
+/** Attributes stamped onto a footnote reference during the pre-pass so the
+ * text walk can emit a marker without re-running the detection. */
+const NOTE_ID_ATTR = 'data-tw-note';
+const NOTE_NUM_ATTR = 'data-tw-note-n';
 
 function mimeFromExt(name: string): string {
   const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
@@ -72,12 +94,11 @@ export async function loadEpub(file: File): Promise<LoadedEpub> {
 
     let coverDataUrl: string | undefined;
     if (coverHref) {
-      const coverEntry = byPath.get(coverHref.toLowerCase()) as unknown as FileEntry | undefined;
-      // zip.js's FileEntry.getData() isn't in its shipped TS types; reach through `as any`.
-      if (coverEntry && typeof (coverEntry as any).getData === 'function') {
+      const coverEntry = byPath.get(coverHref.toLowerCase());
+      if (coverEntry) {
         try {
-          const blob = await (coverEntry as any).getData(new BlobWriter(mimeFromExt(coverHref)));
-          coverDataUrl = await blobToDataUrl(blob as Blob);
+          const blob = await coverEntry.getData(new BlobWriter(mimeFromExt(coverHref)));
+          coverDataUrl = await blobToDataUrl(blob);
         } catch {
           // cover failure shouldn't block the book
         }
@@ -102,12 +123,18 @@ export async function loadEpub(file: File): Promise<LoadedEpub> {
       }
     }
 
+    const notes = new Map<string, string>();
+    const imageRefs = new Set<string>();
+
     const chunks: string[] = [];
-    for (const href of spineHrefs) {
+    for (const [spineIndex, href] of spineHrefs.entries()) {
       const entry = byPath.get(href.toLowerCase());
       if (!entry) continue;
       const html = await entry.getData(new TextWriter('utf-8'));
-      const text = htmlToPlainText(html);
+      const dir = href.includes('/') ? href.slice(0, href.lastIndexOf('/') + 1) : '';
+      // Footnote ids restart at B_1 in every chapter file of a Sigil/Duokan
+      // build, so the spine index is what keeps them apart across the book.
+      const text = htmlToPlainText(html, String(spineIndex), dir, notes, imageRefs);
       if (!text) continue;
       const label = tocLabels.get(href);
       if (label && !startsWithLine(text, label)) {
@@ -120,10 +147,43 @@ export async function loadEpub(file: File): Promise<LoadedEpub> {
       }
     }
 
+    // Only referenced images get inflated — an EPUB's manifest routinely
+    // carries plates no spine document ever points at.
+    const images = new Map<string, Blob>();
+    for (const key of imageRefs) {
+      const imgEntry = lookupEntry(byPath, key);
+      if (!imgEntry) continue;
+      try {
+        images.set(key, await imgEntry.getData(new BlobWriter(mimeFromExt(key))));
+      } catch {
+        // one unreadable image shouldn't cost the reader the whole book
+      }
+    }
+
     const cleanedTitle = title || file.name.replace(/\.[^.]+$/, '');
-    return { title: cleanedTitle, text: chunks.filter(Boolean).join('\n\n'), coverDataUrl };
+    return {
+      title: cleanedTitle,
+      text: chunks.filter(Boolean).join('\n\n'),
+      coverDataUrl,
+      images,
+      notes
+    };
   } finally {
     await reader.close();
+  }
+}
+
+/** Zip entry names are stored as raw UTF-8 while hrefs inside the package are
+ * percent-encoded, and real files are inconsistent about it — try both
+ * spellings before giving up. */
+function lookupEntry(byPath: Map<string, FileEntry>, key: string): FileEntry | undefined {
+  const hit = byPath.get(key);
+  if (hit) return hit;
+  try {
+    return byPath.get(decodeURIComponent(key));
+  } catch {
+    // malformed percent-encoding — nothing else to try
+    return undefined;
   }
 }
 
@@ -271,7 +331,13 @@ function resolvePath(p: string): string {
   return parts.join('/');
 }
 
-function htmlToPlainText(html: string): string {
+function htmlToPlainText(
+  html: string,
+  fileKey: string,
+  dir: string,
+  notes: Map<string, string>,
+  imageRefs: Set<string>
+): string {
   let doc: Document;
   try {
     doc = new DOMParser().parseFromString(html, 'application/xhtml+xml');
@@ -285,10 +351,81 @@ function htmlToPlainText(html: string): string {
 
   const body = doc.body || doc.documentElement;
   body.querySelectorAll('script, style, svg').forEach((el) => el.remove());
+  liftFootnotes(body, fileKey, notes);
 
-  const lines: string[] = [];
-  walk(body, lines);
-  return lines.join('\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  const out: string[] = [];
+  walk(body, out, dir, imageRefs);
+  // Joined with '' — `walk` emits its own '\n' around block elements, so the
+  // pieces between them are inline and must stay on one line. Joining with
+  // '\n' instead (as this did originally) split a paragraph at every inline
+  // element: an <em>, a <span>, and now a footnote marker each became their
+  // own "paragraph", and a marker alone on a line has no text to attach to
+  // and was dropped outright.
+  return out.join('').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Does this in-page anchor look like a footnote reference rather than an
+ * ordinary cross-link? Covers Duokan/Sigil (`class="duokan-footnote"`),
+ * EPUB3 (`epub:type="noteref"`) and the bare `<sup>` convention. */
+function isNoteRef(a: Element): boolean {
+  // Back-links inside a note body point at the reference; treated as refs
+  // they'd make each note swallow the paragraph it belongs to.
+  if (
+    a.parentElement?.closest(
+      '[class*="footnote-item"], [class*="footnote-content"], [class*="endnote-item"], aside'
+    )
+  ) {
+    return false;
+  }
+  const cls = a.getAttribute('class') || '';
+  const epubType = a.getAttribute('epub:type') || '';
+  return (
+    /footnote|noteref|endnote/i.test(cls) ||
+    /noteref/i.test(epubType) ||
+    !!a.querySelector('sup') ||
+    a.parentElement?.tagName?.toLowerCase() === 'sup'
+  );
+}
+
+/**
+ * Move footnote bodies out of the document into `notes`, and stamp each
+ * reference with the id + display number the text walk will emit.
+ *
+ * Numbering is per file, matching how these books print it — ids restart at
+ * B_1 in every chapter, and so does the visible "1".
+ */
+function liftFootnotes(body: Element, fileKey: string, notes: Map<string, string>) {
+  // Index by id up front rather than building a selector per reference: ids in
+  // the wild carry quotes, colons and spaces that would need escaping, and a
+  // 400-note book would rebuild that selector 400 times.
+  const byId = new Map<string, Element>();
+  for (const el of Array.from(body.querySelectorAll('[id]'))) {
+    const id = el.getAttribute('id');
+    if (id && !byId.has(id)) byId.set(id, el);
+  }
+
+  let seq = 0;
+  for (const a of Array.from(body.querySelectorAll('a[href^="#"]'))) {
+    if (!isNoteRef(a)) continue;
+    const raw = a.getAttribute('href')!.slice(1);
+    if (!raw) continue;
+    let targetId = raw;
+    try {
+      targetId = decodeURIComponent(raw);
+    } catch {
+      // href wasn't percent-encoded — the raw form is the id
+    }
+    const target = byId.get(targetId) ?? byId.get(raw);
+    if (!target) continue;
+    const text = (target.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    seq += 1;
+    const noteId = `${fileKey}:${targetId}`;
+    notes.set(noteId, text);
+    target.remove();
+    a.setAttribute(NOTE_ID_ATTR, noteId);
+    a.setAttribute(NOTE_NUM_ATTR, String(seq));
+  }
 }
 
 const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
@@ -307,7 +444,7 @@ const BLOCK_TAGS = new Set([
   'hr'
 ]);
 
-function walk(node: Node, out: string[]) {
+function walk(node: Node, out: string[], dir: string, imageRefs: Set<string>) {
   if (node.nodeType === Node.TEXT_NODE) {
     const t = node.textContent;
     if (t) out.push(t);
@@ -316,9 +453,29 @@ function walk(node: Node, out: string[]) {
   if (node.nodeType !== Node.ELEMENT_NODE) return;
   const el = node as Element;
   const tag = el.tagName.toLowerCase();
+
+  const noteId = el.getAttribute(NOTE_ID_ATTR);
+  if (noteId) {
+    // Don't descend: the reference's own markup is a superscript image, and
+    // its alt text ("注释1") would otherwise leak into the prose.
+    out.push(`${MARK_NOTE}${el.getAttribute(NOTE_NUM_ATTR) || ''}${MARK_SEP}${noteId}${MARK_END}`);
+    return;
+  }
+
+  if (tag === 'img' || tag === 'image') {
+    const src = el.getAttribute('src') || el.getAttribute('xlink:href') || el.getAttribute('href');
+    // Remote and inline-data images have no zip entry to resolve against.
+    if (src && !/^(https?:|data:|blob:)/i.test(src)) {
+      const key = resolvePath(dir + src.split('#')[0].split('?')[0]).toLowerCase();
+      imageRefs.add(key);
+      out.push(`${MARK_IMG}${key}${MARK_END}`);
+    }
+    return;
+  }
+
   const isHeading = HEADING_TAGS.has(tag);
   const isBlock = isHeading || BLOCK_TAGS.has(tag);
   if (isBlock) out.push('\n');
-  for (const child of Array.from(el.childNodes)) walk(child, out);
+  for (const child of Array.from(el.childNodes)) walk(child, out, dir, imageRefs);
   if (isBlock) out.push('\n');
 }

@@ -9,9 +9,19 @@ import type { BookFormat } from './book-format';
  * path: per-page rendered images + optional positioned text layer. The
  * discriminator lets the caller switch reader UI without sniffing
  * filename twice. */
-export type LoadedFile =
-  | { kind: 'text'; format: BookFormat; title: string; text: string; coverDataUrl?: string }
-  | { kind: 'pdf'; format: 'pdf'; pdf: ParsedPdf };
+export interface LoadedText {
+  kind: 'text';
+  format: BookFormat;
+  title: string;
+  text: string;
+  coverDataUrl?: string;
+  /** EPUB only: image asset key → blob, and footnote id → body text. The
+   * text carries their positions as sentinels (see parse-text.ts). */
+  images?: Map<string, Blob>;
+  notes?: Map<string, string>;
+}
+
+export type LoadedFile = LoadedText | { kind: 'pdf'; format: 'pdf'; pdf: ParsedPdf };
 
 async function isZipMagic(file: File): Promise<boolean> {
   // EPUB is a ZIP. iOS share-sheet often strips or renames the extension
@@ -62,7 +72,9 @@ export async function loadFile(
       format: 'epub',
       title: epub.title || stem,
       text: epub.text,
-      coverDataUrl: epub.coverDataUrl
+      coverDataUrl: epub.coverDataUrl,
+      images: epub.images,
+      notes: epub.notes
     };
   }
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
