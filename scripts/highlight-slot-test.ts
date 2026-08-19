@@ -147,3 +147,31 @@ test('swatches follow custom colours', () => {
   const styles = highlightSlotStyles({ mode: 'custom', custom: ['#ff0000'], ...LIGHT });
   assert.match(slotSwatchStyle(styles['1']), /rgba\(255, 0, 0,/);
 });
+
+test('the label colour is always explicit', () => {
+  // `inherit` was the bug: themes bake an alpha into their text colour, so the
+  // inherited ink converged with the faintest slot's own ink wash (4.24:1,
+  // under AA and under the app's own 5.32:1 body text). A swatch number has to
+  // carry its own full-strength colour.
+  for (const mode of ['color', 'invert', 'custom'] as const) {
+    for (const theme of [LIGHT, DARK, { darkPage: true }, { darkPage: false }]) {
+      const styles = highlightSlotStyles({ mode, ...theme });
+      for (const slot of HIGHLIGHT_SLOTS) {
+        const { label } = styles[slot];
+        assert.ok(
+          /^(rgb\(|#)/.test(label),
+          `${mode}/${JSON.stringify(theme)} slot ${slot} label was "${label}"`
+        );
+      }
+    }
+  }
+});
+
+test('the inverted slot labels away from the others', () => {
+  // Slot 1 is the only opaque fill, so its number must flip to the page colour
+  // while the rest keep the ink colour.
+  const styles = highlightSlotStyles({ mode: 'invert', ...LIGHT });
+  assert.notEqual(styles['1'].label, styles['2'].label);
+  assert.equal(styles['2'].label, styles['3'].label);
+  assert.equal(styles['3'].label, styles['4'].label);
+});

@@ -34,7 +34,7 @@
   import NotebookReviewModal from '$lib/components/notebook/notebook-review-modal.svelte';
   import { isTauri } from '$lib/data/env';
   import { t, tImmediate } from '$lib/i18n';
-  import { highlightSlotStyles$, obsidianVaultPath$ } from '$lib/data/store';
+  import { obsidianVaultPath$ } from '$lib/data/store';
   import { buildSyncPlan, staleVaultFiles } from '$lib/functions/notebook/obsidian-sync';
   import { pickUserDir } from '$lib/functions/pick-user-dir';
   import {
@@ -46,7 +46,8 @@
     highlightHtml
   } from '$lib/functions/notebook/notebook-search';
   import type { NotebookSortKey, TagMode, NotebookGroup } from '$lib/functions/notebook/notebook-search';
-  import { HIGHLIGHT_SLOTS, normalizeHighlightSlot, slotSwatchStyle } from '$lib/data/highlight-color';
+  import { HIGHLIGHT_SLOTS, normalizeHighlightSlot } from '$lib/data/highlight-color';
+  import HighlightSlotSwatch from '$lib/components/highlight-slot-swatch.svelte';
 
   const REVIEW_BATCH = 10;
   const FRESH_REVIEW_MS = 1000 * 60 * 60 * 24 * 7; // less than 7d since reviewed = down-weight
@@ -627,14 +628,13 @@
       {#each HIGHLIGHT_SLOTS as c (c)}
         <button
           type="button"
-          class="rounded-full border px-2 py-0.5 transition-colors"
-          style:border-color={selectedColors.has(c) ? `rgb(${$highlightSlotStyles$[c].rgb})` : 'currentColor'}
-          style:background={selectedColors.has(c)
-            ? `rgba(${$highlightSlotStyles$[c].rgb}, 0.35)`
-            : 'transparent'}
+          class="rounded-full p-0.5 transition-opacity"
+          class:ring-2={selectedColors.has(c)}
+          class:ring-current={selectedColors.has(c)}
           style:opacity={selectedColors.has(c) ? 1 : 0.65}
+          title={c}
           on:click={() => toggleColor(c)}
-        ><span class="inline-block h-2 w-2 rounded-full align-middle" style={slotSwatchStyle($highlightSlotStyles$[c])} /></button>
+        ><HighlightSlotSwatch slot={c} class="h-5 w-5 text-[0.6rem]" /></button>
       {/each}
       {#if selectedColors.size}
         <button
@@ -708,9 +708,9 @@
                 {@const linked = linkedById.get(h.id) ?? []}
                 <li class="rounded-lg border border-current/10 p-3">
                   <div class="flex items-start gap-3">
-                    <span
-                      class="mt-1.5 inline-block h-3 w-3 flex-shrink-0 rounded-full"
-                      style={slotSwatchStyle($highlightSlotStyles$[normalizeHighlightSlot(h.color)])}
+                    <HighlightSlotSwatch
+                      slot={normalizeHighlightSlot(h.color)}
+                      class="mt-1 h-4 w-4 text-[0.55rem]"
                     />
                     <div class="min-w-0 flex-1">
                       {#if h.kind === 'note'}

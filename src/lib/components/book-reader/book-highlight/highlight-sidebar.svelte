@@ -7,8 +7,8 @@
   import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
   import type { Section } from '$lib/data/database/books-db/versions/books-db';
   import { clickOutside } from '$lib/functions/use-click-outside';
-  import { normalizeHighlightSlot, slotSwatchStyle } from '$lib/data/highlight-color';
-  import { highlightSlotStyles$ } from '$lib/data/store';
+  import { normalizeHighlightSlot } from '$lib/data/highlight-color';
+  import HighlightSlotSwatch from '$lib/components/highlight-slot-swatch.svelte';
   import { t } from '$lib/i18n';
 
   export let highlights: BooksDbHighlight[] = [];
@@ -91,9 +91,9 @@
             on:click={() => dispatch('navigate', hl)}
           >
             <div class="flex items-start gap-2">
-              <span
-                class="mt-1 inline-block h-3 w-3 flex-shrink-0 rounded-full"
-                style={slotSwatchStyle($highlightSlotStyles$[normalizeHighlightSlot(hl.color)])}
+              <HighlightSlotSwatch
+                slot={normalizeHighlightSlot(hl.color)}
+                class="mt-0.5 h-4 w-4 text-[0.55rem]"
               />
               <div class="min-w-0 flex-1">
                 <p class="line-clamp-2 break-all">{hl.text}</p>

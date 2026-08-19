@@ -2,8 +2,8 @@
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
   import { t } from '$lib/i18n';
-  import { HIGHLIGHT_SLOTS, slotSwatchStyle } from '$lib/data/highlight-color';
-  import { highlightSlotStyles$ } from '$lib/data/store';
+  import { HIGHLIGHT_SLOTS } from '$lib/data/highlight-color';
+  import HighlightSlotSwatch from '$lib/components/highlight-slot-swatch.svelte';
   import TextSourceEditor from '$lib/components/text-editor/text-source-editor.svelte';
 
   export let mode: 'create' | 'edit' = 'create';
@@ -136,7 +136,7 @@
             class:ring-current={selectedColor === c}
             title={c}
             on:click={() => (selectedColor = c)}
-          ><span class="inline-block h-4 w-4 rounded-full" style={slotSwatchStyle($highlightSlotStyles$[c])} /></button>
+          ><HighlightSlotSwatch slot={c} class="h-5 w-5 text-[0.6rem]" /></button>
         {/each}
       </div>
       <span class="opacity-50">{$t('notebook.editor.chars', { n: charCount })}</span>

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
-  import { HIGHLIGHT_SLOTS, slotSwatchStyle } from '$lib/data/highlight-color';
-  import { highlightSlotStyles$ } from '$lib/data/store';
+  import { HIGHLIGHT_SLOTS } from '$lib/data/highlight-color';
+  import HighlightSlotSwatch from '$lib/components/highlight-slot-swatch.svelte';
   import { t } from '$lib/i18n';
 
   export let x = 0;
@@ -20,11 +20,7 @@
     close: void;
   }>();
 
-  $: colors = HIGHLIGHT_SLOTS.map((id) => ({
-    id,
-    swatch: slotSwatchStyle($highlightSlotStyles$[id]),
-    label: id
-  }));
+  const colors = HIGHLIGHT_SLOTS.map((id) => ({ id, label: id }));
 
   function handleColor(c: HighlightSlot) {
     dispatch('color', c);
@@ -50,11 +46,10 @@
       {#each colors as c (c.id)}
         <button
           type="button"
-          class="h-7 w-7 rounded-full border-2 border-transparent hover:border-current/60 transition-colors"
-          style={c.swatch}
+          class="rounded-full border-2 border-transparent p-0.5 transition-colors hover:border-current/60"
           title={$t('highlight.slot.tooltip', { label: c.label })}
           on:click={() => handleColor(c.id)}
-        />
+        ><HighlightSlotSwatch slot={c.id} class="h-6 w-6 text-[0.7rem]" /></button>
       {/each}
       <span class="menu-divider" />
       <button
@@ -73,11 +68,10 @@
       {#each colors as c (c.id)}
         <button
           type="button"
-          class="h-7 w-7 rounded-full border-2 border-transparent hover:border-current/60 transition-colors"
-          style={c.swatch}
+          class="rounded-full border-2 border-transparent p-0.5 transition-colors hover:border-current/60"
           title={$t('highlight.recolor.tooltip', { label: c.label })}
           on:click={() => handleColor(c.id)}
-        />
+        ><HighlightSlotSwatch slot={c.id} class="h-6 w-6 text-[0.7rem]" /></button>
       {/each}
       <span class="menu-divider" />
       <button

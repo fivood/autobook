@@ -61,6 +61,16 @@ export interface HighlightSlotStyle {
   underlineStyle: string;
   /** Text colour inside the mark; `inherit` unless the fill is opaque. */
   ink: string;
+  /**
+   * Colour for a slot *label* — the number printed on a swatch.
+   *
+   * Same idea as `ink` but never `inherit`: themes bake an alpha into their
+   * own text colour (sage-green ships `rgba(64,90,92,0.92)`), and that muted
+   * ink sitting on the faintest slot's own ink wash measured 4.24:1 — under
+   * AA, and below the app's own 5.32:1 body text. Full strength fixes it
+   * without touching how the mark itself renders.
+   */
+  label: string;
 }
 
 /**
@@ -68,7 +78,7 @@ export interface HighlightSlotStyle {
  * rest stay unfilled or nearly so and are told apart by their underline, which
  * keeps a heavily annotated page from turning into a wall of solid blocks.
  */
-const INVERT_TREATMENT: Record<HighlightSlot, Omit<HighlightSlotStyle, 'rgb' | 'ink'>> = {
+const INVERT_TREATMENT: Record<HighlightSlot, Omit<HighlightSlotStyle, 'rgb' | 'ink' | 'label'>> = {
   '1': { alpha: '1', underlineWidth: '0', underlineStyle: 'solid' },
   '2': { alpha: '0', underlineWidth: '3px', underlineStyle: 'solid' },
   '3': { alpha: '0', underlineWidth: '3px', underlineStyle: 'dotted' },
@@ -76,6 +86,12 @@ const INVERT_TREATMENT: Record<HighlightSlot, Omit<HighlightSlotStyle, 'rgb' | '
 };
 
 const asRgbList = (rgb: readonly [number, number, number]) => `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`;
+
+/** A colour string stripped of any alpha the theme baked in. */
+const opaque = (color: string | undefined, fallback: string) => {
+  const parsed = color ? parseColor(color) : null;
+  return parsed ? `rgb(${asRgbList(parsed)})` : fallback;
+};
 
 /**
  * The CSS custom properties `app.scss` reads, for one theme + palette choice.
@@ -116,7 +132,11 @@ export function highlightSlotStyles(opts: {
           ...INVERT_TREATMENT[slot],
           // Only the opaque slot needs its text flipped; the others sit on the
           // untouched page and must keep the theme's own body colour.
-          ink: INVERT_TREATMENT[slot].alpha === '1' ? page : 'inherit'
+          ink: INVERT_TREATMENT[slot].alpha === '1' ? page : 'inherit',
+          label:
+            INVERT_TREATMENT[slot].alpha === '1'
+              ? opaque(page, darkPage ? '#000000' : '#ffffff')
+              : opaque(ink, darkPage ? '#ffffff' : '#000000')
         }
       ])
     ) as Record<HighlightSlot, HighlightSlotStyle>;
@@ -137,7 +157,8 @@ export function highlightSlotStyles(opts: {
           alpha,
           underlineWidth,
           underlineStyle: 'solid',
-          ink: 'inherit'
+          ink: 'inherit',
+          label: opaque(opts.fontColor, darkPage ? '#ffffff' : '#000000')
         }
       ];
     })
