@@ -22,10 +22,8 @@
   import {
     DEFAULT_CUSTOM_COLORS,
     HIGHLIGHT_SLOTS,
-    highlightSlotStyles,
     type HighlightPaletteMode
   } from '$lib/data/highlight-color';
-  import { FORMAT_STOPS_DARK, stopsForBackground } from '$lib/data/format-color';
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsCustomTheme from '$lib/components/settings/settings-custom-theme.svelte';
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
@@ -51,6 +49,7 @@
     customThemes$,
     highlightCustomColors$,
     highlightPalette$,
+    highlightSlotStyles$,
     database,
     fontFamilyGroupOne$,
     fontFamilyGroupTwo$,
@@ -294,15 +293,7 @@
     $highlightCustomColors$ = next.join(',');
   }
 
-  /** Preview swatch for one slot, using the same styles the reader will apply. */
-  $: highlightPreview = highlightSlotStyles({
-    mode: $highlightPalette$,
-    custom: customSlotColors,
-    fontColor: previewTheme.fontColor,
-    backgroundColor: previewTheme.backgroundColor,
-    darkPage: stopsForBackground(previewTheme.backgroundColor) === FORMAT_STOPS_DARK
-  });
-
+  /** The applied theme's own page colours, for the preview strip's backdrop. */
   let previewTheme: Partial<ThemeOption> = {};
   $: previewTheme = $customThemes$[selectedTheme] || availableThemesMap.get(selectedTheme) || {};
 
@@ -1140,27 +1131,27 @@
         >
           {#each HIGHLIGHT_SLOTS as slot (slot)}
             <span
-              class="rounded-sm px-2 py-1 text-sm"
-              style="background:rgba({highlightPreview[slot].rgb},{highlightPreview[slot].alpha});
-                     border-bottom:{highlightPreview[slot].underlineWidth} {highlightPreview[slot]
-                .underlineStyle} rgb({highlightPreview[slot].rgb});
-                     color:{highlightPreview[slot].ink}"
+              class="rounded-sm px-2 py-1"
+              style="background:rgba({$highlightSlotStyles$[slot].rgb},{$highlightSlotStyles$[slot].alpha});
+                     border-bottom:{$highlightSlotStyles$[slot].underlineWidth} {$highlightSlotStyles$[slot]
+                .underlineStyle} rgb({$highlightSlotStyles$[slot].rgb});
+                     color:{$highlightSlotStyles$[slot].ink}"
             >
               {$t('settings.highlightPalette.sample', { slot })}
             </span>
           {/each}
         </div>
         {#if $highlightPalette$ === 'custom'}
-          <div class="mt-3 flex flex-wrap gap-3">
+          <div class="-m-1 mt-2 flex flex-wrap">
             {#each HIGHLIGHT_SLOTS as slot, i (slot)}
-              <label class="flex items-center gap-2 text-sm">
-                <span class="opacity-70">{slot}</span>
+              <label class="m-1 flex flex-col items-center gap-1">
                 <input
                   type="color"
-                  class="h-8 w-12 cursor-pointer rounded border-0 bg-transparent p-0"
+                  class="h-12 w-14 cursor-pointer rounded-md border-2 border-current/40 bg-transparent p-1"
                   value={customSlotColors[i]}
                   on:input={(ev) => setCustomSlotColor(i, ev.currentTarget.value)}
                 />
+                <span class="text-xs opacity-60">{slot}</span>
               </label>
             {/each}
           </div>

@@ -34,7 +34,7 @@
   import NotebookReviewModal from '$lib/components/notebook/notebook-review-modal.svelte';
   import { isTauri } from '$lib/data/env';
   import { t, tImmediate } from '$lib/i18n';
-  import { obsidianVaultPath$ } from '$lib/data/store';
+  import { highlightSlotStyles$, obsidianVaultPath$ } from '$lib/data/store';
   import { buildSyncPlan, staleVaultFiles } from '$lib/functions/notebook/obsidian-sync';
   import { pickUserDir } from '$lib/functions/pick-user-dir';
   import {
@@ -46,7 +46,7 @@
     highlightHtml
   } from '$lib/functions/notebook/notebook-search';
   import type { NotebookSortKey, TagMode, NotebookGroup } from '$lib/functions/notebook/notebook-search';
-  import { HIGHLIGHT_SLOTS, HIGHLIGHT_SLOT_DOT as colorDot, normalizeHighlightSlot } from '$lib/data/highlight-color';
+  import { HIGHLIGHT_SLOTS, normalizeHighlightSlot, slotSwatchStyle } from '$lib/data/highlight-color';
 
   const REVIEW_BATCH = 10;
   const FRESH_REVIEW_MS = 1000 * 60 * 60 * 24 * 7; // less than 7d since reviewed = down-weight
@@ -628,11 +628,13 @@
         <button
           type="button"
           class="rounded-full border px-2 py-0.5 transition-colors"
-          style:border-color={selectedColors.has(c) ? colorDot[c] : 'currentColor'}
-          style:background={selectedColors.has(c) ? colorDot[c] : 'transparent'}
+          style:border-color={selectedColors.has(c) ? `rgb(${$highlightSlotStyles$[c].rgb})` : 'currentColor'}
+          style:background={selectedColors.has(c)
+            ? `rgba(${$highlightSlotStyles$[c].rgb}, 0.35)`
+            : 'transparent'}
           style:opacity={selectedColors.has(c) ? 1 : 0.65}
           on:click={() => toggleColor(c)}
-        ><span class="inline-block h-2 w-2 rounded-full align-middle" style="background:{colorDot[c]}" /></button>
+        ><span class="inline-block h-2 w-2 rounded-full align-middle" style={slotSwatchStyle($highlightSlotStyles$[c])} /></button>
       {/each}
       {#if selectedColors.size}
         <button
@@ -708,7 +710,7 @@
                   <div class="flex items-start gap-3">
                     <span
                       class="mt-1.5 inline-block h-3 w-3 flex-shrink-0 rounded-full"
-                      style="background:{colorDot[normalizeHighlightSlot(h.color)]}"
+                      style={slotSwatchStyle($highlightSlotStyles$[normalizeHighlightSlot(h.color)])}
                     />
                     <div class="min-w-0 flex-1">
                       {#if h.kind === 'note'}

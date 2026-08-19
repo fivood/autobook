@@ -17,12 +17,11 @@ import test from 'node:test';
 import {
   DEFAULT_CUSTOM_COLORS,
   HIGHLIGHT_SLOTS,
-  HIGHLIGHT_SLOT_CHIP,
-  HIGHLIGHT_SLOT_DOT,
   HIGHLIGHT_SLOT_RGB,
   LEGACY_SLOT_OF_COLOR,
   highlightSlotStyles,
-  normalizeHighlightSlot
+  normalizeHighlightSlot,
+  slotSwatchStyle
 } from '../src/lib/data/highlight-color.ts';
 
 test('pre-v13 colour names keep their display order', () => {
@@ -48,11 +47,9 @@ test('normalize never returns something without a mark rule', () => {
   }
 });
 
-test('every slot has a full set of surfaces', () => {
+test('the built-in palette covers every slot', () => {
   for (const slot of HIGHLIGHT_SLOTS) {
     assert.equal(HIGHLIGHT_SLOT_RGB[slot]?.length, 3, `slot ${slot} rgb`);
-    assert.match(HIGHLIGHT_SLOT_CHIP[slot], /^rgba\(/, `slot ${slot} chip`);
-    assert.match(HIGHLIGHT_SLOT_DOT[slot], /^rgba\(/, `slot ${slot} dot`);
   }
   assert.equal(Object.keys(HIGHLIGHT_SLOT_RGB).length, HIGHLIGHT_SLOTS.length);
 });
@@ -127,4 +124,26 @@ test('the custom picker defaults to exactly the colour palette', () => {
   const custom = highlightSlotStyles({ mode: 'custom', custom: DEFAULT_CUSTOM_COLORS, ...LIGHT });
   const builtin = highlightSlotStyles({ mode: 'color', ...LIGHT });
   assert.deepEqual(custom, builtin);
+});
+
+test('swatches stay tellable apart in every mode', () => {
+  // The menu chip, sidebar dot and filter pill all render from this. They used
+  // to be a fixed hue palette, which meant invert mode offered four identical
+  // swatches for four visibly different marks.
+  for (const mode of ['color', 'invert'] as const) {
+    for (const theme of [LIGHT, DARK]) {
+      const styles = highlightSlotStyles({ mode, ...theme });
+      const swatches = HIGHLIGHT_SLOTS.map((s) => slotSwatchStyle(styles[s]));
+      assert.equal(
+        new Set(swatches).size,
+        4,
+        `${mode} on ${theme.backgroundColor}: ${swatches.join(' | ')}`
+      );
+    }
+  }
+});
+
+test('swatches follow custom colours', () => {
+  const styles = highlightSlotStyles({ mode: 'custom', custom: ['#ff0000'], ...LIGHT });
+  assert.match(slotSwatchStyle(styles['1']), /rgba\(255, 0, 0,/);
 });

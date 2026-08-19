@@ -15,6 +15,7 @@
     customThemes$,
     highlightCustomColors$,
     highlightPalette$,
+    highlightSlotStyles$,
     pendingLaunchFiles$,
     syncEnabled$,
     syncToken$,
@@ -79,6 +80,7 @@
       backgroundColor: theme.backgroundColor,
       darkPage
     });
+    highlightSlotStyles$.next(slotStyles);
     for (const [slot, style] of Object.entries(slotStyles)) {
       s.setProperty(`--hl-${slot}-rgb`, style.rgb);
       s.setProperty(`--hl-${slot}-alpha`, style.alpha);

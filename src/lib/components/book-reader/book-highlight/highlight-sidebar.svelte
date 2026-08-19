@@ -7,7 +7,8 @@
   import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
   import type { Section } from '$lib/data/database/books-db/versions/books-db';
   import { clickOutside } from '$lib/functions/use-click-outside';
-  import { HIGHLIGHT_SLOT_DOT as colorDot, normalizeHighlightSlot } from '$lib/data/highlight-color';
+  import { normalizeHighlightSlot, slotSwatchStyle } from '$lib/data/highlight-color';
+  import { highlightSlotStyles$ } from '$lib/data/store';
   import { t } from '$lib/i18n';
 
   export let highlights: BooksDbHighlight[] = [];
@@ -92,7 +93,7 @@
             <div class="flex items-start gap-2">
               <span
                 class="mt-1 inline-block h-3 w-3 flex-shrink-0 rounded-full"
-                style="background:{colorDot[normalizeHighlightSlot(hl.color)]}"
+                style={slotSwatchStyle($highlightSlotStyles$[normalizeHighlightSlot(hl.color)])}
               />
               <div class="min-w-0 flex-1">
                 <p class="line-clamp-2 break-all">{hl.text}</p>

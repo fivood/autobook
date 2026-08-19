@@ -7,9 +7,9 @@
 import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
 import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
 import { getDate, getDateString } from '$lib/functions/statistic-util';
-import { HIGHLIGHT_SLOTS, HIGHLIGHT_SLOT_DOT } from '$lib/data/highlight-color';
+import { HIGHLIGHT_SLOTS } from '$lib/data/highlight-color';
 
-export { HIGHLIGHT_SLOTS as highlightSlots, HIGHLIGHT_SLOT_DOT as highlightSlotSwatch };
+export { HIGHLIGHT_SLOTS as highlightSlots };
 
 /** Slots have no fixed colour any more, so the label is just the position. */
 export const highlightSlotLabel = (slot: HighlightSlot) => `高亮 ${slot}`;

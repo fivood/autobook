@@ -6,36 +6,14 @@ import { parseColor } from './format-color.ts';
 /** The 4 highlight slots, in a stable display order. */
 export const HIGHLIGHT_SLOTS: HighlightSlot[] = ['1', '2', '3', '4'];
 
-/** Single source of truth for the raw RGB tuples. Everything themed on
- *  highlight slot (in-page mark background, sidebar dot, context-menu
- *  chip) derives from these — pick your own alpha per surface. */
+/** The built-in hue palette. Only the `color` mode uses these directly; every
+ *  surface reads the resolved styles instead (see `highlightSlotStyles`). */
 export const HIGHLIGHT_SLOT_RGB: Record<HighlightSlot, readonly [number, number, number]> = {
   '1': [255, 235, 59],
   '2': [100, 181, 246],
   '3': [129, 199, 132],
   '4': [244, 143, 177]
 };
-
-const rgba = (rgb: readonly [number, number, number], a: number) =>
-  `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
-
-/** Per-slot alpha. Slot 1 is the brightest swatch so it needs the least
- *  help; the rest carry a touch more to read at the same weight. */
-const CHIP_ALPHA: Record<HighlightSlot, number> = { '1': 0.6, '2': 0.5, '3': 0.5, '4': 0.5 };
-const DOT_ALPHA: Record<HighlightSlot, number> = { '1': 0.8, '2': 0.7, '3': 0.7, '4': 0.7 };
-
-const withAlpha = (alpha: Record<HighlightSlot, number>) =>
-  Object.fromEntries(HIGHLIGHT_SLOTS.map((s) => [s, rgba(HIGHLIGHT_SLOT_RGB[s], alpha[s])])) as Record<
-    HighlightSlot,
-    string
-  >;
-
-/** Context-menu color chip — pops slightly stronger than the mark so
- *  the picker reads as active choices, not selected text. */
-export const HIGHLIGHT_SLOT_CHIP = withAlpha(CHIP_ALPHA);
-
-/** Sidebar / notebook / statistics dot — highest alpha so it reads at 12–16px. */
-export const HIGHLIGHT_SLOT_DOT = withAlpha(DOT_ALPHA);
 
 /**
  * Slot ids as they were spelled before db v13.
@@ -171,3 +149,24 @@ export const DEFAULT_CUSTOM_COLORS = HIGHLIGHT_SLOTS.map((slot) => {
   const [r, g, b] = HIGHLIGHT_SLOT_RGB[slot];
   return `#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
 });
+
+/**
+ * Inline style for a slot swatch — menu chip, sidebar dot, notebook filter pill.
+ *
+ * A miniature of the mark itself rather than a fixed colour, so the swatch keeps
+ * telling the truth when the palette is not hue-based: under `invert` all four
+ * slots share one colour and are told apart by fill and ring exactly as they are
+ * in the text.
+ *
+ * ponytail: the ring caps at 2px because the smallest consumers are 8-12px dots,
+ * where a 3px dotted ring stops reading as dotted. If the slots ever need to be
+ * unambiguous at that size, put the slot number on the swatch instead of
+ * encoding the treatment.
+ */
+export function slotSwatchStyle(style: HighlightSlotStyle): string {
+  const ring = style.underlineWidth === '0' ? '1px' : `min(2px, ${style.underlineWidth})`;
+  return [
+    `background: rgba(${style.rgb}, ${style.alpha})`,
+    `border: ${ring} ${style.underlineStyle} rgb(${style.rgb})`
+  ].join(';');
+}

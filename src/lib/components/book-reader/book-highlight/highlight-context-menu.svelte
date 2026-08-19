@@ -1,7 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
-  import { HIGHLIGHT_SLOTS, HIGHLIGHT_SLOT_CHIP } from '$lib/data/highlight-color';
+  import { HIGHLIGHT_SLOTS, slotSwatchStyle } from '$lib/data/highlight-color';
+  import { highlightSlotStyles$ } from '$lib/data/store';
   import { t } from '$lib/i18n';
 
   export let x = 0;
@@ -19,9 +20,9 @@
     close: void;
   }>();
 
-  const colors = HIGHLIGHT_SLOTS.map((id) => ({
+  $: colors = HIGHLIGHT_SLOTS.map((id) => ({
     id,
-    bg: HIGHLIGHT_SLOT_CHIP[id],
+    swatch: slotSwatchStyle($highlightSlotStyles$[id]),
     label: id
   }));
 
@@ -50,7 +51,7 @@
         <button
           type="button"
           class="h-7 w-7 rounded-full border-2 border-transparent hover:border-current/60 transition-colors"
-          style="background:{c.bg}"
+          style={c.swatch}
           title={$t('highlight.slot.tooltip', { label: c.label })}
           on:click={() => handleColor(c.id)}
         />
@@ -73,7 +74,7 @@
         <button
           type="button"
           class="h-7 w-7 rounded-full border-2 border-transparent hover:border-current/60 transition-colors"
-          style="background:{c.bg}"
+          style={c.swatch}
           title={$t('highlight.recolor.tooltip', { label: c.label })}
           on:click={() => handleColor(c.id)}
         />

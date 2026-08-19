@@ -41,8 +41,11 @@ import {
 import { writableSubject } from '$lib/functions/svelte/store';
 import {
   DEFAULT_CUSTOM_COLORS,
-  type HighlightPaletteMode
+  highlightSlotStyles,
+  type HighlightPaletteMode,
+  type HighlightSlotStyle
 } from '$lib/data/highlight-color';
+import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
 import { map } from 'rxjs';
 import { BookReaderAvailableKeybind, type BookReaderKeybindMap } from './book-reader-keybind';
 import { DatabaseService } from './database/books-db/database.service';
@@ -72,6 +75,13 @@ export const obsidianVaultPath$ = writableStringLocalStorageSubject()('obsidianV
 export const highlightPalette$ = writableStringLocalStorageSubject<HighlightPaletteMode>()(
   'highlightPalette',
   'color'
+);
+/** Resolved per-slot styles for the active theme + palette. Published by
+ *  +layout.svelte, which is the only place that resolves a theme; every swatch
+ *  (menu chip, sidebar dot, filter pill, statistics bar) reads it so they can
+ *  never drift from what the text actually looks like. */
+export const highlightSlotStyles$ = writableSubject<Record<HighlightSlot, HighlightSlotStyle>>(
+  highlightSlotStyles({ mode: 'color', darkPage: false })
 );
 /** Comma-separated hex, slot order. Only read when the palette is 'custom'. */
 export const highlightCustomColors$ = writableStringLocalStorageSubject()(

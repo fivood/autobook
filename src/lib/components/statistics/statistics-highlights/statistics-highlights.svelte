@@ -4,11 +4,10 @@
   import {
     aggregateHighlightStats,
     highlightSlotLabel,
-    highlightSlotSwatch,
     highlightSlots,
     type HighlightStatsSummary
   } from '$lib/functions/highlight-stats';
-  import { database, startDayHoursForTracker$ } from '$lib/data/store';
+  import { database, highlightSlotStyles$, startDayHoursForTracker$ } from '$lib/data/store';
   import Fa from 'svelte-fa';
   import { onMount } from 'svelte';
 
@@ -89,7 +88,7 @@
             <div class="flex-1 h-3 rounded bg-current/15 overflow-hidden">
               <div
                 class="h-full rounded"
-                style="width:{(count / colorMax) * 100}%;background:{highlightSlotSwatch[color]}"
+                style="width:{(count / colorMax) * 100}%;background:rgb({$highlightSlotStyles$[color].rgb})"
               ></div>
             </div>
             <div class="w-24 text-right tabular-nums">{count} · {pct}%</div>
