@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "AutoBook",
-  "version": "1.34.0",
+  "version": "1.34.1",
   "identifier": "io.github.fukki.ebookreader",
   "build": {
     "frontendDist": "../build",
