@@ -286,11 +286,38 @@ option {
    `$lib/data/highlight-color.ts` (single source of truth) — layout mirrors
    them to `--hl-*-rgb` on :root at mount. Alpha is per-surface, see
    HIGHLIGHT_COLOR_MARK / _CHIP / _DOT there. */
-mark.hl-yellow { background: rgba(var(--hl-yellow-rgb, 255, 235, 59), 0.5); }
-mark.hl-blue { background: rgba(var(--hl-blue-rgb, 100, 181, 246), 0.5); }
-mark.hl-green { background: rgba(var(--hl-green-rgb, 129, 199, 132), 0.5); }
-mark.hl-pink { background: rgba(var(--hl-pink-rgb, 244, 143, 177), 0.5); }
-mark[data-hl-id] { cursor: pointer; border-radius: 2px; }
+/* Wash strength is per-theme, set on :root by +layout.svelte.
+   A bright wash under *light* body text is the problem: on the dark themes a
+   0.5 yellow drops text contrast from 7.2:1 to 1.6:1 — highlighting a
+   sentence made it markedly harder to read than leaving it alone. Dark themes
+   therefore get a faint wash (measured: 0.12 keeps every colour above 4.5:1)
+   and lean on the underline below to stay identifiable, while light themes
+   keep the solid 0.5 wash that already reads well. */
+mark.hl-yellow {
+  background: rgba(var(--hl-yellow-rgb, 255, 235, 59), var(--hl-wash-alpha, 0.5));
+  border-bottom-color: rgb(var(--hl-yellow-rgb, 255, 235, 59));
+}
+mark.hl-blue {
+  background: rgba(var(--hl-blue-rgb, 100, 181, 246), var(--hl-wash-alpha, 0.5));
+  border-bottom-color: rgb(var(--hl-blue-rgb, 100, 181, 246));
+}
+mark.hl-green {
+  background: rgba(var(--hl-green-rgb, 129, 199, 132), var(--hl-wash-alpha, 0.5));
+  border-bottom-color: rgb(var(--hl-green-rgb, 129, 199, 132));
+}
+mark.hl-pink {
+  background: rgba(var(--hl-pink-rgb, 244, 143, 177), var(--hl-wash-alpha, 0.5));
+  border-bottom-color: rgb(var(--hl-pink-rgb, 244, 143, 177));
+}
+
+mark[data-hl-id] {
+  cursor: pointer;
+  border-radius: 2px;
+  /* Carries the colour at full strength without sitting behind the glyphs, so
+     it costs nothing in contrast. Width is 0 on light themes, where the wash
+     alone is already unambiguous. */
+  border-bottom: var(--hl-underline-width, 0) solid transparent;
+}
 
 ::selection {
   background-color: var(--selection-background, #5f7e7b);

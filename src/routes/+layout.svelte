@@ -26,6 +26,7 @@
   import {
     FORMAT_HUE,
     FORMAT_SATURATION_SCALE,
+    FORMAT_STOPS_DARK,
     stopsForBackground
   } from '$lib/data/format-color';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
@@ -69,6 +70,13 @@
     for (const [name, [r, g, b]] of Object.entries(HIGHLIGHT_COLOR_RGB)) {
       s.setProperty(`--hl-${name}-rgb`, `${r}, ${g}, ${b}`);
     }
+
+    // Highlight wash strength, decided by whether body text on this theme is
+    // light or dark. Reuses the same luminance split the format colours use.
+    // See the comment on `mark.hl-*` in app.scss for the measurements.
+    const darkPage = stopsForBackground(theme.backgroundColor) === FORMAT_STOPS_DARK;
+    s.setProperty('--hl-wash-alpha', darkPage ? '0.12' : '0.5');
+    s.setProperty('--hl-underline-width', darkPage ? '2px' : '0');
 
     // Book-format identity colors. The hue carries "which format is this";
     // the lightness/saturation stops come from whether this theme is light or
