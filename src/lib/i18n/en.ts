@@ -632,6 +632,7 @@ export default {
   'folders.section': 'Library',
   'folders.groupHeader': 'Folders',
   'folders.groupLocal': 'From folders',
+  'bookCard.memoLabel': 'Note',
   'vaultSync.label': 'Notes folder sync',
   'vaultSync.choose': 'Choose folder',
   'vaultSync.change': 'Change folder',

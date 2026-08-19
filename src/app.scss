@@ -319,6 +319,22 @@ mark[data-hl-id] {
   border-bottom: var(--hl-underline-width, 0) solid transparent;
 }
 
+/* An annotated passage used to look identical to a bare one, so notes were
+   invisible until you opened the sidebar. A small raised dot after the mark
+   says "there is a memo here"; hovering shows it. Kept as ::after rather than
+   an extra element so the highlight stays a single node for offset math. */
+mark[data-hl-memo]::after {
+  content: '';
+  display: inline-block;
+  width: 0.34em;
+  height: 0.34em;
+  margin-left: 0.15em;
+  vertical-align: super;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+
 ::selection {
   background-color: var(--selection-background, #5f7e7b);
   color: var(--selection-foreground, #f0efe6);

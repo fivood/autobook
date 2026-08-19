@@ -129,6 +129,7 @@ export default {
   'folders.section': '书库',
   'folders.groupHeader': '分类',
   'folders.groupLocal': '本地引入',
+  'bookCard.memoLabel': '备注',
   'vaultSync.label': '笔记目录同步',
   'vaultSync.choose': '选择目录',
   'vaultSync.change': '更换目录',

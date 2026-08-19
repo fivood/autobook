@@ -637,6 +637,7 @@ export default {
   'folders.section': 'ライブラリ',
   'folders.groupHeader': 'フォルダ',
   'folders.groupLocal': '取り込み元',
+  'bookCard.memoLabel': 'メモ',
   'vaultSync.label': 'ノートフォルダ同期',
   'vaultSync.choose': 'フォルダを選択',
   'vaultSync.change': 'フォルダを変更',

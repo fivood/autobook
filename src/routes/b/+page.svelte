@@ -155,6 +155,7 @@
   import { hasIndexableText, isComicBook } from '$lib/data/ai/has-indexable-text';
   import HighlightContextMenu from '$lib/components/book-reader/book-highlight/highlight-context-menu.svelte';
   import HighlightMemoDialog from '$lib/components/book-reader/book-highlight/highlight-memo-dialog.svelte';
+  import HighlightMemoCard from '$lib/components/book-reader/book-highlight/highlight-memo-card.svelte';
   import HighlightSidebar from '$lib/components/book-reader/book-highlight/highlight-sidebar.svelte';
   // Lazy-load the AI drawer module on first open. ~300 lines of Svelte
   // template + downstream markdown/highlight deps; users who never open
@@ -1125,10 +1126,42 @@
     handleBookContentClick(ev);
   }
 
+  // --- Memo hover card -------------------------------------------------
+  let memoCardAnchor: { left: number; right: number; top: number; bottom: number } | undefined;
+  let memoCardText = '';
+  let memoCardTags: string[] = [];
+
+  /** Only marks carrying `data-hl-memo` are worth a store lookup. */
+  function handleGlobalMouseOver(ev: MouseEvent) {
+    const target = ev.target as HTMLElement | null;
+    const mark = target?.closest?.('mark[data-hl-memo]') as HTMLElement | null;
+    if (!mark || !mark.closest('.book-content')) {
+      if (memoCardAnchor) memoCardAnchor = undefined;
+      return;
+    }
+    const id = getHighlightIdFromElement(mark);
+    if (id === undefined) return;
+    const hl = $hlStore$.find((h) => h.id === id);
+    if (!hl?.memo) return;
+    const r = mark.getBoundingClientRect();
+    memoCardText = hl.memo;
+    memoCardTags = hl.tags || [];
+    memoCardAnchor = { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+  }
+
   onMount(() => {
     document.addEventListener('ttu-action', handleAction, false);
     document.addEventListener('contextmenu', handleGlobalContextMenu);
     document.addEventListener('click', handleGlobalClick);
+    document.addEventListener('mouseover', handleGlobalMouseOver);
+    // The card is anchored in viewport coordinates, so any scroll invalidates
+    // it. Hiding is cheaper and less jumpy than repositioning mid-scroll.
+    const hide = () => (memoCardAnchor = undefined);
+    window.addEventListener('scroll', hide, true);
+    return () => {
+      document.removeEventListener('mouseover', handleGlobalMouseOver);
+      window.removeEventListener('scroll', hide, true);
+    };
   });
 
   // Tray menu / global shortcut request TTS toggle. Works in both view modes
@@ -2760,6 +2793,8 @@
     on:cancel={() => { hlMemoDialogOpen = false; hlEditTarget = undefined; skipKeyDownListener$.next(false); }}
   />
 {/if}
+
+<HighlightMemoCard anchor={memoCardAnchor} memo={memoCardText} tags={memoCardTags} />
 
 {#if showReaderImageGallery && BookReaderImageGallery}
   <svelte:component

@@ -69,6 +69,7 @@ function applyHighlightsToDOM(
     hlEnd: number;
     hlId: number;
     color: string;
+    hasMemo: boolean;
   }
 
   const ops: WrapOp[] = [];
@@ -84,7 +85,7 @@ function applyHighlightsToDOM(
       if (hl.endOffset > offset) {
         const hlStart = Math.max(0, hl.startOffset - offset);
         const hlEnd = Math.min(len, hl.endOffset - offset);
-        ops.push({ node, hlStart, hlEnd, hlId: hl.id, color: hl.color });
+        ops.push({ node, hlStart, hlEnd, hlId: hl.id, color: hl.color, hasMemo: !!hl.memo?.trim() });
       }
       if (hl.endOffset <= nodeEnd) {
         hlIdx++;
@@ -98,7 +99,7 @@ function applyHighlightsToDOM(
   }
 
   for (let i = ops.length - 1; i >= 0; i--) {
-    const { node, hlStart, hlEnd, hlId, color } = ops[i];
+    const { node, hlStart, hlEnd, hlId, color, hasMemo } = ops[i];
     const cls = HL_CLASS_MAP[color] || HL_CLASS_MAP.yellow;
 
     let target: Text = node;
@@ -112,6 +113,10 @@ function applyHighlightsToDOM(
     const mark = document.createElement('mark');
     mark.className = cls;
     mark.setAttribute(HL_ATTR, String(hlId));
+    // Lets the stylesheet mark annotated passages and the reader decide
+    // whether hovering should surface a memo card, without re-querying the
+    // store for every mouse move.
+    if (hasMemo) mark.setAttribute('data-hl-memo', '');
     target.parentNode!.insertBefore(mark, target);
     mark.appendChild(target);
   }
