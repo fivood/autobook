@@ -499,7 +499,7 @@ export default {
   'notebook.pickVaultTitle': 'Pick Obsidian vault directory',
   'notebook.vaultDesktopOnly': 'Vault sync only works on desktop',
   'notebook.pickVaultFirst': 'Pick an Obsidian vault directory first',
-  'notebook.syncDone': 'Synced {n} entries to {dir}/',
+  'notebook.syncDone': 'Synced {n} entries to {dir}/ ({skipped} unchanged, {removed} stale files removed)',
   'notebook.syncFailed': 'Sync failed: {err}',
   'notebook.sidebar.views': 'Views',
   'notebook.sidebar.all': 'All',

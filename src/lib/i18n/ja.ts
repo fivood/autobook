@@ -504,7 +504,7 @@ export default {
   'notebook.pickVaultTitle': 'Obsidian vault ディレクトリを選択',
   'notebook.vaultDesktopOnly': 'vault 同期はデスクトップ版のみ',
   'notebook.pickVaultFirst': '先に Obsidian vault ディレクトリを選択してください',
-  'notebook.syncDone': '{n} 件を {dir}/ に同期しました',
+  'notebook.syncDone': '{n} 件を {dir}/ に同期しました（{skipped} 件は変更なし、{removed} 件の旧ファイルを削除）',
   'notebook.syncFailed': '同期失敗：{err}',
   'notebook.sidebar.views': 'ビュー',
   'notebook.sidebar.all': 'すべて',

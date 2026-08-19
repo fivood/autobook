@@ -35,7 +35,7 @@
   import { isTauri } from '$lib/data/env';
   import { t, tImmediate } from '$lib/i18n';
   import { obsidianVaultPath$ } from '$lib/data/store';
-  import { buildSyncPlan } from '$lib/functions/notebook/obsidian-sync';
+  import { buildSyncPlan, staleVaultFiles } from '$lib/functions/notebook/obsidian-sync';
   import { pickUserDir } from '$lib/functions/pick-user-dir';
   import {
     STANDALONE_GROUP_TITLE,
@@ -401,24 +401,63 @@
     try {
       const folderNameById = new Map(folders.map((f) => [f.id, f.name]));
       const plan = buildSyncPlan(highlights, folderNameById);
-      const { writeTextFile, mkdir, exists } = await import('@tauri-apps/plugin-fs');
+      const { writeTextFile, readTextFile, readDir, remove, mkdir, exists } = await import(
+        '@tauri-apps/plugin-fs'
+      );
       const rootPath = `${vault}/${plan.rootDirName}`;
       if (!(await exists(rootPath))) {
         await mkdir(rootPath, { recursive: true });
       }
-      const dirsCreated = new Set<string>();
+
+      // One listing per directory, reused for both the unchanged-file skip and
+      // the orphan cleanup below.
+      const byDir = new Map<string, typeof plan.files>();
       for (const f of plan.files) {
-        const fullPath = `${rootPath}/${f.relativePath}`;
-        const dirPath = fullPath.slice(0, fullPath.lastIndexOf('/'));
-        if (!dirsCreated.has(dirPath)) {
-          if (!(await exists(dirPath))) {
-            await mkdir(dirPath, { recursive: true });
-          }
-          dirsCreated.add(dirPath);
-        }
-        await writeTextFile(fullPath, f.content);
+        const d = f.relativePath.slice(0, f.relativePath.lastIndexOf('/'));
+        if (!byDir.has(d)) byDir.set(d, []);
+        byDir.get(d)!.push(f);
       }
-      syncMessage = tImmediate('notebook.syncDone', { n: plan.files.length, dir: plan.rootDirName });
+
+      let written = 0;
+      let removed = 0;
+      for (const [dir, files] of byDir) {
+        const dirPath = `${rootPath}/${dir}`;
+        let existingNames: string[] = [];
+        if (await exists(dirPath)) {
+          existingNames = (await readDir(dirPath)).filter((e) => e.isFile).map((e) => e.name);
+        } else {
+          await mkdir(dirPath, { recursive: true });
+        }
+        const existing = new Set(existingNames);
+
+        for (const f of files) {
+          const name = f.relativePath.slice(f.relativePath.lastIndexOf('/') + 1);
+          const fullPath = `${dirPath}/${name}`;
+          // Rewriting an identical file would bump its mtime for nothing, which
+          // shows up as a phantom change in Obsidian's own sync and in backups.
+          if (existing.has(name)) {
+            const current = await readTextFile(fullPath).catch(() => null);
+            if (current === f.content) continue;
+          }
+          await writeTextFile(fullPath, f.content);
+          written += 1;
+        }
+
+        // The filename embeds a slug of the highlight text, so editing a
+        // highlight's range renames its file; without this the old name stays
+        // behind forever.
+        for (const stale of staleVaultFiles(plan.files, existingNames, dir)) {
+          await remove(`${dirPath}/${stale}`).catch(() => undefined);
+          removed += 1;
+        }
+      }
+
+      syncMessage = tImmediate('notebook.syncDone', {
+        n: written,
+        dir: plan.rootDirName,
+        skipped: plan.files.length - written,
+        removed
+      });
     } catch (err: any) {
       syncMessage = tImmediate('notebook.syncFailed', { err: err?.message || err });
     } finally {

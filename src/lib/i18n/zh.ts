@@ -615,7 +615,7 @@ export default {
   'notebook.pickVaultTitle': '选择 Obsidian vault 目录',
   'notebook.vaultDesktopOnly': 'vault 同步只在桌面端可用',
   'notebook.pickVaultFirst': '请先选择 Obsidian vault 目录',
-  'notebook.syncDone': '已同步 {n} 条到 {dir}/',
+  'notebook.syncDone': '已同步 {n} 条到 {dir}/（{skipped} 条无变化跳过，清理 {removed} 个旧文件）',
   'notebook.syncFailed': '同步失败：{err}',
   'notebook.sidebar.views': '视图',
   'notebook.sidebar.all': '全部',

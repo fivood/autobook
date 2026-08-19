@@ -92,6 +92,44 @@ function highlightToMarkdown(
 export interface VaultSyncFile {
   relativePath: string;
   content: string;
+  /** Highlight this file represents. Carried so the writer can spot the same
+   * note under an older filename — the name embeds a slug of the text, so
+   * editing a highlight's range renames its file and would otherwise leave
+   * the previous one behind as an orphan. */
+  id: number;
+}
+
+/**
+ * Files under `dir` that belong to a note we just wrote under a *different*
+ * name. Only same-id leftovers are reported: a file whose id is absent from
+ * the plan belongs to a highlight that no longer exists locally, and deleting
+ * those is a separate decision (this export has never mirrored deletions).
+ */
+export function staleVaultFiles(
+  planned: VaultSyncFile[],
+  existingNames: string[],
+  dir: string
+): string[] {
+  const keepByDir = new Map<string, Map<number, string>>();
+  for (const f of planned) {
+    const slash = f.relativePath.lastIndexOf('/');
+    const d = slash < 0 ? '' : f.relativePath.slice(0, slash);
+    const name = f.relativePath.slice(slash + 1);
+    if (!keepByDir.has(d)) keepByDir.set(d, new Map());
+    keepByDir.get(d)!.set(f.id, name);
+  }
+  const keep = keepByDir.get(dir);
+  if (!keep) return [];
+
+  const stale: string[] = [];
+  for (const name of existingNames) {
+    const m = /^(\d+)-/.exec(name);
+    if (!m) continue;
+    const id = Number(m[1]);
+    const current = keep.get(id);
+    if (current && current !== name) stale.push(name);
+  }
+  return stale;
 }
 
 export interface VaultSyncPlan {
@@ -111,7 +149,8 @@ export function buildSyncPlan(
     const file = highlightFilename(h);
     files.push({
       relativePath: `${dir}/${file}`,
-      content: highlightToMarkdown(h, byId, folderName)
+      content: highlightToMarkdown(h, byId, folderName),
+      id: h.id
     });
   }
   return { rootDirName: ROOT_DIR_NAME, files };
