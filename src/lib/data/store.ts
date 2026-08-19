@@ -39,6 +39,10 @@ import {
   ReplicationSaveBehavior
 } from '$lib/functions/replication/replication-options';
 import { writableSubject } from '$lib/functions/svelte/store';
+import {
+  DEFAULT_CUSTOM_COLORS,
+  type HighlightPaletteMode
+} from '$lib/data/highlight-color';
 import { map } from 'rxjs';
 import { BookReaderAvailableKeybind, type BookReaderKeybindMap } from './book-reader-keybind';
 import { DatabaseService } from './database/books-db/database.service';
@@ -63,6 +67,17 @@ import type { OcrModelProfile } from '$lib/functions/file-loaders/pdf/ocr-option
 
 export const theme$ = writableStringLocalStorageSubject()('theme', 'sage-green-theme');
 export const obsidianVaultPath$ = writableStringLocalStorageSubject()('obsidianVaultPath', '');
+/** How the four highlight slots are painted. `invert` drops hue entirely so
+ *  the slots stay distinguishable to colour-blind readers. */
+export const highlightPalette$ = writableStringLocalStorageSubject<HighlightPaletteMode>()(
+  'highlightPalette',
+  'color'
+);
+/** Comma-separated hex, slot order. Only read when the palette is 'custom'. */
+export const highlightCustomColors$ = writableStringLocalStorageSubject()(
+  'highlightCustomColors',
+  DEFAULT_CUSTOM_COLORS.join(',')
+);
 export const aiProvider$ = writableStringLocalStorageSubject()('aiProvider', 'anthropic');
 export const aiApiKey$ = writableStringLocalStorageSubject()('aiApiKey', '');
 export const aiBaseUrl$ = writableStringLocalStorageSubject()('aiBaseUrl', '');

@@ -183,7 +183,7 @@
     scrollToHighlight,
     getHighlightIdFromElement
   } from '$lib/components/book-reader/book-highlight/highlight-renderer';
-  import type { BooksDbHighlight, HighlightColor } from '$lib/data/database/books-db/versions/books-db';
+  import type { BooksDbHighlight, HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
   import {
     readerImageGalleryPictures$,
     toggleImageGalleryPictureSpoiler$,
@@ -377,7 +377,7 @@
   let dictPopupSentence = '';
   let dictPopupX = 0;
   let dictPopupY = 0;
-  let hlPendingColor: HighlightColor = 'yellow';
+  let hlPendingColor: HighlightSlot = '1';
   let hlPendingRange: Range | undefined;
   let syncedResolver: () => void;
 
@@ -1771,7 +1771,7 @@
     hlMenuVisible = true;
   }
 
-  async function handleHlColor(color: HighlightColor) {
+  async function handleHlColor(color: HighlightSlot) {
     const container = getBookContentEl();
     if (!container) return;
 
@@ -1795,7 +1795,7 @@
       hlMemoSelectedText = hlPendingRange.toString();
       hlMemoText = '';
       hlMemoTags = [];
-      hlPendingColor = 'yellow';
+      hlPendingColor = '1';
       hlMemoDialogOpen = true;
       skipKeyDownListener$.next(true);
     }

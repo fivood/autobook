@@ -282,47 +282,38 @@ option {
   overflow-clip-margin: unset;
 }
 
-/* Highlight text-mark backgrounds. RGB tuples come from
-   `$lib/data/highlight-color.ts` (single source of truth) — layout mirrors
-   them to `--hl-*-rgb` on :root at mount. Alpha is per-surface, see
-   HIGHLIGHT_COLOR_MARK / _CHIP / _DOT there. */
-/* Wash strength is per-theme, set on :root by +layout.svelte.
-   A bright wash under *light* body text is the problem: on the dark themes a
-   0.5 yellow drops text contrast from 7.2:1 to 1.6:1 — highlighting a
-   sentence made it markedly harder to read than leaving it alone. Dark themes
-   therefore get a faint wash (measured: 0.12 keeps every colour above 4.5:1)
-   and lean on the underline below to stay identifiable, while light themes
-   keep the solid 0.5 wash that already reads well. */
-mark.hl-yellow {
-  background: rgba(var(--hl-yellow-rgb, 255, 235, 59), var(--hl-wash-alpha, 0.5));
-  border-bottom-color: rgb(var(--hl-yellow-rgb, 255, 235, 59));
-}
-mark.hl-blue {
-  background: rgba(var(--hl-blue-rgb, 100, 181, 246), var(--hl-wash-alpha, 0.5));
-  border-bottom-color: rgb(var(--hl-blue-rgb, 100, 181, 246));
-}
-mark.hl-green {
-  background: rgba(var(--hl-green-rgb, 129, 199, 132), var(--hl-wash-alpha, 0.5));
-  border-bottom-color: rgb(var(--hl-green-rgb, 129, 199, 132));
-}
-mark.hl-pink {
-  background: rgba(var(--hl-pink-rgb, 244, 143, 177), var(--hl-wash-alpha, 0.5));
-  border-bottom-color: rgb(var(--hl-pink-rgb, 244, 143, 177));
-}
+/* Highlight text-mark treatment. Every value here is a per-slot custom
+   property mirrored onto :root by +layout.svelte from
+   `highlightSlotStyles()` — the palette is user-configurable, so nothing
+   about how a slot looks may be decided in this file.
 
+   The fallbacks are the historic hue palette, used only for the frame before
+   the layout mounts.
+
+   Note the ordering: `mark[data-hl-id]` below has the same specificity as
+   `mark.hl-N` (element + one selector each), so a `border-bottom` *shorthand*
+   there would silently reset the colour set here. It previously did, which is
+   why the dark themes rendered a 2px transparent underline — i.e. none at all.
+   Longhands only, and the shared rule stays free of border properties. */
 mark[data-hl-id] {
   cursor: pointer;
   border-radius: 2px;
-  /* Carries the colour at full strength without sitting behind the glyphs, so
-     it costs nothing in contrast. Width is 0 on light themes, where the wash
-     alone is already unambiguous. */
-  border-bottom: var(--hl-underline-width, 0) solid transparent;
 }
 
-/* An annotated passage used to look identical to a bare one, so notes were
-   invisible until you opened the sidebar. A small raised dot after the mark
-   says "there is a memo here"; hovering shows it. Kept as ::after rather than
-   an extra element so the highlight stays a single node for offset math. */
+@each $slot, $fallback in (1: (255, 235, 59), 2: (100, 181, 246), 3: (129, 199, 132), 4: (244, 143, 177)) {
+  mark.hl-#{$slot} {
+    background: rgba(var(--hl-#{$slot}-rgb, #{$fallback}), var(--hl-#{$slot}-alpha, 0.5));
+    /* Carries the slot at full strength without sitting behind the glyphs, so
+       it costs nothing in contrast. */
+    border-bottom-width: var(--hl-#{$slot}-bw, 0);
+    border-bottom-style: var(--hl-#{$slot}-bs, solid);
+    border-bottom-color: rgb(var(--hl-#{$slot}-rgb, #{$fallback}));
+    /* `inherit` for every slot except an opaque fill, which needs its text
+       flipped to the page colour to stay readable. */
+    color: var(--hl-#{$slot}-ink, inherit);
+  }
+}
+
 mark[data-hl-memo]::after {
   content: '';
   display: inline-block;

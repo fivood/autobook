@@ -1,17 +1,17 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, tick } from 'svelte';
-  import type { HighlightColor } from '$lib/data/database/books-db/versions/books-db';
+  import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
   import { t } from '$lib/i18n';
-  import { HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_DOT as colorDot } from '$lib/data/highlight-color';
+  import { HIGHLIGHT_SLOTS, HIGHLIGHT_SLOT_DOT as colorDot } from '$lib/data/highlight-color';
   import TextSourceEditor from '$lib/components/text-editor/text-source-editor.svelte';
 
   export let mode: 'create' | 'edit' = 'create';
   export let memo = '';
   export let tags: string[] = [];
-  export let color: HighlightColor = 'yellow';
+  export let color: HighlightSlot = '1';
 
   const dispatch = createEventDispatcher<{
-    save: { memo: string; tags: string[]; color: HighlightColor };
+    save: { memo: string; tags: string[]; color: HighlightSlot };
     cancel: void;
   }>();
 
@@ -127,7 +127,7 @@
     <div class="mt-2 flex items-center justify-between text-xs">
       <div class="flex items-center gap-1.5 opacity-70">
         <span>{$t('notebook.editor.color')}</span>
-        {#each HIGHLIGHT_COLORS as c (c)}
+        {#each HIGHLIGHT_SLOTS as c (c)}
           <button
             type="button"
             class="rounded-full p-0.5"

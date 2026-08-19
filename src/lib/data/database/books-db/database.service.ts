@@ -41,6 +41,7 @@ import type { IDBPDatabase } from 'idb';
 import LogReportDialog from '$lib/components/log-report-dialog.svelte';
 import { MergeMode } from '$lib/data/merge-mode';
 import { HighlightRepository } from './highlight-repository';
+import { normalizeHighlightSlot } from '$lib/data/highlight-color';
 import MessageDialog from '$lib/components/message-dialog.svelte';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { dialogManager } from '$lib/data/dialog-manager';
@@ -500,7 +501,9 @@ export class DatabaseService {
       const merged: BooksDbHighlight = {
         ...raw,
         bookTitle: title,
-        dataId: resolvedDataId
+        dataId: resolvedDataId,
+        // Backups written before db v13 spell the slot as a colour name.
+        color: normalizeHighlightSlot(raw.color)
       };
       if (prior) {
         if (

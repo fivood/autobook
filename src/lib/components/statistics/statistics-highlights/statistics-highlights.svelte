@@ -3,9 +3,9 @@
   import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
   import {
     aggregateHighlightStats,
-    highlightColorLabels,
-    highlightColorSwatch,
-    highlightColors,
+    highlightSlotLabel,
+    highlightSlotSwatch,
+    highlightSlots,
     type HighlightStatsSummary
   } from '$lib/functions/highlight-stats';
   import { database, startDayHoursForTracker$ } from '$lib/data/store';
@@ -39,7 +39,7 @@
   }
 
   $: colorMax = summary
-    ? Math.max(1, ...highlightColors.map((c) => summary!.colorBreakdown[c]))
+    ? Math.max(1, ...highlightSlots.map((c) => summary!.colorBreakdown[c]))
     : 1;
 
   $: topBooks = summary ? summary.byBook.slice(0, 10) : [];
@@ -79,17 +79,17 @@
     <section class="my-6">
       <h3 class="text-lg mb-2">颜色分布</h3>
       <div class="flex flex-col gap-2">
-        {#each highlightColors as color (color)}
+        {#each highlightSlots as color (color)}
           {@const count = summary.colorBreakdown[color]}
           {@const pct = summary.totalHighlights
             ? Math.round((count / summary.totalHighlights) * 100)
             : 0}
           <div class="flex items-center gap-3 text-sm">
-            <div class="w-14 opacity-70">{highlightColorLabels[color]}</div>
+            <div class="w-14 opacity-70">{highlightSlotLabel(color)}</div>
             <div class="flex-1 h-3 rounded bg-current/15 overflow-hidden">
               <div
                 class="h-full rounded"
-                style="width:{(count / colorMax) * 100}%;background:{highlightColorSwatch[color]}"
+                style="width:{(count / colorMax) * 100}%;background:{highlightSlotSwatch[color]}"
               ></div>
             </div>
             <div class="w-24 text-right tabular-nums">{count} · {pct}%</div>

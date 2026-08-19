@@ -19,6 +19,13 @@
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import SettingsThemeEditor from '$lib/components/settings/settings-theme-editor.svelte';
+  import {
+    DEFAULT_CUSTOM_COLORS,
+    HIGHLIGHT_SLOTS,
+    highlightSlotStyles,
+    type HighlightPaletteMode
+  } from '$lib/data/highlight-color';
+  import { FORMAT_STOPS_DARK, stopsForBackground } from '$lib/data/format-color';
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsCustomTheme from '$lib/components/settings/settings-custom-theme.svelte';
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
@@ -42,6 +49,8 @@
   import { MergeMode } from '$lib/data/merge-mode';
   import {
     customThemes$,
+    highlightCustomColors$,
+    highlightPalette$,
     database,
     fontFamilyGroupOne$,
     fontFamilyGroupTwo$,
@@ -268,6 +277,34 @@
   // stays findable when the UI is currently in a language you can't read —
   // which is exactly the state someone opening this setting is trying to fix.
   $: optionsForLocale = LOCALES.map((loc) => ({ id: loc, text: tImmediate('locale.' + loc) }));
+
+  $: optionsForHighlightPalette = (['color', 'invert', 'custom'] as HighlightPaletteMode[]).map(
+    (id) => ({ id, text: $t(`settings.highlightPalette.${id}`) })
+  );
+
+  // Stored as one comma-separated string so it needs no new storage subject
+  // type; the split is padded because a hand-edited value can be short.
+  $: customSlotColors = HIGHLIGHT_SLOTS.map(
+    (_, i) => $highlightCustomColors$.split(',')[i]?.trim() || DEFAULT_CUSTOM_COLORS[i]
+  );
+
+  function setCustomSlotColor(index: number, value: string) {
+    const next = [...customSlotColors];
+    next[index] = value;
+    $highlightCustomColors$ = next.join(',');
+  }
+
+  /** Preview swatch for one slot, using the same styles the reader will apply. */
+  $: highlightPreview = highlightSlotStyles({
+    mode: $highlightPalette$,
+    custom: customSlotColors,
+    fontColor: previewTheme.fontColor,
+    backgroundColor: previewTheme.backgroundColor,
+    darkPage: stopsForBackground(previewTheme.backgroundColor) === FORMAT_STOPS_DARK
+  });
+
+  let previewTheme: Partial<ThemeOption> = {};
+  $: previewTheme = $customThemes$[selectedTheme] || availableThemesMap.get(selectedTheme) || {};
 
   onDestroy(() => dialogManager.dialogs$.next([]));
 
@@ -1083,6 +1120,50 @@
           {/key}
         {:else}
           <p class="mt-2 text-xs opacity-60">{$t('settings.theme.editHint')}</p>
+        {/if}
+      </SettingsItemGroup>
+    </div>
+
+    <div class="lg:col-span-3">
+      <SettingsItemGroup
+        title={$t('settings.item.highlightPalette')}
+        tooltip={$t('settings.tip.highlightPalette')}
+      >
+        <ButtonToggleGroup
+          options={optionsForHighlightPalette}
+          bind:selectedOptionId={$highlightPalette$}
+        />
+        <div
+          class="mt-3 flex flex-wrap items-center gap-3 rounded-md p-3"
+          style="background:{previewTheme.backgroundColor || 'transparent'};color:{previewTheme.fontColor ||
+            'inherit'}"
+        >
+          {#each HIGHLIGHT_SLOTS as slot (slot)}
+            <span
+              class="rounded-sm px-2 py-1 text-sm"
+              style="background:rgba({highlightPreview[slot].rgb},{highlightPreview[slot].alpha});
+                     border-bottom:{highlightPreview[slot].underlineWidth} {highlightPreview[slot]
+                .underlineStyle} rgb({highlightPreview[slot].rgb});
+                     color:{highlightPreview[slot].ink}"
+            >
+              {$t('settings.highlightPalette.sample', { slot })}
+            </span>
+          {/each}
+        </div>
+        {#if $highlightPalette$ === 'custom'}
+          <div class="mt-3 flex flex-wrap gap-3">
+            {#each HIGHLIGHT_SLOTS as slot, i (slot)}
+              <label class="flex items-center gap-2 text-sm">
+                <span class="opacity-70">{slot}</span>
+                <input
+                  type="color"
+                  class="h-8 w-12 cursor-pointer rounded border-0 bg-transparent p-0"
+                  value={customSlotColors[i]}
+                  on:input={(ev) => setCustomSlotColor(i, ev.currentTarget.value)}
+                />
+              </label>
+            {/each}
+          </div>
         {/if}
       </SettingsItemGroup>
     </div>

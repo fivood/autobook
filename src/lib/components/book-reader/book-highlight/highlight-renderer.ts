@@ -1,12 +1,7 @@
 import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
+import { normalizeHighlightSlot } from '$lib/data/highlight-color';
 
 const HL_ATTR = 'data-hl-id';
-const HL_CLASS_MAP: Record<string, string> = {
-  yellow: 'hl-yellow',
-  blue: 'hl-blue',
-  green: 'hl-green',
-  pink: 'hl-pink'
-};
 
 function textNodesUnder(root: Node): Text[] {
   const result: Text[] = [];
@@ -100,7 +95,7 @@ function applyHighlightsToDOM(
 
   for (let i = ops.length - 1; i >= 0; i--) {
     const { node, hlStart, hlEnd, hlId, color, hasMemo } = ops[i];
-    const cls = HL_CLASS_MAP[color] || HL_CLASS_MAP.yellow;
+    const cls = `hl-${normalizeHighlightSlot(color)}`;
 
     let target: Text = node;
     if (hlEnd < (node.textContent?.length || 0)) {

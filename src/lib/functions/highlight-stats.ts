@@ -5,24 +5,14 @@
  */
 
 import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
-import type { HighlightColor } from '$lib/data/database/books-db/versions/books-db';
+import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
 import { getDate, getDateString } from '$lib/functions/statistic-util';
+import { HIGHLIGHT_SLOTS, HIGHLIGHT_SLOT_DOT } from '$lib/data/highlight-color';
 
-export const highlightColors: HighlightColor[] = ['yellow', 'blue', 'green', 'pink'];
+export { HIGHLIGHT_SLOTS as highlightSlots, HIGHLIGHT_SLOT_DOT as highlightSlotSwatch };
 
-export const highlightColorLabels: Record<HighlightColor, string> = {
-  yellow: '黄色',
-  blue: '蓝色',
-  green: '绿色',
-  pink: '粉色'
-};
-
-export const highlightColorSwatch: Record<HighlightColor, string> = {
-  yellow: 'rgba(255,235,59,0.8)',
-  blue: 'rgba(100,181,246,0.7)',
-  green: 'rgba(129,199,132,0.7)',
-  pink: 'rgba(244,143,177,0.7)'
-};
+/** Slots have no fixed colour any more, so the label is just the position. */
+export const highlightSlotLabel = (slot: HighlightSlot) => `高亮 ${slot}`;
 
 export interface HighlightBookCount {
   title: string;
@@ -41,7 +31,7 @@ export interface HighlightStatsSummary {
   totalNotes: number;
   totalCharacters: number;
   daysWithHighlights: number;
-  colorBreakdown: Record<HighlightColor, number>;
+  colorBreakdown: Record<HighlightSlot, number>;
   byBook: HighlightBookCount[];
   byTag: HighlightTagCount[];
   byMonth: { monthKey: string; count: number }[];
@@ -73,12 +63,7 @@ export function aggregateHighlightStats(
   }
   const rangeEnd = rangeEndDate.getTime();
 
-  const colorBreakdown: Record<HighlightColor, number> = {
-    yellow: 0,
-    blue: 0,
-    green: 0,
-    pink: 0
-  };
+  const colorBreakdown: Record<HighlightSlot, number> = { '1': 0, '2': 0, '3': 0, '4': 0 };
   const byBookMap = new Map<string, HighlightBookCount>();
   const byTagMap = new Map<string, number>();
   const dayKeys = new Set<string>();

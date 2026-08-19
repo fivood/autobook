@@ -9,7 +9,7 @@ import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/book
 import type { HighlightStatsSummary } from '$lib/functions/highlight-stats';
 import type { YearSummary } from '$lib/components/statistics/statistics-year/year-summary';
 import { toTimeString } from '$lib/functions/statistic-util';
-import { highlightColorLabels, highlightColors } from '$lib/functions/highlight-stats';
+import { highlightSlotLabel, highlightSlots } from '$lib/functions/highlight-stats';
 import { UNKNOWN_AUTHOR_KEY } from '$lib/components/statistics/books-summary';
 
 export interface YearReportInput {
@@ -182,12 +182,12 @@ export function buildYearReportMarkdown(input: YearReportInput): string {
 
     if (highlights.totalHighlights > 0) {
       lines.push('### 颜色分布', '');
-      for (const color of highlightColors) {
+      for (const color of highlightSlots) {
         const c = highlights.colorBreakdown[color];
         const pct = highlights.totalHighlights
           ? Math.round((c / highlights.totalHighlights) * 100)
           : 0;
-        lines.push(`- **${highlightColorLabels[color]}** — ${c} · ${pct}%`);
+        lines.push(`- **${highlightSlotLabel(color)}** — ${c} · ${pct}%`);
       }
       lines.push('');
     }

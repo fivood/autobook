@@ -13,6 +13,8 @@
   import { goto } from '$app/navigation';
   import {
     customThemes$,
+    highlightCustomColors$,
+    highlightPalette$,
     pendingLaunchFiles$,
     syncEnabled$,
     syncToken$,
@@ -22,7 +24,7 @@
   } from '$lib/data/store';
   import { startSyncLoop } from '$lib/data/sync/sync-manager';
   import { availableThemes } from '$lib/data/theme-option';
-  import { HIGHLIGHT_COLOR_RGB } from '$lib/data/highlight-color';
+  import { highlightSlotStyles } from '$lib/data/highlight-color';
   import {
     FORMAT_HUE,
     FORMAT_SATURATION_SCALE,
@@ -65,18 +67,25 @@
     setVar('--selection-background', theme.selectionBackgroundColor, '#5f7e7b');
     setVar('--selection-foreground', theme.selectionFontColor, '#f0efe6');
     setVar('--link-color', theme.linkColor, '#2b5a69');
-    // Highlight color RGB tuples — consumed by app.scss `mark.hl-*` so
-    // there's no second place to edit if the palette changes.
-    for (const [name, [r, g, b]] of Object.entries(HIGHLIGHT_COLOR_RGB)) {
-      s.setProperty(`--hl-${name}-rgb`, `${r}, ${g}, ${b}`);
-    }
-
-    // Highlight wash strength, decided by whether body text on this theme is
-    // light or dark. Reuses the same luminance split the format colours use.
-    // See the comment on `mark.hl-*` in app.scss for the measurements.
+    // Highlight slot treatment. Every decision lives in `highlightSlotStyles`
+    // (pure, tested); this only mirrors the result onto :root for app.scss.
+    // The light/dark split reuses the same luminance test the format colours
+    // use, so a custom theme is classified the same way.
     const darkPage = stopsForBackground(theme.backgroundColor) === FORMAT_STOPS_DARK;
-    s.setProperty('--hl-wash-alpha', darkPage ? '0.12' : '0.5');
-    s.setProperty('--hl-underline-width', darkPage ? '2px' : '0');
+    const slotStyles = highlightSlotStyles({
+      mode: $highlightPalette$,
+      custom: $highlightCustomColors$.split(','),
+      fontColor: theme.fontColor,
+      backgroundColor: theme.backgroundColor,
+      darkPage
+    });
+    for (const [slot, style] of Object.entries(slotStyles)) {
+      s.setProperty(`--hl-${slot}-rgb`, style.rgb);
+      s.setProperty(`--hl-${slot}-alpha`, style.alpha);
+      s.setProperty(`--hl-${slot}-bw`, style.underlineWidth);
+      s.setProperty(`--hl-${slot}-bs`, style.underlineStyle);
+      s.setProperty(`--hl-${slot}-ink`, style.ink);
+    }
 
     // Book-format identity colors. The hue carries "which format is this";
     // the lightness/saturation stops come from whether this theme is light or

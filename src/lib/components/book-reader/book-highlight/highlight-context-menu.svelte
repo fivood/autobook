@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import type { HighlightColor } from '$lib/data/database/books-db/versions/books-db';
-  import { HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_CHIP } from '$lib/data/highlight-color';
+  import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
+  import { HIGHLIGHT_SLOTS, HIGHLIGHT_SLOT_CHIP } from '$lib/data/highlight-color';
   import { t } from '$lib/i18n';
 
   export let x = 0;
@@ -11,7 +11,7 @@
   export let hasMemo = false;
 
   const dispatch = createEventDispatcher<{
-    color: HighlightColor;
+    color: HighlightSlot;
     memo: void;
     editMemo: void;
     lookup: void;
@@ -19,13 +19,13 @@
     close: void;
   }>();
 
-  const colors = HIGHLIGHT_COLORS.map((id) => ({
+  const colors = HIGHLIGHT_SLOTS.map((id) => ({
     id,
-    bg: HIGHLIGHT_COLOR_CHIP[id],
-    labelKey: `highlight.color.${id}`
+    bg: HIGHLIGHT_SLOT_CHIP[id],
+    label: id
   }));
 
-  function handleColor(c: HighlightColor) {
+  function handleColor(c: HighlightSlot) {
     dispatch('color', c);
   }
 
@@ -51,7 +51,7 @@
           type="button"
           class="h-7 w-7 rounded-full border-2 border-transparent hover:border-current/60 transition-colors"
           style="background:{c.bg}"
-          title={$t('highlight.color.tooltip', { label: $t(c.labelKey) })}
+          title={$t('highlight.slot.tooltip', { label: c.label })}
           on:click={() => handleColor(c.id)}
         />
       {/each}
@@ -74,7 +74,7 @@
           type="button"
           class="h-7 w-7 rounded-full border-2 border-transparent hover:border-current/60 transition-colors"
           style="background:{c.bg}"
-          title={$t('highlight.recolor.tooltip', { label: $t(c.labelKey) })}
+          title={$t('highlight.recolor.tooltip', { label: c.label })}
           on:click={() => handleColor(c.id)}
         />
       {/each}

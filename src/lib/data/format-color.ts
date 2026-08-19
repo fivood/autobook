@@ -126,30 +126,28 @@ export const FORMAT_SATURATION_SCALE: Record<string, number> = {
 };
 
 /**
- * Relative luminance of a CSS colour string, or null when it can't be parsed.
+ * RGB channels of a CSS colour string, or null when it can't be parsed.
  * Only `#rgb`, `#rrggbb` and `rgb()/rgba()` appear in theme values, which is
  * what `themeObjValueToStringValue` emits.
  */
-export function relativeLuminance(color: string): number | null {
-  let r: number;
-  let g: number;
-  let b: number;
-
+export function parseColor(color: string): [number, number, number] | null {
   const hex = color.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
   if (hex) {
     const h = hex[1];
     const full = h.length === 3 ? h.replace(/./g, (c) => c + c) : h;
     const n = parseInt(full, 16);
-    r = (n >> 16) & 255;
-    g = (n >> 8) & 255;
-    b = n & 255;
-  } else {
-    const rgb = color.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
-    if (!rgb) return null;
-    r = Number(rgb[1]);
-    g = Number(rgb[2]);
-    b = Number(rgb[3]);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
+  const rgb = color.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
+  if (!rgb) return null;
+  return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+}
+
+/** Relative luminance of a CSS colour string, or null when it can't be parsed. */
+export function relativeLuminance(color: string): number | null {
+  const parsed = parseColor(color);
+  if (!parsed) return null;
+  const [r, g, b] = parsed;
 
   const lin = (c: number) => {
     const v = c / 255;

@@ -1,7 +1,8 @@
 import type {
   BooksDbHighlight,
-  HighlightColor
+  HighlightSlot
 } from '$lib/data/database/books-db/versions/books-db';
+import { LEGACY_SLOT_OF_COLOR } from '$lib/data/highlight-color';
 
 export const STANDALONE_GROUP_TITLE = '__standalone__';
 
@@ -23,19 +24,22 @@ export interface ParsedQuery {
   memoTerms: string[];
   tagTerms: string[];
   bookTerms: string[];
-  colors: HighlightColor[];
+  colors: HighlightSlot[];
   kinds: Set<'note' | 'highlight'>;
   hasTextFilters: boolean;
 }
 
-const COLOR_NAMES: Record<string, HighlightColor> = {
-  yellow: 'yellow',
-  blue: 'blue',
-  green: 'green',
-  pink: 'pink'
+/** `slot:2` is the current spelling; the colour names stay as aliases so
+ *  queries people already typed (and saved searches) keep working. */
+const SLOT_ALIASES: Record<string, HighlightSlot> = {
+  ...LEGACY_SLOT_OF_COLOR,
+  '1': '1',
+  '2': '2',
+  '3': '3',
+  '4': '4'
 };
 
-/** Parse `memo:foo tag:bar book:baz color:blue kind:note` + bare terms.
+/** Parse `memo:foo tag:bar book:baz slot:2 kind:note` + bare terms.
  * Bare terms match across text + memo + bookTitle + tags (legacy behavior). */
 export function parseNotebookQuery(raw: string): ParsedQuery {
   const result: ParsedQuery = {
@@ -57,7 +61,8 @@ export function parseNotebookQuery(raw: string): ParsedQuery {
       if (field === 'memo') result.memoTerms.push(val);
       else if (field === 'tag') result.tagTerms.push(val);
       else if (field === 'book') result.bookTerms.push(val);
-      else if (field === 'color' && COLOR_NAMES[val]) result.colors.push(COLOR_NAMES[val]);
+      else if ((field === 'slot' || field === 'color') && SLOT_ALIASES[val])
+        result.colors.push(SLOT_ALIASES[val]);
       else if (field === 'kind' && (val === 'note' || val === 'highlight')) result.kinds.add(val);
       else matched = false;
       if (matched) result.hasTextFilters = true;

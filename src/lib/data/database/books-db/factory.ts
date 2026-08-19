@@ -5,11 +5,12 @@
  */
 
 import type BooksDb from './versions/books-db';
+import { LEGACY_SLOT_OF_COLOR } from '$lib/data/highlight-color';
 import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 12, {
+  return openDB<BooksDb>(name, 13, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -231,6 +232,20 @@ export function createBooksDb(name = 'books') {
               keyPath: 'title'
             });
             bookMetadataStore.createIndex('author', 'author');
+          }
+          // Fall through to v12 -> v13 upgrade.
+        }
+        case 12: {
+          // Highlight colours became slot ids. The palette is user-configurable
+          // now, so a stored 'yellow' would be a lie as soon as slot 1 is
+          // recoloured. Rewrite in place -- the id is the identity, appearance
+          // is a theme concern.
+          const highlightStore = transaction.objectStore('highlight');
+          for (const row of await highlightStore.getAll()) {
+            const slot = LEGACY_SLOT_OF_COLOR[row.color as string];
+            if (slot) {
+              await highlightStore.put({ ...row, color: slot });
+            }
           }
           break;
         }

@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import type { BooksDbHighlight, HighlightColor } from '$lib/data/database/books-db/versions/books-db';
+import type { BooksDbHighlight, HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
 import type { DatabaseService } from '$lib/data/database/books-db/database.service';
 
 export const highlights$ = writable<BooksDbHighlight[]>([]);
@@ -32,7 +32,7 @@ export async function addHighlight(
   startOffset: number,
   endOffset: number,
   text: string,
-  color: HighlightColor,
+  color: HighlightSlot,
   memo = '',
   tags: string[] = []
 ): Promise<BooksDbHighlight | undefined> {

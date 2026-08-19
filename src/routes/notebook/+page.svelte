@@ -19,7 +19,7 @@
   import type {
     BooksDbHighlight,
     BooksDbHighlightFolder,
-    HighlightColor
+    HighlightSlot
   } from '$lib/data/database/books-db/versions/books-db';
   import { database } from '$lib/data/store';
   import { dialogManager } from '$lib/data/dialog-manager';
@@ -46,7 +46,7 @@
     highlightHtml
   } from '$lib/functions/notebook/notebook-search';
   import type { NotebookSortKey, TagMode, NotebookGroup } from '$lib/functions/notebook/notebook-search';
-  import { HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_DOT as colorDot } from '$lib/data/highlight-color';
+  import { HIGHLIGHT_SLOTS, HIGHLIGHT_SLOT_DOT as colorDot, normalizeHighlightSlot } from '$lib/data/highlight-color';
 
   const REVIEW_BATCH = 10;
   const FRESH_REVIEW_MS = 1000 * 60 * 60 * 24 * 7; // less than 7d since reviewed = down-weight
@@ -71,7 +71,7 @@
   let loaded = false;
   let sortKey: NotebookSortKey = 'auto';
   let tagMode: TagMode = 'and';
-  let selectedColors = new Set<HighlightColor>();
+  let selectedColors = new Set<HighlightSlot>();
 
   let editTarget: BooksDbHighlight | undefined;
   let dialogOpen = false;
@@ -84,7 +84,7 @@
   let noteEditorTarget: BooksDbHighlight | undefined;
   let noteEditorMemo = '';
   let noteEditorTags: string[] = [];
-  let noteEditorColor: HighlightColor = 'yellow';
+  let noteEditorColor: HighlightSlot = '1';
 
   let linkPickerSource: BooksDbHighlight | undefined;
   let reviewQueue: BooksDbHighlight[] = [];
@@ -181,7 +181,7 @@
     selectedTags = next;
   }
 
-  function toggleColor(c: HighlightColor) {
+  function toggleColor(c: HighlightSlot) {
     const next = new Set(selectedColors);
     if (next.has(c)) next.delete(c);
     else next.add(c);
@@ -233,7 +233,7 @@
     noteEditorTarget = undefined;
     noteEditorMemo = '';
     noteEditorTags = [];
-    noteEditorColor = 'yellow';
+    noteEditorColor = '1';
     noteEditorOpen = true;
   }
 
@@ -273,7 +273,7 @@
   async function handleNoteEditorSave(detail: {
     memo: string;
     tags: string[];
-    color: HighlightColor;
+    color: HighlightSlot;
   }) {
     const { memo, tags, color } = detail;
     if (noteEditorMode === 'create') {
@@ -624,7 +624,7 @@
   {#if highlights.length}
     <div class="flex flex-wrap items-center gap-2 border-b border-current/10 px-4 py-2 text-xs">
       <span class="opacity-50">{$t('notebook.colorLabel')}</span>
-      {#each HIGHLIGHT_COLORS as c (c)}
+      {#each HIGHLIGHT_SLOTS as c (c)}
         <button
           type="button"
           class="rounded-full border px-2 py-0.5 transition-colors"
@@ -708,7 +708,7 @@
                   <div class="flex items-start gap-3">
                     <span
                       class="mt-1.5 inline-block h-3 w-3 flex-shrink-0 rounded-full"
-                      style="background:{colorDot[h.color] || colorDot.yellow}"
+                      style="background:{colorDot[normalizeHighlightSlot(h.color)]}"
                     />
                     <div class="min-w-0 flex-1">
                       {#if h.kind === 'note'}
