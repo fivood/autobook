@@ -925,6 +925,8 @@ export default {
   'stats.sessions.colDur': '時間',
   'stats.sessions.colChars': '字数',
   'stats.sessions.colTitle': '書籍',
+  'stats.sessions.recordTotals': 'この期間の記録（手動入力を含む）',
+  'stats.sessions.sessionTotals': 'セッション（自動記録の読書時間帯のみ）',
   'stats.sessions.emptyPeriod': 'この期間にセッションはありません（v10 以降のみ利用可）',
   'stats.summary.header': '日別集計 · {range}',
   'stats.summary.readDays': '読書日数',

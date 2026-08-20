@@ -85,17 +85,25 @@
       </div>
 
       <div class="flex shrink-0">
-        <div
-          tabindex="0"
-          role="button"
-          aria-label={$t('stats.header.manualEntry')}
-          title={$t('stats.header.manualEntry')}
-          class={baseIconClasses}
-          on:click={() => openManualStatisticsEntry$.next()}
-          on:keyup={activateOnKeyup}
-        >
-          <Fa icon={faPenToSquare} />
-        </div>
+        <!--
+          Every other tab renders `statistic` rows, so adding one is visible
+          straight away. The highlights tab reads the `highlight` store and
+          takes no statistics at all — the button there produced no feedback
+          whatsoever, which is worse than it being absent.
+        -->
+        {#if $lastStatisticsTab$ !== StatisticsTab.HIGHLIGHTS}
+          <div
+            tabindex="0"
+            role="button"
+            aria-label={$t('stats.header.manualEntry')}
+            title={$t('stats.header.manualEntry')}
+            class={baseIconClasses}
+            on:click={() => openManualStatisticsEntry$.next()}
+            on:keyup={activateOnKeyup}
+          >
+            <Fa icon={faPenToSquare} />
+          </div>
+        {/if}
         <div
           tabindex="0"
           role="button"

@@ -82,7 +82,38 @@
   {$t('stats.sessions.header', { range: statisticsDateRangeLabel })}
 </div>
 
+<!--
+  Two different totals for the same period, so they are grouped and labelled
+  rather than mixed: this block counts `statistic` rows (what the tracker wrote
+  plus anything entered by hand), the block below counts `session` rows. Adding
+  a manual record used to leave this tab showing nothing but "no session data",
+  which reads as the record having been lost — the numbers were already computed,
+  just never rendered here.
+-->
+{#if summary && (summary.totalSeconds || summary.totalChars)}
+  <section class="my-4">
+    <h3 class="mb-2 text-sm opacity-70">{$t('stats.sessions.recordTotals')}</h3>
+    <div class="grid grid-cols-3 gap-3">
+      <div class="rounded border border-current/30 p-3">
+        <div class="text-xs opacity-70">{$t('stats.main.totalTime')}</div>
+        <div class="text-xl font-medium tabular-nums">{formatDuration(summary.totalSeconds)}</div>
+      </div>
+      <div class="rounded border border-current/30 p-3">
+        <div class="text-xs opacity-70">{$t('stats.main.totalChars')}</div>
+        <div class="text-xl font-medium tabular-nums">
+          {summary.totalChars.toLocaleString()}
+        </div>
+      </div>
+      <div class="rounded border border-current/30 p-3">
+        <div class="text-xs opacity-70">{$t('stats.main.readDays')}</div>
+        <div class="text-xl font-medium tabular-nums">{summary.activeDays}</div>
+      </div>
+    </div>
+  </section>
+{/if}
+
 {#if summary?.sessionStats}
+  <h3 class="mb-2 mt-6 text-sm opacity-70">{$t('stats.sessions.sessionTotals')}</h3>
   <div class="grid grid-cols-2 md:grid-cols-5 gap-3 my-4">
     <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.sessions.count')}</div>
@@ -114,7 +145,8 @@
     </div>
   </div>
 {:else}
-  <div class="opacity-60 text-sm py-6">
+  <h3 class="mb-2 mt-6 text-sm opacity-70">{$t('stats.sessions.sessionTotals')}</h3>
+  <div class="opacity-60 text-sm pb-6">
     {$t('stats.sessions.emptyPeriod')}
   </div>
 {/if}

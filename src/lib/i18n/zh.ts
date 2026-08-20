@@ -961,6 +961,8 @@ export default {
   'stats.sessions.colDur': '时长',
   'stats.sessions.colChars': '字数',
   'stats.sessions.colTitle': '书',
+  'stats.sessions.recordTotals': '本时段记录（含手动补录）',
+  'stats.sessions.sessionTotals': '会话（仅自动记录的阅读时段）',
   'stats.sessions.emptyPeriod': '此时段没有会话记录（会话数据从 v10 起可用，早期年份为空）',
   'stats.summary.header': '按日汇总 · {range}',
   'stats.summary.readDays': '阅读天数',

@@ -920,6 +920,8 @@ export default {
   'stats.sessions.colDur': 'Duration',
   'stats.sessions.colChars': 'Chars',
   'stats.sessions.colTitle': 'Book',
+  'stats.sessions.recordTotals': 'Records this period (manual entries included)',
+  'stats.sessions.sessionTotals': 'Sessions (auto-tracked reading spans only)',
   'stats.sessions.emptyPeriod': 'No sessions in this period (session data starts from v10)',
   'stats.summary.header': 'Daily summary · {range}',
   'stats.summary.readDays': 'Days read',
