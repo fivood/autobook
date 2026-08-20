@@ -35,3 +35,8 @@ ai-verify.local.json
 
 # CodeGraph 本地索引（每机器重建，勿入库）
 .codegraph/
+
+# 本机测试产物（按日期分目录，39M+）
+test-artifacts/
+# 测试用例含本机绝对路径与书库内容，不通用
+docs/test-cases-ai.md
