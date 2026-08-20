@@ -29,7 +29,8 @@
   let title = '';
   let dateKey = todayKey;
   let minutes: number | null = null;
-  let characters: number | null = 0;
+  // Empty, not 0: a prefilled zero has to be deleted before typing.
+  let characters: number | null = null;
   let markCompleted = false;
   let conflictStrategy: 'append' | 'overwrite' = 'append';
 
@@ -319,7 +320,6 @@
         bind:value={title}
         bind:this={titleInputEl}
         list="manual-existing-titles"
-        placeholder="例如：三体（纸质）"
       />
       <datalist id="manual-existing-titles">
         {#each Array.from(new Set(existingTitles.map((k) => k.split('__')[0]))) as t (t)}
@@ -343,7 +343,6 @@
           class={inputClasses}
           bind:value={minutes}
           bind:this={minutesInputEl}
-          placeholder="30"
         />
       </label>
       <label class="flex flex-col flex-1 min-w-0">
@@ -355,7 +354,6 @@
           class={inputClasses}
           bind:value={characters}
           on:input={() => (charsFieldTouched = true)}
-          placeholder="0"
         />
       </label>
     </div>
@@ -416,17 +414,17 @@
           <div class="flex gap-3">
             <label class="flex flex-col flex-1 min-w-0">
               <span class="text-[11px] opacity-70">作者</span>
-              <input type="text" class={inputClasses} bind:value={author} placeholder="刘慈欣" />
+              <input type="text" class={inputClasses} bind:value={author} />
             </label>
             <label class="flex flex-col flex-1 min-w-0">
               <span class="text-[11px] opacity-70">译者（如有）</span>
-              <input type="text" class={inputClasses} bind:value={translator} placeholder="" />
+              <input type="text" class={inputClasses} bind:value={translator} />
             </label>
           </div>
           <div class="flex gap-3">
             <label class="flex flex-col flex-[2] min-w-0">
               <span class="text-[11px] opacity-70">出版社</span>
-              <input type="text" class={inputClasses} bind:value={publisher} placeholder="重庆出版社" />
+              <input type="text" class={inputClasses} bind:value={publisher} />
             </label>
             <label class="flex flex-col flex-1 min-w-0">
               <span class="text-[11px] opacity-70">出版年</span>
@@ -437,14 +435,13 @@
                 step="1"
                 class={inputClasses}
                 bind:value={publishedYear}
-                placeholder="2008"
               />
             </label>
           </div>
           <div class="flex gap-3">
             <label class="flex flex-col flex-[2] min-w-0">
               <span class="text-[11px] opacity-70">ISBN</span>
-              <input type="text" class={inputClasses} bind:value={isbn} placeholder="978-…" />
+              <input type="text" class={inputClasses} bind:value={isbn} />
             </label>
             <label class="flex flex-col flex-1 min-w-0">
               <span class="text-[11px] opacity-70">总字数（万）</span>
@@ -455,20 +452,18 @@
                 class={inputClasses}
                 value={totalCharacters !== null ? totalCharacters / 10000 : ''}
                 on:input={onTotalCharsInput}
-                placeholder="28.5"
               />
             </label>
           </div>
           <label class="flex flex-col">
             <span class="text-[11px] opacity-70">标签（逗号、顿号或换行分隔）</span>
-            <input type="text" class={inputClasses} bind:value={tagsInput} placeholder="科幻, 长篇" />
+            <input type="text" class={inputClasses} bind:value={tagsInput} />
           </label>
           <label class="flex flex-col">
             <span class="text-[11px] opacity-70">备注</span>
             <textarea
               class="{inputClasses} min-h-[3rem] resize-y"
               bind:value={bookNotes}
-              placeholder="购入时间 / 阅读缘由 / 想法…"
             ></textarea>
           </label>
           <div class="flex items-start gap-3">

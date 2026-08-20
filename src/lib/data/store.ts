@@ -709,10 +709,13 @@ if (typeof window !== 'undefined') {
   }
 }
 
+/** A single day was too narrow a default: backdating a reading record showed
+ *  nothing at all, which reads as "the entry did not save" rather than "it is
+ *  outside the range". A month covers the ordinary logging case. */
 export const lastStatisticsRangeTemplate$ =
   writableStringLocalStorageSubject<StatisticsRangeTemplate>()(
     'lastStatisticsRangeTemplate',
-    StatisticsRangeTemplate.TODAY
+    StatisticsRangeTemplate.MONTH
   );
 
 export const lastStatisticsStartDate$ = writableStringLocalStorageSubject()(

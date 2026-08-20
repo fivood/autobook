@@ -14,15 +14,23 @@
   })();
 </script>
 
+<!--
+  The host centres dialogs at `top: 38%` with a -50% translate, so anything
+  taller than 76vh pushes its own top edge off-screen — and nothing here
+  scrolled, which made the header unreachable once a dialog grew (expanding the
+  manual entry form's book-info section was enough). Capping at 72vh keeps the
+  top edge on screen at 2vh in the worst case, and only the content scrolls so
+  the title and the buttons stay put.
+-->
 <section
   role="dialog"
   aria-modal="true"
-  class="mdc-elevation--z24 rounded p-6"
+  class="mdc-elevation--z24 flex max-h-[72vh] flex-col rounded p-6"
   style="background-color: {resolved.backgroundColor || '#fff'}; color: {resolved.fontColor || '#000'};"
 >
-  <h2 class="weight-medium mb-5 text-xl"><slot name="header" /></h2>
-  <slot name="content" />
-  <footer class="flex flex-wrap items-center justify-end pt-5">
+  <h2 class="weight-medium mb-5 shrink-0 text-xl"><slot name="header" /></h2>
+  <div class="min-h-0 flex-1 overflow-y-auto"><slot name="content" /></div>
+  <footer class="flex shrink-0 flex-wrap items-center justify-end pt-5">
     <slot name="footer" />
   </footer>
 </section>
