@@ -32,3 +32,6 @@ static/vendor/pdfjs/
 
 # 本地 AI 验证密钥，永不提交
 ai-verify.local.json
+
+# CodeGraph 本地索引（每机器重建，勿入库）
+.codegraph/
