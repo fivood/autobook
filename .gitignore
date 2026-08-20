@@ -40,3 +40,5 @@ ai-verify.local.json
 test-artifacts/
 # 测试用例含本机绝对路径与书库内容，不通用
 docs/test-cases-ai.md
+# 语言路由方案，内容已基本落地，留作本机草稿
+docs/language-routing-plan.md
