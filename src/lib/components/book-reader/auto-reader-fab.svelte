@@ -2,13 +2,7 @@
   import Fa from 'svelte-fa';
   import { faVolumeHigh, faVolumeXmark, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import type { AutoReader } from '$lib/components/book-reader/types';
-  import {
-    readerRate$,
-    readerVoiceUri$,
-    ttsEngine$,
-    ttsSapiVoiceId$,
-    ttsStartStrategy$
-  } from '$lib/data/store';
+  import { readerRate$, ttsStartStrategy$, ttsVoiceByLang$ } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
   import { t } from '$lib/i18n';
@@ -21,76 +15,39 @@
 
   let enabled = false;
   let sub: Subscription | undefined;
-  let voices: SpeechSynthesisVoice[] = [];
 
   $: {
     sub?.unsubscribe();
     sub = autoReader?.wasReaderEnabled$.subscribe((v) => (enabled = v));
   }
 
-  // Push the saved voice into the reader. Reactive so settings changes apply live.
-  $: if (autoReader && $ttsEngine$ === 'sapi') {
-    autoReader.voice = $ttsSapiVoiceId$
-      ? ({ voiceURI: $ttsSapiVoiceId$ } as SpeechSynthesisVoice)
-      : undefined;
+  // Voice resolution lives in the reader itself now (autoSelectVoice reads the
+  // per-language slot, falling back to the engine's legacy single store), so
+  // the FAB no longer pushes any voice id. It only has to re-trigger the
+  // resolution when the slots change, i.e. while the settings drawer is open
+  // over this very page.
+  $: if (autoReader && $ttsVoiceByLang$) {
+    autoReader.autoSelectVoice();
   }
-  // Custom engine: configuration is read directly from stores inside the
-  // reader on each speak, so nothing to push from the FAB here.
 
   onMount(() => {
-    const loadVoices = () => {
-      const all = window.speechSynthesis.getVoices();
-      const langPrefix = autoReader?.lang?.slice(0, 2);
-      // Sort: current lang first, then zh/ja, then others
-      if (langPrefix) {
-        const current = all.filter((v) => v.lang.startsWith(langPrefix));
-        const zh = all.filter((v) => !v.lang.startsWith(langPrefix) && v.lang.startsWith('zh'));
-        const ja = all.filter((v) => !v.lang.startsWith(langPrefix) && v.lang.startsWith('ja'));
-        const rest = all.filter(
-          (v) =>
-            !v.lang.startsWith(langPrefix) && !v.lang.startsWith('zh') && !v.lang.startsWith('ja')
-        );
-        voices = [...current, ...zh, ...ja, ...rest];
-      } else {
-        const zh = all.filter((v) => v.lang.startsWith('zh'));
-        const ja = all.filter((v) => v.lang.startsWith('ja'));
-        const rest = all.filter((v) => !v.lang.startsWith('zh') && !v.lang.startsWith('ja'));
-        voices = [...zh, ...ja, ...rest];
-      }
+    // Chrome hands back an empty getVoices() until the engine warms up, so the
+    // reader's first lookup had nothing to match — re-run it once the list
+    // lands. Nothing else here needs the voices themselves any more; picking
+    // one moved to the settings panel and resolving one moved into the reader.
+    const rerunVoiceLookup = () => autoReader?.autoSelectVoice();
 
-      const savedUri = $readerVoiceUri$;
-      if (savedUri && autoReader) {
-        const found = voices.find((v) => v.voiceURI === savedUri);
-        if (found) {
-          autoReader.voice = found;
-          return;
-        }
-      }
-      // If no saved voice or saved voice not found, auto-select based on lang
-      if (autoReader) {
-        autoReader.autoSelectVoice();
-      }
-    };
-
-    loadVoices();
-    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    rerunVoiceLookup();
+    window.speechSynthesis.addEventListener('voiceschanged', rerunVoiceLookup);
 
     return () => {
-      window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+      window.speechSynthesis.removeEventListener('voiceschanged', rerunVoiceLookup);
     };
   });
 
   onDestroy(() => {
     sub?.unsubscribe();
   });
-
-  // Web Speech voice is picked in 设置 → 阅读 now (the FAB's gear panel
-  // is gone); react to the store so a change made there applies to a
-  // reader opened later in the same session without reloading voices.
-  $: if (autoReader && $ttsEngine$ !== 'sapi' && voices.length && $readerVoiceUri$) {
-    const found = voices.find((v) => v.voiceURI === $readerVoiceUri$);
-    if (found) autoReader.voice = found;
-  }
 
   function toggle() {
     if (!enabled && autoReader) {

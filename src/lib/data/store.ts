@@ -280,6 +280,15 @@ export const ttsPositions$ = writableObjectLocalStorageSubject<Record<string, Tt
 
 export const readerRate$ = writableNumberLocalStorageSubject()('readerRate', 1);
 export const readerVoiceUri$ = writableStringLocalStorageSubject()('readerVoiceUri', '');
+
+/** Remembered voice per engine + book language, keyed `${engine}:${zh|ja|en}`.
+ * The single-value stores above (readerVoiceUri$, ttsSapiVoiceId$, ...) stay
+ * as the fallback for slots the user never set — see data/tts/voice-by-lang.ts
+ * for why language rather than book is the axis. */
+export const ttsVoiceByLang$ = writableObjectLocalStorageSubject<Record<string, string>>()(
+  'ttsVoiceByLang',
+  {}
+);
 export const lastBookHasImages$ = writableBooleanLocalStorageSubject()(
   'lastBookHasImages',
   false

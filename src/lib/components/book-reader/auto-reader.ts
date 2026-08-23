@@ -11,6 +11,8 @@
  */
 
 import { BehaviorSubject, type Observable } from 'rxjs';
+import { readerVoiceUri$ } from '$lib/data/store';
+import { langSlotOf, voiceForLang } from '$lib/data/tts/voice-by-lang';
 import {
   computeGlobalCharIndex,
   extractText,
@@ -93,6 +95,7 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   set lang(v: string) {
+    if (v === this._lang) return;
     this._lang = v;
     this.autoSelectVoice();
   }
@@ -105,6 +108,18 @@ export class AutoReaderContinuous implements AutoReader {
     if (!this.synth) return;
     const voices = this.synth.getVoices();
     if (!voices.length) return;
+
+    // A voice the user picked for this language wins over everything below,
+    // and is checked *before* the "already matches lang" shortcut — otherwise
+    // switching the zh slot would never take effect while a zh voice is loaded.
+    const saved = voiceForLang('web', langSlotOf(this._lang), readerVoiceUri$.getValue());
+    if (saved) {
+      const chosen = voices.find((v) => v.voiceURI === saved);
+      if (chosen) {
+        this._voice = chosen;
+        return;
+      }
+    }
 
     // If current voice already matches lang, keep it
     if (this._voice && this._voice.lang.startsWith(this._lang)) return;

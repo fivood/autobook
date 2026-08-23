@@ -32,6 +32,10 @@
   export let items: Entry[] = [mergeEntries.MANAGE, mergeEntries.SETTINGS];
   export let mergeTo: Entry = mergeEntries.MANAGE;
   export let disableRouteNavigation = false;
+  /** Keep the popover on every width instead of fanning the items out as
+   * inline icons at lg. The reader header uses it so its icon row stays the
+   * short list of things you reach for mid-book. */
+  export let alwaysCollapse = false;
 
   const dispatch = createEventDispatcher<{ action: string }>();
 
@@ -57,7 +61,7 @@
     }
   }
 
-  if (actionItems.length === 1 && actionItems[0].routeId) {
+  if (!alwaysCollapse && actionItems.length === 1 && actionItems[0].routeId) {
     leavePageLink = actionItems[0].routeId;
   }
 </script>
@@ -73,7 +77,7 @@
     </div>
   </a>
 {:else}
-  <div class="hidden lg:flex">
+  <div class={alwaysCollapse ? 'hidden' : 'hidden lg:flex'}>
     {#each actionItems as actionItem (actionItem.label)}
       <div
         tabindex="0"
@@ -87,14 +91,19 @@
       </div>
     {/each}
   </div>
-  <div class="flex lg:hidden">
+  <div class={alwaysCollapse ? 'flex' : 'flex lg:hidden'}>
     <Popover
       placement="bottom"
       fallbackPlacements={['bottom-end', 'bottom-start']}
       yOffset={0}
       bind:this={menuElm}
     >
-      <div slot="icon" class={baseIconClasses}>
+      <div
+        slot="icon"
+        class={baseIconClasses}
+        aria-label={mergeTo.titleKey ? $t(mergeTo.titleKey) : mergeTo.title}
+        title={mergeTo.titleKey ? $t(mergeTo.titleKey) : mergeTo.title}
+      >
         <Fa icon={mergeTo.icon} />
       </div>
       <div class="menu-list w-40 md:w-32" slot="content">

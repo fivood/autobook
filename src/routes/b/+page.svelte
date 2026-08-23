@@ -167,6 +167,18 @@
       AiReaderDrawer = (await import('$lib/components/ai/ai-reader-drawer.svelte')).default;
     }
   }
+  // Same lazy-load reasoning as the AI drawer: the TTS panel drags in the
+  // preset catalogue and the kokoro/edge voice tables, none of which a reader
+  // who never opens settings should parse on cold start.
+  import type ReaderSettingsDrawerComponent from '$lib/components/book-reader/reader-settings-drawer.svelte';
+  let ReaderSettingsDrawer: typeof ReaderSettingsDrawerComponent | null = null;
+  async function loadReaderSettingsDrawer() {
+    if (!ReaderSettingsDrawer) {
+      ReaderSettingsDrawer = (
+        await import('$lib/components/book-reader/reader-settings-drawer.svelte')
+      ).default;
+    }
+  }
   import DictPopup from '$lib/components/dict/dict-popup.svelte';
   import { extractSentence } from '$lib/data/ai/gloss';
   import {
@@ -362,6 +374,7 @@
   let hlMemoSelectedText = '';
   let hlMemoTags: string[] = [];
   let aiDrawerOpen = false;
+  let settingsDrawerOpen = false;
   /** Set when a comic translation job with renderable output is found — the
    * overlay shows it, so the "open translation workbench" banner would be
    * redundant. */
@@ -2590,7 +2603,11 @@
         await loadImageGallery();
         showReaderImageGallery = true;
       }}
-      on:settingsClick={() => leaveReader(mergeEntries.SETTINGS.routeId, false)}
+      on:settingsClick={async () => {
+        showHeader = false;
+        await loadReaderSettingsDrawer();
+        settingsDrawerOpen = true;
+      }}
       on:domainHintClick={onDomainHintClick}
       on:bookManagerClick={() => leaveReader(mergeEntries.MANAGE.routeId)}
     />
@@ -2716,6 +2733,14 @@
       {wasTrackerPaused}
     />
   </div>
+{/if}
+
+{#if settingsDrawerOpen && ReaderSettingsDrawer}
+  <svelte:component
+    this={ReaderSettingsDrawer}
+    bookLanguage={$bookData$?.language}
+    on:close={() => (settingsDrawerOpen = false)}
+  />
 {/if}
 
 {#if aiDrawerOpen && $rawBookData$ && AiReaderDrawer}

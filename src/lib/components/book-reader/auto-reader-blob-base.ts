@@ -31,6 +31,7 @@
  */
 
 import { BehaviorSubject, type Observable } from 'rxjs';
+import { langSlotOf, setVoiceForLang, voiceForLang } from '$lib/data/tts/voice-by-lang';
 import type { AutoReader } from './types';
 import {
   computeGlobalCharIndex,
@@ -148,15 +149,40 @@ export abstract class BlobAutoReader implements AutoReader {
   }
 
   set lang(v: string) {
+    if (v === this._lang) return;
     this._lang = v;
+    // Opening a Japanese book after a Chinese one has to swap the voice, and
+    // the language is the only signal that arrives at that moment.
+    this.autoSelectVoice();
   }
 
   get lang() {
     return this._lang;
   }
 
+  /** Identifies this engine's slots in `ttsVoiceByLang$`. */
+  protected abstract readonly engineKey: string;
+
+  /** The per-engine store holding the pre-slot single voice id, read only
+   *  when the current language has no slot of its own. Engines whose voice
+   *  isn't a plain id (custom HTTP bakes it into the request body) return ''. */
+  protected legacyVoiceId(): string {
+    return '';
+  }
+
   autoSelectVoice() {
-    /* no-op — these engines pick their voice in settings */
+    const next = voiceForLang(this.engineKey, langSlotOf(this._lang), this.legacyVoiceId());
+    if (next === this._voiceId) return;
+    this._voiceId = next;
+    this.clearPrefetch();
+  }
+
+  /** Persist a voice the engine picked on its own (a fallback after the saved
+   *  one turned out invalid) so it doesn't get re-derived — and re-warned
+   *  about — on every single sentence. */
+  protected rememberVoice(voiceId: string) {
+    this._voiceId = voiceId;
+    setVoiceForLang(this.engineKey, langSlotOf(this._lang), voiceId);
   }
 
   prepare() {

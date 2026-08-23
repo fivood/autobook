@@ -16,6 +16,7 @@ import {
   faClockRotateLeft,
   faCloudArrowDown,
   faCog,
+  faEllipsisVertical,
   faFileArrowUp,
   faFileZipper,
   faFolderPlus,
@@ -134,6 +135,16 @@ export const mergeEntries = {
     icon: faCloudArrowDown,
     title: '检查桌面端更新',
     titleKey: 'menu.checkUpdate.title'
+  },
+  /** Catch-all for the reader header's low-frequency, leaves-the-book actions.
+   * Only ever used as a `mergeTo` icon — it dispatches nothing itself. */
+  MORE: {
+    routeId: '',
+    label: '更多',
+    labelKey: 'menu.more.label',
+    icon: faEllipsisVertical,
+    title: '更多操作',
+    titleKey: 'menu.more.title'
   },
   CHANGELOG: {
     routeId: '/changelog',

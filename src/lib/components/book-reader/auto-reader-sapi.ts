@@ -9,9 +9,16 @@
  * played by BlobAutoReader, which also handles the prefetch pipeline.
  */
 
+import { ttsSapiVoiceId$ } from '$lib/data/store';
 import { BlobAutoReader } from './auto-reader-blob-base';
 
 export class AutoReaderSapi extends BlobAutoReader {
+  protected readonly engineKey = 'sapi';
+
+  protected legacyVoiceId() {
+    return ttsSapiVoiceId$.getValue();
+  }
+
   /** WinRT applies SetSpeakingRate during synthesis (see winrt_tts.rs), so
    *  the base class must not also touch audio.playbackRate. */
   protected readonly synthesisHonorsRate = true;

@@ -121,6 +121,12 @@ async function loadModel(
 }
 
 export class AutoReaderKokoro extends BlobAutoReader {
+  protected readonly engineKey = 'kokoro';
+
+  protected legacyVoiceId() {
+    return kokoroVoiceId$.getValue();
+  }
+
   /** No rate parameter in kokoro-js's generate() — base class uses playbackRate. */
   protected readonly synthesisHonorsRate = false;
 
@@ -149,7 +155,7 @@ export class AutoReaderKokoro extends BlobAutoReader {
     // v1.1-zh has zf_/zm_ plus af_maple/af_sol/bf_vale), so a saved voice
     // from one is guaranteed invalid on the other — kokoro.generate would
     // throw. Prefer a Chinese voice on v1.1-zh, English (af_) on v1.0.
-    let voiceId = kokoroVoiceId$.getValue();
+    let voiceId = this._voiceId || kokoroVoiceId$.getValue();
     const voices = tts?.voices ? Object.keys(tts.voices) : [];
     if (voices.length && (!voiceId || !voices.includes(voiceId))) {
       const preferChinese = modelId === 'v1.1-zh';
@@ -160,6 +166,9 @@ export class AutoReaderKokoro extends BlobAutoReader {
         voices[0];
       console.warn(`[kokoro] voice ${voiceId || '(unset)'} not in ${modelId}; fell back to ${fallback}`);
       voiceId = fallback;
+      // Into the language slot too, or the invalid id survives there and this
+      // whole branch (console.warn included) reruns for every sentence.
+      this.rememberVoice(voiceId);
       kokoroVoiceId$.next(voiceId);
     }
 

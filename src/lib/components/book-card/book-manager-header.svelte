@@ -553,6 +553,7 @@
                       mergeEntries.MANAGE,
                       mergeEntries.STATISTICS,
                       mergeEntries.NOTEBOOK,
+                      mergeEntries.TRANSLATE,
                       mergeEntries.SETTINGS,
                       mergeEntries.CHANGELOG
                     ]),

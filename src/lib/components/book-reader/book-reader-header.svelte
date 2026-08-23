@@ -3,14 +3,17 @@
   import { faBookmark as farBookmark } from '@fortawesome/free-regular-svg-icons';
   import {
     faBookmark as fasBookmark,
+    faCog,
     faCrosshairs,
     faExpand,
     faFlag,
     faHighlighter,
+    faImages,
     faList,
     faPenToSquare,
     faRobot,
     faRotateLeft,
+    faSignOutAlt,
     type IconDefinition
   } from '@fortawesome/free-solid-svg-icons';
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
@@ -98,6 +101,10 @@
 
   $: isOldUrl = browser && isOnOldUrl(window);
 
+  // What stays in the overflow menu: everything that navigates away from the
+  // book or is reached once a session. Reading settings and 返回书库 used to
+  // live here too — they're first-class icons now, and the image gallery moved
+  // to the left group with the other in-book navigation.
   $: {
     const items = [];
 
@@ -111,11 +118,7 @@
       items.push(mergeEntries.JUMP_TO_POSITION);
     }
 
-    if ($readerImageGalleryPictures$.length) {
-      items.push(mergeEntries.READER_IMAGE_GALLERY);
-    }
-
-    items.push(mergeEntries.TRANSLATE, mergeEntries.SETTINGS, mergeEntries.MANAGE);
+    items.push(mergeEntries.TRANSLATE);
 
     menuItems = items;
   }
@@ -150,6 +153,18 @@
         on:keyup={activateOnKeyup}
       >
         <Fa icon={faList} />
+      </div>
+    {/if}
+    {#if $readerImageGalleryPictures$.length}
+      <div
+        tabindex="0"
+        role="button"
+        aria-label={$t('menu.imageGallery.title')} title={$t('menu.imageGallery.title')}
+        class={baseIconClasses}
+        on:click={() => dispatch('readerImageGalleryClick')}
+        on:keyup={activateOnKeyup}
+      >
+        <Fa icon={faImages} />
       </div>
     {/if}
     <div
@@ -266,8 +281,10 @@
       </div>
     {/if}
     <MergedHeaderIcon
+      alwaysCollapse
       disableRouteNavigation
       items={menuItems}
+      mergeTo={mergeEntries.MORE}
       on:action={({ detail }) => {
         if (detail === mergeEntries.STATISTICS.label) {
           dispatch('statisticsClick');
@@ -275,17 +292,31 @@
           dispatch('translateClick');
         } else if (detail === mergeEntries.JUMP_TO_POSITION.label) {
           dispatch('jumpClick');
-        } else if (detail === mergeEntries.READER_IMAGE_GALLERY.label) {
-          dispatch('readerImageGalleryClick');
-        } else if (detail === mergeEntries.SETTINGS.label) {
-          dispatch('settingsClick');
         } else if (detail === mergeEntries.DOMAIN_HINT.label) {
           dispatch('domainHintClick');
-        } else if (detail === mergeEntries.MANAGE.label) {
-          dispatch('bookManagerClick');
         }
       }}
     />
+    <div
+      tabindex="0"
+      role="button"
+      aria-label={$t('menu.settings.title')} title={$t('menu.settings.title')}
+      class={baseIconClasses}
+      on:click={() => dispatch('settingsClick')}
+      on:keyup={activateOnKeyup}
+    >
+      <Fa icon={faCog} />
+    </div>
+    <div
+      tabindex="0"
+      role="button"
+      aria-label={$t('menu.manage.title')} title={$t('menu.manage.title')}
+      class={baseIconClasses}
+      on:click={() => dispatch('bookManagerClick')}
+      on:keyup={activateOnKeyup}
+    >
+      <Fa icon={faSignOutAlt} />
+    </div>
   </div>
 </div>
 

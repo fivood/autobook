@@ -26,13 +26,19 @@ import { ttsEdgeProxyUrl$, ttsEdgeVoiceId$ } from '$lib/data/store';
 const DEFAULT_VOICE = 'zh-CN-XiaoxiaoNeural';
 
 export class AutoReaderEdge extends BlobAutoReader {
+  protected readonly engineKey = 'edge';
+
+  protected legacyVoiceId() {
+    return ttsEdgeVoiceId$.getValue();
+  }
+
   protected readonly synthesisHonorsRate = true;
 
   protected prefetchDepth = 2;
 
   protected async synthesize(text: string, rate: number): Promise<Blob> {
     const { invoke } = await import('@tauri-apps/api/core');
-    const voice = ttsEdgeVoiceId$.getValue() || DEFAULT_VOICE;
+    const voice = this._voiceId || DEFAULT_VOICE;
     const b64 = await invoke<string>('edge_tts_synthesize', {
       text,
       voice,

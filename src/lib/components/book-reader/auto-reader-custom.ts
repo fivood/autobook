@@ -25,6 +25,10 @@ import {
 import { wrapPcmAsWav } from '$lib/functions/pcm-to-wav';
 
 export class AutoReaderCustom extends BlobAutoReader {
+  /** Voice lives inside the preset's request body / endpoint, not in a
+   *  standalone id, so there is nothing per-language to remember here. */
+  protected readonly engineKey = 'custom';
+
   /** Rate isn't part of the request contract (the body template is entirely
    *  user-authored), so the base class applies it via playbackRate. */
   protected readonly synthesisHonorsRate = false;
