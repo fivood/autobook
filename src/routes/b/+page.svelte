@@ -919,12 +919,18 @@
           }
           pageManager?.ensureCharVisible?.(calcLocal + sectionStartCharCount);
         } else {
-          // Continuous mode: TTS drives the typewriter reveal so visible
-          // text stays in sync with the voice. Pull characters up to
-          // charIndex out of hidden state and ensure the active sentence is
-          // scrolled into view.
-          autoScroller?.seekToCharIndex?.(charIndex);
-          if (sentence) scrollSentenceIntoView(sentence.globalStart);
+          // Continuous mode: the text stays fully visible and only the
+          // sentence highlight tracks the voice.
+          //
+          // TTS used to drive the typewriter's char-by-char reveal from this
+          // same callback, and it could never line up: neither engine reports
+          // where the voice actually is. Web Speech fires per *word*, and the
+          // blob engines fire every 2% of audio duration and derive the index
+          // as `sentenceLength * elapsedFraction` — a straight line through
+          // speech that is anything but linear (pauses, punctuation, numbers).
+          // Sentence boundaries are the one position both engines know
+          // exactly, so that is the only thing we paint.
+          if (sentence) followSpokenSentence(sentence.globalStart);
         }
       }
       const now = Date.now();
@@ -958,24 +964,38 @@
     autoReader.wasReaderEnabled$.subscribe((enabled) => {
       if (enabled) {
         const el = document.querySelector('.book-content') as HTMLElement | null;
-        if (!isPaginated) {
-          // Hide chars so TTS boundaries can reveal them char-by-char in
-          // pace with the voice (matches the typewriter pattern).
-          autoScroller?.prepare?.();
-          autoScroller?.off?.();
-        }
+        // Nothing to hide or reveal here any more — book-reader-continuous
+        // already reveals everything and stops the typewriter when TTS turns
+        // on, and this side used to immediately undo that by re-hiding.
+        lastFollowedSentenceStart = -1;
+        ttsFollowSuspendedUntil = 0;
         ttsHighlighter.prepare(el || undefined);
       } else {
         ttsHighlighter.clear();
-        if (!isPaginated) {
-          // TTS stopped: make sure the rest of the book is visible again
-          // (otherwise the user is stuck with whatever was revealed so far).
-          autoScroller?.revealAll?.();
-        }
       }
       // Pausing saves the precise spot (throttled boundary saves lag ~2s).
       if (!enabled && ttsWiredReader === autoReader) persistTtsPosition();
     });
+  }
+
+  /** Sentence start we last scrolled to, so a 50-boundaries-per-sentence
+   * engine doesn't re-scroll on every one of them. */
+  let lastFollowedSentenceStart = -1;
+  /** Manual scrolling wins: any real scroll gesture parks the auto-follow for
+   * a while instead of fighting it back on the next boundary. */
+  let ttsFollowSuspendedUntil = 0;
+
+  const TTS_FOLLOW_SUSPEND_MS = 8000;
+
+  function suspendTtsFollow() {
+    ttsFollowSuspendedUntil = Date.now() + TTS_FOLLOW_SUSPEND_MS;
+  }
+
+  function followSpokenSentence(globalStart: number) {
+    if (globalStart === lastFollowedSentenceStart) return;
+    lastFollowedSentenceStart = globalStart;
+    if (Date.now() < ttsFollowSuspendedUntil) return;
+    scrollSentenceIntoView(globalStart);
   }
 
   function scrollSentenceIntoView(globalIdx: number) {
@@ -2993,6 +3013,8 @@
   on:keydown={onKeydown}
   on:beforeunload={handleUnload}
   on:pointermove={onWindowPointerMove}
+  on:wheel={suspendTtsFollow}
+  on:touchmove={suspendTtsFollow}
   on:resize={() => {
     if ($statisticsEnabled$ && !$isTrackerPaused$) {
       pauseTracker();

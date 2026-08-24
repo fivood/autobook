@@ -12,13 +12,10 @@ export interface AutoScroller {
   multiplier: number;
   toggle: () => void;
   off: () => void;
+  /** Put the whole text back on screen. TTS calls this when it starts:
+   * the two are mutually exclusive, and the reader has to be able to read
+   * ahead and scroll while the voice runs. */
   revealAll: () => void;
-  /** Wrap content characters now (idempotent). Used by TTS so it can drive
-   * char-by-char reveal via seekToCharIndex without the typewriter's own
-   * interval running. */
-  prepare?: () => void;
-  /** Reveal characters up to the given index (global extractText() index). */
-  seekToCharIndex?: (index: number) => void;
 }
 
 export interface AutoReader {

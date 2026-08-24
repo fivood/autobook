@@ -390,11 +390,14 @@
 
     autoReaderConcrete = createAutoReader($ttsEngine$, destroy$);
     if (language) autoReaderConcrete.lang = language;
-    autoReaderConcrete.onBoundary = (charIndex) => {
-      autoScrollerConcrete?.seekToCharIndex(charIndex);
-    };
+    // No onBoundary here: /b's own handler owns that slot (it is a single
+    // property, so whatever was assigned here was overwritten anyway) and it
+    // no longer drives the reveal at all.
     autoReaderConcrete.wasReaderEnabled$.subscribe((enabled) => {
       if (enabled) {
+        // TTS and the typewriter are mutually exclusive: stop the typewriter
+        // and put the whole text back on screen, so the reader can read ahead
+        // and scroll freely while the voice runs.
         autoScrollerConcrete?.revealAll();
         autoScrollerConcrete?.off();
       }
