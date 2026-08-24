@@ -248,6 +248,8 @@ export default {
   'dict.desktopOnly': '辞書の読み込みはデスクトップ版のみ',
   'dict.pickFolder': '辞書フォルダを選択（StarDict サブフォルダまたは .dict.json ファイルを含む）',
   'dict.scanning': 'スキャン中…',
+  'dict.scanErrorsHeading': '{n} 件の辞書を読み込めませんでした',
+  'dict.scanErrorsMore': '…ほか {n} 件（全件は開発者コンソールに出ます）',
   'dict.scanDone': '{n} 個の辞書を読み込みました',
   'dict.scanDoneWithErrors': '{n} 個の辞書を読み込みました、{e} 個エラー',
   'dict.scanFailed': 'スキャン失敗：{err}',

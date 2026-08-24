@@ -354,6 +354,8 @@ export default {
   'dict.desktopOnly': '词典加载只在桌面端可用',
   'dict.pickFolder': '选择词典文件夹（含 StarDict 子目录或 .dict.json 文件）',
   'dict.scanning': '扫描中…',
+  'dict.scanErrorsHeading': '{n} 个词典没能加载',
+  'dict.scanErrorsMore': '……还有 {n} 条（完整列表见开发者控制台）',
   'dict.scanDone': '已载入 {n} 个词典',
   'dict.scanDoneWithErrors': '已载入 {n} 个词典，{e} 个出错',
   'dict.scanFailed': '扫描失败：{err}',

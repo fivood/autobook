@@ -24,6 +24,11 @@
   let loaded = $loadedDicts$;
   let busy = false;
   let message = '';
+  /** Per-dictionary scan failures. The count already showed up in `message`;
+   * the text used to go to console.warn only, so "3 个出错" was a dead end —
+   * and these messages are the useful part ("缺少 .idx 或 .dict 文件", the JSON
+   * parse position). Kept as a list so the popup can cap what it renders. */
+  let scanErrors: string[] = [];
 
   onMount(async () => {
     if (!loaded.length && $dictFolderPath$ && isTauri()) {
@@ -37,6 +42,7 @@
               ? tImmediate('dict.loadedWithErrors', { n: res.loaded.length, e: res.errors.length })
               : tImmediate('dict.loaded', { n: res.loaded.length })
             : '';
+        scanErrors = res.errors;
         if (res.errors.length) {
           console.warn('[dict] errors', res.errors);
         }
@@ -86,6 +92,7 @@
       message = res.errors.length
         ? tImmediate('dict.scanDoneWithErrors', { n: res.loaded.length, e: res.errors.length })
         : tImmediate('dict.scanDone', { n: res.loaded.length });
+      scanErrors = res.errors;
       if (res.errors.length) {
         console.warn('[dict] errors', res.errors);
       }
@@ -222,6 +229,23 @@
     {/if}
     {#if message && loaded.length && results.length}
       <p class="mt-2 text-xs opacity-50">{message}</p>
+    {/if}
+
+    {#if scanErrors.length}
+      <section class="mt-2 border-t border-current/10 pt-2 text-xs">
+        <h4 class="mb-1 font-medium" style="color:var(--danger-color);">
+          {$t('dict.scanErrorsHeading', { n: scanErrors.length })}
+        </h4>
+        <!-- Capped: one broken pack usually produces one line, but a folder of
+             half-copied dictionaries can produce dozens, and this popup is
+             ~20rem wide. -->
+        {#each scanErrors.slice(0, 5) as err, i (i)}
+          <p class="break-words opacity-70">{err}</p>
+        {/each}
+        {#if scanErrors.length > 5}
+          <p class="opacity-50">{$t('dict.scanErrorsMore', { n: scanErrors.length - 5 })}</p>
+        {/if}
+      </section>
     {/if}
 
     {#if glossAvailable}

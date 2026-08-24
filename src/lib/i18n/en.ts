@@ -243,6 +243,8 @@ export default {
   'dict.desktopOnly': 'Loading dictionaries only works on desktop',
   'dict.pickFolder': 'Pick a folder (containing StarDict subfolders or .dict.json files)',
   'dict.scanning': 'Scanning…',
+  'dict.scanErrorsHeading': '{n} dictionaries failed to load',
+  'dict.scanErrorsMore': '…and {n} more (full list in the devtools console)',
   'dict.scanDone': 'Loaded {n} dictionaries',
   'dict.scanDoneWithErrors': 'Loaded {n} dictionaries, {e} failed',
   'dict.scanFailed': 'Scan failed: {err}',
