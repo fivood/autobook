@@ -155,6 +155,8 @@ export default {
   // Reader header (top bar while reading a book)
   'reader.toc': '打开目录',
   'reader.highlights': '高亮笔记',
+  'reader.ttsFailed.title': '朗读失败',
+  'reader.ttsFailed.hint': '可在阅读页顶栏的设置里换个朗读引擎或音色；Edge TTS 报连接类错误多半是代理没走到 speech.platform.bing.com。',
   'reader.ai': 'AI 助手（剧透安全）',
   'reader.settingsDrawer': '朗读设置（不离开本书）',
   'comicOverlay.translations': '段译文',

@@ -36,6 +36,9 @@ export interface AutoReader {
   getCurrentSentence?: () => { globalStart: number; globalEnd: number; text: string } | null;
   onBoundary?: (charIndex: number) => void;
   onEnd?: () => void;
+  /** Fatal-for-this-session failure the reader should be told about: the
+   * engine has already called off() by the time this fires. */
+  onError?: (message: string) => void;
   rate: number;
   voice: SpeechSynthesisVoice | undefined;
   lang: string;

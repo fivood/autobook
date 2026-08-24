@@ -572,6 +572,8 @@ export default {
 
   'reader.toc': '目次を開く',
   'reader.highlights': 'ハイライト・ノート',
+  'reader.ttsFailed.title': '読み上げに失敗しました',
+  'reader.ttsFailed.hint': 'リーダーの設定ドロワーからエンジンか音声を変えてみてください。Edge TTS の接続エラーは、プロキシが speech.platform.bing.com を通していないことがほとんどです。',
   'reader.ai': 'AI アシスタント（ネタバレ防止）',
   'reader.settingsDrawer': '読み上げ設定（本を離れずに）',
   'comicOverlay.translations': '翻訳',

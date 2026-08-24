@@ -938,6 +938,25 @@
       lastTtsSaveTime = now;
       persistTtsPosition();
     };
+    // Four call sites in BlobAutoReader report failures through onError and
+    // nobody was listening, so every one of them ended the same way: the
+    // engine calls off(), the FAB flips back, and the reader is left pressing
+    // play at a button that refuses with no reason given. The common ones are
+    // not exotic — a wrong Edge proxy (`tls handshake eof`), Kokoro not
+    // downloaded yet, a bad key on a custom HTTP endpoint.
+    autoReader.onError = (message) => {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: $t('reader.ttsFailed.title'),
+            message: `${message}
+
+${$t('reader.ttsFailed.hint')}`
+          }
+        }
+      ]);
+    };
     autoReader.onEnd = () => {
       if (!$ttsAutoAdvanceSection$) {
         clearTtsPosition();

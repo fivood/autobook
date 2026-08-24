@@ -17,7 +17,10 @@
 <DialogTemplate>
   <svelte:fragment slot="header">{title}</svelte:fragment>
   <svelte:fragment slot="content">
-    <p>{message}</p>
+    <!-- pre-line, because callers do pass 
+-separated messages (engine error
+         + what to try next) and a plain <p> ran them together. -->
+    <p class="whitespace-pre-line">{message}</p>
   </svelte:fragment>
   <svelte:fragment slot="footer">
     <button class={buttonClasses} on:click={() => dispatch('close')}>

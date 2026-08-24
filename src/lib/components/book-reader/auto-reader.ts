@@ -53,6 +53,8 @@ export class AutoReaderContinuous implements AutoReader {
 
   onBoundary?: (charIndex: number) => void;
 
+  onError?: (message: string) => void;
+
   onEnd?: () => void;
 
   constructor(destroy$: Observable<void>) {
@@ -319,6 +321,7 @@ export class AutoReaderContinuous implements AutoReader {
         return;
       }
       console.warn('[auto-reader] speech error:', ev.error);
+      this.onError?.(`Web Speech: ${ev.error}`);
       this.off();
     };
 

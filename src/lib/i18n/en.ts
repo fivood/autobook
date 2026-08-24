@@ -567,6 +567,8 @@ export default {
 
   'reader.toc': 'Open table of contents',
   'reader.highlights': 'Highlights & notes',
+  'reader.ttsFailed.title': 'Narration failed',
+  'reader.ttsFailed.hint': 'Try another engine or voice from the reader’s settings drawer. Connection errors on Edge TTS usually mean the proxy is not routing speech.platform.bing.com.',
   'reader.ai': 'AI assistant (spoiler-safe)',
   'reader.settingsDrawer': 'Narration settings (without leaving the book)',
   'comicOverlay.translations': 'translations',
