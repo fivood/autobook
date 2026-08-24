@@ -449,7 +449,21 @@
    * — skipped bubbles (gradient / textured backgrounds) stay as-is for a later
    * LaMa pass.
    */
-  async function runComicInpaint(pageBlobs: Blob[], bubbles: ComicBubble[], cacheKey: string, storage: ComicStorage) {
+  /**
+   * Erase source text from uniform bubbles. Returns what went wrong, if
+   * anything, so the caller can say so.
+   *
+   * A single failed page must not sink the run — but swallowing *every* page
+   * was indistinguishable from success: point the endpoint at a dead port and
+   * the workbench still announced 「准备就绪」 with nothing inpainted, which is
+   * exactly the case where the user needs to be told.
+   */
+  async function runComicInpaint(
+    pageBlobs: Blob[],
+    bubbles: ComicBubble[],
+    cacheKey: string,
+    storage: ComicStorage
+  ): Promise<{ attempted: number; failed: number; firstError?: string }> {
     const byPage = new Map<number, InpaintBubble[]>();
     for (const b of bubbles) {
       const list = byPage.get(b.pageIndex) || [];
@@ -457,18 +471,28 @@
       byPage.set(b.pageIndex, list);
     }
     const lamaEndpoint = translateLamaEndpoint$.getValue().trim();
+    // Empty endpoint is the documented "off" switch, not a failure: skip
+    // rather than throwing once per page and reporting it as breakage.
+    if (!lamaEndpoint) return { attempted: 0, failed: 0 };
+
+    let attempted = 0;
+    let failed = 0;
+    let firstError: string | undefined;
     for (const [pageIndex, pageBubbles] of byPage) {
       const pageBlob = pageBlobs[pageIndex];
       if (!pageBlob) continue;
+      attempted += 1;
       try {
         const { result, blob } = await inpaintPageWithLama(pageBlob, pageBubbles, lamaEndpoint);
         if (result.inpainted > 0) {
           await storage.writeInpainted(cacheKey, pageIndex, blob);
         }
-      } catch {
-        // A failed page must not sink the whole run — leave the original.
+      } catch (err: any) {
+        failed += 1;
+        if (!firstError) firstError = err?.message || String(err);
       }
     }
+    return { attempted, failed, firstError };
   }
 
   /** Per-book language wins over the global default for stored books. */
@@ -628,7 +652,17 @@
       // sit on a clean page. Runs after the job is saved — a failure here
       // loses only the inpainting, never the translation.
       statusMessage = tImmediate('translate.comic.inpainting');
-      await runComicInpaint(ocrBlobs, finalBubbles, cacheKey, storage);
+      const inpaint = await runComicInpaint(ocrBlobs, finalBubbles, cacheKey, storage);
+      if (inpaint.failed) {
+        checkpointWarnings = [
+          ...checkpointWarnings,
+          tImmediate('translate.comic.inpaintFailed', {
+            failed: inpaint.failed,
+            attempted: inpaint.attempted,
+            detail: inpaint.firstError ?? ''
+          })
+        ];
+      }
       statusMessage = tImmediate('translate.comic.ready', { pages: pages.length, bubbles: bubbles.length });
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);

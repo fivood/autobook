@@ -1277,6 +1277,7 @@ export default {
   'translate.book.noTranslationNeeded': 'Book language matches target language — no translation needed',
   'translate.comic.extracting': 'Extracting comic pages…',
   'translate.comic.ocr': 'OCR in progress {done}/{total} pages…',
+  'translate.comic.inpaintFailed': '{failed} of {attempted} pages could not have their source text erased (the translation itself is unaffected). Reason: {detail}',
   'translate.comic.ready': 'Comic ready: {pages} pages, {bubbles} text regions',
   'translate.comic.ocrTitle': 'Comic OCR',
   'translate.comic.pendingOcr': '{pages} comic pages loaded — OCR is needed before translation',

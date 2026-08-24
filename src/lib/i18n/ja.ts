@@ -1280,6 +1280,7 @@ export default {
   'translate.book.noTranslationNeeded': '書籍の言語と翻訳先の言語が同じです。翻訳は不要です',
   'translate.comic.extracting': 'コミックのページを展開中…',
   'translate.comic.ocr': 'OCR 処理中 {done}/{total} ページ…',
+  'translate.comic.inpaintFailed': '{attempted} ページ中 {failed} ページで原文の消去に失敗しました（翻訳自体には影響ありません）。原因：{detail}',
   'translate.comic.ready': 'コミック準備完了：{pages} ページ、{bubbles} 個のテキスト領域',
   'translate.comic.ocrTitle': 'コミック OCR',
   'translate.comic.pendingOcr': '{pages} ページのコミックを読み込みました。翻訳には OCR が必要です',

@@ -1314,6 +1314,7 @@ export default {
   'translate.book.noTranslationNeeded': '书籍语言与目标语言一致，无需翻译',
   'translate.comic.extracting': '正在解压漫画页面…',
   'translate.comic.ocr': 'OCR 识别中 {done}/{total} 页…',
+  'translate.comic.inpaintFailed': '{attempted} 页里有 {failed} 页没能消除原文（翻译本身不受影响）。原因：{detail}',
   'translate.comic.ready': '漫画就绪：{pages} 页，{bubbles} 个文字区域',
   'translate.comic.ocrTitle': '漫画 OCR',
   'translate.comic.pendingOcr': '已加载 {pages} 页漫画，需要 OCR 识别文字后才能翻译',
