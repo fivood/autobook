@@ -9,41 +9,19 @@
   import {
     addCharactersOnCompletion$,
     adjustStatisticsAfterIdleTime$,
-    autoBookmark$,
-    autoBookmarkTime$,
-    autoPositionOnResize$,
     autoReplication$,
-    avoidPageBreak$,
     cacheStorageData$,
-    confirmClose$,
-    customReadingPointEnabled$,
-    disableWheelNavigation$,
-    enableReaderWakeLock$,
-    enableTapEdgeToFlip$,
-    firstDimensionMargin$,
     hideExternalReadHint$,
-    hideSpoilerImage$,
     importHTMLFixMode$,
-    manualBookmark$,
     keepLocalStatisticsOnDeletion$,
     openTrackerOnCompletion$,
     overwriteBookCompletion$,
-    pageColumns$,
-    pauseTrackerOnCustomPointChange$,
-    prioritizeReaderStyles$,
     replicationSaveBehavior$,
     restrictImportFixToAnchor$,
-    secondDimensionMaxValue$,
-    selectionToBookmarkEnabled$,
-    showCharacterCounter$,
-    showPercentage$,
-    showFooterChapterCharacterCounter$,
-    showFooterChapterPercentage$,
     showExternalPlaceholder$,
     startDayHoursForTracker$,
     statisticsEnabled$,
     statisticsMergeMode$,
-    swipeThreshold$,
     theme$,
     trackerAutoPause$,
     trackerBackwardSkipThreshold$,
@@ -52,9 +30,7 @@
     trackerIdleTime$,
     trackerPopupDetection$,
     trackerSkipThresholdAction$,
-    viewMode$,
     readingGoalsMergeMode$,
-    hideSpoilerImageMode$
   } from '$lib/data/store';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import { pagePath } from '$lib/data/env';
@@ -135,32 +111,8 @@
       {activeSettings}
       {storageQuota}
       bind:selectedTheme={$theme$}
-      bind:blurImage={$hideSpoilerImage$}
-      bind:blurImageMode={$hideSpoilerImageMode$}
-      bind:prioritizeReaderStyles={$prioritizeReaderStyles$}
-      bind:enableReaderWakeLock={$enableReaderWakeLock$}
-      bind:showCharacterCounter={$showCharacterCounter$}
-      bind:showPercentage={$showPercentage$}
-      bind:showFooterChapterCharacterCounter={$showFooterChapterCharacterCounter$}
-      bind:showFooterChapterPercentage={$showFooterChapterPercentage$}
-      bind:viewMode={$viewMode$}
-      bind:secondDimensionMaxValue={$secondDimensionMaxValue$}
-      bind:firstDimensionMargin={$firstDimensionMargin$}
-      bind:swipeThreshold={$swipeThreshold$}
-      bind:disableWheelNavigation={$disableWheelNavigation$}
-      bind:autoPositionOnResize={$autoPositionOnResize$}
-      bind:avoidPageBreak={$avoidPageBreak$}
-      bind:pauseTrackerOnCustomPointChange={$pauseTrackerOnCustomPointChange$}
-      bind:customReadingPointEnabled={$customReadingPointEnabled$}
-      bind:selectionToBookmarkEnabled={$selectionToBookmarkEnabled$}
-      bind:enableTapEdgeToFlip={$enableTapEdgeToFlip$}
-      bind:pageColumns={$pageColumns$}
       bind:persistentStorage={$persistentStorage$}
       bind:hideExternalReadHint={$hideExternalReadHint$}
-      bind:confirmClose={$confirmClose$}
-      bind:manualBookmark={$manualBookmark$}
-      bind:autoBookmark={$autoBookmark$}
-      bind:autoBookmarkTime={$autoBookmarkTime$}
       bind:importHTMLFixMode={$importHTMLFixMode$}
       bind:restrictImportFixToAnchor={$restrictImportFixToAnchor$}
       bind:cacheStorageData={$cacheStorageData$}

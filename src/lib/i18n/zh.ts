@@ -671,6 +671,7 @@ export default {
 
   // Reader-side settings drawer
   'readerSettings.title': '朗读设置',
+  'readerSettings.tab.behavior': '阅读',
   'readerSettings.tab.tts': '朗读',
   'readerSettings.tab.typography': '排版',
   'readerSettings.close': '关闭',

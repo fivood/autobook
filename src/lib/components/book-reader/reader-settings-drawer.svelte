@@ -5,6 +5,7 @@
   import { fly } from 'svelte/transition';
   import { quintInOut } from 'svelte/easing';
   import SettingsTts from '$lib/components/settings/settings-tts.svelte';
+  import SettingsReaderBehavior from '$lib/components/settings/settings-reader-behavior.svelte';
   import SettingsTypography from '$lib/components/settings/settings-typography.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { pagePath } from '$lib/data/env';
@@ -19,7 +20,8 @@
   // `id` is the dispatch identity; only `labelKey` goes through $t.
   const tabs = [
     { id: 'tts', labelKey: 'readerSettings.tab.tts' },
-    { id: 'typography', labelKey: 'readerSettings.tab.typography' }
+    { id: 'typography', labelKey: 'readerSettings.tab.typography' },
+    { id: 'behavior', labelKey: 'readerSettings.tab.behavior' }
   ];
 
   let activeTab = 'tts';
@@ -63,8 +65,10 @@
   <div class="flex-1 overflow-y-auto px-4 py-3">
     {#if activeTab === 'tts'}
       <SettingsTts showSectionHeader={false} {bookLanguage} />
-    {:else}
+    {:else if activeTab === 'typography'}
       <SettingsTypography showSectionHeader={false} />
+    {:else}
+      <SettingsReaderBehavior showSectionHeader={false} />
     {/if}
   </div>
 

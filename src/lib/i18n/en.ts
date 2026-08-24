@@ -552,6 +552,7 @@ export default {
 
   // Reader-side settings drawer
   'readerSettings.title': 'Narration settings',
+  'readerSettings.tab.behavior': 'Reading',
   'readerSettings.tab.tts': 'Narration',
   'readerSettings.tab.typography': 'Typography',
   'readerSettings.close': 'Close',
