@@ -2111,6 +2111,9 @@ ${$t('reader.ttsFailed.hint')}`
 
     if (error) {
       if (!isSilent) {
+        // Same rule as everywhere else: the report dialog is an extra, not a
+        // replacement for the reason. The context sentence is worth keeping
+        // though — `error` alone rarely says *which* operation failed.
         const showReport = logger.errorCount > 1;
 
         logger.warn(error);
@@ -2120,9 +2123,7 @@ ${$t('reader.ttsFailed.hint')}`
             component: showReport ? LogReportDialog : MessageDialog,
             props: {
               title: '处理数据错误',
-              message: showReport
-                ? `部分或全部数据无法存储到外部存储`
-                : error
+              message: `部分或全部数据无法存储到外部存储\n\n${error}`
             }
           }
         ]);

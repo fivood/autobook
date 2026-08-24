@@ -87,6 +87,11 @@ export class DatabaseService {
         ).pipe(
           catchError((error: unknown) => {
             if (error instanceof Error) {
+              // The report dialog is offered once the session has logged more
+              // than one error, but the reason goes in either way. This used to
+              // collapse to the bare string 「发生错误」 — two words for a
+              // database failure — and logger.errorCount counts the whole
+              // session, so one unrelated warning at startup was enough.
               const showReport = logger.errorCount > 1;
 
               logger.warn(error.message);
@@ -96,7 +101,7 @@ export class DatabaseService {
                   component: showReport ? LogReportDialog : MessageDialog,
                   props: {
                     title: '失败',
-                    message: showReport ? '发生错误' : `发生错误: ${error.message}`
+                    message: `发生错误: ${error.message}`
                   }
                 }
               ]);
