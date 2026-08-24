@@ -7,23 +7,39 @@ export const highlights$ = writable<BooksDbHighlight[]>([]);
 let currentDataId = -1;
 let currentBookTitle = '';
 let dbService: DatabaseService | undefined;
+/** Bumped per init so a slow load for the previous book cannot land on top of
+ *  the current one. */
+let loadToken = 0;
 
 export function initHighlightManager(db: DatabaseService, dataId: number, bookTitle: string) {
   dbService = db;
   currentDataId = dataId;
   currentBookTitle = bookTitle;
+  // Cleared synchronously. /b is a single route, so moving between two books
+  // re-runs this without ever unmounting the page — dispose does not get to
+  // run in between. Left alone, the previous book's highlights stay in the
+  // store while the new load is in flight and the renderer paints them, by
+  // offset, onto a completely different text.
+  highlights$.set([]);
   loadHighlights();
 }
 
 export function disposeHighlightManager() {
   currentDataId = -1;
+  currentBookTitle = '';
   dbService = undefined;
+  loadToken += 1;
   highlights$.set([]);
 }
 
 async function loadHighlights() {
   if (!dbService || currentDataId < 0) return;
+  const token = ++loadToken;
   const list = await dbService.getHighlights(currentDataId);
+  // Two reads against different books are separate transactions and can settle
+  // out of order; without this the older book's list wins and the sidebar ends
+  // up listing highlights that belong to a book you are no longer in.
+  if (token !== loadToken) return;
   list.sort((a, b) => a.startOffset - b.startOffset);
   highlights$.set(list);
 }
