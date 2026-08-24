@@ -537,6 +537,14 @@ pub fn run() {
       calibre_converter::convert_with_calibre
     ])
     .setup(|app| {
+      // The window title in tauri.conf.json is a hand-typed "AutoBook vX.Y.Z"
+      // that nobody remembers to touch on release — it sat at v1.33.0 through
+      // two whole versions. Derive it from the package version instead, so the
+      // string in the config only ever shows for the few ms before setup runs.
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_title(&format!("AutoBook v{}", app.package_info().version));
+      }
+
       // Before any window can ask for them: the static scope is
       // Documents/AutoBook only, so a custom library root, vault or dictionary
       // folder is unreachable until its remembered grant is restored.
