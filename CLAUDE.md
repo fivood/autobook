@@ -78,12 +78,63 @@ ESLint 走「少而准」路线，只开确实咬过这个仓库的规则，**�
 
 原生 `<select>` 的 `<option>` 弹出层在 Windows / WebView2 不继承主题字色，`app.scss` 里的全局 `option { color:#111; background:#fff }` 已经兜底，不用每个 `<option>` 内联写 `style="color:#000"`。
 
+## 真机排查（改阅读器行为前先读这一节）
+
+**编辑器内嵌的预览面板不合成画面，`requestAnimationFrame` 一次都不会触发。**
+实测 `rafFired: 0 / timerFired: 1`——`setTimeout` 正常，rAF 全死。于是这些
+在面板里全是坏的，而它们看起来**和真 bug 一模一样**：
+
+- 分页模式整页空白（`displayedHtml` 赋值在两层嵌套 rAF 里）
+- 滚动后阅读进度恒为 `0 / N 0.00%`、书签存进 `exploredCharCount: 0`
+  （`onScroll()` 整个包在 rAF 里）
+- `scrollIntoView({behavior:'smooth'})` 原地不动（`'auto'` 正常）
+- 所有 CSS 动画/过渡卡在第一帧
+
+2026-08 排查朗读时因此差点报出三个假 bug。**碰阅读器渲染、滚动、分页、动画
+的改动，一律上真机验。**
+
+```
+npm run tauri:dev:cdp                       # 一个 shell 里挂着别关
+node scripts/cdp-eval.mjs "location.pathname"
+node scripts/cdp-eval.mjs "$(cat probe.js)" # 表达式会被 await，可以返回 Promise
+```
+
+几条踩过的：
+
+- `tauri dev` 里 vite 走 strictPort，**5281 被占就整个起不来**（CDP 端口也就
+  永远不出现）。上一轮的 vite 进程要先杀干净
+- `dialogManager.dialogs$.next([...])` 是**整体替换**。自己弹的框会把启动时的
+  「文件夹需要重新授权」顶掉——别看到没弹就以为那个机制坏了
+- 外存书库要授权才读得到。不想点原生选择框的话，直接写
+  `%LOCALAPPDATA%\io.github.fukki.ebookreader\allowed-roots.json`
+  （内容是转义好的 JSON 数组，例如 `["E:\\e"]`），`grant_remembered_roots()`
+  启动时就读它
+- 真机连的是**开发库**，不是安装版的库。动数据前先 `getAll` 存一份快照，
+  测完删干净、改过的 localStorage 键还原
+
 ## 发版流程
 
 桌面（在 `desktop` 分支上）：
-1. 版本号改三处：`package.json`、`src-tauri/tauri.conf.json`（version + 窗口 title）、`src-tauri/Cargo.toml`
-2. `CHANGELOG.md` 顶部加 `## X.Y.Z` 条目：中文、写根因和修法，不只写现象（CI 用它做 release body）
-3. 提交后 `git tag -a vX.Y.Z` 并推送分支 + tag —— CI 全托管（构建、签名、建 release、latest.json），**不要本地 build 或手动 gh release**
-4. 验证：`gh run watch` 或 `curl https://updates.fivood.com/latest.json`
+1. 版本号改**四处**：`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、
+   `src-tauri/Cargo.lock` 里 `name = "app"` 那条。窗口标题**不用管**——1.36.1 起由
+   `setup()` 从包版本推导，配置里只留裸的 `"AutoBook"`（之前手写的版本号在 v1.33.0
+   卡了两个版本没人发现）
+2. `CHANGELOG.md` 顶部加 `## X.Y.Z` 条目：中文、**只写用户视角的摘要**，不展开根因/
+   文件/行号（那些写进 commit message）。CI 用它做 release body
+3. `npm run check` / `npm run lint` / `npm test` / `cargo check` 全过后提交、推分支
+4. **建 release 壳**——`GITHUB_TOKEN` 建不了 release（`Resource not accessible by
+   integration`），用个人 token 建，tag 由它顺带创建，**这次 tag push 会自己触发
+   工作流，不用再 dispatch**：
+
+   ```
+   gh release create vX.Y.Z --target desktop --title vX.Y.Z --notes-file notes.txt
+   ```
+
+   `--target` 必须给**分支名**，给 commit SHA 会被 API 拒。tag 已存在时改用
+   `--verify-tag` 并手动 `gh workflow run "Release Desktop" --ref vX.Y.Z`
+5. 验证：`gh run watch <id>`，完了 `curl https://updates.fivood.com/latest.json`
+   确认 version 已经变
+
+`gh run rerun` 对权限问题没用——它沿用原次运行排队时的 token 权限快照。
 
 PWA：推 `release/1.6.0` 即部署，无版本仪式。
