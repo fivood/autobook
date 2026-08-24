@@ -414,6 +414,26 @@ export async function runOcrOnPage(
   };
 }
 
+/**
+ * Fold a finished OCR run into whatever the book row says *now*.
+ *
+ * A whole-book run takes minutes, and the OCR banner sits on screen for all of
+ * them — it can write `ocrLang`, and single-page re-OCR can write
+ * `elementHtml`. The job used to write back the book object it captured when
+ * it started, silently reverting any of that. Only the four fields the run
+ * actually produces come from the result; every other field belongs to the
+ * current row.
+ */
+export function mergeOcrResult<T extends Record<string, any>>(current: T, produced: T): T {
+  return {
+    ...current,
+    elementHtml: produced.elementHtml,
+    characters: produced.characters,
+    sections: produced.sections,
+    lastBookModified: produced.lastBookModified
+  };
+}
+
 export async function runOcr(
   book: BooksDbBookData,
   lang: OcrLanguage,

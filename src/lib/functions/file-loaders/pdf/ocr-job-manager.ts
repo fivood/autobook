@@ -27,7 +27,7 @@ import {
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
 import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-types';
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
-import { runOcr, type OcrProgress } from './pdf-ocr-runner';
+import { mergeOcrResult, runOcr, type OcrProgress } from './pdf-ocr-runner';
 import { disposeOcrWorker, type OcrLanguage, type OcrModelProfile } from './pdf-ocr';
 export type { OcrLanguage, OcrModelProfile };
 
@@ -155,7 +155,16 @@ export function startOcrJob(
         signal
       );
       const db = await database.db;
-      await db.put('data', updated);
+      // Re-read before writing, like every other writer of this row does.
+      // `updated` spreads the book snapshot taken when the job started, and a
+      // whole-book OCR runs for minutes with the banner on screen the whole
+      // time — the banner writes ocrLang, single-page re-OCR writes
+      // elementHtml. Putting the snapshot back reverted whatever the user did
+      // meanwhile. Only the fields this run actually produced are taken from
+      // it; everything else comes from the current row.
+      const fresh = await db.get('data', book.id);
+      const merged = mergeOcrResult(fresh ?? book, updated);
+      await db.put('data', merged);
       // Only retire the "scanned PDF" banner when something actually came out.
       // A run where every page failed used to land here all the same, and the
       // skip list then made sure the banner never offered a retry again — the
@@ -166,7 +175,7 @@ export function startOcrJob(
       // Fire-and-forget the external-storage push so the "finished" state
       // can flip immediately and the user can hit "应用并刷新" without
       // waiting on disk I/O.
-      pushOcrResultToExternalStorage(updated).catch(() => {});
+      pushOcrResultToExternalStorage(merged).catch(() => {});
       _store.update((s) =>
         s ? { ...s, status: 'finished', failedPages, firstFailure } : s
       );
