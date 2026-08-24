@@ -87,11 +87,10 @@ export class DatabaseService {
         ).pipe(
           catchError((error: unknown) => {
             if (error instanceof Error) {
-              // The report dialog is offered once the session has logged more
-              // than one error, but the reason goes in either way. This used to
-              // collapse to the bare string 「发生错误」 — two words for a
-              // database failure — and logger.errorCount counts the whole
-              // session, so one unrelated warning at startup was enough.
+              // The report dialog is offered once this operation has logged
+              // more than one error (history is cleared just above), but the
+              // reason goes in either way. This used to collapse to the bare
+              // string 「发生错误」 — two words for a database failure.
               const showReport = logger.errorCount > 1;
 
               logger.warn(error.message);

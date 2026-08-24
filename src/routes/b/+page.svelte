@@ -2114,6 +2114,8 @@ ${$t('reader.ttsFailed.hint')}`
         // Same rule as everywhere else: the report dialog is an extra, not a
         // replacement for the reason. The context sentence is worth keeping
         // though — `error` alone rarely says *which* operation failed.
+        // (errorCount is per-operation here too; clearHistory runs at the top
+        // of this replication path.)
         const showReport = logger.errorCount > 1;
 
         logger.warn(error);

@@ -846,13 +846,13 @@
   }
 
   function showError(title: string, message: string, fallbackMessage: string) {
-    // Offer the log report once this session has produced more than one error
-    // — but never at the cost of the reason. This used to swap `message` for
-    // the generic `fallbackMessage` in that case, and since logger.errorCount
-    // is cumulative across the whole session (a font-load warning at startup
-    // is enough), the specific reason was being thrown away exactly when
-    // things were going worst. LogReportDialog renders nothing but `message`,
-    // so what was left was 「书籍导入期间发生错误」 and three buttons.
+    // errorCount is per-operation — initializeReplicationProgressData calls
+    // logger.clearHistory() first — so `> 1` really does mean "several things
+    // failed in this one run", and escalating to the log report is right.
+    // What was wrong is that it *replaced* the reason: LogReportDialog renders
+    // nothing but `message`, so a 3-file import failure showed one generic
+    // sentence and three buttons, with the per-file causes reachable only by
+    // downloading a report. The report is an addition, not a substitute.
     const showReport = logger.errorCount > 1;
 
     logger.warn(message);
