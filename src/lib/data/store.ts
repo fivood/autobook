@@ -158,6 +158,12 @@ export const syncLastAt$ = writableNumberLocalStorageSubject()('syncLastAt', 0);
  * hint was a "last synced" timestamp that quietly stopped moving. Shown in
  * 设置 → 数据 next to that timestamp, which is where you look when you wonder. */
 export const syncLastError$ = writableSubject<string>('');
+
+/** Outcome of the last 笔记目录同步 run, rendered in 设置 → 数据 beside the
+ * vault path. That sync only ever runs automatically — `runVaultSync(manual)`
+ * has never had a caller passing true — so its whole toast/dialog reporting
+ * layer is unreachable and every failure went to logger.warn alone. */
+export const vaultSyncLastError$ = writableSubject<string>('');
 export const customThemes$ = writableObjectLocalStorageSubject<Record<string, ThemeOption>>()(
   'customThemes',
   {}

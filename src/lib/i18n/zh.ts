@@ -140,6 +140,7 @@ export default {
   'vaultSync.done': '同步完成：更新 {changed}，新增 {added}，删除 {removed}',
   'vaultSync.partialTitle': '同步没有全部完成',
   'vaultSync.partialMessage': '计划新增 {planned} 条笔记，实际只导入 {imported} 条。原因：{detail}',
+  'vaultSync.autoFailed': '上次自动同步没成功：{detail}',
   'vaultSync.failedTitle': '同步失败',
   'vaultSync.keptTitle': '这些书的文件已不在目录里',
   'vaultSync.keptMessage': '它们有阅读进度或高亮，所以没有自动删除（也可能只是被改名了）。确认不要了就手动删：\n\n{titles}',

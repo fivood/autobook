@@ -642,6 +642,7 @@ export default {
   'vaultSync.done': 'Synced: {changed} updated, {added} added, {removed} removed',
   'vaultSync.partialTitle': 'Sync did not finish',
   'vaultSync.partialMessage': '{planned} notes were queued to import but only {imported} landed. Reason: {detail}',
+  'vaultSync.autoFailed': 'The last automatic sync did not succeed: {detail}',
   'vaultSync.failedTitle': 'Sync failed',
   'vaultSync.keptTitle': 'These books no longer have a file',
   'vaultSync.keptMessage': 'They carry reading progress or highlights, so they were not deleted (they may simply have been renamed). Delete them by hand if you no longer want them:\n\n{titles}',

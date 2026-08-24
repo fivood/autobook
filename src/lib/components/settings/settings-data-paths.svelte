@@ -11,7 +11,7 @@
   import { isTauri } from '$lib/data/env';
   import { dialogManager } from '$lib/data/dialog-manager';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
-  import { fsRoot$, vaultSyncRoot$ } from '$lib/data/store';
+  import { fsRoot$, vaultSyncRoot$, vaultSyncLastError$ } from '$lib/data/store';
   import { pickUserDir } from '$lib/functions/pick-user-dir';
   import { t, tImmediate } from '$lib/i18n';
 
@@ -282,6 +282,14 @@
           {/if}
         </div>
         <p class="hint">{$t('vaultSync.hint')}</p>
+        <!-- This sync only ever runs automatically (nothing calls it with
+             manual=true), so a failure has nowhere else to appear. Same
+             treatment as the reading-time sync above: state it here, quietly. -->
+        {#if $vaultSyncLastError$}
+          <p class="hint" style="color:var(--danger-color);">
+            {$t('vaultSync.autoFailed', { detail: $vaultSyncLastError$ })}
+          </p>
+        {/if}
       </div>
 
       <div class="row">

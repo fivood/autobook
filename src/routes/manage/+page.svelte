@@ -53,6 +53,7 @@
   import { t, tImmediate } from '$lib/i18n';
   import { detectBookFormat } from '$lib/functions/book-format';
   import { categoryOfPath, planVaultSync, readVaultFiles } from '$lib/functions/vault-sync';
+  import { vaultSyncLastError$ } from '$lib/data/store';
   import { formatTextSource, getEditableTextFormat } from '$lib/functions/file-loaders/text-source';
   import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
   import { cloneMutateSet } from '$lib/functions/clone-mutate-set';
@@ -548,6 +549,7 @@
     const root = $vaultSyncRoot$.trim();
     if (!root || vaultSyncing || !isTauri()) return;
     vaultSyncing = true;
+    vaultSyncLastError$.next('');
     try {
       const [files, books] = await Promise.all([readVaultFiles(root), syncedBooks()]);
       const plan = planVaultSync(
@@ -625,18 +627,18 @@
           }
         ]);
       } else if (importError) {
-        // Report the shortfall rather than a success with the intended count.
-        if (manual) {
-          showError(
-            tImmediate('vaultSync.partialTitle'),
-            tImmediate('vaultSync.partialMessage', {
-              imported: importedCount,
-              planned: plan.added.length,
-              detail: importError
-            }),
-            ''
-          );
-        }
+        // Not gated on `manual`: nothing ever passes it. This sync only runs
+        // automatically, so its whole toast/dialog layer is unreachable and a
+        // failure would otherwise leave no trace outside logger.warn. Same
+        // treatment as the reading-time sync — state the reason in
+        // 设置 → 数据 rather than interrupting with a dialog.
+        vaultSyncLastError$.next(
+          tImmediate('vaultSync.partialMessage', {
+            imported: importedCount,
+            planned: plan.added.length,
+            detail: importError
+          })
+        );
       } else if (manual) {
         flashToast(
           tImmediate('vaultSync.done', {
@@ -648,6 +650,7 @@
       }
     } catch (err: any) {
       logger.warn(`vault sync failed: ${err?.message || err}`);
+      vaultSyncLastError$.next(err?.message || String(err));
       if (manual) showError(tImmediate('vaultSync.failedTitle'), err?.message || String(err), '');
     } finally {
       vaultSyncing = false;
