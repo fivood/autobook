@@ -1,7 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import {
-    faComputer,
     faFileArrowDown,
     faFileArrowUp,
     faPlus,
@@ -27,23 +26,20 @@
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsCustomTheme from '$lib/components/settings/settings-custom-theme.svelte';
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
-  import SettingsFontSelector from '$lib/components/settings/settings-font-selector.svelte';
   import SettingsReadingGoals from '$lib/components/settings/settings-reading-goals.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSync from '$lib/components/settings/settings-sync.svelte';
+  import SettingsTypography from '$lib/components/settings/settings-typography.svelte';
   import SettingsTts from '$lib/components/settings/settings-tts.svelte';
   import SettingsAi from '$lib/components/settings/settings-ai.svelte';
   import SettingsOcr from '$lib/components/settings/settings-ocr.svelte';
   import SettingsModels from '$lib/components/settings/settings-models.svelte';
   import SettingsDataPaths from '$lib/components/settings/settings-data-paths.svelte';
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
-  import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
   import { inputClasses } from '$lib/css-classes';
   import { BlurMode } from '$lib/data/blur-mode';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { confirmResetUiSettings } from '$lib/functions/reset-ui-settings';
-  import { LocalFont } from '$lib/data/fonts';
-  import { FuriganaStyle } from '$lib/data/furigana-style';
   import { ImportHTMLFixMode } from '$lib/data/import-html-fix-mode';
   import { MergeMode } from '$lib/data/merge-mode';
   import {
@@ -52,27 +48,23 @@
     highlightPalette$,
     highlightSlotStyles$,
     database,
-    fontFamilyGroupOne$,
-    fontFamilyGroupTwo$,
     lastBookHasImages$,
     horizontalCustomReadingPosition$,
     textMarginMode$,
     textMarginValue$,
     theme$,
+    writingMode$,
     verticalCustomReadingPosition$
   } from '$lib/data/store';
   import { isTauri } from '$lib/data/env';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
-  import type { TextMarginMode } from '$lib/data/text-margin-mode';
   import {
     availableThemes as availableThemesMap,
     type ThemeOption
   } from '$lib/data/theme-option';
-  import type { VerticalTextOrientation } from '$lib/data/vertical-text-orientation';
   import { ViewMode } from '$lib/data/view-mode';
   import { t, tImmediate, locale$, LOCALES } from '$lib/i18n';
-  import type { WritingMode } from '$lib/data/writing-mode';
   import { secondsToMinutes } from '$lib/functions/statistic-util';
   import { activateOnKeyup } from '$lib/functions/utils';
   import {
@@ -86,43 +78,27 @@
 
   export let viewMode: ViewMode;
 
-  export let fontFamilyGroupOne: string;
 
-  export let fontFamilyGroupTwo: string;
 
-  export let fontWeight: number | null;
 
-  export let fontSize: number;
 
-  export let lineHeight: number;
 
-  export let textIndentation: number;
 
-  export let textMarginValue: number;
 
   export let blurImage: boolean;
 
   export let blurImageMode: string;
 
-  export let hideFurigana: boolean;
 
-  export let furiganaStyle: FuriganaStyle;
 
-  export let writingMode: WritingMode;
 
-  export let enableFontKerning: boolean;
 
-  export let enableFontVPAL: boolean;
 
-  export let verticalTextOrientation: VerticalTextOrientation;
 
   export let prioritizeReaderStyles: boolean;
 
-  export let enableTextJustification: boolean;
 
-  export let enableTextWrapPretty: boolean;
 
-  export let textMarginMode: TextMarginMode;
 
   export let enableReaderWakeLock: boolean;
 
@@ -328,28 +304,6 @@
     }
   }
 
-  $: optionsForFuriganaStyle = [
-    { id: FuriganaStyle.Hide, text: $t('settings.value.furigana.hide') },
-    { id: FuriganaStyle.Partial, text: $t('settings.value.furigana.partial') },
-    { id: FuriganaStyle.Toggle, text: $t('settings.value.furigana.toggle') },
-    { id: FuriganaStyle.Full, text: $t('settings.value.furigana.full') }
-  ] as ToggleOption<FuriganaStyle>[];
-
-  $: optionsForWritingMode = [
-    { id: 'horizontal-tb', text: $t('settings.value.wm.horizontal') },
-    { id: 'vertical-rl', text: $t('settings.value.wm.vertical') }
-  ] as ToggleOption<WritingMode>[];
-
-  $: optionsForVerticalTextOrientation = [
-    { id: 'mixed', text: $t('settings.value.vto.mixed') },
-    { id: 'upright', text: $t('settings.value.vto.upright') }
-  ] as ToggleOption<VerticalTextOrientation>[];
-
-  $: optionsForTextMarginMode = [
-    { id: 'auto', text: $t('settings.value.textMargin.auto') },
-    { id: 'manual', text: $t('settings.value.textMargin.manual') }
-  ] as ToggleOption<TextMarginMode>[];
-
   $: optionsForViewMode = [
     { id: ViewMode.Continuous, text: $t('settings.value.viewMode.continuous') },
     { id: ViewMode.Paginated, text: $t('settings.value.viewMode.paginated') }
@@ -407,7 +361,6 @@
   ] as ToggleOption<MergeMode>[];
 
   let showSpinner = false;
-  let furiganaStyleTooltip = '';
   let importHTMLFixModeTooltip = '';
   let autoReplicationTypeTooltip = '';
   let trackerAutoPauseTooltip = '';
@@ -416,28 +369,9 @@
     $textMarginValue$ = 0;
   }
 
-  $: verticalTextOrientationTooltip =
-    verticalTextOrientation === 'mixed'
-      ? $t('settings.tip.vto.mixed')
-      : $t('settings.tip.vto.upright');
   $: autoBookmarkTooltip = $t('settings.tip.autoBookmark', { n: autoBookmarkTime });
   $: wakeLockSupported = browser && 'wakeLock' in navigator;
-  $: verticalMode = writingMode === 'vertical-rl';
-  $: fontCacheSupported = browser && 'caches' in window;
-  $: switch (furiganaStyle) {
-    case FuriganaStyle.Hide:
-      furiganaStyleTooltip = $t('settings.tip.furigana.hide');
-      break;
-    case FuriganaStyle.Toggle:
-      furiganaStyleTooltip = $t('settings.tip.furigana.toggle');
-      break;
-    case FuriganaStyle.Full:
-      furiganaStyleTooltip = $t('settings.tip.furigana.full');
-      break;
-    default:
-      furiganaStyleTooltip = $t('settings.tip.furigana.partial');
-      break;
-  }
+  $: verticalMode = $writingMode$ === 'vertical-rl';
   $: avoidPageBreakTooltip = avoidPageBreak
     ? $t('settings.tip.avoidBreak.on')
     : $t('settings.tip.avoidBreak.off');
@@ -616,179 +550,7 @@
       </SettingsItemGroup>
     </div>
 
-    <SettingsSectionHeader title={$t('settings.section.fontsTypography')} />
-    <SettingsItemGroup title={$t('settings.item.fontGroup1')}>
-      <div slot="header" class="flex items-center">
-        <SettingsFontSelector
-          availableFonts={[
-            LocalFont.NOTOSANSSC,
-            LocalFont.NOTOSERIFJP,
-            LocalFont.KZUDMINCHO,
-            LocalFont.SERIF
-          ]}
-          bind:fontValue={fontFamilyGroupOne}
-        />
-        {#if fontCacheSupported}
-          <div
-            tabindex="0"
-            role="button"
-            title="打开自定义字体对话框"
-            on:click={() =>
-              dialogManager.dialogs$.next([
-                {
-                  component: SettingsUserFontDialog,
-                  props: { fontFamily: fontFamilyGroupOne$ }
-                }
-              ])}
-            on:keyup={activateOnKeyup}
-          >
-            <Fa icon={faComputer} />
-          </div>
-        {/if}
-      </div>
-      <input
-        type="text"
-        class={inputClasses}
-        placeholder="Noto Sans SC"
-        bind:value={fontFamilyGroupOne}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={$t('settings.item.fontGroup2')}>
-      <div slot="header" class="flex items-center">
-        <SettingsFontSelector
-          availableFonts={[LocalFont.NOTOSANSSC, LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF]}
-          bind:fontValue={fontFamilyGroupTwo}
-        />
-        {#if fontCacheSupported}
-          <div
-            tabindex="0"
-            role="button"
-            on:click={() =>
-              dialogManager.dialogs$.next([
-                {
-                  component: SettingsUserFontDialog,
-                  props: { fontFamily: fontFamilyGroupTwo$ }
-                }
-              ])}
-            on:keyup={activateOnKeyup}
-          >
-            <Fa icon={faComputer} />
-          </div>
-        {/if}
-      </div>
-      <input
-        type="text"
-        class={inputClasses}
-        placeholder="Noto Sans SC"
-        bind:value={fontFamilyGroupTwo}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={$t('settings.item.fontSize')}>
-      <input type="number" class={inputClasses} step="1" min="1" bind:value={fontSize} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={$t('settings.item.lineHeight')}>
-      <input
-        type="number"
-        class={inputClasses}
-        step="0.05"
-        min="1"
-        bind:value={lineHeight}
-        on:change={() => {
-          if (!lineHeight || lineHeight < 1) {
-            lineHeight = 1.65;
-          }
-        }}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={$t('settings.item.fontWeight')} tooltip={$t('settings.tip.fontWeight')}>
-      <input
-        type="number"
-        placeholder="默认"
-        class={inputClasses}
-        step="100"
-        min="100"
-        max="1000"
-        bind:value={fontWeight}
-        on:change={() => {
-          if (fontWeight === null) return;
-          if (fontWeight < 100) fontWeight = 100;
-          else if (fontWeight > 1000) fontWeight = 1000;
-        }}
-      />
-    </SettingsItemGroup>
-    <SettingsSectionHeader title={$t('settings.section.paragraphs')} />
-    <SettingsItemGroup title={$t('settings.item.paraIndent')} tooltip={$t('settings.tip.paraIndent')}>
-      <input
-        type="number"
-        class={inputClasses}
-        step=".5"
-        min="0"
-        bind:value={textIndentation}
-        on:blur={() => {
-          const newValue = Number.parseFloat(`${textIndentation ?? 0}`);
-          if (isNaN(newValue) || newValue < 1) textIndentation = 0;
-        }}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={$t('settings.item.paraSpacingMode')} tooltip={$t('settings.tip.paraSpacingMode')}>
-      <ButtonToggleGroup
-        options={optionsForTextMarginMode}
-        bind:selectedOptionId={textMarginMode}
-      />
-    </SettingsItemGroup>
-    {#if textMarginMode === 'manual'}
-      <SettingsItemGroup title={$t('settings.item.paraSpacing')} tooltip={$t('settings.tip.paraSpacing')}>
-        <input
-          type="number"
-          class={inputClasses}
-          step=".5"
-          min="0"
-          bind:value={textMarginValue}
-          on:blur={() => {
-            const newValue = Number.parseFloat(`${textMarginValue ?? 0}`);
-            if (isNaN(newValue) || newValue < 1) textMarginValue = 0;
-          }}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup title={$t('settings.item.justify')} tooltip={$t('settings.tip.justify')}>
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={enableTextJustification}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={$t('settings.item.prettyWrap')} tooltip={$t('settings.tip.prettyWrap')}>
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTextWrapPretty} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={$t('settings.item.writingDirection')}>
-      <ButtonToggleGroup options={optionsForWritingMode} bind:selectedOptionId={writingMode} />
-    </SettingsItemGroup>
-    {#if verticalMode}
-      <SettingsItemGroup title={$t('settings.item.enableKerning')} tooltip={$t('settings.tip.enableKerning')}>
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontKerning} />
-      </SettingsItemGroup>
-      <SettingsItemGroup title={$t('settings.item.enableVpal')} tooltip={$t('settings.tip.enableVpal')}>
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontVPAL} />
-      </SettingsItemGroup>
-      <SettingsItemGroup title={$t('settings.item.textOrientation')} tooltip={verticalTextOrientationTooltip}>
-        <ButtonToggleGroup
-          options={optionsForVerticalTextOrientation}
-          bind:selectedOptionId={verticalTextOrientation}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsSectionHeader title={$t('settings.section.furigana')} />
-    <SettingsItemGroup title={$t('settings.item.hideFurigana')}>
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
-    </SettingsItemGroup>
-    {#if hideFurigana}
-      <SettingsItemGroup title={$t('settings.item.furiganaStyle')} tooltip={furiganaStyleTooltip}>
-        <ButtonToggleGroup
-          options={optionsForFuriganaStyle}
-          bind:selectedOptionId={furiganaStyle}
-        />
-      </SettingsItemGroup>
-    {/if}
+    <SettingsTypography />
   {:else if activeSettings === 'Reader'}
     <SettingsSectionHeader title={$t('settings.section.viewMode')} hint={$t('settings.section.viewModeHint')} />
     <div class="h-full">

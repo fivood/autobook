@@ -5,6 +5,8 @@
   import { fly } from 'svelte/transition';
   import { quintInOut } from 'svelte/easing';
   import SettingsTts from '$lib/components/settings/settings-tts.svelte';
+  import SettingsTypography from '$lib/components/settings/settings-typography.svelte';
+  import Ripple from '$lib/components/ripple.svelte';
   import { pagePath } from '$lib/data/env';
   import { clickOutside } from '$lib/functions/use-click-outside';
   import { t } from '$lib/i18n';
@@ -13,6 +15,14 @@
   export let bookLanguage: string | undefined = undefined;
 
   const dispatch = createEventDispatcher<{ close: void }>();
+
+  // `id` is the dispatch identity; only `labelKey` goes through $t.
+  const tabs = [
+    { id: 'tts', labelKey: 'readerSettings.tab.tts' },
+    { id: 'typography', labelKey: 'readerSettings.tab.typography' }
+  ];
+
+  let activeTab = 'tts';
 </script>
 
 <!-- Deliberately NOT a grid, unlike the settings page's container: the panels
@@ -35,8 +45,27 @@
     ><Fa icon={faTimes} /></button>
   </div>
 
+  <div class="flex border-b border-current/10">
+    {#each tabs as tab (tab.id)}
+      <button
+        type="button"
+        class="drawer-tab relative flex-1 px-3 py-2 text-sm"
+        class:is-active={activeTab === tab.id}
+        aria-pressed={activeTab === tab.id}
+        on:click={() => (activeTab = tab.id)}
+      >
+        {$t(tab.labelKey)}
+        <Ripple />
+      </button>
+    {/each}
+  </div>
+
   <div class="flex-1 overflow-y-auto px-4 py-3">
-    <SettingsTts showSectionHeader={false} {bookLanguage} />
+    {#if activeTab === 'tts'}
+      <SettingsTts showSectionHeader={false} {bookLanguage} />
+    {:else}
+      <SettingsTypography showSectionHeader={false} />
+    {/if}
   </div>
 
   <div class="border-t border-current/10 px-4 py-2 text-xs">
@@ -45,3 +74,29 @@
     >
   </div>
 </div>
+
+<style>
+  /* Page-surface palette, not menu: this is a drawer (see the theme contract
+     in CLAUDE.md), so the active tab reads as a soft selection rather than the
+     inverted fill the header's menu bar uses. */
+  .drawer-tab {
+    background: transparent;
+    opacity: 0.6;
+    transition: opacity 0.12s ease, background-color 0.12s ease;
+  }
+  .drawer-tab:hover {
+    opacity: 1;
+  }
+  .drawer-tab.is-active {
+    opacity: 1;
+    font-weight: 600;
+  }
+  .drawer-tab.is-active::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    bottom: -1px;
+    height: 2px;
+    background: currentColor;
+  }
+</style>

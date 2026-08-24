@@ -557,6 +557,8 @@ export default {
 
   // Reader-side settings drawer
   'readerSettings.title': '読み上げ設定',
+  'readerSettings.tab.tts': '読み上げ',
+  'readerSettings.tab.typography': 'レイアウト',
   'readerSettings.close': '閉じる',
   'readerSettings.more': 'レイアウト・データ・統計などの全設定 →',
   'ai.emptyHint1': '既読部分について何でも聞いてください。',

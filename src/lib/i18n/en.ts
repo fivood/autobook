@@ -552,6 +552,8 @@ export default {
 
   // Reader-side settings drawer
   'readerSettings.title': 'Narration settings',
+  'readerSettings.tab.tts': 'Narration',
+  'readerSettings.tab.typography': 'Typography',
   'readerSettings.close': 'Close',
   'readerSettings.more': 'Typography, data, statistics and the rest →',
   'ai.emptyHint1': 'Ask me anything about what you\'ve read so far.',

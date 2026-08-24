@@ -18,23 +18,12 @@
     confirmClose$,
     customReadingPointEnabled$,
     disableWheelNavigation$,
-    enableFontVPAL$,
     enableReaderWakeLock$,
     enableTapEdgeToFlip$,
-    enableTextJustification$,
-    enableTextWrapPretty$,
-    enableVerticalFontKerning$,
     firstDimensionMargin$,
-    fontFamilyGroupOne$,
-    fontFamilyGroupTwo$,
-    fontSize$,
-    fontWeight$,
-    furiganaStyle$,
     hideExternalReadHint$,
-    hideFurigana$,
     hideSpoilerImage$,
     importHTMLFixMode$,
-    lineHeight$,
     manualBookmark$,
     keepLocalStatisticsOnDeletion$,
     openTrackerOnCompletion$,
@@ -55,9 +44,6 @@
     statisticsEnabled$,
     statisticsMergeMode$,
     swipeThreshold$,
-    textIndentation$,
-    textMarginMode$,
-    textMarginValue$,
     theme$,
     trackerAutoPause$,
     trackerBackwardSkipThreshold$,
@@ -66,9 +52,7 @@
     trackerIdleTime$,
     trackerPopupDetection$,
     trackerSkipThresholdAction$,
-    verticalTextOrientation$,
     viewMode$,
-    writingMode$,
     readingGoalsMergeMode$,
     hideSpoilerImageMode$
   } from '$lib/data/store';
@@ -151,25 +135,9 @@
       {activeSettings}
       {storageQuota}
       bind:selectedTheme={$theme$}
-      bind:fontFamilyGroupOne={$fontFamilyGroupOne$}
-      bind:fontFamilyGroupTwo={$fontFamilyGroupTwo$}
-      bind:fontWeight={$fontWeight$}
-      bind:fontSize={$fontSize$}
-      bind:lineHeight={$lineHeight$}
-      bind:textIndentation={$textIndentation$}
-      bind:textMarginValue={$textMarginValue$}
       bind:blurImage={$hideSpoilerImage$}
       bind:blurImageMode={$hideSpoilerImageMode$}
-      bind:hideFurigana={$hideFurigana$}
-      bind:furiganaStyle={$furiganaStyle$}
-      bind:writingMode={$writingMode$}
-      bind:enableFontKerning={$enableVerticalFontKerning$}
-      bind:enableFontVPAL={$enableFontVPAL$}
-      bind:verticalTextOrientation={$verticalTextOrientation$}
       bind:prioritizeReaderStyles={$prioritizeReaderStyles$}
-      bind:enableTextJustification={$enableTextJustification$}
-      bind:enableTextWrapPretty={$enableTextWrapPretty$}
-      bind:textMarginMode={$textMarginMode$}
       bind:enableReaderWakeLock={$enableReaderWakeLock$}
       bind:showCharacterCounter={$showCharacterCounter$}
       bind:showPercentage={$showPercentage$}
