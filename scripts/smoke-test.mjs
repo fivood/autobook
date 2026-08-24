@@ -271,6 +271,49 @@ async function batchImportNamesEveryFailure() {
   return 'all 3 failures named with reasons';
 }
 
+/** Regression: BlobAutoReader had four `onError?.()` call sites and nothing
+ *  ever assigned onError, so every engine failure ended as "the button springs
+ *  back, no explanation" (1.38.0).
+ *
+ *  Forced by making Web Speech fire a fatal error event. Deterministic and
+ *  engine-independent: the wiring under test is /b's onError handler, not the
+ *  engine. */
+async function ttsFailureExplainsItself(bookId) {
+  // Pin the engine: the failure is injected through speechSynthesis, which the
+  // blob engines (SAPI / Edge / Kokoro / custom) never touch. Restored from the
+  // snapshot at the end of the run like every other setting the suite writes.
+  await session.evaluate(`(() => { localStorage.setItem('ttsEngine', 'web'); return 1; })()`);
+  await goto(`/b?id=${bookId}`, `!!document.querySelector('[title^="开始朗读"]')`);
+
+  const out = await session.evaluate(`(() => {
+    const original = window.speechSynthesis.speak.bind(window.speechSynthesis);
+    window.speechSynthesis.speak = (utt) => {
+      setTimeout(() => utt.onerror && utt.onerror({ error: 'synthesis-failed' }), 60);
+    };
+    document.querySelector('[title^="开始朗读"]').click();
+    return ${after(
+      2000,
+      `(() => {
+        window.speechSynthesis.speak = original;
+        const body = document.body.innerText;
+        // Close whatever dialog appeared so the next scenario starts clean.
+        const close = [...document.querySelectorAll('button')].find(b => b.innerText.trim() === '关闭');
+        if (close) close.click();
+        return {
+          reported: /朗读失败/.test(body),
+          quotesEngine: /synthesis-failed/.test(body),
+          backToStopped: !!document.querySelector('[title^="开始朗读"]')
+        };
+      })()`
+    )};
+  })()`);
+
+  if (!out.reported) throw new Error('engine failure produced no visible message');
+  if (!out.quotesEngine) throw new Error('message did not quote the engine reason');
+  if (!out.backToStopped) throw new Error('the play button did not return to the stopped state');
+  return 'reason shown and quoted';
+}
+
 // ----------------------------------------------------------------- run ----
 
 console.log('AutoBook smoke suite (real Tauri window via CDP)\n');
@@ -293,6 +336,7 @@ try {
 
   await scenario('书签：书籍开头设的书签能跳回去', () => bookmarkAtStart(bookId));
   await scenario('朗读：正文不被隐藏、可滚动、逐句高亮推进', () => ttsLeavesTextAlone(bookId));
+  await scenario('朗读：引擎失败时说明原因', () => ttsFailureExplainsItself(bookId));
   await scenario('导入：批量失败时逐个报出文件名和原因', () => batchImportNamesEveryFailure());
 } catch (err) {
   fail('suite setup', err.message);
