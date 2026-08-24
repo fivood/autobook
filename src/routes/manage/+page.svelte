@@ -846,6 +846,13 @@
   }
 
   function showError(title: string, message: string, fallbackMessage: string) {
+    // Offer the log report once this session has produced more than one error
+    // — but never at the cost of the reason. This used to swap `message` for
+    // the generic `fallbackMessage` in that case, and since logger.errorCount
+    // is cumulative across the whole session (a font-load warning at startup
+    // is enough), the specific reason was being thrown away exactly when
+    // things were going worst. LogReportDialog renders nothing but `message`,
+    // so what was left was 「书籍导入期间发生错误」 and three buttons.
     const showReport = logger.errorCount > 1;
 
     logger.warn(message);
@@ -855,7 +862,7 @@
         component: showReport ? LogReportDialog : MessageDialog,
         props: {
           title,
-          message: showReport ? fallbackMessage : message
+          message: message || fallbackMessage
         }
       }
     ]);

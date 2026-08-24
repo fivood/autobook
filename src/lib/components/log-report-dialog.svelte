@@ -238,7 +238,8 @@
 <DialogTemplate>
   <svelte:fragment slot="header">{title}</svelte:fragment>
   <svelte:fragment slot="content">
-    <p>{message}</p>
+    <!-- pre-line: a batch import passes one line per failed file. -->
+    <p class="whitespace-pre-line">{message}</p>
     {#if downloadStatus}
       <p class="text-xs opacity-70 mt-2">{downloadStatus}</p>
     {/if}

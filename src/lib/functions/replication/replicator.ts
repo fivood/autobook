@@ -74,7 +74,17 @@ export async function importData(
   const maxProgress = progressBase * files.length;
   const limiter = pLimit(1);
 
-  let errorMessage = '';
+  /**
+   * One entry per file that failed. This used to be a single string that each
+   * failure overwrote, so importing a folder where several books fail reported
+   * only the last one — the others were invisible until you retried and hit
+   * them one at a time. Cancels never land here: handleErrorDuringReplication
+   * rethrows AbortError.
+   */
+  const failures: string[] = [];
+  /** Beyond this the dialog stops being readable; the count still tells the
+   *  full story. */
+  const MAX_REPORTED_FAILURES = 10;
 
   replicationProgress$.next({ progressBase, maxProgress });
 
@@ -217,9 +227,9 @@ export async function importData(
 
           checkCancelAndProgress(cancelSignal, true, !bookContent.coverImage);
         } catch (error: any) {
-          errorMessage = handleErrorDuringReplication(error, `Error importing ${currentTitle}: `, [
-            limiter
-          ]);
+          failures.push(
+            handleErrorDuringReplication(error, `Error importing ${currentTitle}: `, [limiter])
+          );
         }
       })
     )
@@ -244,7 +254,12 @@ export async function importData(
     });
   }
 
-  return { error: errorMessage, imported };
+  const shown = failures.slice(0, MAX_REPORTED_FAILURES);
+  if (failures.length > shown.length) {
+    shown.push(`…还有 ${failures.length - shown.length} 个文件失败`);
+  }
+
+  return { error: shown.join('\n'), imported };
 }
 
 export async function importBackup(
