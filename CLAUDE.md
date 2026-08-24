@@ -99,6 +99,30 @@ node scripts/cdp-eval.mjs "location.pathname"
 node scripts/cdp-eval.mjs "$(cat probe.js)" # 表达式会被 await，可以返回 Promise
 ```
 
+### 冒烟套件
+
+```
+npm run tauri:dev:cdp      # 一个 shell 挂着
+npm run smoke              # 另一个 shell
+```
+
+`scripts/smoke-test.mjs`。**每个场景对应一个真出过的 bug**，不是凭空想的检查项：
+书籍开头的书签能不能跳回、朗读期间正文是否被藏起来 + 逐句高亮是否推进、批量
+导入失败时是否逐个报出文件名。
+
+规矩：
+- 加场景的前提是**它对应一个真实发生过的回归**。想不出对应的 bug，就说明那个
+  场景大概率不值得写
+- 套件自己导一本 `ZZ-冒烟测试用书`，跑完删掉，改过的 localStorage 键全部还原
+  （失败路径也走 finally）。跑之前先 snapshot，拿不到就拒绝运行
+- 不要靠切存储源/改 fsRoot 来制造失败——那会牵出文件夹授权弹窗，还得让套件自己
+  收拾。用坏数据（比如后缀是 .epub 但内容不是 zip）更干净
+- `goto()` 必须传一个**页面专属就绪标记**。只等 `readyState === 'complete'` 不够，
+  SvelteKit 之后还有客户端导航，这期间起的 evaluate 会以
+  `Execution context was destroyed` 挂掉
+
+自检过：把书签那个修复临时退回去，套件立刻红（`4000 → 4000`），改回来又绿。
+
 几条踩过的：
 
 - `tauri dev` 里 vite 走 strictPort，**5281 被占就整个起不来**（CDP 端口也就
