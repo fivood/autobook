@@ -639,7 +639,29 @@ export const addCharactersOnCompletion$ = writableBooleanLocalStorageSubject()(
 
 export const trackerAutostartTime$ = writableNumberLocalStorageSubject()('trackerAutoStartTime', 0);
 
-export const trackerIdleTime$ = writableNumberLocalStorageSubject()('trackerIdleTime', 0);
+/** Seconds of no page interaction (scroll / pointer / selection) after which
+ * the tracker stops counting — and, with `adjustStatisticsAfterIdleTime$`,
+ * retroactively drops the idle window it already counted.
+ *
+ * On by default since 1.38. Off (0) meant the tracker billed wall-clock time
+ * for as long as the reader was open: walk away mid-chapter and the day's
+ * "reading time" kept climbing. Five minutes rather than one or two because
+ * activity here is scroll / pointer / selection — someone reading a dense
+ * page on a big screen genuinely can sit still for a couple of minutes, and
+ * over-trimming real reading is the worse error of the two. */
+export const trackerIdleTime$ = writableNumberLocalStorageSubject()('trackerIdleTime', 300);
+
+/** One-shot flag for the 1.38 default change. Installs that predate it have
+ * `trackerIdleTime` persisted as 0 — including everyone who merely opened the
+ * settings page, since the number inputs there write on mount — so the new
+ * default alone would never reach them. Flipping once, and only from an exact
+ * 0, keeps a deliberate later "off" sticking. */
+const trackerIdleMigrated$ = writableBooleanLocalStorageSubject()('trackerIdleMigrated', false);
+
+if (browser && !trackerIdleMigrated$.getValue()) {
+  if (trackerIdleTime$.getValue() === 0) trackerIdleTime$.next(300);
+  trackerIdleMigrated$.next(true);
+}
 
 export const trackerForwardSkipThreshold$ = writableNumberLocalStorageSubject()(
   'trackerForwardSkipThreshold',

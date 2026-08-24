@@ -368,6 +368,9 @@
 
   $: startOfDayHours = `${`${startDayHoursForTracker}`.padStart(2, '0')}:00`;
 
+  /** 12 hours, the ceiling the tooltip has always promised. */
+  const IDLE_MAX_MINUTES = 720;
+
   $: trackerIdleTimeInMin = secondsToMinutes(trackerIdleTime);
 
   $: switch (trackerAutoPause) {
@@ -763,19 +766,24 @@
       </SettingsItemGroup>
       <SettingsItemGroup
         title="空闲时间 (分钟)"
-        tooltip={'无页面交互达到此分钟数后统计自动暂停（0 = 关闭，最大 12 小时）'}
+        tooltip={'无页面交互（滚动 / 指针 / 选择）达到此分钟数后统计自动暂停，并把这段空闲从已计入的时长里扣回。默认 5 分钟，0 = 关闭（关掉的话，人离开了时长也会一直涨），最大 12 小时'}
       >
         <input
           type="number"
           class={inputClasses}
           step="0.5"
           min="0"
+          max={IDLE_MAX_MINUTES}
           bind:value={trackerIdleTimeInMin}
           on:blur={() => {
+            // The ceiling is in minutes because that is what this field holds.
+            // It used to compare against 43200 — the *seconds* in 12 hours —
+            // so the clamp only fired above 30 days, and then dropped the
+            // value to 900 seconds (15 min) rather than the 12 h it promised.
             if (!trackerIdleTimeInMin || trackerIdleTimeInMin < 0) {
               trackerIdleTime = 0;
-            } else if (trackerIdleTimeInMin > 43200) {
-              trackerIdleTime = 900;
+            } else if (trackerIdleTimeInMin > IDLE_MAX_MINUTES) {
+              trackerIdleTime = IDLE_MAX_MINUTES * 60;
             } else {
               trackerIdleTime = Math.floor(trackerIdleTimeInMin * 60);
             }
