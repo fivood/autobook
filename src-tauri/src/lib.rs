@@ -5,6 +5,7 @@ use tauri::{
   tray::{TrayIconBuilder, TrayIconEvent},
   Emitter, Manager, WindowEvent,
 };
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_fs::FsExt;
 
 mod calibre_converter;
@@ -127,8 +128,6 @@ async fn pick_user_dir(
   title: Option<String>,
   default_path: Option<String>,
 ) -> Result<Option<String>, String> {
-  use tauri_plugin_dialog::DialogExt;
-
   let mut builder = app.dialog().file();
   if let Some(title) = title {
     builder = builder.set_title(title);
@@ -256,10 +255,13 @@ fn take_launch_files(state: tauri::State<LaunchFiles>) -> Vec<String> {
   std::mem::take(&mut *guard)
 }
 
-/// Schedule a Local Storage wipe on next launch and restart. Used by both the
-/// tray menu and the settings page reset button.
-#[tauri::command]
-fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
+/// Drop the marker Local Storage wipe reads on next launch, then restart.
+/// Never returns on success — `restart()` diverges.
+///
+/// The tray menu used to inline a copy of this that swallowed the write
+/// error, so a failed write still restarted and the user just saw "nothing
+/// happened". One path, one error.
+fn do_ui_reset(app: &tauri::AppHandle) -> Result<(), String> {
   let flag = reset_flag_path();
   if let Some(parent) = flag.parent() {
     let _ = std::fs::create_dir_all(parent);
@@ -267,6 +269,13 @@ fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
   std::fs::write(&flag, b"1").map_err(|e| e.to_string())?;
   QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
   app.restart();
+}
+
+/// Schedule a Local Storage wipe on next launch and restart. Used by both the
+/// tray menu and the settings page reset button.
+#[tauri::command]
+fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
+  do_ui_reset(&app)
 }
 
 /// Schedule a FULL data wipe on next launch (Local Storage + IndexedDB) and
@@ -611,13 +620,38 @@ pub fn run() {
               let _ = app.emit("tts-toggle", ());
             }
             "reset" => {
-              let flag = reset_flag_path();
-              if let Some(parent) = flag.parent() {
-                let _ = std::fs::create_dir_all(parent);
-              }
-              let _ = std::fs::write(&flag, b"1");
-              QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
-              app.restart();
+              // The settings-page button for this same action confirms first;
+              // the tray one sits one row above 退出 in a four-item menu, so it
+              // is the copy that most needs a guard, not the one that can skip it.
+              let handle = app.clone();
+              app
+                .dialog()
+                .message(
+                  "将清除本地保存的 UI 设置（主题、字体、快捷键、TTS 选项等），书库与统计数据保留。应用会重启。",
+                )
+                .title("重置 UI 设置")
+                .buttons(MessageDialogButtons::OkCancelCustom(
+                  "重置并重启".to_string(),
+                  "取消".to_string(),
+                ))
+                .show(move |confirmed| {
+                  if !confirmed {
+                    return;
+                  }
+                  // This callback runs on a thread the dialog plugin spawns;
+                  // restart() tears down the windows and the tray, so hop back
+                  // to the main thread before touching either.
+                  let app = handle.clone();
+                  let _ = handle.run_on_main_thread(move || {
+                    if let Err(err) = do_ui_reset(&app) {
+                      app
+                        .dialog()
+                        .message(format!("重置失败：{err}"))
+                        .title("重置 UI 设置")
+                        .show(|_| {});
+                    }
+                  });
+                });
             }
             "quit" => request_quit(app),
             _ => {}

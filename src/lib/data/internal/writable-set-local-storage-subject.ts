@@ -6,11 +6,14 @@
 
 import { localStorage } from '$lib/data/window/local-storage';
 import { writableStorageSubject } from '$lib/data/internal/writable-storage-subject';
+import { parseOrDefault } from '$lib/data/internal/writable-object-local-storage-subject';
 
 function createWritableObjectLocalStorageSubject<T>(fallback: string, storage = localStorage) {
   return writableStorageSubject(
     storage,
-    (x) => new Set(JSON.parse(x || fallback)) as T,
+    // Same reasoning as the object subject: a corrupt value here is a white
+    // window, because store.ts builds these at module scope.
+    (x, key) => new Set(parseOrDefault<unknown[]>(x, fallback, key)) as T,
     (x) => JSON.stringify([...(x as Set<T>)])
   );
 }
