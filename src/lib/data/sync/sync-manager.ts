@@ -10,6 +10,7 @@ import {
   syncDeviceId$,
   syncEnabled$,
   syncLastAt$,
+  syncLastError$,
   syncToken$
 } from '$lib/data/store';
 import {
@@ -212,6 +213,7 @@ export async function pushNow(): Promise<{ pushed: number } | null> {
     saveMyContrib(cache);
     saveCachedRemote(merged);
     syncLastAt$.next(Date.now());
+    syncLastError$.next('');
     return { pushed: payload.changedKeys.length };
   } finally {
     inFlight = false;
@@ -224,7 +226,17 @@ export async function pullNow(): Promise<RemoteState | null> {
   const remote = await pullState(token);
   await applyRemoteToLocal(remote);
   syncLastAt$.next(Date.now());
+  syncLastError$.next('');
   return remote;
+}
+
+/** pullState/pushDelta reject with a `SyncError` ({status, message}) on an HTTP
+ *  error and with a TypeError when fetch itself could not reach the worker;
+ *  neither stringifies usefully on its own. */
+function describeSyncError(kind: 'push' | 'pull', err: any): string {
+  const status = typeof err?.status === 'number' ? ` (HTTP ${err.status})` : '';
+  const detail = err?.message || (typeof err === 'string' ? err : '网络不可达');
+  return `${kind === 'push' ? '上传' : '下载'}失败${status}：${detail}`;
 }
 
 function scheduleDebouncedPush() {
@@ -233,6 +245,7 @@ function scheduleDebouncedPush() {
   pushTimer = setTimeout(() => {
     pushNow().catch((err) => {
       console.warn('[sync] push failed', err);
+      syncLastError$.next(describeSyncError('push', err));
     });
   }, PUSH_DEBOUNCE_MS);
 }
@@ -248,10 +261,16 @@ export function startSyncLoop() {
       pullTimer = undefined;
       return;
     }
-    pullNow().catch((err) => console.warn('[sync] initial pull failed', err));
+    pullNow().catch((err) => {
+      console.warn('[sync] initial pull failed', err);
+      syncLastError$.next(describeSyncError('pull', err));
+    });
     if (!pullTimer) {
       pullTimer = setInterval(() => {
-        pullNow().catch((err) => console.warn('[sync] periodic pull failed', err));
+        pullNow().catch((err) => {
+          console.warn('[sync] periodic pull failed', err);
+          syncLastError$.next(describeSyncError('pull', err));
+        });
       }, PULL_INTERVAL_MS);
     }
   });

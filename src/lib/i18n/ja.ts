@@ -825,6 +825,7 @@ export default {
   'sync.regenDeviceId': 'device-id を再生成',
   'sync.pushNow': '今すぐプッシュ',
   'sync.pullNow': '今すぐ取得',
+  'sync.autoFailed': 'バックグラウンド同期が失敗しています：{detail}。上のアップロード / ダウンロードを押すと詳細が出ます。',
   'sync.lastSync': '前回の同期：{time}',
 
   'update.checkFailed': 'アップデート確認に失敗',

@@ -150,6 +150,14 @@ export const syncToken$ = writableStringLocalStorageSubject()('syncToken', '');
 export const syncDeviceId$ = writableStringLocalStorageSubject()('syncDeviceId', '');
 export const syncEnabled$ = writableBooleanLocalStorageSubject()('syncEnabled', false);
 export const syncLastAt$ = writableNumberLocalStorageSubject()('syncLastAt', 0);
+/** Why the last automatic sync failed, '' when the last one worked.
+ *
+ * The background loop must not pop dialogs — a bad token would produce one per
+ * push, i.e. one every few seconds while reading. But `console.warn` alone
+ * meant a desktop user had no way at all to find out sync was dead; the only
+ * hint was a "last synced" timestamp that quietly stopped moving. Shown in
+ * 设置 → 数据 next to that timestamp, which is where you look when you wonder. */
+export const syncLastError$ = writableSubject<string>('');
 export const customThemes$ = writableObjectLocalStorageSubject<Record<string, ThemeOption>>()(
   'customThemes',
   {}

@@ -862,6 +862,7 @@ export default {
   'sync.regenDeviceId': '重新生成 device-id',
   'sync.pushNow': '立刻推送',
   'sync.pullNow': '立刻拉取',
+  'sync.autoFailed': '后台自动同步出错：{detail}。手动点上面的上传/下载可以看到完整报错。',
   'sync.lastSync': '上次同步：{time}',
 
   'update.checkFailed': '检查更新失败',

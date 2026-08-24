@@ -14,6 +14,7 @@
     syncDeviceId$,
     syncEnabled$,
     syncLastAt$,
+    syncLastError$,
     syncToken$
   } from '$lib/data/store';
   import {
@@ -194,6 +195,12 @@
     ><Fa icon={faDownload} size="xs" /> {$t('sync.pullNow')}</button>
     <span class="text-xs opacity-60">{$t('sync.lastSync', { time: formatTime($syncLastAt$) })}</span>
   </div>
+
+  {#if $syncLastError$}
+    <p class="mb-3 text-xs" style="color:var(--danger-color);">
+      {$t('sync.autoFailed', { detail: $syncLastError$ })}
+    </p>
+  {/if}
 
   {#if message}
     <p class="text-xs opacity-70">{message}</p>

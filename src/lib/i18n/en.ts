@@ -820,6 +820,7 @@ export default {
   'sync.regenDeviceId': 'Regenerate device-id',
   'sync.pushNow': 'Push now',
   'sync.pullNow': 'Pull now',
+  'sync.autoFailed': 'Background sync is failing: {detail}. Use the upload/download buttons above for the full error.',
   'sync.lastSync': 'Last sync: {time}',
 
   'update.checkFailed': 'Update check failed',
