@@ -170,8 +170,22 @@
     {:else if jobForThisBook?.status === 'finished'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">OCR 完成（共 {jobForThisBook.progress.total} 页）</div>
-        <div class="meta">点「应用」刷新阅读器加载新内容</div>
+        {#if jobForThisBook.failedPages && jobForThisBook.failedPages >= jobForThisBook.progress.total}
+          <!-- Every page failed. Saying 「OCR 完成」 here is how a textless book
+               used to look identical to a good one. -->
+          <div class="title">OCR 没有识别出任何内容（{jobForThisBook.progress.total} 页全部失败）</div>
+          <div class="meta">
+            {jobForThisBook.firstFailure || '换一个识别语言或模型后可以再试一次'}
+          </div>
+        {:else if jobForThisBook.failedPages}
+          <div class="title">
+            OCR 完成（共 {jobForThisBook.progress.total} 页，其中 {jobForThisBook.failedPages} 页失败）
+          </div>
+          <div class="meta">{jobForThisBook.firstFailure || '点「应用」刷新阅读器加载新内容'}</div>
+        {:else}
+          <div class="title">OCR 完成（共 {jobForThisBook.progress.total} 页）</div>
+          <div class="meta">点「应用」刷新阅读器加载新内容</div>
+        {/if}
       </div>
       <button class="btn primary" on:click={applyAndReload}>应用并刷新</button>
       <button class="btn ghost" on:click={dismissResult} title="稍后再说"><Fa icon={faTimes} /></button>

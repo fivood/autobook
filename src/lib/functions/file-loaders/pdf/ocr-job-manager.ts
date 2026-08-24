@@ -95,6 +95,11 @@ function markBookOcrComplete(bookId: number) {
 export type OcrJobStatus = 'running' | 'finished' | 'errored';
 
 export interface OcrJobState {
+  /** Pages that produced no text layer. `finished` with this equal to the page
+   *  count means the run achieved nothing. */
+  failedPages?: number;
+  /** Reason for the first failed page, for the banner to quote. */
+  firstFailure?: string;
   bookId: number;
   bookTitle: string;
   lang: OcrLanguage;
@@ -140,7 +145,7 @@ export function startOcrJob(
 
   (async () => {
     try {
-      const updated = await runOcr(
+      const { book: updated, failedPages, totalPages, firstFailure } = await runOcr(
         book,
         lang,
         profile,
@@ -151,12 +156,20 @@ export function startOcrJob(
       );
       const db = await database.db;
       await db.put('data', updated);
-      markBookOcrComplete(book.id);
+      // Only retire the "scanned PDF" banner when something actually came out.
+      // A run where every page failed used to land here all the same, and the
+      // skip list then made sure the banner never offered a retry again — the
+      // book was stuck textless with no route back from the UI.
+      if (failedPages < totalPages) {
+        markBookOcrComplete(book.id);
+      }
       // Fire-and-forget the external-storage push so the "finished" state
       // can flip immediately and the user can hit "应用并刷新" without
       // waiting on disk I/O.
       pushOcrResultToExternalStorage(updated).catch(() => {});
-      _store.update((s) => (s ? { ...s, status: 'finished' } : s));
+      _store.update((s) =>
+        s ? { ...s, status: 'finished', failedPages, firstFailure } : s
+      );
     } catch (err: any) {
       const msg = err?.name === 'AbortError' ? '已中止' : err?.message || String(err);
       _store.update((s) => (s ? { ...s, status: 'errored', error: msg } : s));

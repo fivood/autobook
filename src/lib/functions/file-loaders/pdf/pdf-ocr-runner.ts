@@ -420,7 +420,7 @@ export async function runOcr(
   profile: OcrModelProfile,
   onProgress: (p: OcrProgress) => void,
   signal?: AbortSignal
-): Promise<BooksDbBookData> {
+): Promise<{ book: BooksDbBookData; failedPages: number; totalPages: number; firstFailure: string }> {
   const original = book.elementHtml;
   const pages = findPageImages(original);
   const total = pages.length;
@@ -447,6 +447,13 @@ export async function runOcr(
 
   const chunks: string[] = [];
   let cursor = 0;
+  /** Pages that produced no text layer. Both bail-outs below used to be a
+   *  console.warn and nothing else, so a run where every single page failed
+   *  finished exactly like a clean one — and markBookOcrComplete then put the
+   *  book on the skip list, retiring the banner that would have let the user
+   *  retry. */
+  let failedPages = 0;
+  let firstFailure = '';
 
   for (let i = 0; i < pages.length; i++) {
     if (signal?.aborted) throw new DOMException('OCR aborted', 'AbortError');
@@ -474,6 +481,8 @@ export async function runOcr(
 
     const blob = pageBlobFromBook(book, page.pageNum);
     if (!blob) {
+      failedPages += 1;
+      if (!firstFailure) firstFailure = `第 ${page.pageNum} 页取不到图片数据`;
       console.warn(`[ocr] no blob for page ${page.pageNum}`);
       onProgress({ page: progressPage, total, text: '' });
       chunks.push(page.imgTag);
@@ -492,7 +501,11 @@ export async function runOcr(
       const layer = itemsToTextLayer(result.items);
       spans = layer.spans;
       cleanText = layer.cleanText;
-    } catch (err) {
+    } catch (err: any) {
+      failedPages += 1;
+      if (!firstFailure) {
+        firstFailure = `第 ${page.pageNum} 页：${err?.message || String(err)}`;
+      }
       console.warn(`[ocr] page ${page.pageNum} failed`, err);
     }
 
@@ -533,10 +546,15 @@ export async function runOcr(
   );
 
   return {
-    ...book,
-    elementHtml: newHtml,
-    characters: newCharacters,
-    sections: updatedSections,
-    lastBookModified: Date.now()
+    book: {
+      ...book,
+      elementHtml: newHtml,
+      characters: newCharacters,
+      sections: updatedSections,
+      lastBookModified: Date.now()
+    },
+    failedPages,
+    totalPages: total,
+    firstFailure
   };
 }
