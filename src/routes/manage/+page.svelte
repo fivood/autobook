@@ -584,7 +584,13 @@
         await reassignVaultCategory(asBookCardId(current.id), path);
       }
 
-      if (plan.added.length) await importVaultFiles(plan.added);
+      let importedCount = 0;
+      let importError: string | undefined;
+      if (plan.added.length) {
+        const res = await importVaultFiles(plan.added);
+        importedCount = res.imported;
+        importError = res.error;
+      }
 
       // Deletions mirror the vault, but only for books that would cost the
       // user nothing. A rename the content match failed to catch looks exactly
@@ -618,11 +624,24 @@
             }
           }
         ]);
+      } else if (importError) {
+        // Report the shortfall rather than a success with the intended count.
+        if (manual) {
+          showError(
+            tImmediate('vaultSync.partialTitle'),
+            tImmediate('vaultSync.partialMessage', {
+              imported: importedCount,
+              planned: plan.added.length,
+              detail: importError
+            }),
+            ''
+          );
+        }
       } else if (manual) {
         flashToast(
           tImmediate('vaultSync.done', {
             changed: plan.changed.length + plan.moved.length,
-            added: plan.added.length,
+            added: importedCount,
             removed: removable.length
           })
         );
@@ -635,8 +654,18 @@
     }
   }
 
-  /** Import notes the library has never seen, tagging each with its path. */
-  async function importVaultFiles(added: { path: string; content: string }[]) {
+  /**
+   * Import notes the library has never seen, tagging each with its path.
+   *
+   * Returns how many actually landed plus the failure reason, if any.
+   * `importData` reports failure by *returning* `{error}` rather than
+   * throwing, so the enclosing try/catch in syncVault never saw it: the sync
+   * went on to announce 「同步完成：新增 5」 using plan.added.length — the
+   * number it meant to add — while none of the five had imported.
+   */
+  async function importVaultFiles(
+    added: { path: string; content: string }[]
+  ): Promise<{ imported: number; error?: string }> {
     const files = added.map(
       (f) => new File([f.content], f.path.split('/').pop() || 'note.md', { type: 'text/plain' })
     );
@@ -669,6 +698,7 @@
       await reassignVaultCategory(entry.id, source.path);
     }
     if (result.error) logger.warn(`vault import: ${result.error}`);
+    return { imported: result.imported.length, error: result.error };
   }
 
   /** Put a synced book in the folder matching its directory, and only there. */

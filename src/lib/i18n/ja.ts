@@ -645,6 +645,8 @@ export default {
   'vaultSync.disable': '無効にする',
   'vaultSync.hint': 'md / txt ノートのフォルダ（Obsidian vault のサブフォルダなど）をライブラリに取り込みます。一方向で、ファイルが正となり AutoBook は読むだけです。サブフォルダ名がカテゴリになります。',
   'vaultSync.done': '同期完了：更新 {changed}、追加 {added}、削除 {removed}',
+  'vaultSync.partialTitle': '同期が完了しませんでした',
+  'vaultSync.partialMessage': '{planned} 件のノートを追加する予定でしたが、実際に取り込めたのは {imported} 件です。原因：{detail}',
   'vaultSync.failedTitle': '同期に失敗しました',
   'vaultSync.keptTitle': 'これらの本のファイルが見つかりません',
   'vaultSync.keptMessage': '読書進捗やハイライトがあるため自動削除していません（単に名前が変わっただけの可能性もあります）。不要なら手動で削除してください：\n\n{titles}',
