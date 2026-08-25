@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher, onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
   import { faTimes, faFolderOpen, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
   import { isTauri } from '$lib/data/env';
@@ -57,10 +57,17 @@
 
   $: if (word) refresh();
 
-  loadedDicts$.subscribe((v) => {
+  // This popup is mounted inside `{#if dictPopupOpen}` — a fresh instance per
+  // word lookup — and loadedDicts$ is a hand-rolled store whose subscribe()
+  // returns an unsubscribe that was being dropped on the floor. Its `subs` set
+  // therefore grew by one every lookup, and every later scan re-ran refresh()
+  // on each dead instance.
+  const unsubscribeDicts = loadedDicts$.subscribe((v) => {
     loaded = v;
     refresh();
   });
+
+  onDestroy(unsubscribeDicts);
 
   function refresh() {
     if (!word) {
