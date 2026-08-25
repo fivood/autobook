@@ -31,6 +31,7 @@ import { handleErrorDuringReplication } from '$lib/functions/replication/error-h
 import pLimit from 'p-limit';
 import { replicationProgress$ } from '$lib/functions/replication/replication-progress';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
+import { staleSiblings } from '$lib/data/storage/stale-siblings';
 
 import {
   BaseDirectory,
@@ -146,8 +147,22 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
         await this.setTitleData(directories);
         this.dataListFetched = true;
       } catch (err) {
-        console.error('[TauriFsStorageHandler] getBookList failed:', err);
-        this.dataListFetched = true;
+        // Rethrow like the browser handler does — dataList$ turns this into a
+        // dialog naming the reason. Swallowing it here logged to a console
+        // nobody sees and then showed an EMPTY LIBRARY: an unplugged drive, a
+        // renamed folder or a lost fs-scope grant all rendered as "your books
+        // are gone". Setting dataListFetched on the failure path also meant it
+        // never retried, so plugging the drive back in did not help.
+        this.clearData();
+        // Name the folder. The plugin's own text is accurate but arrives as
+        // e.g. 「forbidden path: Z:..., maybe it is not allowed on the scope
+        // for `allow-exists` permission in your capability file」, which tells
+        // a user with an unplugged drive nothing about what to do.
+        const reason = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `无法读取书库文件夹「${this.rootDir}」：${reason}\n\n` +
+            '如果书库放在移动硬盘或网络位置，请确认它已连接；也可以在 设置 → 数据 里重新选择书库文件夹。'
+        );
       }
     }
     return [...this.titleToBookCard.values()];
@@ -795,11 +810,21 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     await writeFile(newPath, data, { baseDir: this.baseDir });
     BaseStorageHandler.reportProgress(progressPerStep);
 
-    if (file && file.path !== newPath) {
+    // Remove every sibling sharing this prefix, not just the one we read at
+    // the start. Everything downstream does `files.find(startsWith(prefix))`
+    // and takes whatever the directory listing yields first — which for
+    // `bookdata_` is not the newest, since the variable-width character count
+    // sits ahead of the timestamp. So a single removal that failed earlier
+    // (locked by antivirus, a sync client, an open handle) would silently
+    // roll the book or its progress back to the older file on the next
+    // launch. Sweeping the prefix makes the write self-healing.
+    for (const stale of staleSiblings(files, filename, newPath)) {
       try {
-        await remove(file.path, { baseDir: this.baseDir });
+        await remove(stale.path, { baseDir: this.baseDir });
       } catch {
-        // best effort
+        // Best effort: the new file is already written and is the one kept in
+        // `titleToFiles`, so this session stays correct either way. The next
+        // successful write sweeps whatever is left over.
       }
     }
 
