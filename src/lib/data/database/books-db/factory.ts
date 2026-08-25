@@ -10,7 +10,7 @@ import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 13, {
+  return openDB<BooksDb>(name, 14, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -101,6 +101,12 @@ export function createBooksDb(name = 'books') {
             keyPath: 'title'
           });
           freshBookMetadataStore.createIndex('author', 'author');
+
+          // v14: archived books — put away, not deleted.
+          const freshArchivedStore = oldDb.createObjectStore('archived', {
+            keyPath: 'title'
+          });
+          freshArchivedStore.createIndex('archivedAt', 'archivedAt');
 
           break;
         }
@@ -246,6 +252,15 @@ export function createBooksDb(name = 'books') {
             if (slot) {
               await highlightStore.put({ ...row, color: slot });
             }
+          }
+          // Fall through to v13 → v14 upgrade.
+        }
+        case 13: {
+          if (!oldDb.objectStoreNames.contains('archived')) {
+            const archivedStore = oldDb.createObjectStore('archived', {
+              keyPath: 'title'
+            });
+            archivedStore.createIndex('archivedAt', 'archivedAt');
           }
           break;
         }

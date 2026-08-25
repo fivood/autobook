@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-import type BooksDbV13 from '$lib/data/database/books-db/versions/v13/books-db-v13';
+import type BooksDbV14 from '$lib/data/database/books-db/versions/v14/books-db-v14';
 
 export type { Section } from '$lib/data/database/books-db/versions/v6/books-db-v6';
 export type {
@@ -17,8 +17,9 @@ export type { BooksDbV13Highlight as BooksDbHighlight } from '$lib/data/database
 export type { BooksDbV10Session as BooksDbSession } from '$lib/data/database/books-db/versions/v10/books-db-v10';
 export type { BooksDbV11ManualBook as BooksDbManualBook } from '$lib/data/database/books-db/versions/v11/books-db-v11';
 export type { BooksDbV12BookMetadata as BooksDbBookMetadata } from '$lib/data/database/books-db/versions/v12/books-db-v12';
+export type { BooksDbV14Archived as BooksDbArchived } from '$lib/data/database/books-db/versions/v14/books-db-v14';
 
-type BooksDb = BooksDbV13;
+type BooksDb = BooksDbV14;
 
 export type BooksDbBookData = BooksDb['data']['value'];
 export type BooksDbBookmarkData = BooksDb['bookmark']['value'];
@@ -29,6 +30,6 @@ export type BooksDbLastModified = BooksDb['lastModified']['value'];
 export type BooksDbAudioBook = BooksDb['audioBook']['value'];
 export type BooksDbSubtitleData = BooksDb['subtitle']['value'];
 export type BooksDbHandle = BooksDb['handle']['value'];
-export const currentDbVersion = 13;
+export const currentDbVersion = 14;
 
 export type { BooksDb as default };

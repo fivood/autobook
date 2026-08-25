@@ -16,6 +16,14 @@
   } from '$lib/data/library-folders';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import { asBookCardId, type BookCardId } from '$lib/data/book-id';
+  import {
+    ARCHIVED_FILTER,
+    archiveBooks,
+    archivedTitles$,
+    clearArchiveForTitles,
+    refreshArchive,
+    unarchiveBooks
+  } from '$lib/data/library-archive';
   import BookManagerHeader from '$lib/components/book-card/book-manager-header.svelte';
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
@@ -161,14 +169,20 @@
     bookCards$,
     bookFolders$,
     activeFolderFilter$,
-    libraryFilter$
+    libraryFilter$,
+    archivedTitles$
   ]).pipe(
-    map(([cards, bookFolders, filter, libFilter]) => {
-      let result = cards;
+    map(([cards, bookFolders, filter, libFilter, archived]) => {
+      // Archived books are hidden from every view except the archive itself —
+      // that is the whole point of putting a book away.
+      let result =
+        filter === ARCHIVED_FILTER
+          ? cards.filter((c) => archived.has(c.title))
+          : cards.filter((c) => !archived.has(c.title));
       if (filter === 'uncategorized') {
         const assigned = new Set(bookFolders.map((bf) => bf.bookId));
         result = result.filter((c) => !assigned.has(c.id));
-      } else if (filter !== 'all') {
+      } else if (filter !== 'all' && filter !== ARCHIVED_FILTER) {
         const folderId = Number(filter);
         if (Number.isFinite(folderId)) {
           const inFolder = new Set(
@@ -256,6 +270,7 @@
   onDestroy(() => dialogManager.dialogs$.next([]));
 
   onMount(() => {
+    refreshArchive().catch(() => {});
     refreshFolders()
       // Once per library visit, after folders are loaded so newly synced books
       // land in their categories immediately. Failure is logged inside.
@@ -294,6 +309,42 @@
     const ids = Array.from(selectedBookIds);
     await addBooksToFolder(ids, folderId);
     flashToast(tImmediate('manager.toast.addedToFolder', { n: ids.length }));
+  }
+
+  /** Archived books that actually exist in this library, as card ids. */
+  $: archivedCardIds = new Set(
+    ($bookCards$ || []).filter((card) => $archivedTitles$.has(card.title)).map((card) => card.id)
+  );
+
+  $: visibleLibraryCount = Math.max(0, ($bookCards$?.length ?? 0) - archivedCardIds.size);
+
+  /** Card ids → titles, since the archive is keyed by title. */
+  function titlesForIds(ids: Iterable<number>): string[] {
+    const wanted = new Set(ids);
+    return ($bookCards$ || []).filter((card) => wanted.has(card.id)).map((card) => card.title);
+  }
+
+  /**
+   * Put the selection away, or bring it back when the archive is what's on
+   * screen. One button rather than two: the archive view is the only place
+   * un-archiving makes sense, and the only place archiving does not.
+   */
+  async function toggleArchiveForSelection() {
+    const titles = titlesForIds(selectedBookIds);
+    if (!titles.length) return;
+    const restoring = $activeFolderFilter$ === ARCHIVED_FILTER;
+    if (restoring) {
+      await unarchiveBooks(titles);
+    } else {
+      await archiveBooks(titles);
+    }
+    selectedBookIds = new Set();
+    selectMode = false;
+    flashToast(
+      tImmediate(restoring ? 'manager.toast.unarchived' : 'manager.toast.archived', {
+        n: titles.length
+      })
+    );
   }
 
   let toastMessage = '';
@@ -930,15 +981,13 @@
 
     const currentBookCount = $bookCards$.length;
     const handler = getStorageHandler(window, $storageSource$, '');
-    const { error, deleted } = await handler.deleteBookData(
-      $bookCards$.reduce((toDelete, card) => {
-        if (bookIds.includes(card.id)) {
-          toDelete.push(card.title);
-        }
-        return toDelete;
-      }, [] as string[]),
-      cancelSignal
-    );
+    const titlesToDelete = $bookCards$.reduce((toDelete, card) => {
+      if (bookIds.includes(card.id)) {
+        toDelete.push(card.title);
+      }
+      return toDelete;
+    }, [] as string[]);
+    const { error, deleted } = await handler.deleteBookData(titlesToDelete, cancelSignal);
 
     resetProgress();
 
@@ -950,6 +999,9 @@
     await Promise.all(
       deleted.map((id: number) => clearBookFolderAssignments(asBookCardId(id)).catch(() => {}))
     );
+    // Unlike reading records, an archive flag with no book is meaningless —
+    // and worse, it would silently hide the book if it were re-imported.
+    await clearArchiveForTitles(titlesToDelete).catch(() => {});
 
     if (deleted.length === currentBookCount) {
       selectMode = false;
@@ -1207,7 +1259,9 @@
     bind:selectMode
     on:selectAllClick={onSelectAllBooks}
     on:backToBookClick={backToCurrentBook}
+    showingArchive={$activeFolderFilter$ === ARCHIVED_FILTER}
     on:removeClick={() => handleRemove(Array.from(selectedBookIds))}
+    on:archiveClick={toggleArchiveForSelection}
     on:filesChange={(ev) => onFilesChange(ev.detail)}
     on:domainHintClick={onDomainHintClick}
     on:cancelReplication={() => {
@@ -1231,7 +1285,9 @@
 
 <div class="flex min-h-screen pt-16 xl:pt-14">
   <FolderSidebar
-    totalBookCount={$bookCards$?.length ?? 0}
+    totalBookCount={visibleLibraryCount}
+    archivedCount={archivedCardIds.size}
+    archivedBookIds={archivedCardIds}
     on:booksAddedToFolder={({ detail }) => flashToast(tImmediate('manager.toast.addedToFolder', { n: detail.count }))}
   />
   <!-- svelte-ignore a11y-no-static-element-interactions — this is the library
@@ -1317,6 +1373,8 @@
       on:removeBookClick={(ev) => handleRemove([ev.detail.id])}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />
+  {:else if $activeFolderFilter$ === ARCHIVED_FILTER}
+    <div class="mt-20 text-center text-sm opacity-60">{$t('manager.emptyArchive')}</div>
   {:else if $activeFolderFilter$ !== 'all'}
     <div class="mt-20 text-center text-sm opacity-60">这个分类还是空的；拖书过来或框选后点上面的胶囊加入</div>
   {:else}

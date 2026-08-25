@@ -59,6 +59,8 @@
   import { activateOnKeyup, isMobile$, isOnOldUrl } from '$lib/functions/utils';
   import {
     faArrowDownShortWide,
+    faBoxArchive,
+    faBoxOpen,
     faArrowDownWideShort,
     faCalendarXmark,
     faChartLine,
@@ -79,6 +81,9 @@
   export let hasBookOpened: boolean;
   export let selectMode: boolean;
   export let selectedCount: number;
+
+  /** The archive view is on screen, so the archive button restores instead. */
+  export let showingArchive = false;
   export let hasBooks: boolean;
   export let cancelTooltip: string;
   export let replicationProgress: number;
@@ -94,6 +99,7 @@
     importBackup: File;
     selectionToStatistics: void;
     deleteStatistics: void;
+    archiveClick: void;
     replicateData: void;
     cancelReplication: void;
   }>();
@@ -615,6 +621,18 @@
               <Fa icon={faCalendarXmark} />
             </div>
           {/if}
+          <div
+            tabindex="0"
+            role="button"
+            title={showingArchive ? $t('manager.unarchiveBooks') : $t('manager.archiveBooks')}
+            class="transform-gpu {baseIconClasses}"
+            in:scale={inAnimationParams}
+            out:scale={outAnimationParams}
+            on:click={() => dispatch('archiveClick')}
+            on:keyup={activateOnKeyup}
+          >
+            <Fa icon={showingArchive ? faBoxOpen : faBoxArchive} />
+          </div>
           <div
             tabindex="0"
             role="button"

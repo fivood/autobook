@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { faFolder, faFolderOpen, faPlus, faPencil, faTrash } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faBoxArchive,
+    faFolder,
+    faFolderOpen,
+    faPlus,
+    faPencil,
+    faTrash
+  } from '@fortawesome/free-solid-svg-icons';
   import { dialogManager } from '$lib/data/dialog-manager';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import TextInputDialog from '$lib/components/text-input-dialog.svelte';
@@ -16,11 +23,20 @@
     deleteFolder,
     addBooksToFolder
   } from '$lib/data/library-folders';
+  import { ARCHIVED_FILTER } from '$lib/data/library-archive';
   import { asBookCardId, type BookCardId } from '$lib/data/book-id';
   import { t, tImmediate } from '$lib/i18n';
 
-  /** Total book count in the library — shown next to "全部书籍". */
+  /** Books visible in the library — archived ones excluded, so the number
+   * next to 全部书籍 matches what the grid actually shows. */
   export let totalBookCount: number;
+
+  /** How many books are put away. The row stays hidden while this is 0 so an
+   * unused feature does not take up a permanent slot in the sidebar. */
+  export let archivedCount = 0;
+
+  /** Card ids of archived books, so 未分类 does not count what it cannot show. */
+  export let archivedBookIds: Set<number> = new Set();
 
   const dispatch = createEventDispatcher<{ booksAddedToFolder: { folderId: number; count: number } }>();
 
@@ -58,7 +74,9 @@
     }
   ];
 
-  $: assignedBookIds = new Set($bookFolders$.map((bf) => bf.bookId));
+  $: assignedBookIds = new Set(
+    $bookFolders$.filter((bf) => !archivedBookIds.has(bf.bookId)).map((bf) => bf.bookId)
+  );
   $: uncategorizedCount = Math.max(0, totalBookCount - assignedBookIds.size);
 
   function onCreateFolder() {
@@ -164,6 +182,21 @@
     <span>{$t('folders.uncategorized')}</span>
     <span class="opacity-60">{uncategorizedCount}</span>
   </button>
+
+  {#if archivedCount > 0 || $activeFolderFilter$ === ARCHIVED_FILTER}
+    <button
+      type="button"
+      class="flex items-center justify-between rounded px-3 py-1.5 text-left hover-soft"
+      class:bg-soft-active={ARCHIVED_FILTER === $activeFolderFilter$}
+      on:click={() => activeFolderFilter$.next(ARCHIVED_FILTER)}
+    >
+      <span class="flex items-center gap-2">
+        <Fa icon={faBoxArchive} />
+        {$t('folders.archived')}
+      </span>
+      <span class="opacity-60">{archivedCount}</span>
+    </button>
+  {/if}
 
   <div class="flex-1 overflow-y-auto pr-1">
     {#each folderGroups as group (group.key)}
