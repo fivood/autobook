@@ -286,11 +286,17 @@ export class DatabaseService {
     return bookData;
   }
 
+  /**
+   * Remove books. Reading records — the daily `statistic` rows and the raw
+   * `session` rows behind them — are deliberately NOT touched: a book gets
+   * deleted because it is finished or abandoned, and in both cases the
+   * evidence that it was read should outlive the copy. Clearing them is a
+   * separate, explicit action in settings.
+   */
   async deleteData(
     dataIds: number[],
     idsToTitles: Map<number, string>,
-    cancelSignal: AbortSignal,
-    keepLocalStatistics: boolean
+    cancelSignal: AbortSignal
   ) {
     const db = await this.db;
     const lastItemObj = await db.get('lastItem', LAST_ITEM_KEY);
@@ -312,13 +318,10 @@ export class DatabaseService {
             throwIfAborted(cancelSignal);
 
             deleted.push(
-              await this.deleteSingleData(
-                db,
-                id,
-                idsToTitles.get(id),
-                { lastItem, bookmarkIds },
-                !keepLocalStatistics
-              )
+              await this.deleteSingleData(db, id, idsToTitles.get(id), {
+                lastItem,
+                bookmarkIds
+              })
             );
           } catch (error) {
             errorMessage = handleErrorDuringReplication(
@@ -390,8 +393,7 @@ export class DatabaseService {
     db: IDBPDatabase<BooksDb>,
     dataId: number,
     title: string | undefined,
-    cachedData: { bookmarkIds: Set<number>; lastItem: number | undefined },
-    shouldDeleteStatistics: boolean
+    cachedData: { bookmarkIds: Set<number>; lastItem: number | undefined }
   ) {
     const storeNames: (
       | 'data'
@@ -402,7 +404,6 @@ export class DatabaseService {
       | 'audioBook'
       | 'subtitle'
       | 'handle'
-      | 'session'
     )[] = ['data', 'audioBook', 'subtitle', 'handle'];
     const shouldDeleteLastItem = cachedData.lastItem === dataId;
     const shouldDeleteBookmark = cachedData.bookmarkIds.has(dataId);
@@ -415,16 +416,6 @@ export class DatabaseService {
 
     if (shouldDeleteBookmark) {
       storeNames.push('bookmark');
-    }
-
-    if (shouldDeleteStatistics) {
-      storeNames.push('statistic');
-      storeNames.push('lastModified');
-      // Sessions are the same reading time the statistics rows summarise, and
-      // the statistics page has a tab that reads them directly. Leaving them
-      // behind made 「删掉这本书和它的统计」 produce a statistics page that
-      // still listed the book — the daily rows gone, the sessions intact.
-      storeNames.push('session');
     }
 
     const tx = db.transaction(storeNames, 'readwrite');
@@ -440,18 +431,6 @@ export class DatabaseService {
 
       if (shouldDeleteBookmark) {
         await tx.objectStore('bookmark').delete(dataId);
-      }
-
-      if (shouldDeleteStatistics && bookTitle) {
-        await tx.objectStore('statistic').delete(IDBKeyRange.bound([bookTitle], [bookTitle, []]));
-        await tx.objectStore('lastModified').delete([bookTitle, StorageDataType.STATISTICS]);
-
-        const sessionIndex = tx.objectStore('session').index('title');
-        let sessionCursor = await sessionIndex.openCursor(IDBKeyRange.only(bookTitle));
-        while (sessionCursor) {
-          await sessionCursor.delete();
-          sessionCursor = await sessionCursor.continue();
-        }
       }
 
       if (bookTitle) {
@@ -944,44 +923,36 @@ export class DatabaseService {
     }
   }
 
-  async clearZombieStatistics() {
-    try {
-      const db = await this.db;
-      const books = await db.getAll('data');
-      const titles = new Set(books.map((book) => book.title));
-      const statistics = await db.getAll('statistic');
-      const lastModifiedForStatistics = await db.getAll('lastModified');
-      const statisticsToDelete: BooksDbStatistic[] = [];
-      const lastModifiedItemsToDelete = new Set<string>();
-
-      for (let index = 0, { length } = statistics; index < length; index += 1) {
-        const entry = statistics[index];
-
-        if (!titles.has(entry.title)) {
-          statisticsToDelete.push(entry);
-        }
-      }
-
-      for (let index = 0, { length } = lastModifiedForStatistics; index < length; index += 1) {
-        const entry = lastModifiedForStatistics[index];
-
-        if (!titles.has(entry.title)) {
-          lastModifiedItemsToDelete.add(entry.title);
-        }
-      }
-
-      await this.deleteStatistics(statisticsToDelete, [...lastModifiedItemsToDelete]);
-    } catch (error: any) {
-      dialogManager.dialogs$.next([
-        {
-          component: MessageDialog,
-          props: {
-            title: '失败',
-            message: `删除出错: ${error.message}`
-          }
-        }
-      ]);
+  /**
+   * Statistics rows whose book is nowhere to be found.
+   *
+   * `knownTitles` must carry the current library's titles, not just the IDB
+   * `data` rows. Filesystem-backed books only get a `data` row once they are
+   * opened, so judging by `data` alone declared books sitting in the library
+   * right now to be junk — three of them, on the machine this was found on.
+   *
+   * Even a genuine orphan is not automatically junk: a book gets deleted when
+   * it is finished or abandoned, and the record of having read it is meant to
+   * outlive the copy. So this only reports; deleting is the caller's call,
+   * after the user has seen what would go.
+   */
+  async findOrphanStatistics(knownTitles: Iterable<string> = []) {
+    const db = await this.db;
+    const titles = new Set<string>(knownTitles);
+    for (const book of await db.getAll('data')) {
+      titles.add(book.title);
     }
+
+    const statistics = (await db.getAll('statistic')).filter((entry) => !titles.has(entry.title));
+    const lastModifiedTitles = [
+      ...new Set(
+        (await db.getAll('lastModified'))
+          .filter((entry) => !titles.has(entry.title))
+          .map((entry) => entry.title)
+      )
+    ];
+
+    return { statistics, lastModifiedTitles, titles: [...new Set(statistics.map((e) => e.title))] };
   }
 
   async deleteStatistics(statistics: BooksDbStatistic[], lastModifiedTitlesToDelete: string[]) {

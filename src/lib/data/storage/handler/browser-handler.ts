@@ -533,11 +533,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     BaseStorageHandler.reportProgress();
   }
 
-  async deleteBookData(
-    booksToDelete: string[],
-    cancelSignal: AbortSignal,
-    keepLocalStatistics: boolean
-  ) {
+  async deleteBookData(booksToDelete: string[], cancelSignal: AbortSignal) {
     const ids: number[] = [];
     const idToTitle = new Map<number, string>();
 
@@ -551,7 +547,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     }
 
     const { error, deleted } = await database
-      .deleteData(ids, idToTitle, cancelSignal, keepLocalStatistics)
+      .deleteData(ids, idToTitle, cancelSignal)
       .catch((catchedError) => ({ error: catchedError.message, deleted: [] }));
 
     for (let index = 0, { length } = deleted; index < length; index += 1) {

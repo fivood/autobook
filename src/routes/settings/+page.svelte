@@ -13,7 +13,6 @@
     cacheStorageData$,
     hideExternalReadHint$,
     importHTMLFixMode$,
-    keepLocalStatisticsOnDeletion$,
     openTrackerOnCompletion$,
     overwriteBookCompletion$,
     replicationSaveBehavior$,
@@ -119,7 +118,6 @@
       bind:replicationSaveBehavior={$replicationSaveBehavior$}
       bind:autoReplication={$autoReplication$}
       bind:showExternalPlaceholder={$showExternalPlaceholder$}
-      bind:keepLocalStatisticsOnDeletion={$keepLocalStatisticsOnDeletion$}
       bind:overwriteBookCompletion={$overwriteBookCompletion$}
       bind:startDayHoursForTracker={$startDayHoursForTracker$}
       bind:statisticsMergeMode={$statisticsMergeMode$}

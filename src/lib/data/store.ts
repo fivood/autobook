@@ -609,11 +609,6 @@ export const fsRoot$ = writableStringLocalStorageSubject()('fsRoot', '');
  */
 export const vaultSyncRoot$ = writableStringLocalStorageSubject()('vaultSyncRoot', '');
 
-export const keepLocalStatisticsOnDeletion$ = writableBooleanLocalStorageSubject()(
-  'keepLocalStatisticsOnDeletion',
-  true
-);
-
 export const overwriteBookCompletion$ = writableBooleanLocalStorageSubject()(
   'overwriteBookCompletion',
   false

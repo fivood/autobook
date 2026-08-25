@@ -149,8 +149,7 @@ export abstract class BaseStorageHandler {
 
   abstract deleteBookData(
     booksToDelete: string[],
-    cancelSignal: AbortSignal,
-    keepLocalStatistics: boolean
+    cancelSignal: AbortSignal
   ): Promise<ReplicationDeleteResult>;
 
   static rootName = storageRootName;

@@ -39,7 +39,6 @@
     confirmStatisticsDeletion$,
     database,
     fileCountData$,
-    keepLocalStatisticsOnDeletion$,
     lastExportedTarget$,
     lastExportedTypes$,
     libraryFilter$,
@@ -938,8 +937,7 @@
         }
         return toDelete;
       }, [] as string[]),
-      cancelSignal,
-      $keepLocalStatisticsOnDeletion$
+      cancelSignal
     );
 
     resetProgress();

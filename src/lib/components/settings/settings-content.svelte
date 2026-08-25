@@ -17,6 +17,7 @@
   } from '$lib/components/button-toggle-group/toggle-option';
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import SettingsThemeEditor from '$lib/components/settings/settings-theme-editor.svelte';
   import {
     DEFAULT_CUSTOM_COLORS,
@@ -38,6 +39,7 @@
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
   import { inputClasses } from '$lib/css-classes';
   import { dialogManager } from '$lib/data/dialog-manager';
+  import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { confirmResetUiSettings } from '$lib/functions/reset-ui-settings';
   import { ImportHTMLFixMode } from '$lib/data/import-html-fix-mode';
   import { MergeMode } from '$lib/data/merge-mode';
@@ -129,7 +131,6 @@
 
   export let showExternalPlaceholder: boolean;
 
-  export let keepLocalStatisticsOnDeletion: boolean;
 
   export let overwriteBookCompletion: boolean;
 
@@ -385,6 +386,85 @@
       break;
   }
 
+  /**
+   * Reading records are kept when a book is deleted — on purpose. So clearing
+   * them has to be a decision the user makes with the list in front of them,
+   * not a one-click sweep of anything that looks unattached.
+   */
+  async function confirmClearOrphanStatistics() {
+    showSpinner = true;
+    try {
+      const handler = getStorageHandler(window, $storageSource$, '');
+      // Books in the current library that own no IDB `data` row still count as
+      // present; without this the sweep offered to delete books on screen.
+      const libraryTitles = await handler
+        .getBookList()
+        .then((cards) => cards.map((card) => card.title))
+        .catch(() => [] as string[]);
+
+      const { statistics, lastModifiedTitles, titles } =
+        await database.findOrphanStatistics(libraryTitles);
+
+      if (!statistics.length && !lastModifiedTitles.length) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: tImmediate('settings.item.clearOrphanStats'),
+              message: tImmediate('settings.tip.clearOrphanStatsNone')
+            }
+          }
+        ]);
+        return;
+      }
+
+      const preview = titles.slice(0, 8).join('\n');
+      const wasCanceled = await new Promise<boolean>((resolver) => {
+        dialogManager.dialogs$.next([
+          {
+            component: ConfirmDialog,
+            props: {
+              dialogHeader: tImmediate('settings.item.clearOrphanStats'),
+              dialogMessage: `${tImmediate('settings.tip.clearOrphanStatsConfirm', {
+                books: titles.length,
+                rows: statistics.length
+              })}\n\n${preview}${titles.length > 8 ? '\n…' : ''}`,
+              contentStyles: 'white-space: pre-line;',
+              resolver
+            }
+          }
+        ]);
+      });
+      if (wasCanceled) return;
+
+      await database.deleteStatistics(statistics, lastModifiedTitles);
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: tImmediate('settings.item.clearOrphanStats'),
+            message: tImmediate('settings.tip.clearOrphanStatsDone', {
+              books: titles.length,
+              rows: statistics.length
+            })
+          }
+        }
+      ]);
+    } catch (error: any) {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: tImmediate('common.error'),
+            message: `${tImmediate('settings.tip.clearOrphanStatsError')}: ${error?.message || error}`
+          }
+        }
+      ]);
+    } finally {
+      showSpinner = false;
+    }
+  }
+
 </script>
 
 <div class="grid grid-cols-1 items-center sm:grid-cols-2 sm:gap-6 lg:md:gap-8 lg:grid-cols-3">
@@ -638,39 +718,17 @@
   {:else}
     <SettingsSectionHeader title={$t('settings.section.statsBasics')} hint={$t('settings.section.statsBasicsHint')} />
     <SettingsItemGroup
-      title={$t('settings.item.keepDataOnDelete')}
-      tooltip={$t('settings.tip.keepDataOnDelete')}
+      title={$t('settings.item.clearOrphanStats')}
+      tooltip={$t('settings.tip.clearOrphanStats')}
     >
-      <div class="flex items-center">
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={keepLocalStatisticsOnDeletion}
-        />
-        <div
-          tabindex="0"
-          role="button"
-          class="ml-4 hover:underline"
-          on:click={() => {
-            showSpinner = true;
-            database
-              .clearZombieStatistics()
-              .catch(({ message }) =>
-                dialogManager.dialogs$.next([
-                  {
-                    component: MessageDialog,
-                    props: {
-                      title: tImmediate('common.error'),
-                      message: `${tImmediate('settings.tip.clearZombieError')}: ${message}`
-                    }
-                  }
-                ])
-              )
-              .finally(() => (showSpinner = false));
-          }}
-          on:keyup={() => {}}
-        >
-          {$t('settings.button.clearZombieStats')}
-        </div>
+      <div
+        tabindex="0"
+        role="button"
+        class="hover:underline"
+        on:click={confirmClearOrphanStatistics}
+        on:keyup={() => {}}
+      >
+        {$t('settings.button.clearOrphanStats')}
       </div>
     </SettingsItemGroup>
     <SettingsItemGroup
