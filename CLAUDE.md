@@ -26,12 +26,22 @@ AutoBook 是一个桌面电子书阅读器（Tauri，本仓库本分支）。另
 
 ## 提交前必过的检查
 
-必须 **0 error**（PWA 在 `release/1.6.0` 上单独跑同样两条）：
+必须 **0 error**：
 
 ```
 npm run check   # svelte-check（类型 + 模板）
 npm run lint    # eslint（见下）
+npm test        # 纯函数用例，含 i18n key 完整性
 ```
+
+`npm test` 里的 `i18n-keys-test.ts` 是**加文案时的安全网**：一条字符串要同时落到
+zh / en / ja 三个文件，靠手记必然会漏。它检查四件事——用到的 key 在 zh 里有、
+`labelKey` / `titleKey` 这类旁挂 key 也有、en 和 ja 与 zh 的 key 集合完全一致、
+以及扫描本身没有失效（key 数量下限断言，免得正则失灵后所有断言都空过）。
+
+zh 是原始语言，en/ja 回落到它，所以**漏在 zh 里的 key 才会直接被用户看到**——
+显示成 `Settings.Item.$FontSize$` 这种自动标题。这不是假设：一次批量改名就
+真的这么干过。
 
 ESLint 走「少而准」路线，只开确实咬过这个仓库的规则，**不要**擅自启用 recommended 全家桶：
 
