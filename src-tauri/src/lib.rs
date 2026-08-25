@@ -59,6 +59,10 @@ fn collect_book_files<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
 fn allow_paths(app: &tauri::AppHandle, paths: &[String]) {
   let scope = app.fs_scope();
   for path in paths {
+    // Best-effort: a path the scope refuses simply fails to open later, with
+    // the frontend's own import error. There is no UI at this point in
+    // startup to report it through, and refusing to launch over one bad
+    // association argument would be worse.
     let _ = scope.allow_file(path);
   }
 }
@@ -367,6 +371,19 @@ fn dir_is_empty(p: &std::path::Path) -> bool {
   std::fs::read_dir(p).map(|mut it| it.next().is_none()).unwrap_or(false)
 }
 
+/// Resolve `..`, short (8.3) names and case so two spellings of the same
+/// folder compare equal. A path that does not exist yet has no canonical
+/// form, so fall back to canonicalizing the nearest ancestor that does.
+fn canonical_ish(p: &std::path::Path) -> std::path::PathBuf {
+  if let Ok(c) = p.canonicalize() {
+    return c;
+  }
+  match (p.parent(), p.file_name()) {
+    (Some(parent), Some(name)) => canonical_ish(parent).join(name),
+    _ => p.to_path_buf(),
+  }
+}
+
 /// Move a directory to a new location. Tries a plain rename first (instant,
 /// same volume); on cross-volume rename failure it falls back to recursive
 /// copy + remove. `to` may be an empty existing directory — that's the normal
@@ -379,8 +396,20 @@ fn move_directory(from: String, to: String) -> Result<(), String> {
   if !from_path.exists() {
     return Err(format!("源文件夹不存在: {from}"));
   }
-  if from_path == to_path {
+  let from_c = canonical_ish(&from_path);
+  let to_c = canonical_ish(&to_path);
+  if from_c == to_c {
     return Ok(());
+  }
+  // Nothing stops the folder picker from returning a subfolder of the current
+  // library root, and that case is quietly catastrophic: Windows refuses to
+  // rename a directory into itself, so control falls through to the recursive
+  // copy — which walks `from` while creating the copy *inside* `from`, and
+  // duplicates the entire library once per nesting level until the path
+  // length limit finally errors out. A 10 GB library writes hundreds of GB
+  // before that happens.
+  if to_c.starts_with(&from_c) {
+    return Err(format!("目标文件夹在源文件夹内部，无法移动: {to}"));
   }
   if to_path.exists() {
     if !to_path.is_dir() {
@@ -506,6 +535,81 @@ fn set_tts_shortcut(app: tauri::AppHandle, accelerator: String) -> Result<(), St
     return Ok(());
   }
   gs.register(trimmed).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod move_directory_tests {
+  use super::*;
+
+  fn tmp(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("autobook_move_test_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+  }
+
+  /// The regression that motivated the guard: picking a subfolder of the
+  /// library root used to fall through to the recursive copy and duplicate
+  /// the whole library once per nesting level.
+  #[test]
+  fn refuses_a_target_inside_the_source() {
+    let root = tmp("nested");
+    let src = root.join("AutoBook");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("book.epub"), b"x").unwrap();
+    let dst = src.join("newfolder");
+    std::fs::create_dir_all(&dst).unwrap();
+
+    let err = move_directory(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+    )
+    .unwrap_err();
+    assert!(err.contains("内部"), "unexpected error: {err}");
+    // The source must be untouched — no copy started, nothing removed.
+    assert!(src.join("book.epub").exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// A sibling whose name merely starts with the source's name is not inside
+  /// it — `starts_with` on Path compares components, and this pins that.
+  #[test]
+  fn allows_a_sibling_with_a_prefix_name() {
+    let root = tmp("sibling");
+    let src = root.join("e");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("book.epub"), b"x").unwrap();
+    let dst = root.join("ebooks");
+
+    move_directory(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+    )
+    .unwrap();
+    assert!(dst.join("book.epub").exists());
+    assert!(!src.exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// Two spellings of the same folder are a no-op, not an error — the
+  /// comparison runs on canonical paths so a trailing separator or `..`
+  /// cannot make it look like a real move.
+  #[test]
+  fn same_folder_spelled_differently_is_a_noop() {
+    let root = tmp("same");
+    let src = root.join("lib");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("book.epub"), b"x").unwrap();
+    let alias = root.join("other").join("..").join("lib");
+
+    move_directory(
+      src.to_string_lossy().into_owned(),
+      alias.to_string_lossy().into_owned(),
+    )
+    .unwrap();
+    assert!(src.join("book.epub").exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

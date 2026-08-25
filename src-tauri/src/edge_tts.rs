@@ -138,7 +138,7 @@ fn is_transient(err: &str) -> bool {
     // Lowercase literals so the comparison is a plain `contains`. Note the
     // rustls mid-stream wording is "closed connection", not "connection
     // closed" — matching only the latter silently skipped the retry.
-    const MARKERS: [&str; 9] = [
+    const MARKERS: [&str; 10] = [
         "handshake eof",
         "unexpectedeof",
         "unexpected eof",
@@ -148,6 +148,7 @@ fn is_transient(err: &str) -> bool {
         "reset by peer",
         "os error 10054",
         "代理在返回 connect 响应前关闭了连接",
+        "无响应",
     ];
     let lowered = err.to_ascii_lowercase();
     MARKERS.iter().any(|m| lowered.contains(m))
@@ -164,6 +165,15 @@ mod transient_tests {
             "edge-tts recv: IO error: peer closed connection without sending TLS close_notify"
         ));
         assert!(is_transient("os error 10054"));
+    }
+
+    #[test]
+    fn stalls_count_as_transient_so_the_retry_budget_applies() {
+        // A silent stall is the same class of proxy failure as a mid-TLS
+        // reset; if it did not match, the timeout would surface as a hard
+        // error and skip all five attempts.
+        assert!(is_transient("edge-tts 等待音频帧无响应（20s）"));
+        assert!(is_transient("edge-tts 直连握手无响应（20s）"));
     }
 
     #[test]
@@ -266,12 +276,26 @@ async fn synthesize_once(
     // which is dead on any network that only reaches Bing through a proxy —
     // the TCP connect succeeds and the TLS handshake then EOFs. Tunnel via
     // CONNECT whenever a proxy is configured or auto-detected.
+    // Every await below is bounded. A half-open tunnel — the failure mode this
+    // whole module is built around — does not raise an error, it just stops
+    // producing bytes, and an unbounded await on it hangs that sentence
+    // forever: the retry budget never gets a chance to run, playback stops
+    // dead, and neither layer above has a timeout of its own to notice.
+    const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+    // Chunks stream continuously once synthesis starts; the only real wait is
+    // before the first one.
+    const FRAME_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
     let proxy = crate::proxy::resolve(proxy_url);
     let (mut ws, _) = match &proxy {
         Some(p) => {
             let tcp = crate::proxy::connect_tunnel(p, "speech.platform.bing.com", 443).await?;
-            tokio_tungstenite::client_async_tls_with_config(req, tcp, None, None)
-                .await
+            tokio::time::timeout(
+                CONNECT_TIMEOUT,
+                tokio_tungstenite::client_async_tls_with_config(req, tcp, None, None),
+            )
+            .await
+            .map_err(|_| format!("edge-tts 经代理 {p} 握手无响应（{}s）", CONNECT_TIMEOUT.as_secs()))?
                 .map_err(|e| {
                     // The tunnel opened but died during TLS, so the local
                     // client is fine and the failure is past it. By far the
@@ -290,7 +314,10 @@ async fn synthesize_once(
                     )
                 })?
         }
-        None => tokio_tungstenite::connect_async(req).await.map_err(|e| {
+        None => tokio::time::timeout(CONNECT_TIMEOUT, tokio_tungstenite::connect_async(req))
+            .await
+            .map_err(|_| format!("edge-tts 直连握手无响应（{}s）", CONNECT_TIMEOUT.as_secs()))?
+            .map_err(|e| {
             format!(
                 "edge-tts connect: {e}\n\
                  直连 speech.platform.bing.com 失败。若在中国大陆，该域名通常需要代理才能访问 —— \
@@ -341,7 +368,13 @@ async fn synthesize_once(
     // Concat every audio chunk. MP3 concatenation is a byte-level operation
     // (frames self-sync), so no re-mux is needed.
     let mut audio: Vec<u8> = Vec::with_capacity(64 * 1024);
-    while let Some(msg) = ws.next().await {
+    loop {
+        let Some(msg) = tokio::time::timeout(FRAME_TIMEOUT, ws.next())
+            .await
+            .map_err(|_| format!("edge-tts 等待音频帧无响应（{}s）", FRAME_TIMEOUT.as_secs()))?
+        else {
+            break;
+        };
         let msg = msg.map_err(|e| format!("edge-tts recv: {e}"))?;
         match msg {
             Message::Text(t) => {
@@ -417,6 +450,50 @@ fn date_string() -> String {
         dn = DAY_NAMES[dow],
         mn = MONTH_NAMES[(m - 1) as usize]
     )
+}
+
+#[cfg(test)]
+mod stall_tests {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// Takes ~20s by design (one CONNECT_TIMEOUT), so it is `#[ignore]`d:
+    /// `cargo test --lib stall_tests -- --ignored --nocapture`
+    ///
+    /// Stands in for the failure this bound exists for — a proxy that accepts
+    /// CONNECT and then never speaks again. Before the timeout this hung
+    /// forever, taking the sentence and the whole retry budget with it.
+    #[tokio::test]
+    #[ignore]
+    async fn a_silent_proxy_times_out_instead_of_hanging() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            if let Ok((mut sock, _)) = listener.accept().await {
+                let mut buf = [0u8; 1024];
+                let _ = sock.read(&mut buf).await;
+                let _ = sock
+                    .write_all(b"HTTP/1.1 200 Connection established\r\n\r\n")
+                    .await;
+                // Then go silent, holding the socket open.
+                tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+            }
+        });
+
+        let started = std::time::Instant::now();
+        let err = super::synthesize_once(
+            "测试",
+            Some("zh-CN-XiaoxiaoNeural"),
+            Some(1.0),
+            Some(&format!("http://{addr}")),
+        )
+        .await
+        .unwrap_err();
+        let elapsed = started.elapsed();
+        println!("failed after {:?}: {}", elapsed, err.lines().next().unwrap_or(""));
+        assert!(err.contains("无响应"), "unexpected error: {err}");
+        assert!(elapsed < std::time::Duration::from_secs(40), "took {elapsed:?}");
+        assert!(super::is_transient(&err), "should be retried: {err}");
+    }
 }
 
 #[cfg(test)]

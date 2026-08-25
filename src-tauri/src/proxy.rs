@@ -131,7 +131,13 @@ fn parse_proxy_server(raw: &str) -> Option<String> {
 
   let mut http = None;
   for part in raw.split(';') {
-    let (scheme, addr) = part.split_once('=')?;
+    // A trailing `;` — which Windows writes often enough — leaves an empty
+    // final segment. Aborting the whole parse on it dropped a perfectly good
+    // `http=` entry, and a proxy that fails to be detected surfaces as the
+    // `tls handshake eof` this module exists to fix.
+    let Some((scheme, addr)) = part.split_once('=') else {
+      continue;
+    };
     match scheme.trim().to_ascii_lowercase().as_str() {
       // The https= entry is still an HTTP CONNECT proxy, not an HTTPS one.
       "https" => return Some(format!("http://{}", addr.trim())),
@@ -252,6 +258,18 @@ mod tests {
       Some("http://127.0.0.1:7897")
     );
     assert_eq!(parse_proxy_server("").as_deref(), None);
+  }
+
+  #[test]
+  fn tolerates_a_trailing_semicolon() {
+    assert_eq!(
+      parse_proxy_server("http=127.0.0.1:1080;").as_deref(),
+      Some("http://127.0.0.1:1080")
+    );
+    assert_eq!(
+      parse_proxy_server("socks=127.0.0.1:1080;http=127.0.0.1:7897;").as_deref(),
+      Some("http://127.0.0.1:7897")
+    );
   }
 
   #[test]

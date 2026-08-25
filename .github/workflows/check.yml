@@ -75,6 +75,14 @@ jobs:
         working-directory: ./src-tauri
         run: cargo check --locked --all-targets
 
+      # The Rust unit tests were being compiled by --all-targets and never
+      # run, so proxy parsing and TTS retry classification had assertions
+      # nobody was checking. The corpus-dependent MOBI scans and the network
+      # /timing tests stay #[ignore]d and are skipped here.
+      - name: cargo test
+        working-directory: ./src-tauri
+        run: cargo test --locked --lib
+
   worker:
     runs-on: ubuntu-latest
     steps:

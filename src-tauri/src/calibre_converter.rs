@@ -19,7 +19,18 @@ fn find_calibre_convert() -> Option<PathBuf> {
             return Some(p);
         }
     }
-    if let Ok(output) = std::process::Command::new("where").arg("ebook-convert").output() {
+    let mut probe = std::process::Command::new("where");
+    probe.arg("ebook-convert");
+    // Same reason the conversion itself hides its window: this runs from a GUI
+    // process, and `where` would otherwise flash a console on every settings
+    // page visit.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        probe.creation_flags(CREATE_NO_WINDOW);
+    }
+    if let Ok(output) = probe.output() {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(line) = stdout.lines().next() {
@@ -117,15 +128,20 @@ pub async fn convert_with_calibre(
     // indefinitely when ebook-convert hangs on a problematic file.
     cmd.kill_on_drop(true);
 
-    let result = timeout(CONVERSION_TIMEOUT, cmd.output())
-        .await
+    let outcome = timeout(CONVERSION_TIMEOUT, cmd.output()).await;
+
+    // Delete the input before inspecting the outcome. Returning early on the
+    // timeout / spawn-error paths used to skip this, leaving the whole book —
+    // tens of MB — behind in %TEMP% on exactly the runs most likely to be
+    // retried.
+    let _ = std::fs::remove_file(&input_path);
+
+    let result = outcome
         .map_err(|_| {
             "Calibre 转换超时（超过 5 分钟），ebook-convert 可能已卡住。".to_string() +
                 "建议先用 Calibre 手动把该书转成 EPUB，再导入 AutoBook。"
         })?
         .map_err(|e| format!("调用 ebook-convert 失败: {e}"))?;
-
-    let _ = std::fs::remove_file(&input_path);
 
     if !result.status.success() {
         let _ = std::fs::remove_file(&output_path);
