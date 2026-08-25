@@ -95,9 +95,11 @@ function markBookOcrComplete(bookId: number) {
 export type OcrJobStatus = 'running' | 'finished' | 'errored';
 
 export interface OcrJobState {
-  /** Pages that produced no text layer. `finished` with this equal to the page
-   *  count means the run achieved nothing. */
+  /** Pages that produced no text layer. `finished` with this equal to
+   *  `totalPages` means the run achieved nothing and nothing was saved. */
   failedPages?: number;
+  /** Pages the run walked, for the banner to compare against. */
+  totalPages?: number;
   /** Reason for the first failed page, for the banner to quote. */
   firstFailure?: string;
   bookId: number;
@@ -154,6 +156,20 @@ export function startOcrJob(
         },
         signal
       );
+      // Nothing recognised at all: do not persist. runOcr still returns html
+      // with the sentinel `<p class="pdf-ocr-text" hidden>` prepended, and that
+      // sentinel is what stops isScannedPdf flagging the book — so writing it
+      // silences the banner just as surely as the skip list does. Keeping the
+      // book out of the skip list (below) was only half the job; this is the
+      // other half. Saving would also bump lastBookModified and set a bogus
+      // character count for a text layer that does not exist.
+      if (totalPages > 0 && failedPages >= totalPages) {
+        _store.update((s) =>
+          s ? { ...s, status: 'finished', failedPages, totalPages, firstFailure } : s
+        );
+        return;
+      }
+
       const db = await database.db;
       // Re-read before writing, like every other writer of this row does.
       // `updated` spreads the book snapshot taken when the job started, and a
@@ -177,7 +193,7 @@ export function startOcrJob(
       // waiting on disk I/O.
       pushOcrResultToExternalStorage(merged).catch(() => {});
       _store.update((s) =>
-        s ? { ...s, status: 'finished', failedPages, firstFailure } : s
+        s ? { ...s, status: 'finished', failedPages, totalPages, firstFailure } : s
       );
     } catch (err: any) {
       const msg = err?.name === 'AbortError' ? '已中止' : err?.message || String(err);

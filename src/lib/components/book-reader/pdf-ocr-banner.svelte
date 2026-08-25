@@ -170,12 +170,15 @@
     {:else if jobForThisBook?.status === 'finished'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        {#if jobForThisBook.failedPages && jobForThisBook.failedPages >= jobForThisBook.progress.total}
+        {#if jobForThisBook.failedPages && jobForThisBook.failedPages >= (jobForThisBook.totalPages ?? jobForThisBook.progress.total)}
           <!-- Every page failed. Saying 「OCR 完成」 here is how a textless book
                used to look identical to a good one. -->
-          <div class="title">OCR 没有识别出任何内容（{jobForThisBook.progress.total} 页全部失败）</div>
+          <div class="title">
+            OCR 没有识别出任何内容（{jobForThisBook.totalPages ?? jobForThisBook.progress.total} 页全部失败）
+          </div>
           <div class="meta">
-            {jobForThisBook.firstFailure || '换一个识别语言或模型后可以再试一次'}
+            {jobForThisBook.firstFailure || '换一个识别语言或模型后可以再试一次'}·
+            这本书没有被改动，下次打开还会再问
           </div>
         {:else if jobForThisBook.failedPages}
           <div class="title">
