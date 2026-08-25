@@ -620,7 +620,20 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     await this.writeFileTo(dirPath, filename, bytes, files, file, 0.6);
   }
 
-  async deleteBookData(booksToDelete: string[], cancelSignal: AbortSignal) {
+  /**
+   * `keepLocalStatistics` used to be missing from this signature — TypeScript
+   * lets an implementation take fewer parameters than the abstract member, so
+   * the argument the library page passes was silently dropped and the setting
+   * 「删除时保留本地统计」 did nothing for filesystem-backed books: their
+   * reading time survived every deletion and only a manual 清理 button in
+   * settings could remove it. Books here live as files and own no `data` row,
+   * so the IDB rows keyed by title have to be cleaned explicitly.
+   */
+  async deleteBookData(
+    booksToDelete: string[],
+    cancelSignal: AbortSignal,
+    keepLocalStatistics = true
+  ) {
     await this.ensureRoot();
     const deleted: number[] = [];
     const deletionLimiter = pLimit(1);
@@ -637,6 +650,12 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
             const sanitized = BaseStorageHandler.sanitizeForFilename(bookToDelete);
             const bookDir = joinPath(this.rootDir, sanitized);
             await remove(bookDir, { baseDir: this.baseDir, recursive: true });
+
+            if (!keepLocalStatistics) {
+              const statistics = await database.getStatisticsForBook(bookToDelete);
+              await database.deleteStatistics(statistics, [bookToDelete]);
+              await database.deleteSessionsForTitle(bookToDelete);
+            }
 
             const deletedId = this.titleToBookCard.get(bookToDelete)?.id;
             if (deletedId) deleted.push(deletedId);

@@ -402,6 +402,7 @@ export class DatabaseService {
       | 'audioBook'
       | 'subtitle'
       | 'handle'
+      | 'session'
     )[] = ['data', 'audioBook', 'subtitle', 'handle'];
     const shouldDeleteLastItem = cachedData.lastItem === dataId;
     const shouldDeleteBookmark = cachedData.bookmarkIds.has(dataId);
@@ -419,6 +420,11 @@ export class DatabaseService {
     if (shouldDeleteStatistics) {
       storeNames.push('statistic');
       storeNames.push('lastModified');
+      // Sessions are the same reading time the statistics rows summarise, and
+      // the statistics page has a tab that reads them directly. Leaving them
+      // behind made 「删掉这本书和它的统计」 produce a statistics page that
+      // still listed the book — the daily rows gone, the sessions intact.
+      storeNames.push('session');
     }
 
     const tx = db.transaction(storeNames, 'readwrite');
@@ -439,6 +445,13 @@ export class DatabaseService {
       if (shouldDeleteStatistics && bookTitle) {
         await tx.objectStore('statistic').delete(IDBKeyRange.bound([bookTitle], [bookTitle, []]));
         await tx.objectStore('lastModified').delete([bookTitle, StorageDataType.STATISTICS]);
+
+        const sessionIndex = tx.objectStore('session').index('title');
+        let sessionCursor = await sessionIndex.openCursor(IDBKeyRange.only(bookTitle));
+        while (sessionCursor) {
+          await sessionCursor.delete();
+          sessionCursor = await sessionCursor.continue();
+        }
       }
 
       if (bookTitle) {
@@ -599,6 +612,24 @@ export class DatabaseService {
     const id = await db.add('session', session as BooksDbSession);
     this.sessionsChanged$.next();
     return id;
+  }
+
+  /**
+   * Drop a title's sessions. Used by storage backends that delete books
+   * without going through `deleteData` — the filesystem one removes a folder
+   * on disk and owns no IDB rows, so the reading time would otherwise outlive
+   * the book it belongs to.
+   */
+  async deleteSessionsForTitle(title: string) {
+    const db = await this.db;
+    const tx = db.transaction('session', 'readwrite');
+    const index = tx.store.index('title');
+    let cursor = await index.openCursor(IDBKeyRange.only(title));
+    while (cursor) {
+      await cursor.delete();
+      cursor = await cursor.continue();
+    }
+    await tx.done;
   }
 
   async getSessionsForRange(startDateKey: string, endDateKey: string) {
