@@ -100,5 +100,15 @@ export async function connect({ port = DEFAULT_PORT, timeoutMs = 0 } = {}) {
     }
   }
 
-  return { evaluate, evaluateThroughNavigation, waitFor, close: () => ws.close() };
+  /**
+   * PNG of the real window, base64. Works where the editor preview pane's
+   * screenshot does not: that pane never composites, this is an actual
+   * compositing WebView2.
+   */
+  async function screenshot() {
+    const res = await send('Page.captureScreenshot', { format: 'png' });
+    return res.data;
+  }
+
+  return { evaluate, evaluateThroughNavigation, waitFor, screenshot, close: () => ws.close() };
 }

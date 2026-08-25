@@ -201,10 +201,32 @@ option {
 
 /* CSS Custom Highlight API target: TTS-driven sentence-current marker.
    Painted via window.Highlight + CSS.highlights.set('tts-sentence', ...);
-   See tts-highlight.ts. Color picked to read on every built-in theme. */
+   See tts-highlight.ts.
+
+   Deliberately NOT a coloured fill. It used to be rgba(255,220,90,.42), which
+   is within a hair of highlight slot 1 (rgba(255,235,59,.5)) — with the book's
+   own highlights on screen you could not tell "the sentence being read right
+   now" from "something I marked last week". Hue cannot fix that: the four
+   slots span yellow/blue/green/pink and users can set custom colours, so any
+   hue is a possible collision, and in the invert palette the slots are filled
+   with the page's own foreground colour.
+
+   So the distinction is structural, not chromatic: a neutral tint derived from
+   the text colour, plus a wavy underline. No highlight slot uses wavy in any
+   palette (invert uses solid / dotted / thin), and the marker is transient
+   anyway — it should read as "active", not as "annotated".
+
+   Only background-color, color, text-decoration, text-shadow and
+   -webkit-text-stroke are honoured inside ::highlight(), which is why this is
+   done with a decoration rather than a border. */
 ::highlight(tts-sentence) {
-  background-color: rgba(255, 220, 90, 0.42);
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
   color: inherit;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--link-color, currentColor);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 .settings-input:hover {
   border-color: color-mix(in srgb, currentColor 32%, transparent);

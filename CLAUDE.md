@@ -115,7 +115,13 @@ ESLint 走「少而准」路线，只开确实咬过这个仓库的规则，**�
 npm run tauri:dev:cdp                       # 一个 shell 里挂着别关
 node scripts/cdp-eval.mjs "location.pathname"
 node scripts/cdp-eval.mjs "$(cat probe.js)" # 表达式会被 await，可以返回 Promise
+node scripts/cdp-shot.mjs out.png           # 真窗口截图
 ```
+
+**需要「看」的判断一律用 `cdp-shot.mjs`，别靠断言脑补。** 朗读的逐句高亮就是
+这么发现问题的：机械断言（没隐藏正文、高亮在推进、页面可滚）全绿，一截图才
+看见它和用户高亮几乎同色——`rgba(255,220,90,.42)` vs 槽 1 的
+`rgba(255,235,59,.5)`。这种「每项都对、合起来不对」的问题，断言永远抓不到。
 
 ### 冒烟套件
 
