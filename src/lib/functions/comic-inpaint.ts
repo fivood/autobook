@@ -42,6 +42,14 @@ const EXPAND_RATIO = 0.08;
  * as "complex background".
  */
 function trimmedSpread(values: number[], medianVal: number): number {
+  // Measured on synthetic pages (share of rim samples >60 from the median):
+  // flat white / flat dark 0%, half-dark panel and checkerboard 100% (caught
+  // by the retention guard below), screentone 49% — which squeaks past and
+  // gets flat-filled white, wiping the tone. Raising the guard would catch it
+  // at the cost of skipping more bubbles, and a skipped bubble keeps its
+  // source text visible whenever LaMa is not configured (the default). Not
+  // worth the trade without a real comic corpus to measure against.
+
   if (values.length < 4) return Infinity;
   const trimmed = values.filter((v) => Math.abs(v - medianVal) <= 60);
   if (trimmed.length < values.length * 0.4) return Infinity;
@@ -196,13 +204,21 @@ export async function inpaintPageWithLama(
   bubbles: InpaintBubble[],
   lamaEndpoint: string,
   onProgress?: (done: number, total: number) => void
-): Promise<{ result: InpaintResult; blob: Blob }> {
+): Promise<{ result: InpaintResult; blob: Blob; lamaError?: string; lamaMissed?: number }> {
   const filled = await inpaintPage(pageBlob, bubbles, onProgress);
   const skippedBubbles = bubbles.filter((b) => filled.result.skipped.includes(b.id));
   if (!lamaEndpoint || !skippedBubbles.length) return filled;
 
   const lama = await inpaintWithLama(filled.blob, skippedBubbles, lamaEndpoint);
-  if (!lama.ok || !lama.blob) return filled;
+  if (!lama.ok || !lama.blob) {
+    // Falling back to the flat-fill result is right — the uniform bubbles are
+    // already erased and the translation is unaffected. But inpaintWithLama
+    // hands back a specific reason ("LaMa HTTP 500", a network message) and
+    // dropping it meant a configured-but-unreachable endpoint looked exactly
+    // like no endpoint at all: the complex-background bubbles quietly stay
+    // dirty and nothing says why.
+    return { ...filled, lamaError: lama.error || 'LaMa 无响应', lamaMissed: skippedBubbles.length };
+  }
 
   const skipped = skippedBubbles.map((b) => b.id);
   const remaining = filled.result.skipped.filter((id) => !skipped.includes(id));

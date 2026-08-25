@@ -450,20 +450,34 @@
    * LaMa pass.
    */
   /**
-   * Erase source text from uniform bubbles. Returns what went wrong, if
-   * anything, so the caller can say so.
+   * Erase source text from bubbles. Returns what went wrong, if anything.
    *
-   * A single failed page must not sink the run — but swallowing *every* page
-   * was indistinguishable from success: point the endpoint at a dead port and
-   * the workbench still announced 「准备就绪」 with nothing inpainted, which is
-   * exactly the case where the user needs to be told.
+   * Two very different failures live here and they need separate reporting:
+   *
+   * - a page throwing (bad image, cache write) — rare, and if it happens to
+   *   every page the run achieved nothing
+   * - LaMa being configured but unreachable — *not* fatal. The local flat-fill
+   *   pass has already erased every uniform bubble; LaMa only ever handles the
+   *   complex-background ones it skipped. So the page is still improved, but
+   *   the bubbles the user set the endpoint up for stay dirty, silently.
+   *
+   * An earlier version of this comment claimed a dead endpoint meant nothing
+   * was erased at all. That was wrong — inpaintPageWithLama falls back to the
+   * flat-filled page — and it was only caught by pointing a real run at a dead
+   * port and watching six bubbles get erased anyway.
    */
   async function runComicInpaint(
     pageBlobs: Blob[],
     bubbles: ComicBubble[],
     cacheKey: string,
     storage: ComicStorage
-  ): Promise<{ attempted: number; failed: number; firstError?: string }> {
+  ): Promise<{
+    attempted: number;
+    failed: number;
+    firstError?: string;
+    lamaMissed: number;
+    lamaError?: string;
+  }> {
     const byPage = new Map<number, InpaintBubble[]>();
     for (const b of bubbles) {
       const list = byPage.get(b.pageIndex) || [];
@@ -473,26 +487,30 @@
     const lamaEndpoint = translateLamaEndpoint$.getValue().trim();
     // Empty endpoint is the documented "off" switch, not a failure: skip
     // rather than throwing once per page and reporting it as breakage.
-    if (!lamaEndpoint) return { attempted: 0, failed: 0 };
-
     let attempted = 0;
     let failed = 0;
     let firstError: string | undefined;
+    let lamaMissed = 0;
+    let lamaError: string | undefined;
     for (const [pageIndex, pageBubbles] of byPage) {
       const pageBlob = pageBlobs[pageIndex];
       if (!pageBlob) continue;
       attempted += 1;
       try {
-        const { result, blob } = await inpaintPageWithLama(pageBlob, pageBubbles, lamaEndpoint);
-        if (result.inpainted > 0) {
-          await storage.writeInpainted(cacheKey, pageIndex, blob);
+        const page = await inpaintPageWithLama(pageBlob, pageBubbles, lamaEndpoint);
+        if (page.result.inpainted > 0) {
+          await storage.writeInpainted(cacheKey, pageIndex, page.blob);
+        }
+        if (page.lamaError) {
+          lamaMissed += page.lamaMissed ?? 0;
+          if (!lamaError) lamaError = page.lamaError;
         }
       } catch (err: any) {
         failed += 1;
         if (!firstError) firstError = err?.message || String(err);
       }
     }
-    return { attempted, failed, firstError };
+    return { attempted, failed, firstError, lamaMissed, lamaError };
   }
 
   /** Per-book language wins over the global default for stored books. */
@@ -660,6 +678,15 @@
             failed: inpaint.failed,
             attempted: inpaint.attempted,
             detail: inpaint.firstError ?? ''
+          })
+        ];
+      }
+      if (inpaint.lamaMissed) {
+        checkpointWarnings = [
+          ...checkpointWarnings,
+          tImmediate('translate.comic.lamaUnreachable', {
+            missed: inpaint.lamaMissed,
+            detail: inpaint.lamaError ?? ''
           })
         ];
       }

@@ -1314,6 +1314,7 @@ export default {
   'translate.book.noTranslationNeeded': '书籍语言与目标语言一致，无需翻译',
   'translate.comic.extracting': '正在解压漫画页面…',
   'translate.comic.ocr': 'OCR 识别中 {done}/{total} 页…',
+  'translate.comic.lamaUnreachable': '{missed} 个复杂背景的气泡没能消除原文——IOPaint / LaMa 服务连不上（{detail}）。背景均匀的气泡已经用本地填充处理，翻译不受影响。',
   'translate.comic.inpaintFailed': '{attempted} 页里有 {failed} 页没能消除原文（翻译本身不受影响）。原因：{detail}',
   'translate.comic.ready': '漫画就绪：{pages} 页，{bubbles} 个文字区域',
   'translate.comic.ocrTitle': '漫画 OCR',
