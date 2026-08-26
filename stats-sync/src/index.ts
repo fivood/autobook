@@ -90,18 +90,40 @@ function emptyState(): UserState {
   return { v: 1, books: {} };
 }
 
+/** Thrown when a stored blob exists but cannot be trusted. Never swallowed. */
+class UnreadableState extends Error {}
+
+/**
+ * A missing key is a new user — an empty state is the right answer.
+ *
+ * Anything else is not. This used to fall back to `emptyState()` on a parse
+ * failure or an unexpected `v`, with a comment claiming "the client's next
+ * push will rebuild". It does not: the client keeps its own record of what it
+ * has already pushed and skips those days, so a reset here loses this
+ * device's history permanently and the other device's along with it — with
+ * nobody told. The same branch would have fired on the first read after any
+ * future schema bump, wiping every user's state at once.
+ *
+ * So: refuse. The blob stays in KV for whoever has to look at it, the client
+ * surfaces a sync error, and nothing is overwritten.
+ */
 async function loadState(env: Env, token: string): Promise<UserState> {
   const raw = await env.STATS.get(token);
   if (!raw) return emptyState();
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.v === 1 && typeof parsed.books === 'object') {
-      return parsed as UserState;
-    }
+    parsed = JSON.parse(raw);
   } catch {
-    // corrupt blob → start fresh; the client's next push will rebuild
+    throw new UnreadableState('stored state is not valid JSON');
   }
-  return emptyState();
+  const candidate = parsed as Partial<UserState> | null;
+  if (!candidate || typeof candidate.books !== 'object' || candidate.books === null) {
+    throw new UnreadableState('stored state has no books map');
+  }
+  if (candidate.v !== 1) {
+    throw new UnreadableState(`stored state has unsupported version ${String(candidate.v)}`);
+  }
+  return candidate as UserState;
 }
 
 async function saveState(env: Env, token: string, state: UserState): Promise<void> {
@@ -230,8 +252,11 @@ export default {
     }
 
     if (request.method === 'GET') {
-      const state = await loadState(env, token);
-      return json(state);
+      try {
+        return json(await loadState(env, token));
+      } catch (e: any) {
+        return json({ error: e?.message || 'state unreadable' }, { status: 500 });
+      }
     }
 
     if (request.method === 'POST') {
@@ -245,8 +270,14 @@ export default {
       } catch {
         return json({ error: 'invalid json' }, { status: 400 });
       }
-      const state = await loadState(env, token);
-      const merged = mergeInto(state, body, Date.now());
+      let merged: UserState;
+      try {
+        merged = mergeInto(await loadState(env, token), body, Date.now());
+      } catch (e: any) {
+        // Refusing beats merging into a fresh state and overwriting whatever
+        // is actually stored under this token.
+        return json({ error: e?.message || 'state unreadable' }, { status: 500 });
+      }
       try {
         await saveState(env, token, merged);
       } catch (e: any) {
