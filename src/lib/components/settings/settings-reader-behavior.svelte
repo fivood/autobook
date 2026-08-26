@@ -57,10 +57,37 @@
   ] as ToggleOption<ViewMode>[];
 
   $: optionsForBlurMode = [
-    { id: BlurMode.ALL, text: $t('settings.value.blur.all') },
+    { id: BlurMode.NONE, text: $t('settings.value.blur.none') },
     { id: BlurMode.AFTER_TOC, text: $t('settings.value.blur.cover') },
-    { id: BlurMode.NONE, text: $t('settings.value.blur.none') }
+    { id: BlurMode.ALL, text: $t('settings.value.blur.all') }
   ] as ToggleOption<BlurMode>[];
+
+  /**
+   * One three-state control instead of an on/off switch plus a scope picker
+   * that only appeared once it was on. Two stores still back it because both
+   * are read elsewhere — the boolean drives a content class, the mode rides in
+   * the formatted-book cache key — but "off" and "scope" were never two
+   * decisions, and hiding one behind the other made a small feature look like
+   * a section of its own.
+   */
+  // Deliberately a plain `let`, seeded once, not a `$:` derived from the two
+  // stores. ButtonToggleGroup only offers two-way binding, so a derived value
+  // that also wrote back would emit -> recompute -> emit.
+  let blurChoice: BlurMode = hideSpoilerImage$.getValue()
+    ? hideSpoilerImageMode$.getValue()
+    : BlurMode.NONE;
+
+  function applyBlurChoice(choice: BlurMode) {
+    if (choice === BlurMode.NONE) {
+      hideSpoilerImage$.next(false);
+      hideSpoilerImageMode$.next(BlurMode.NONE);
+      return;
+    }
+    hideSpoilerImage$.next(true);
+    hideSpoilerImageMode$.next(choice);
+  }
+
+  $: applyBlurChoice(blurChoice);
 
   $: autoBookmarkTooltip = $t('settings.tip.autoBookmark', { n: $autoBookmarkTime$ });
   $: avoidPageBreakTooltip = $avoidPageBreak$
@@ -229,19 +256,19 @@
   />
 </SettingsItemGroup>
 
-<SettingsSectionHeader title={$t('settings.section.imagesReadingPoint')} hint={$t('settings.section.imagesReadingPointHint')} />
+{#if $lastBookHasImages$ || $statisticsEnabled$}
+  <SettingsSectionHeader
+    title={$t('settings.section.imagesReadingPoint')}
+    hint={$t('settings.section.imagesReadingPointHint')}
+  />
+{/if}
 {#if $lastBookHasImages$}
   <SettingsItemGroup
     title={$t('settings.item.blurImages')}
     tooltip={$t('settings.tip.blurImages')}
   >
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$hideSpoilerImage$} />
+    <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurChoice} />
   </SettingsItemGroup>
-  {#if $hideSpoilerImage$}
-    <SettingsItemGroup title={$t('settings.item.blurScope')} tooltip={$t('settings.tip.blurScope')}>
-      <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={$hideSpoilerImageMode$} />
-    </SettingsItemGroup>
-  {/if}
 {/if}
 {#if $statisticsEnabled$}
   <SettingsItemGroup

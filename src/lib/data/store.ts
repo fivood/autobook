@@ -716,6 +716,23 @@ export const lastExportedTypes$ = writableArrayLocalStorageSubject<StorageDataTy
   [StorageDataType.PROGRESS, StorageDataType.STATISTICS]
 );
 
+/**
+ * Books the reader asked the AI to stay spoiler-safe on, by title.
+ *
+ * Off by default and opt-in per book: withholding unread text is only worth
+ * anything for mysteries and thrillers, and on everything else it turns the
+ * assistant into a wall — ask a non-fiction book what its argument is and a
+ * spoiler-safe assistant answers 「目前还没读到」.
+ *
+ * Keyed by title rather than book id (two id spaces — see CLAUDE.md), and
+ * kept in localStorage rather than IDB on purpose: losing it to a UI reset
+ * costs one click on the next mystery, which does not justify a migration.
+ */
+export const aiSpoilerSafeTitles$ = writableSetLocalStorageSubject<string>()(
+  'aiSpoilerSafeTitles',
+  new Set<string>()
+);
+
 export const lastBlurredTrackerItems$ = writableSetLocalStorageSubject<string>()(
   'lastBlurredTrackerItems',
   new Set<string>()
