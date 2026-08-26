@@ -69,6 +69,7 @@ ESLint 走「少而准」路线，只开确实咬过这个仓库的规则，**�
 - pdfjs 的 cmaps / standard_fonts / wasm 必须整目录可访问（worker 运行时按目录 URL 找兄弟文件），单文件 `?url` import 会碎。两端都靠 postinstall 拷到 static
 - 外存同步回写（`saveExternalLastRead` 等）必须比较 `lastBookModified`，防止旧数据覆盖新进度
 - **朗读位置索引统一以 `extractText()` 的原始字符串为准**。分句结果（`Sentence`）自带 `start`/`end` 绝对偏移，别再用「累加 `sentences[i].text.length`」推算——`trim()` 掉的空白会逐句累积漂移（实测 200 段就偏 199 字）
+- **AI 检索的 chunk 偏移必须是真实偏移**。`chunkBookText` 的 `startChar` 是防剧透闸门的依据（`retrieveSpoilerSafe` 靠它筛掉读者还没读到的段落），不是记账字段。别再用「`split(/\n+/)` 再按 `para.length + 1` 累加游标」推算——`htmlToPlaintext` 在块级元素前后各发一个 `\n`，每个空行间隔就丢一个字符，实测 400 段偏 1.45%，而且方向是**偏小**：还没读到的内容会显得更靠前，直接穿过闸门
 - **不要按 `.tw-c` span 索引定位字符**。打字机现在只包装 frontier 所在的那一段，全书 span 不存在了；而且这条老路径本身就漏掉未包装的 `\n`，包装前后取到的索引不一致。一律走普通 text-node 遍历，包装与否结果相同
 - 打字机是**块级增量**的：未读到的段落整段 `.tw-block-hidden`，只有 frontier 那段逐字包装，走过就拆回纯文本。给它加功能时别退回「一次性包装全书」（30 万字实测冻结 1.3 秒 + 常驻 30 万 span）
 - blob 类 TTS 引擎（SAPI / 自定义 HTTP / Kokoro）统一继承 `BlobAutoReader`，子类只实现 `synthesize()`。语速由 `synthesisHonorsRate` 决定走合成侧还是 `playbackRate` —— **两边都设会叠乘**（WinRT 曾经 1.5 倍速实际放成 2.25 倍）
