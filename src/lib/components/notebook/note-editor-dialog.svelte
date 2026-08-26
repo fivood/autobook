@@ -22,6 +22,7 @@
   let tagsInput = tags.join(' ');
   let selectedColor = color;
   let restoredFromDraft = false;
+  let confirmingDiscard = false;
   let editor: TextSourceEditor;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -72,8 +73,27 @@
     clearDraft();
   }
 
+  /**
+   * Create mode is covered by the draft: close it and the text comes back.
+   * Edit mode has no such net — the draft key is a single global slot, so
+   * per-note drafts would restore note A's text into note B — and every exit
+   * (backdrop click, Escape, 取消) dropped the edit silently. Confirm inline
+   * instead; this dialog is mounted by the page, not by dialogManager.
+   */
+  $: dirty = mode === 'edit' && (value !== memo || tagsInput !== tags.join(' ') || selectedColor !== color);
+  $: if (!dirty) confirmingDiscard = false;
+
   function close() {
+    if (dirty && !confirmingDiscard) {
+      confirmingDiscard = true;
+      return;
+    }
     dispatch('cancel');
+  }
+
+  function keepEditing() {
+    confirmingDiscard = false;
+    editor?.focus();
   }
 
   function handleKeydown(ev: KeyboardEvent) {
@@ -150,12 +170,22 @@
       on:keydown={handleKeydown}
     />
 
-    <div class="mt-3 flex justify-end gap-2">
+    <div class="mt-3 flex items-center justify-end gap-2">
+      {#if confirmingDiscard}
+        <span class="mr-auto text-xs" style="color:var(--danger-color);"
+          >{$t('bookEditor.discardConfirm')}</span
+        >
+        <button
+          type="button"
+          class="rounded px-4 py-1.5 text-sm opacity-70 hover:opacity-100"
+          on:click={keepEditing}
+        >{$t('bookEditor.keepEditing')}</button>
+      {/if}
       <button
         type="button"
         class="rounded px-4 py-1.5 text-sm opacity-70 hover:opacity-100"
         on:click={close}
-      >{$t('notebook.editor.cancel')}</button>
+      >{confirmingDiscard ? $t('bookEditor.discard') : $t('notebook.editor.cancel')}</button>
       <button
         type="button"
         class="rounded px-4 py-1.5 text-sm font-medium"

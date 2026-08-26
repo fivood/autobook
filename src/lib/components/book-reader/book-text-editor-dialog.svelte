@@ -18,16 +18,39 @@
 
   let value = source;
   let editor: TextSourceEditor;
+  let confirmingDiscard = false;
 
   $: changed = value !== source;
   $: charCount = Array.from(value).length;
+  $: if (!changed) confirmingDiscard = false;
 
   onMount(() => {
     tick().then(() => editor?.focus());
   });
 
+  /**
+   * Every way out of this dialog used to discard the edit silently — the
+   * backdrop is a huge click target, Escape is a reflex, and what is at stake
+   * is the entire source text of a book. `changed` was already computed right
+   * here and simply not consulted.
+   *
+   * The confirmation is inline rather than a nested dialog: this component is
+   * mounted by the page, not by dialogManager, and dialogManager replaces its
+   * whole stack (see CLAUDE.md) — a confirm pushed from in here would be
+   * fighting the thing that owns the screen.
+   */
   function close() {
-    if (!saving) dispatch('cancel');
+    if (saving) return;
+    if (changed && !confirmingDiscard) {
+      confirmingDiscard = true;
+      return;
+    }
+    dispatch('cancel');
+  }
+
+  function keepEditing() {
+    confirmingDiscard = false;
+    editor?.focus();
   }
 
   function save() {
@@ -89,8 +112,16 @@
         {/if}
       </div>
       <div class="flex items-center gap-2">
+        {#if confirmingDiscard}
+          <span class="text-sm" style="color:var(--danger-color);"
+            >{$t('bookEditor.discardConfirm')}</span
+          >
+          <button type="button" class="menu-choice" on:click={keepEditing}>
+            {$t('bookEditor.keepEditing')}
+          </button>
+        {/if}
         <button type="button" class="menu-choice" disabled={saving} on:click={close}>
-          {$t('bookEditor.cancel')}
+          {confirmingDiscard ? $t('bookEditor.discard') : $t('bookEditor.cancel')}
         </button>
         <button
           type="button"
