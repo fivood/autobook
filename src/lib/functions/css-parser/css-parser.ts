@@ -311,6 +311,27 @@ function parseCss(css: string, options = {}): CssTree {
       return { type: m[1], name: m[2].trim() };
     }
   }
+  // Any block at-rule none of the handlers above claimed: @layer, @container,
+  // @scope, whatever ships next. Without this the parser falls through to
+  // rule() and throws "property missing ':'", which used to take the whole
+  // stylesheet — and, before format-style-sheet grew a fallback, the whole
+  // book — down with it. Contents are parsed as ordinary rules, the same
+  // treatment @media gets.
+  function at_unknown() {
+    if (!/^@[-\w]+[^{;]*\{/.test(css)) {
+      return;
+    }
+    const m = match(/^@([-\w]+)([^{]*)/);
+    if (m) {
+      return {
+        type: 'unknown-at-rule',
+        name: m[1],
+        prelude: (m[2] || '').trim(),
+        rules: rules()
+      };
+    }
+  }
+
   function at_rule() {
     whitespace();
 
@@ -325,7 +346,8 @@ function parseCss(css: string, options = {}): CssTree {
         at_custom_m() ||
         at_host() ||
         at_page() ||
-        at_page_margin_box(); // Must be last
+        at_page_margin_box() ||
+        at_unknown(); // Must be last
 
       if (ret && !settings.preserveStatic) {
         let hasVarFunc = false;
