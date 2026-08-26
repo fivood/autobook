@@ -38,6 +38,16 @@ async function scenario(name, fn) {
   }
 }
 
+/**
+ * Build a JS expression with values safely embedded.
+ *
+ * Careful: this is a *tagged* template, so the cooked strings have already had
+ * their escapes processed. `\s` and `\d` arrive here as plain `s` and `d`,
+ * which turns a regex into one that silently matches nothing — no error, just
+ * a scenario that reports null forever. Cost an afternoon once. When the
+ * expression contains regex escapes, use an ordinary template literal and
+ * `JSON.stringify` the values by hand.
+ */
 const js = (strings, ...values) =>
   strings.reduce((acc, s, i) => acc + s + (i < values.length ? JSON.stringify(values[i]) : ''), '');
 
@@ -129,11 +139,23 @@ async function cleanup(bookId, snap) {
       const q = indexedDB.open('books');
       q.onsuccess = () => {
         const db = q.result;
-        const names = ['data', 'bookmark', 'highlight', 'lastItem'].filter(n => db.objectStoreNames.contains(n));
+        const names = ['data', 'bookmark', 'highlight', 'lastItem', 'archived'].filter(n => db.objectStoreNames.contains(n));
         const tx = db.transaction(names, 'readwrite');
         tx.objectStore('data').delete(${bookId});
         if (db.objectStoreNames.contains('bookmark')) tx.objectStore('bookmark').delete(${bookId});
         if (db.objectStoreNames.contains('lastItem')) tx.objectStore('lastItem').clear();
+        // The archive is keyed by title and outlives the book row on purpose,
+        // so it needs clearing explicitly or a failed run leaves the suite's
+        // book hidden from the library forever.
+        if (db.objectStoreNames.contains('archived')) {
+          const cur = tx.objectStore('archived').openCursor();
+          cur.onsuccess = (ev) => {
+            const c = ev.target.result;
+            if (!c) return;
+            if (String(c.key).startsWith(${TEST_TITLE})) c.delete();
+            c.continue();
+          };
+        }
         tx.oncomplete = () => r(1);
         tx.onerror = () => r(0);
       };
@@ -314,6 +336,109 @@ async function ttsFailureExplainsItself(bookId) {
   return 'reason shown and quoted';
 }
 
+/**
+ * Not a shipped regression — archiving is new in 1.39.0. It is here because
+ * its failure mode is the one this app has produced twice already and users
+ * cannot diagnose: a book that is simply *not in the library*, with nothing
+ * on screen to say why. An inverted filter, an archive flag that outlives its
+ * book, or a sidebar row that never appears all look identical to "my book is
+ * gone". See the note in CLAUDE.md §冒烟套件.
+ */
+async function archiveHidesAndRestores(bookId) {
+  await goto('/manage', MANAGE_READY);
+
+  const enterSelect = async () => session.evaluate(`(() => {
+    const dismiss = [...document.querySelectorAll('button')].find(b => b.innerText.trim() === '稍后处理');
+    if (dismiss) dismiss.click();
+    const svg = document.querySelector('svg[role=button][aria-label]');
+    if (!svg) return { ok: false, why: 'no select-mode toggle' };
+    svg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return { ok: true };
+  })()`);
+
+  const clickCard = async () => session.evaluate(js`(() => {
+    const nodes = [...document.querySelectorAll('div,article,li')].filter(
+      (e) => e.innerText && e.innerText.trim().startsWith(${TEST_TITLE})
+        && e.querySelectorAll('div,article,li').length < 6
+    );
+    const card = nodes[nodes.length - 1];
+    if (!card) return { ok: false, why: 'test book not on the shelf' };
+    card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return { ok: true };
+  })()`);
+
+  const clickByTitlePrefix = async (prefix) => session.evaluate(js`(() => {
+    const btn = [...document.querySelectorAll('[title]')]
+      .find((e) => (e.getAttribute('title') || '').startsWith(${prefix}));
+    if (!btn) return { ok: false, why: 'no button titled ' + ${prefix} };
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return { ok: true };
+  })()`);
+
+  // Deliberately NOT the `js` tag — see its definition. A regex escape inside
+  // a tagged template loses its backslash, and `/已归档\s+(\d+)/` would arrive
+  // as `/已归档s+(d+)/`: matches nothing, reports nothing, just quietly wrong.
+  const shelf = async () => session.evaluate(`(() => {
+    const text = document.body.innerText;
+    const row = text.match(/已归档\\s+(\\d+)/);
+    return {
+      onShelf: text.includes(${JSON.stringify(TEST_TITLE)}),
+      archivedCount: row ? Number(row[1]) : null
+    };
+  })()`);
+
+  const before = await shelf();
+  if (!before.onShelf) throw new Error('the test book was not on the shelf to begin with');
+
+  for (const step of [enterSelect, clickCard]) {
+    const r = await step();
+    if (!r.ok) throw new Error(r.why);
+  }
+  const archived = await clickByTitlePrefix('归档');
+  if (!archived.ok) throw new Error(archived.why);
+
+  await session.waitFor(js`!document.body.innerText.includes(${TEST_TITLE})`, {
+    label: 'the archived book to leave the library'
+  });
+  const hidden = await shelf();
+  if (hidden.archivedCount !== 1) {
+    throw new Error(`sidebar shows 已归档 = ${hidden.archivedCount}, expected 1`);
+  }
+
+  // The archive view is the only place it should still be visible.
+  const opened = await session.evaluate(`(() => {
+    const row = [...document.querySelectorAll('button')].find((b) => /已归档/.test(b.innerText));
+    if (!row) return { ok: false, why: 'no 已归档 row to open' };
+    row.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return { ok: true };
+  })()`);
+  if (!opened.ok) throw new Error(opened.why);
+  await session.waitFor(js`document.body.innerText.includes(${TEST_TITLE})`, {
+    label: 'the archive view to list the book'
+  });
+
+  for (const step of [enterSelect, clickCard]) {
+    const r = await step();
+    if (!r.ok) throw new Error(r.why);
+  }
+  const restored = await clickByTitlePrefix('取消归档');
+  if (!restored.ok) throw new Error(restored.why);
+
+  await session.evaluate(`(() => {
+    const all = [...document.querySelectorAll('button')].find((b) => /全部书籍/.test(b.innerText));
+    if (all) all.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return 1;
+  })()`);
+  await session.waitFor(js`document.body.innerText.includes(${TEST_TITLE})`, {
+    label: 'the book to come back to the library'
+  });
+  const after = await shelf();
+  if (after.archivedCount) {
+    throw new Error(`已归档 still shows ${after.archivedCount} after restoring`);
+  }
+  return 'hidden from the shelf, listed under 已归档, restored';
+}
+
 // ----------------------------------------------------------------- run ----
 
 console.log('AutoBook smoke suite (real Tauri window via CDP)\n');
@@ -338,6 +463,7 @@ try {
   await scenario('朗读：正文不被隐藏、可滚动、逐句高亮推进', () => ttsLeavesTextAlone(bookId));
   await scenario('朗读：引擎失败时说明原因', () => ttsFailureExplainsItself(bookId));
   await scenario('导入：批量失败时逐个报出文件名和原因', () => batchImportNamesEveryFailure());
+  await scenario('归档：从书库隐藏、在已归档里能找到、能放回来', () => archiveHidesAndRestores(bookId));
 } catch (err) {
   fail('suite setup', err.message);
 } finally {
