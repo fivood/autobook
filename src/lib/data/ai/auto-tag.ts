@@ -395,6 +395,29 @@ export function isPlausibleTag(tag: string, book: TaggableBook): boolean {
  * instead of surfaced. A book missing from the response simply keeps its
  * baseline tags.
  */
+/**
+ * The row list, whatever wrapper the model put around it.
+ *
+ * The prompt asks for `{"books":[…]}` and usually gets it. Observed against a
+ * real 14B model, it also sometimes drops the wrapper and answers with a bare
+ * `{"id":0,"tags":[…]}` — one row, no envelope. Requiring the envelope threw
+ * the whole batch away and had the job count it as a failure, when a usable
+ * answer for one of the books was sitting right there. Discarding what the
+ * model invents is right; discarding what it got right for lack of a wrapper
+ * is not.
+ */
+function rowsFrom(parsed: unknown): unknown[] | undefined {
+  if (Array.isArray(parsed)) return parsed;
+  if (!parsed || typeof parsed !== 'object') return undefined;
+  const books = (parsed as { books?: unknown }).books;
+  if (Array.isArray(books)) return books;
+  // A single unwrapped row: only when it actually looks like one, so a
+  // response of some other shape still falls through to the next candidate.
+  const row = parsed as { id?: unknown; tags?: unknown };
+  if (row.id !== undefined && Array.isArray(row.tags)) return [row];
+  return undefined;
+}
+
 export function parseTagResponse(
   raw: string,
   batch: readonly TaggableBook[]
@@ -420,8 +443,8 @@ export function parseTagResponse(
     } catch {
       continue;
     }
-    const rows = (parsed as { books?: unknown })?.books;
-    if (!Array.isArray(rows)) continue;
+    const rows = rowsFrom(parsed);
+    if (!rows) continue;
 
     for (const row of rows) {
       if (!row || typeof row !== 'object') continue;
@@ -479,6 +502,21 @@ export function mergeTags(
   }
 
   return out;
+}
+
+/**
+ * How many more tags a book can take before `mergeTags` starts dropping them.
+ *
+ * Counted against the *deduped* existing list, because that is what mergeTags
+ * keeps: a book storing both 「Science Fiction」 and 「science-fiction」 has one
+ * tag as far as the cap is concerned, and reading `existing.length` would
+ * understate the room by one.
+ */
+export function remainingTagCapacity(
+  existing: readonly string[] | undefined,
+  maxTags = MAX_TAGS_PER_BOOK
+): number {
+  return Math.max(0, maxTags - mergeTags(existing, [], maxTags).length);
 }
 
 /** Tags in `incoming` that `existing` doesn't already cover. */

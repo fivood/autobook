@@ -33,6 +33,7 @@ import {
   newTagsOnly,
   normalizeSubjectTags,
   parseTagResponse,
+  remainingTagCapacity,
   type TaggableBook
 } from '$lib/data/ai/auto-tag';
 
@@ -98,12 +99,18 @@ export function clearAutoTagJob() {
 function toSuggestion(input: AutoTagInput, modelTags: string[] = []): AutoTagSuggestion {
   const existingTags = input.existingTags ?? [];
   const baselineTags = normalizeSubjectTags(input.subjects);
+  // Offer only what will actually land. `mergeTags` stops at the per-book cap,
+  // so a book already there used to be listed with tags to add, get ticked,
+  // and write nothing: applyAutoTags sees no length change and skips the row,
+  // leaving the panel to announce 「已应用 0 本」 over a list that plainly
+  // showed something to apply.
+  const room = remainingTagCapacity(existingTags);
   return {
     title: input.title,
     existingTags,
     baselineTags,
     modelTags,
-    newTags: newTagsOnly(existingTags, [...baselineTags, ...modelTags])
+    newTags: newTagsOnly(existingTags, [...baselineTags, ...modelTags]).slice(0, room)
   };
 }
 
