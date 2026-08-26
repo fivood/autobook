@@ -318,6 +318,9 @@
 
   $: visibleLibraryCount = Math.max(0, ($bookCards$?.length ?? 0) - archivedCardIds.size);
 
+  /** Every card the current source knows about, archived or not. */
+  $: shelfCardIds = new Set(($bookCards$ || []).map((card) => card.id));
+
   /** Card ids → titles, since the archive is keyed by title. */
   function titlesForIds(ids: Iterable<number>): string[] {
     const wanted = new Set(ids);
@@ -1288,6 +1291,7 @@
     totalBookCount={visibleLibraryCount}
     archivedCount={archivedCardIds.size}
     archivedBookIds={archivedCardIds}
+    shelfBookIds={shelfCardIds}
     on:booksAddedToFolder={({ detail }) => flashToast(tImmediate('manager.toast.addedToFolder', { n: detail.count }))}
   />
   <!-- svelte-ignore a11y-no-static-element-interactions — this is the library

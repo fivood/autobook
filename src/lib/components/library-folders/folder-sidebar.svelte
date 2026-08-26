@@ -38,6 +38,17 @@
   /** Card ids of archived books, so 未分类 does not count what it cannot show. */
   export let archivedBookIds: Set<number> = new Set();
 
+  /**
+   * Card ids currently on the shelf. Counts are taken against this, not
+   * against the whole `bookFolder` table: assignments outlive their books
+   * (a book removed outside the library UI, or belonging to the other storage
+   * source — there are two id spaces, see CLAUDE.md), and counting rows
+   * instead of books made 未分类 read low while a folder advertised books it
+   * could not show. Reproduced with two rows pointing at ids that do not
+   * exist: five uncategorized books were reported as three.
+   */
+  export let shelfBookIds: Set<number> = new Set();
+
   const dispatch = createEventDispatcher<{ booksAddedToFolder: { folderId: number; count: number } }>();
 
   let dragOverFolderId: number | string | null = null;
@@ -49,9 +60,18 @@
     tick().then(() => renameInput?.focus());
   }
 
-  function countForFolder(folderId: number): number {
-    return $bookFolders$.filter((bf) => bf.folderId === folderId).length;
-  }
+  /**
+   * Derived, not a function called from the template. Svelte tracks the
+   * variables in a template *expression*, not the ones a called function
+   * happens to read — so a `countForFolder(folder.id)` call rendered once and then
+   * kept whatever it said, which after adding the shelf filter meant every
+   * folder showed 0 (the card list resolves after the first paint).
+   */
+  $: folderCounts = $bookFolders$.reduce((acc, bf) => {
+    if (!shelfBookIds.has(bf.bookId)) return acc;
+    acc.set(bf.folderId, (acc.get(bf.folderId) || 0) + 1);
+    return acc;
+  }, new Map<number, number>());
 
   /**
    * Hand-made categories above, directory-mirrored ones below. A vault with a
@@ -75,7 +95,9 @@
   ];
 
   $: assignedBookIds = new Set(
-    $bookFolders$.filter((bf) => !archivedBookIds.has(bf.bookId)).map((bf) => bf.bookId)
+    $bookFolders$
+      .filter((bf) => shelfBookIds.has(bf.bookId) && !archivedBookIds.has(bf.bookId))
+      .map((bf) => bf.bookId)
   );
   $: uncategorizedCount = Math.max(0, totalBookCount - assignedBookIds.size);
 
@@ -253,7 +275,7 @@
             {folder.name}
           </button>
         {/if}
-        <span class="text-xs opacity-60">{countForFolder(folder.id)}</span>
+        <span class="text-xs opacity-60">{(folderCounts.get(folder.id) || 0)}</span>
         <button
           type="button"
           title={$t('folders.rename')}
