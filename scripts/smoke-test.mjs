@@ -554,6 +554,65 @@ async function ttsFollowResolvesParagraphStarts(bookId) {
   return `${out.checked} paragraph starts resolve exactly`;
 }
 
+/**
+ * Regression, found while auditing the reader's index spaces after the
+ * paragraph-start bug (2026-08-31).
+ *
+ * TTS boundaries are offsets into `extractText()`; the paginated auto-page-flip
+ * feeds them to a calculator that counts `getParagraphNodes()` instead — which
+ * drops `<rt>` furigana and hidden subtrees and adds gaiji images. The old
+ * translation ran on the flat extracted *string*, so it could not see the
+ * node-level exclusions: a paragraph with furigana translated to 19 where the
+ * calculator counted 14. The error accumulates within a section, so in a
+ * Japanese book the page runs further and further ahead of the voice.
+ *
+ * Both sides are production code, and the content shapes are the ones that
+ * diverged. A drift in either implementation fails this.
+ */
+async function ttsCalculatorIndexAgrees() {
+  const out = await session.evaluate(`(async () => {
+    const { extractText } = await import('/src/lib/components/book-reader/auto-reader-shared.ts');
+    const { ttsIndexToCalculatorIndex } = await import(
+      '/src/lib/components/book-reader/tts-calculator-index.ts'
+    );
+    const { getCharacterCount } = await import('/src/lib/functions/get-character-count.ts');
+    const { getParagraphNodes } = await import(
+      '/src/lib/components/book-reader/get-paragraph-nodes.ts'
+    );
+
+    const cases = {
+      plain: '<p>吾輩は猫である。名前はまだ無い。</p>',
+      furigana:
+        '<p>吾輩は<ruby>猫<rt>ねこ</rt></ruby>である。<ruby>名前<rt>なまえ</rt></ruby>はまだ無い。</p>',
+      hidden: '<p>見える文章。<span hidden>隠れた文章</span>また見える。</p>',
+      ariaHidden: '<p>見える文章。<span aria-hidden="true">隠れた文章</span>また見える。</p>',
+      withImage:
+        '<p>前の段落。</p><p><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw="></p><p>後の段落。</p>'
+    };
+
+    const drifts = {};
+    for (const [name, html] of Object.entries(cases)) {
+      const host = document.createElement('div');
+      host.style.cssText = 'position:absolute;left:-9999px;top:0;';
+      host.innerHTML = html;
+      document.body.appendChild(host);
+      const calc = getParagraphNodes(host).reduce((a, n) => a + getCharacterCount(n), 0);
+      const text = extractText(host);
+      drifts[name] = ttsIndexToCalculatorIndex(host, text.length) - calc;
+      host.remove();
+    }
+    return drifts;
+  })()`);
+
+  const off = Object.entries(out).filter(([, drift]) => drift !== 0);
+  if (off.length) {
+    throw new Error(
+      `index spaces disagree: ${off.map(([k, v]) => `${k} ${v > 0 ? '+' : ''}${v}`).join(', ')}`
+    );
+  }
+  return `${Object.keys(out).length} content shapes translate exactly`;
+}
+
 // ----------------------------------------------------------------- run ----
 
 console.log('AutoBook smoke suite (real Tauri window via CDP)\n');
@@ -581,6 +640,9 @@ try {
   await scenario('归档：从书库隐藏、在已归档里能找到、能放回来', () => archiveHidesAndRestores(bookId));
   await scenario('朗读跟随：段落开头的位置解析不跑偏', () =>
     ttsFollowResolvesParagraphStarts(bookId)
+  );
+  await scenario('朗读翻页：振假名/隐藏文本不会让字符空间漂移', () =>
+    ttsCalculatorIndexAgrees()
   );
 } catch (err) {
   fail('suite setup', err.message);

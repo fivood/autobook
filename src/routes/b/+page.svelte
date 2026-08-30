@@ -49,8 +49,6 @@
     timer
   } from 'rxjs';
   import {
-    extractText,
-    ttsIndexToCalculatorIndex
   } from '$lib/components/book-reader/auto-reader-shared';
   import { TtsHighlighter } from '$lib/components/book-reader/tts-highlight';
   import { quintInOut } from 'svelte/easing';
@@ -266,6 +264,7 @@
   import { ViewMode } from '$lib/data/view-mode';
   import loadBookData from '$lib/functions/book-data-loader/load-book-data';
   import { elementForCharIndex } from '$lib/components/book-reader/char-index-locator';
+  import { ttsIndexToCalculatorIndex } from '$lib/components/book-reader/tts-calculator-index';
   import {
     formatTextSource,
     getEditableTextFormat,
@@ -845,8 +844,6 @@
   let currentSectionIndex = 0;
   let sectionStartCharCount = 0;
   let lastTtsSaveTime = 0;
-  let ttsExtractedText = '';
-  let ttsExtractedTextSection = -1;
   const ttsHighlighter = new TtsHighlighter();
 
   $: ttsSeekCharCount = Math.max(0, exploredCharCount - sectionStartCharCount);
@@ -905,19 +902,13 @@
         if (isPaginated) {
           // Auto-page-flip: whatever the TTS engine is about to speak should
           // be on-screen. charIndex is a section-local offset into
-          // extractText()'s raw string (counts whitespace, punctuation, …).
-          // The paginated calculator uses getCharacterCount() which strips
-          // those — translate before handing it over so we don't drift off
-          // the section end.
+          // extractText()'s raw string; the paginated calculator counts a
+          // different set of nodes entirely. The translation walks the DOM
+          // rather than the string because the difference is node-level —
+          // furigana and hidden subtrees — not just which characters count.
+          // See tts-calculator-index.ts.
           const el = document.querySelector('.book-content') as HTMLElement | null;
-          let calcLocal = charIndex;
-          if (el) {
-            if (ttsExtractedTextSection !== currentSectionIndex) {
-              ttsExtractedText = extractText(el);
-              ttsExtractedTextSection = currentSectionIndex;
-            }
-            calcLocal = ttsIndexToCalculatorIndex(ttsExtractedText, charIndex);
-          }
+          const calcLocal = el ? ttsIndexToCalculatorIndex(el, charIndex) : charIndex;
           pageManager?.ensureCharVisible?.(calcLocal + sectionStartCharCount);
         } else {
           // Continuous mode: the text stays fully visible and only the
