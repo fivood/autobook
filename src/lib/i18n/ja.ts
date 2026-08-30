@@ -586,6 +586,8 @@ export default {
 
   'reader.toc': '目次を開く',
   'reader.highlights': 'ハイライト・ノート',
+  'reader.voiceMissing.title': '利用できる音声がありません',
+  'reader.voiceMissing.body': '{lang} の音声がインストールされていないため、別の音声で読み上げます——特に数字がその言語の読み方になります。\n\nEdge TTS エンジンに切り替えると各言語のオンライン音声をそのまま使えます。あるいは Windows の設定 → 時刻と言語 → 言語 から音声パックを追加してください。',
   'reader.ttsFailed.title': '読み上げに失敗しました',
   'reader.ttsFailed.hint': 'リーダーの設定ドロワーからエンジンか音声を変えてみてください。Edge TTS の接続エラーは、プロキシが speech.platform.bing.com を通していないことがほとんどです。',
   'reader.ai': 'AI アシスタント',

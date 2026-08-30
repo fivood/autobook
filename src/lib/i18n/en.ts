@@ -581,6 +581,8 @@ export default {
 
   'reader.toc': 'Open table of contents',
   'reader.highlights': 'Highlights & notes',
+  'reader.voiceMissing.title': 'No matching voice',
+  'reader.voiceMissing.body': 'No {lang} voice is installed, so playback falls back to another one — most noticeably, numbers get read in that other language.\n\nSwitching the engine to Edge TTS gives you online voices for every language with nothing to install, or add a voice pack under Windows Settings → Time & language → Language.',
   'reader.ttsFailed.title': 'Narration failed',
   'reader.ttsFailed.hint': 'Try another engine or voice from the reader’s settings drawer. Connection errors on Edge TTS usually mean the proxy is not routing speech.platform.bing.com.',
   'reader.ai': 'AI assistant',

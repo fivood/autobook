@@ -264,6 +264,7 @@
   import { ViewMode } from '$lib/data/view-mode';
   import loadBookData from '$lib/functions/book-data-loader/load-book-data';
   import { elementForCharIndex } from '$lib/components/book-reader/char-index-locator';
+  import { detectLanguage } from '$lib/functions/file-loaders/detect-language';
   import { ttsIndexToCalculatorIndex } from '$lib/components/book-reader/tts-calculator-index';
   import {
     formatTextSource,
@@ -495,6 +496,8 @@
           loadProgress$.next({ stage: 'storage-pull', pct: 50, label: STAGE_LABELS['storage-pull'] });
         }
 
+        // The detected fallback is applied reactively below — at this point
+        // the content is not rendered yet, so there is nothing to detect from.
         if (bookData.language) {
           document.documentElement.lang = bookData.language;
         }
@@ -846,6 +849,33 @@
   let lastTtsSaveTime = 0;
   const ttsHighlighter = new TtsHighlighter();
 
+  /**
+   * The language the reader actually works with.
+   *
+   * `bookData.language` is empty for everything imported before the loaders
+   * started keeping it — and, until this release, for every book stored on the
+   * filesystem, because the field was simply missing from the list of things
+   * written into `bookdata_*.zip`. An empty language means the TTS engine keeps
+   * its `zh-CN` default and picks the Chinese voice slot, which is how an
+   * English book ends up read aloud with every number in Chinese.
+   *
+   * Guessing from the rendered text costs one scan of the first 2000
+   * characters and needs no re-import, so an existing library is fixed the
+   * next time each book is opened.
+   */
+  $: effectiveLanguage =
+    $bookData$?.language ||
+    ($rawBookData$?.elementHtml ? detectLanguage(stripTags($rawBookData$.elementHtml)) : undefined);
+
+  /** Enough to keep tag names out of the Latin-letter count. */
+  function stripTags(html: string): string {
+    return html.slice(0, 20000).replace(/<[^>]*>/g, ' ');
+  }
+
+  $: if (browser && effectiveLanguage) {
+    document.documentElement.lang = effectiveLanguage;
+  }
+
   $: ttsSeekCharCount = Math.max(0, exploredCharCount - sectionStartCharCount);
 
   $: ttsResumePosition = (() => {
@@ -936,6 +966,24 @@
     // play at a button that refuses with no reason given. The common ones are
     // not exotic — a wrong Edge proxy (`tls handshake eof`), Kokoro not
     // downloaded yet, a bad key on a custom HTTP endpoint.
+    // Web Speech only. Nothing installed speaks the book's language, so the
+    // platform falls back to whatever it has — most visibly a Chinese voice
+    // reading English numbers in Chinese, which looks like the app choosing
+    // wrong rather than a missing voice pack.
+    if ('onVoiceMissing' in autoReader) {
+      (autoReader as { onVoiceMissing?: (lang: string) => void }).onVoiceMissing = (lang) => {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: tImmediate('reader.voiceMissing.title'),
+              message: tImmediate('reader.voiceMissing.body', { lang })
+            }
+          }
+        ]);
+      };
+    }
+
     autoReader.onError = (message) => {
       dialogManager.dialogs$.next([
         {
@@ -2675,7 +2723,7 @@ ${$t('reader.ttsFailed.hint')}`
   <StyleSheetRenderer styleSheet={$bookData$.styleSheet} />
   <BookReader
     htmlContent={$bookData$.htmlContent}
-    language={$bookData$?.language}
+    language={effectiveLanguage}
     width={$containerViewportWidth$ ?? 0}
     height={$containerViewportHeight$ ?? 0}
     {fontFeatureSettings}
@@ -2762,7 +2810,7 @@ ${$t('reader.ttsFailed.hint')}`
 {#if settingsDrawerOpen && ReaderSettingsDrawer}
   <svelte:component
     this={ReaderSettingsDrawer}
-    bookLanguage={$bookData$?.language}
+    bookLanguage={effectiveLanguage}
     on:close={() => (settingsDrawerOpen = false)}
   />
 {/if}

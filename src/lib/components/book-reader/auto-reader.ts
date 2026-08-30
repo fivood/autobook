@@ -106,6 +106,12 @@ export class AutoReaderContinuous implements AutoReader {
     return this._lang;
   }
 
+  /** Languages already reported through `onVoiceMissing`, so it fires once. */
+  private warnedMissingVoiceFor = new Set<string>();
+
+  /** Called when no installed voice speaks the book's language. */
+  onVoiceMissing?: (lang: string) => void;
+
   autoSelectVoice() {
     if (!this.synth) return;
     const voices = this.synth.getVoices();
@@ -152,6 +158,16 @@ export class AutoReaderContinuous implements AutoReader {
         this._voice = ja;
         return;
       }
+    }
+
+    // Nothing on this machine speaks the book's language. The utterance still
+    // carries `lang`, so the platform reads it with whatever voice it has —
+    // a Chinese voice on an English book pronounces the words about right and
+    // every number in Chinese, which reads as a bug in the app rather than a
+    // missing voice pack. Say so once per language instead.
+    if (!this.warnedMissingVoiceFor.has(this._lang)) {
+      this.warnedMissingVoiceFor.add(this._lang);
+      this.onVoiceMissing?.(this._lang);
     }
   }
 

@@ -6,17 +6,8 @@
 
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { getFormattedElementMd } from '$lib/functions/file-loaders/md/generate-md-html';
+import { detectLanguage } from '$lib/functions/file-loaders/detect-language';
 
-function detectLanguage(text: string): string {
-  const sample = text.slice(0, 2000);
-  const hiragana = (sample.match(/[぀-ゟ]/g) || []).length;
-  const katakana = (sample.match(/[゠-ヿ]/g) || []).length;
-  const cjk = (sample.match(/[一-鿿]/g) || []).length;
-  const latin = (sample.match(/[a-zA-Z]/g) || []).length;
-  if (hiragana + katakana > 10) return 'ja';
-  if (latin > cjk) return 'en';
-  return 'zh';
-}
 
 async function readAsText(file: File): Promise<string> {
   // Try UTF-8 first; if it lands on the U+FFFD replacement char a lot,

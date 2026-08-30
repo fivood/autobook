@@ -11,6 +11,7 @@ import generateEpubStyleSheet from './generate-epub-style-sheet';
 import getEpubCoverImageFilename from './get-epub-cover-image-filename';
 import { isOPFType } from './types';
 import reduceObjToBlobs from '../utils/reduce-obj-to-blobs';
+import { detectLanguage } from '$lib/functions/file-loaders/detect-language';
 
 /**
  * A Dublin Core element is either a bare string or an object carrying the
@@ -120,8 +121,11 @@ export default async function loadEpub(
         try {
           if (typeof dcLanguage === 'string') {
             languages.push(...Intl.getCanonicalLocales(dcLanguage.trim()));
-          } else if (dcLanguage && dcLanguage['#text']) {
-            languages.push(...Intl.getCanonicalLocales(dcLanguage.trim()));
+          } else if (dcLanguage && typeof dcLanguage['#text'] === 'string') {
+            // `<dc:language id="lang">en</dc:language>` parses to an object;
+            // this branch used to call .trim() on the object itself, throw,
+            // and lose the language to the empty catch below.
+            languages.push(...Intl.getCanonicalLocales(dcLanguage['#text'].trim()));
           }
         } catch (_) {
           //no-op
@@ -134,8 +138,11 @@ export default async function loadEpub(
   }
 
   if (!displayData.language) {
-    displayData.language = 'ja';
-    console.warn(`no language data found for ${file.name} - fallback to ja`);
+    // Was a flat 'ja'. That is upstream's audience, not this app's, and it is
+    // not cosmetic: the TTS voice is picked per language, so this fallback
+    // decides how an untagged book gets read aloud. The text itself is right
+    // here and says more than a guess about the reader.
+    displayData.language = detectLanguage(result.element.textContent || '');
   }
 
   const blobData = reduceObjToBlobs(data);

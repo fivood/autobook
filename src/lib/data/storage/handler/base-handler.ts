@@ -401,6 +401,7 @@ export abstract class BaseStorageHandler {
       >
     > = [
       'title',
+      'language',
       'styleSheet',
       'elementHtml',
       'htmlBackup',
@@ -614,6 +615,11 @@ export abstract class BaseStorageHandler {
               bookObject.lastBookModified = lastBookModified;
               bookObject.lastBookOpen = lastBookOpen;
 
+              // Absent from books written before this field was persisted;
+              // the reader falls back to guessing from the text.
+              if (staticData.language) {
+                bookObject.language = staticData.language;
+              }
               if (staticData.htmlBackup) {
                 bookObject.htmlBackup = staticData.htmlBackup;
               }
