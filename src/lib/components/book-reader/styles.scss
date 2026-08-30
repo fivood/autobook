@@ -144,6 +144,16 @@
     justify-content: center;
   }
 
+  // Undo Tailwind preflight's `img { display: block }` for images that are
+  // part of a line of text — the note markers some EPUBs use. Left as block
+  // they take a line to themselves and push the rest of the sentence down.
+  // Tagged in format-book-data-html.ts, where the surrounding markup is still
+  // available to tell a marker from an illustration.
+  :global(img.ttu-inline-img) {
+    display: inline;
+    vertical-align: baseline;
+  }
+
   &:not(.ttu-apply-important) {
     :global(p) {
       text-indent: var(--book-content-text-intendation, 0rem);

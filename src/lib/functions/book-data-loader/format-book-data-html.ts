@@ -164,12 +164,26 @@ function getHtmlWithImageSource(
 
 function addImageContainerClass(el: HTMLElement) {
   Array.from(el.getElementsByTagName('img'))
-    .map((imgEl) => ({ parentEl: imgEl.parentElement, isGaiji: isElementGaiji(imgEl) }))
-    .forEach(({ parentEl, isGaiji }) => {
+    .map((imgEl) => ({
+      imgEl,
+      parentEl: imgEl.parentElement,
+      isGaiji: isElementGaiji(imgEl)
+    }))
+    .forEach(({ imgEl, parentEl, isGaiji }) => {
       parentEl?.classList.add('ttu-img-container');
 
       if (!isGaiji) {
         parentEl?.classList.add('ttu-illustration-container');
+      }
+
+      // Tailwind's preflight sets `img { display: block }` for every image on
+      // the page. For an illustration that is what you want; for the small
+      // image some EPUBs use as a footnote marker it is not — the marker takes
+      // a line of its own and shoves the rest of the sentence onto the next
+      // one. Tag the ones that live inside a line of text so the stylesheet
+      // can put them back inline.
+      if (isInlineImage(imgEl)) {
+        imgEl.classList.add('ttu-inline-img');
       }
     });
 }
@@ -181,10 +195,61 @@ function removeSvgDimensions(el: HTMLElement) {
   });
 }
 
-function isInlineImage(img: HTMLImageElement): boolean {
-  const parent = img.parentElement;
-  if (!parent) return false;
-  for (const node of Array.from(parent.childNodes)) {
+/**
+ * Inline wrappers a note marker is normally found in. The image itself carries
+ * no text, so asking its immediate parent whether it has text alongside gets
+ * the wrong answer for every one of these.
+ */
+const INLINE_WRAPPER_TAGS = new Set([
+  'A',
+  'ABBR',
+  'B',
+  'BDI',
+  'BDO',
+  'CITE',
+  'CODE',
+  'EM',
+  'FONT',
+  'I',
+  'LABEL',
+  'MARK',
+  'Q',
+  'RUBY',
+  'S',
+  'SMALL',
+  'SPAN',
+  'STRONG',
+  'SUB',
+  'SUP',
+  'TIME',
+  'U'
+]);
+
+/**
+ * Is this image part of a line of text rather than a standalone illustration?
+ *
+ * It matters because standalone images get wrapped in `.ttu-img-parent`, which
+ * is `display: flex` — a block-level box. Wrapping a footnote marker in one
+ * breaks the line, which is what an EPUB using a small image for its note
+ * marks looked like: the text after every marker started a new line.
+ *
+ * The old rule asked the image's *immediate parent* for a text sibling. A bare
+ * `<img>` between two runs of prose passed, but the shapes note markers
+ * actually take — `<sup><img></sup>`, `<a><img></a>`, `<span><img></span>` —
+ * all failed, because those wrappers hold nothing but the image.
+ *
+ * So climb out of inline wrappers first and ask the enclosing block instead.
+ * The predicate itself is unchanged — a *direct* text-node child — which keeps
+ * a captioned illustration (`<p><img><span>图1</span></p>`, no direct text)
+ * classified as an illustration exactly as before.
+ */
+export function isInlineImage(img: HTMLImageElement): boolean {
+  let scope: HTMLElement | null = img.parentElement;
+  while (scope?.parentElement && INLINE_WRAPPER_TAGS.has(scope.tagName)) {
+    scope = scope.parentElement;
+  }
+  if (!scope) return false;
+  for (const node of Array.from(scope.childNodes)) {
     if (node.nodeType === Node.TEXT_NODE && node.textContent && node.textContent.trim().length > 0) {
       return true;
     }

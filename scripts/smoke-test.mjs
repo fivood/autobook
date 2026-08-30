@@ -613,6 +613,102 @@ async function ttsCalculatorIndexAgrees() {
   return `${Object.keys(out).length} content shapes translate exactly`;
 }
 
+/**
+ * Regression, reported 2026-08-31: an EPUB that uses a small image as its
+ * footnote marker had the text after every marker start a new line.
+ *
+ * Tailwind's preflight sets `img { display: block }` for the whole app, which
+ * is right for an illustration and wrong for a marker sitting mid-sentence.
+ * The formatter tags the images that live inside a line of text and the
+ * stylesheet puts those back inline; this checks the two halves still meet.
+ *
+ * Runs inside the opened book on purpose — the rule is scoped to the reader's
+ * stylesheet, so testing it anywhere else would only prove the class name
+ * exists.
+ */
+async function inlineImagesDoNotBreakTheLine(bookId) {
+  await goto(`/b?id=${bookId}`, `!!document.querySelector('.book-content')`);
+
+  const out = await session.evaluate(`(async () => {
+    const { isInlineImage } = await import(
+      '/src/lib/functions/book-data-loader/format-book-data-html.ts'
+    );
+    const root = document.querySelector('.book-content');
+    if (!root) return { ok: false, why: 'no .book-content' };
+    const D = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+
+    const shapes = {
+      bare: '前面的正文<img src="' + D + '" width="12" height="12">后面的正文继续。',
+      sup: '前面的正文<sup><img src="' + D + '" width="12" height="12"></sup>后面的正文继续。',
+      anchor:
+        '前面的正文<a href="#n1"><img src="' + D + '" width="12" height="12"></a>后面的正文继续。',
+      span:
+        '前面的正文<span class="note"><img src="' + D + '" width="12" height="12"></span>后面的正文继续。'
+    };
+
+    const lines = (el) => {
+      const tops = new Set();
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+      for (let n = w.nextNode(); n; n = w.nextNode()) {
+        if (!(n.textContent || '').trim()) continue;
+        const rg = document.createRange();
+        rg.selectNodeContents(n);
+        tops.add(Math.round(rg.getBoundingClientRect().top));
+      }
+      return tops.size;
+    };
+
+    const markers = {};
+    for (const [name, html] of Object.entries(shapes)) {
+      const p = document.createElement('p');
+      p.innerHTML = html;
+      root.insertBefore(p, root.firstChild);
+      const img = p.querySelector('img');
+      const inline = isInlineImage(img);
+      if (inline) img.classList.add('ttu-inline-img');
+      markers[name] = {
+        detected: inline,
+        display: getComputedStyle(img).display,
+        lines: lines(p)
+      };
+      p.remove();
+    }
+
+    // An illustration must stay block, or this "fix" would flatten every
+    // picture in the book onto the text line.
+    const pic = document.createElement('p');
+    pic.innerHTML = '<img src="' + D + '" width="200" height="100">';
+    root.insertBefore(pic, root.firstChild);
+    const picImg = pic.querySelector('img');
+    const illustration = {
+      detected: isInlineImage(picImg),
+      display: getComputedStyle(picImg).display
+    };
+    pic.remove();
+
+    return { ok: true, markers, illustration };
+  })()`);
+
+  if (!out.ok) throw new Error(out.why);
+
+  const broken = Object.entries(out.markers).filter(
+    ([, m]) => !m.detected || m.display !== 'inline' || m.lines !== 1
+  );
+  if (broken.length) {
+    throw new Error(
+      `note markers still break the line: ${broken
+        .map(([k, m]) => `${k}(detected=${m.detected}, display=${m.display}, lines=${m.lines})`)
+        .join(', ')}`
+    );
+  }
+  if (out.illustration.detected || out.illustration.display !== 'block') {
+    throw new Error(
+      `a standalone illustration was flattened: ${JSON.stringify(out.illustration)}`
+    );
+  }
+  return `${Object.keys(out.markers).length} marker shapes stay on one line, illustrations stay block`;
+}
+
 // ----------------------------------------------------------------- run ----
 
 console.log('AutoBook smoke suite (real Tauri window via CDP)\n');
@@ -643,6 +739,9 @@ try {
   );
   await scenario('朗读翻页：振假名/隐藏文本不会让字符空间漂移', () =>
     ttsCalculatorIndexAgrees()
+  );
+  await scenario('排版：注释小图不再把后面的文字挤到下一行', () =>
+    inlineImagesDoNotBreakTheLine(bookId)
   );
 } catch (err) {
   fail('suite setup', err.message);
