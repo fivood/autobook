@@ -265,6 +265,7 @@
   import { availableThemes } from '$lib/data/theme-option';
   import { ViewMode } from '$lib/data/view-mode';
   import loadBookData from '$lib/functions/book-data-loader/load-book-data';
+  import { elementForCharIndex } from '$lib/components/book-reader/char-index-locator';
   import {
     formatTextSource,
     getEditableTextFormat,
@@ -1026,19 +1027,9 @@ ${$t('reader.ttsFailed.hint')}`
     // wraps only the one paragraph straddling its reveal frontier, so
     // indexing `.tw-c` spans would address the wrong character entirely (and
     // even when it wrapped the whole book it silently skipped newlines).
-    let target: Element | null = null;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-    let total = 0;
-    let node: Node | null = walker.nextNode();
-    while (node) {
-      const text = node.textContent || '';
-      if (total + text.length >= globalIdx) {
-        target = node.parentElement;
-        break;
-      }
-      total += text.length;
-      node = walker.nextNode();
-    }
+    // Shared with the highlighter's index space; see char-index-locator.ts
+    // for what went wrong when this walk was inline here and diverged.
+    const target = elementForCharIndex(root, globalIdx);
     if (target) {
       const rect = target.getBoundingClientRect();
       const vh = window.innerHeight || 0;

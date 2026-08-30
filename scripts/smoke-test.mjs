@@ -81,7 +81,19 @@ const MANAGE_READY = `!![...document.querySelectorAll('input[type=file]')]
 
 async function snapshotSettings() {
   return session.evaluate(`(() => {
-    const keys = ['viewMode', 'fsRoot', 'lastStorageSource', 'ttsEngine', 'statisticsEnabled'];
+    // activeFolderFilter is here because the archive scenario parks the library
+    // on 「已归档」 while it works. A run that failed midway used to leave it
+    // there, and every later run started in a view the test book is not in —
+    // reported as "the test book was not on the shelf to begin with", which
+    // says nothing about the actual cause.
+    const keys = [
+      'viewMode',
+      'fsRoot',
+      'lastStorageSource',
+      'ttsEngine',
+      'statisticsEnabled',
+      'activeFolderFilter'
+    ];
     const out = {};
     for (const k of keys) out[k] = localStorage.getItem(k);
     return out;
@@ -345,6 +357,8 @@ async function ttsFailureExplainsItself(bookId) {
  * gone". See the note in CLAUDE.md §冒烟套件.
  */
 async function archiveHidesAndRestores(bookId) {
+  // Start from a known view rather than whatever the last run left behind.
+  await session.evaluate(`(() => { localStorage.setItem('activeFolderFilter', 'all'); return 1; })()`);
   await goto('/manage', MANAGE_READY);
 
   const enterSelect = async () => session.evaluate(`(() => {
@@ -387,6 +401,20 @@ async function archiveHidesAndRestores(bookId) {
     };
   })()`);
 
+  // MANAGE_READY only proves the page mounted; the card list arrives later.
+  // Waiting on the mount alone made this scenario flaky in both directions —
+  // "not on the shelf to begin with" here, and a missing toolbar button below.
+  try {
+    await session.waitFor(js`document.body.innerText.includes(${TEST_TITLE})`, {
+      label: 'the test book to appear on the shelf',
+      timeoutMs: 15000
+    });
+  } catch (err) {
+    const seen = await session.evaluate(
+      `({ source: localStorage.getItem('lastStorageSource'), path: location.pathname, body: document.body.innerText.slice(0, 300) })`
+    );
+    throw new Error(`${err.message} | ${JSON.stringify(seen)}`);
+  }
   const before = await shelf();
   if (!before.onShelf) throw new Error('the test book was not on the shelf to begin with');
 
@@ -394,6 +422,10 @@ async function archiveHidesAndRestores(bookId) {
     const r = await step();
     if (!r.ok) throw new Error(r.why);
   }
+  await session.waitFor(
+    `[...document.querySelectorAll('[title]')].some((e) => (e.getAttribute('title') || '').startsWith('归档'))`,
+    { label: 'the archive button to appear' }
+  );
   const archived = await clickByTitlePrefix('归档');
   if (!archived.ok) throw new Error(archived.why);
 
@@ -421,6 +453,12 @@ async function archiveHidesAndRestores(bookId) {
     const r = await step();
     if (!r.ok) throw new Error(r.why);
   }
+  // The toolbar only renders once a selection exists, and the click above is
+  // asynchronous as far as this side is concerned.
+  await session.waitFor(
+    `[...document.querySelectorAll('[title]')].some((e) => (e.getAttribute('title') || '').startsWith('取消归档'))`,
+    { label: 'the unarchive button to appear' }
+  );
   const restored = await clickByTitlePrefix('取消归档');
   if (!restored.ok) throw new Error(restored.why);
 
@@ -437,6 +475,83 @@ async function archiveHidesAndRestores(bookId) {
     throw new Error(`已归档 still shows ${after.archivedCount} after restoring`);
   }
   return 'hidden from the shelf, listed under 已归档, restored';
+}
+
+/**
+ * Regression, reported 2026-08-31: during TTS a sentence at the start of a
+ * paragraph occasionally scrolled the reader deep into unread text, and the
+ * next sentence scrolled back.
+ *
+ * Cause was `scrollSentenceIntoView`'s text-node walk disagreeing with
+ * `extractText()` — the space sentence indices are expressed in — so a
+ * paragraph-start index resolved to an enclosing wrapper element, and
+ * centring a 76042px chapter `<div>` in an 860px viewport lands anywhere.
+ *
+ * Both sides here are production code: the scenario asks the real locator
+ * where an index lives and checks it against the real extractText() walk.
+ * A drift in either one fails this.
+ */
+async function ttsFollowResolvesParagraphStarts(bookId) {
+  await goto(`/b?id=${bookId}`, `!!document.querySelector('.book-content')`);
+  await session.waitFor(`document.documentElement.scrollHeight > window.innerHeight * 2`, {
+    label: 'the book to lay out'
+  });
+
+  const out = await session.evaluate(`(async () => {
+    const { elementForCharIndex } = await import('/src/lib/components/book-reader/char-index-locator.ts');
+    const { extractText } = await import('/src/lib/components/book-reader/auto-reader-shared.ts');
+    const root = document.querySelector('.book-content');
+    if (!root) return { ok: false, why: 'no .book-content' };
+
+    // Rebuild extractText()'s segment map so we know the right answer.
+    const segs = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    let total = 0;
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const parent = n.parentElement;
+      if (!parent) continue;
+      const tag = parent.tagName;
+      if (tag === 'SCRIPT' || tag === 'STYLE') continue;
+      const text = n.textContent || '';
+      if (!text.length) continue;
+      segs.push({ el: parent, start: total, end: total + text.length });
+      total += text.length;
+    }
+    if (segs.length !== 0 && total !== extractText(root).length) {
+      return { ok: false, why: 'segment map disagrees with extractText itself' };
+    }
+
+    // Every element's first index — a sentence opening a paragraph lands here,
+    // which is exactly where the old walk went wrong.
+    const firsts = [];
+    const seen = new Set();
+    for (const s of segs) {
+      if (seen.has(s.el)) continue;
+      seen.add(s.el);
+      firsts.push(s);
+    }
+    if (firsts.length < 20) return { ok: false, why: 'too few paragraphs to be a real check' };
+
+    let wrong = 0;
+    let firstWrong = null;
+    for (const s of firsts) {
+      const got = elementForCharIndex(root, s.start);
+      if (got !== s.el) {
+        wrong += 1;
+        if (!firstWrong) firstWrong = { at: s.start, wantTag: s.el.tagName, gotTag: got ? got.tagName : 'null' };
+      }
+    }
+    return { ok: true, checked: firsts.length, wrong, firstWrong };
+  })()`);
+
+  if (!out.ok) throw new Error(out.why);
+  if (out.wrong) {
+    throw new Error(
+      `${out.wrong}/${out.checked} paragraph starts resolved to the wrong element ` +
+        `(first: ${JSON.stringify(out.firstWrong)})`
+    );
+  }
+  return `${out.checked} paragraph starts resolve exactly`;
 }
 
 // ----------------------------------------------------------------- run ----
@@ -464,6 +579,9 @@ try {
   await scenario('朗读：引擎失败时说明原因', () => ttsFailureExplainsItself(bookId));
   await scenario('导入：批量失败时逐个报出文件名和原因', () => batchImportNamesEveryFailure());
   await scenario('归档：从书库隐藏、在已归档里能找到、能放回来', () => archiveHidesAndRestores(bookId));
+  await scenario('朗读跟随：段落开头的位置解析不跑偏', () =>
+    ttsFollowResolvesParagraphStarts(bookId)
+  );
 } catch (err) {
   fail('suite setup', err.message);
 } finally {
