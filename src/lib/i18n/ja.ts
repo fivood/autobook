@@ -878,6 +878,7 @@ export default {
   'stats.tab.sessionsHint': '読書時間帯と分位',
   'stats.tab.year': '年間',
   'stats.tab.yearHint': '1年間の読書像',
+  'stats.year.showAll': 'すべて表示',
   'stats.year.toggleHint': 'このモジュールの表示/非表示',
   'stats.year.empty': 'この年の記録はまだありません',
   'stats.year.monthly': '月別の時間',

@@ -64,9 +64,19 @@
       class="rounded border border-current/30 px-2 py-0.5 text-xs"
       class:opacity-40={!shown(id)}
       title={$t('stats.year.toggleHint')}
+      aria-pressed={shown(id)}
       on:click={() => toggle(id)}>{$t(`stats.year.module.${id}`)}</button
     >
   {/each}
+  <!-- Only offered once something is off: switching six modules back on one
+       by one is the kind of chore that makes people leave them off. -->
+  {#if $yearModulesHidden$.size}
+    <button
+      type="button"
+      class="rounded px-2 py-0.5 text-xs underline underline-offset-2 opacity-70 hover:opacity-100"
+      on:click={() => yearModulesHidden$.next(new Set())}>{$t('stats.year.showAll')}</button
+    >
+  {/if}
 </div>
 
 {#if !summary || !summary.totalSeconds}

@@ -873,6 +873,7 @@ export default {
   'stats.tab.sessionsHint': 'Reading times and percentiles',
   'stats.tab.year': 'Year',
   'stats.tab.yearHint': 'A whole year at a glance',
+  'stats.year.showAll': 'Show all',
   'stats.year.toggleHint': 'Show/hide this module',
   'stats.year.empty': 'Nothing read in this year yet',
   'stats.year.monthly': 'Time per month',

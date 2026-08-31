@@ -111,6 +111,7 @@
   import Fa from 'svelte-fa';
   import { fly } from 'svelte/transition';
   import { clickOutside } from '$lib/functions/use-click-outside';
+  import { activateOnKeyup } from '$lib/functions/utils';
 
   const booksAreLoading$ = database.listLoading$.pipe(map((isLoading) => isLoading));
 
@@ -1560,7 +1561,7 @@
           role="button"
           class="menu-item"
           on:click={() => runFromContextMenu(() => onBookClick([...selectedBookIds][0]))}
-          on:keyup={() => {}}
+          on:keyup={activateOnKeyup}
         >{$t('manager.context.open')}</div>
       {/if}
       {#each $folders$ as folder (folder.id)}
@@ -1569,7 +1570,7 @@
           role="button"
           class="menu-item"
           on:click={() => runFromContextMenu(() => addSelectedToFolder(folder.id))}
-          on:keyup={() => {}}
+          on:keyup={activateOnKeyup}
         >+ {folder.name}</div>
       {/each}
       <div
@@ -1577,7 +1578,7 @@
         role="button"
         class="menu-item"
         on:click={() => runFromContextMenu(toggleArchiveForSelection)}
-        on:keyup={() => {}}
+        on:keyup={activateOnKeyup}
       >
         {$activeFolderFilter$ === ARCHIVED_FILTER
           ? $t('manager.action.unarchive')
@@ -1589,7 +1590,7 @@
           role="button"
           class="menu-item"
           on:click={() => runFromContextMenu(selectionToStatistics)}
-          on:keyup={() => {}}
+          on:keyup={activateOnKeyup}
         >{$t('manager.action.stats')}</div>
       {/if}
       <div
@@ -1597,7 +1598,7 @@
         role="button"
         class="menu-item context-menu-danger"
         on:click={() => runFromContextMenu(() => handleRemove(Array.from(selectedBookIds)))}
-        on:keyup={() => {}}
+        on:keyup={activateOnKeyup}
       >{$t('manager.action.delete')}</div>
     </div>
   {/if}

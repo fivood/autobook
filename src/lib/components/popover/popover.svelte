@@ -39,6 +39,17 @@
     isOpen = false;
   }
 
+  $: if (browser && iconElement) {
+    iconElement.setAttribute('aria-expanded', `${isOpen}`);
+  }
+
+  function onWindowKeydown(event: KeyboardEvent) {
+    if (isOpen && event.key === 'Escape') {
+      event.preventDefault();
+      toggleOpen();
+    }
+  }
+
   export async function toggleOpen(referenceElement?: HTMLElement | Event) {
     if (isOpen) {
       popovers.remove(id);
@@ -85,10 +96,35 @@
     }
   }
 
+  /**
+   * Keyboard activation for the trigger.
+   *
+   * The trigger is a bare `<div>` with a click listener, so every popover in
+   * the app — the library's sort / filter / cover-size / language menus, the
+   * reader's overflow — was unreachable without a mouse. Measured on the
+   * library bar: 10 focusable controls, and none of those four among them.
+   * Hover-type popovers are tooltips and stay mouse-only.
+   */
+  function onTriggerKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleOpen(event.currentTarget as HTMLElement);
+  }
+
   function conditionalClickHandlerAndClass(node: HTMLElement, conditionFulfilled: boolean) {
     if (conditionFulfilled) {
       node.classList.add('cursor-pointer');
       if (eventType === 'click') {
+        node.classList.add('popover-trigger');
+        node.tabIndex = 0;
+        node.setAttribute('role', 'button');
+        // The label lives on the icon inside the slot, so the wrapper we just
+        // turned into a button would announce as a nameless "button".
+        if (!node.getAttribute('aria-label')) {
+          const labelled = node.querySelector('[title]')?.getAttribute('title');
+          if (labelled) node.setAttribute('aria-label', labelled);
+        }
+        node.addEventListener('keydown', onTriggerKeydown, false);
         node.addEventListener('click', toggleOpen, false);
       } else {
         node.addEventListener('pointerenter', toggleOpen, false);
@@ -97,6 +133,11 @@
     } else {
       node.classList.remove('cursor-pointer');
       if (eventType === 'click') {
+        node.classList.remove('popover-trigger');
+        node.removeAttribute('tabindex');
+        node.removeAttribute('role');
+        node.removeAttribute('aria-label');
+        node.removeEventListener('keydown', onTriggerKeydown, false);
         node.removeEventListener('click', toggleOpen, false);
       } else {
         node.removeEventListener('pointerenter', toggleOpen, false);
@@ -107,6 +148,7 @@
     return {
       destroy() {
         if (eventType === 'click') {
+          node.removeEventListener('keydown', onTriggerKeydown, false);
           node.removeEventListener('click', toggleOpen, false);
         } else {
           node.removeEventListener('pointerenter', toggleOpen, false);
@@ -138,6 +180,8 @@
     return targetElement;
   }
 </script>
+
+<svelte:window on:keydown={onWindowKeydown} />
 
 <div data-popover class="flex items-center" style={containerStyles}>
   <div
@@ -173,3 +217,13 @@
     </div>
   </div>
 {/if}
+
+<style>
+  /* The trigger only became focusable with this change; without a visible
+     ring, tabbing through the bar would move focus into nowhere. */
+  :global(.popover-trigger:focus-visible) {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+    border-radius: 0.25rem;
+  }
+</style>

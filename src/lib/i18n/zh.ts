@@ -916,6 +916,7 @@ export default {
   'stats.tab.sessionsHint': '阅读时段与分位',
   'stats.tab.year': '年度',
   'stats.tab.yearHint': '整年的阅读画像',
+  'stats.year.showAll': '全部显示',
   'stats.year.toggleHint': '显示/隐藏这个模块',
   'stats.year.empty': '这一年还没有阅读记录',
   'stats.year.monthly': '每月时长',
