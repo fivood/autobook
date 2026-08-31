@@ -25,6 +25,11 @@ export interface DailySummaryRow {
   dateKey: string;
   seconds: number;
   chars: number;
+  /** Pages, for books whose unit of reading is a page (scans, comics). Kept
+   * apart from `chars` because the two cannot be added: a page is not a
+   * character, and summing them produced a 「总字数」 that silently mixed
+   * 113 comic pages into a novel's word count. */
+  pages: number;
   /** Average per-title speed weighted by chars — matches how MAIN
    * computes it. Zero when the day has no character-read data. */
   weightedSpeedCharsPerHour: number;
@@ -36,6 +41,8 @@ export interface DailySummary {
   rows: DailySummaryRow[];
   totalSeconds: number;
   totalChars: number;
+  /** Pages read across the period; see DailySummaryRow.pages. */
+  totalPages: number;
   totalCompleted: number;
   activeDays: number;
 }
@@ -54,7 +61,11 @@ export function computeDailySummary(input: DailyInput): DailySummary {
   const byDay = new Map<string, DailySummaryRow>();
   let totalSeconds = 0;
   let totalChars = 0;
+  let totalPages = 0;
   let totalCompleted = 0;
+
+  /** A row measured in pages: the tracker recorded a page total for it. */
+  const pagesOf = (s: BooksDbStatistic) => (s.sectionsTotal ? s.sectionsRead || 0 : 0);
 
   for (const s of statistics) {
     if (
@@ -70,6 +81,7 @@ export function computeDailySummary(input: DailyInput): DailySummary {
         dateKey: s.dateKey,
         seconds: 0,
         chars: 0,
+        pages: 0,
         weightedSpeedCharsPerHour: 0,
         titles: [],
         completedBooks: 0
@@ -84,13 +96,21 @@ export function computeDailySummary(input: DailyInput): DailySummary {
       completedBook: s.completedBook || 0,
       raw: s
     };
+    const pages = pagesOf(s);
     row.titles.push(t);
     row.seconds += t.readingTime;
-    row.chars += t.charactersRead;
     row.completedBooks += t.completedBook;
     totalSeconds += t.readingTime;
-    totalChars += t.charactersRead;
     totalCompleted += t.completedBook;
+    if (pages) {
+      // For an image book `charactersRead` is one unit per page — the same
+      // quantity, in the wrong column. Count it once, as pages.
+      row.pages += pages;
+      totalPages += pages;
+    } else {
+      row.chars += t.charactersRead;
+      totalChars += t.charactersRead;
+    }
   }
 
   // Weighted speed per day: char-weighted average of per-title lastReadingSpeed.
@@ -99,6 +119,7 @@ export function computeDailySummary(input: DailyInput): DailySummary {
     if (row.chars > 0) {
       let num = 0;
       for (const t of row.titles) {
+        if (pagesOf(t.raw)) continue;
         num += t.lastReadingSpeed * t.charactersRead;
       }
       row.weightedSpeedCharsPerHour = Math.round(num / row.chars);
@@ -112,6 +133,7 @@ export function computeDailySummary(input: DailyInput): DailySummary {
     rows,
     totalSeconds,
     totalChars,
+    totalPages,
     totalCompleted,
     activeDays: rows.filter((r) => r.seconds > 0).length
   };

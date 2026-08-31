@@ -178,8 +178,14 @@
       <div class="text-xl font-medium tabular-nums">{formatDuration(summary.totalSeconds)}</div>
     </div>
     <div class="rounded border border-current/30 p-3">
-      <div class="text-xs opacity-70">{$t('stats.summary.totalChars')}</div>
-      <div class="text-xl font-medium tabular-nums">{formatChars(summary.totalChars)}</div>
+      <div class="text-xs opacity-70">
+        {summary.totalPages ? $t('stats.summary.totalCharsAndPages') : $t('stats.summary.totalChars')}
+      </div>
+      <div class="text-xl font-medium tabular-nums">
+        {formatChars(summary.totalChars)}{summary.totalPages
+          ? ` · ${tImmediate('stats.summary.pagesValue', { n: summary.totalPages })}`
+          : ''}
+      </div>
     </div>
     <div class="rounded border border-current/30 p-3">
       <div class="text-xs opacity-70">{$t('stats.summary.completedBooks')}</div>
@@ -223,7 +229,11 @@
           <div class="whitespace-nowrap">{row.dateKey}</div>
           <div class="opacity-70 text-xs">{weekdayOf(row.dateKey)}</div>
           <div class="text-right">{formatDuration(row.seconds)}</div>
-          <div class="text-right">{formatChars(row.chars)}</div>
+          <div class="text-right">
+            {row.chars ? formatChars(row.chars) : ''}{row.pages
+              ? `${row.chars ? ' · ' : ''}${tImmediate('stats.summary.pagesValue', { n: row.pages })}`
+              : ''}{!row.chars && !row.pages ? '0' : ''}
+          </div>
           <div class="text-right opacity-80">
             {row.weightedSpeedCharsPerHour ? formatChars(row.weightedSpeedCharsPerHour) : '—'}
           </div>
@@ -295,9 +305,22 @@
                   </div>
                 {:else}
                   <div class="text-right tabular-nums">{formatDuration(tc.readingTime)}</div>
-                  <div class="text-right tabular-nums">{formatChars(tc.charactersRead)}</div>
+                  <div class="text-right tabular-nums">
+                    {#if tc.raw.sectionsTotal}
+                      {tImmediate('stats.summary.pagesOfTotal', {
+                        read: tc.raw.sectionsRead ?? 0,
+                        total: tc.raw.sectionsTotal
+                      })}
+                    {:else}
+                      {formatChars(tc.charactersRead)}
+                    {/if}
+                  </div>
                   <div class="text-right tabular-nums opacity-70">
-                    {tc.lastReadingSpeed ? formatChars(tc.lastReadingSpeed) : '—'}
+                    {#if tc.raw.sectionsTotal}
+                      —
+                    {:else}
+                      {tc.lastReadingSpeed ? formatChars(tc.lastReadingSpeed) : '—'}
+                    {/if}
                   </div>
                   <div class="flex gap-2 justify-end">
                     <button
