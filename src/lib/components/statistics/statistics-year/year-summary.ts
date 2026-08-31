@@ -32,6 +32,8 @@ export interface MonthlyBar {
   month: number; // 1..12
   seconds: number;
   chars: number;
+  /** Pages, for books measured in pages; never added to `chars`. */
+  pages: number;
   activeDays: number;
 }
 
@@ -39,6 +41,8 @@ export interface TopBook {
   title: string;
   seconds: number;
   chars: number;
+  /** Pages for image books; `chars` stays 0 for those. */
+  pages: number;
   days: number;
 }
 
@@ -52,6 +56,14 @@ export interface YearSummary {
   year: number;
   totalSeconds: number;
   totalChars: number;
+  /** Pages read this year, kept apart from characters — a page is not a
+   * character, and summing them made a comic inflate a novel's word count. */
+  totalPages: number;
+  /** Time and text delivered by each playback engine, when recorded. */
+  ttsSeconds: number;
+  ttsCharacters: number;
+  typewriterSeconds: number;
+  typewriterCharacters: number;
   activeDays: number;
   completedBooks: number;
   monthly: MonthlyBar[];
@@ -162,11 +174,27 @@ export function computeYearSummary(input: YearSummaryInput): YearSummary {
   const monthlyMap = new Map<number, MonthlyBar>();
   let totalSeconds = 0;
   let totalChars = 0;
+  let totalPages = 0;
+  let ttsSeconds = 0;
+  let ttsCharacters = 0;
+  let typewriterSeconds = 0;
+  let typewriterCharacters = 0;
   let completedBooks = 0;
 
+  /** Books measured in pages: the tracker recorded a page total for them. */
+  const pagesOf = (row: BooksDbStatistic) => (row.sectionsTotal ? row.sectionsRead || 0 : 0);
+
   for (const row of inYearStats) {
+    const rowPages = pagesOf(row);
+    const rowChars = rowPages ? 0 : row.charactersRead || 0;
+
     totalSeconds += row.readingTime || 0;
-    totalChars += row.charactersRead || 0;
+    totalChars += rowChars;
+    totalPages += rowPages;
+    ttsSeconds += row.ttsSeconds || 0;
+    ttsCharacters += row.ttsCharacters || 0;
+    typewriterSeconds += row.typewriterSeconds || 0;
+    typewriterCharacters += row.typewriterCharacters || 0;
     if (row.completedBook) completedBooks += row.completedBook;
 
     const dayBucket = perDay.get(row.dateKey) || {
@@ -175,7 +203,7 @@ export function computeYearSummary(input: YearSummaryInput): YearSummary {
       titles: new Set<string>()
     };
     dayBucket.seconds += row.readingTime || 0;
-    dayBucket.chars += row.charactersRead || 0;
+    dayBucket.chars += rowChars;
     if (row.readingTime) dayBucket.titles.add(row.title);
     perDay.set(row.dateKey, dayBucket);
 
@@ -183,18 +211,27 @@ export function computeYearSummary(input: YearSummaryInput): YearSummary {
       title: row.title,
       seconds: 0,
       chars: 0,
+      pages: 0,
       days: 0
     };
     titleBucket.seconds += row.readingTime || 0;
-    titleBucket.chars += row.charactersRead || 0;
+    titleBucket.chars += rowChars;
+    titleBucket.pages += rowPages;
     if (row.readingTime) titleBucket.days += 1;
     perTitle.set(row.title, titleBucket);
 
     const month = monthOfDateKey(row.dateKey);
     if (month) {
-      const bar = monthlyMap.get(month) || { month, seconds: 0, chars: 0, activeDays: 0 };
+      const bar = monthlyMap.get(month) || {
+        month,
+        seconds: 0,
+        chars: 0,
+        pages: 0,
+        activeDays: 0
+      };
       bar.seconds += row.readingTime || 0;
-      bar.chars += row.charactersRead || 0;
+      bar.chars += rowChars;
+      bar.pages += rowPages;
       monthlyMap.set(month, bar);
     }
   }
@@ -202,7 +239,9 @@ export function computeYearSummary(input: YearSummaryInput): YearSummary {
   // Fill monthly bars for months with no rows.
   const monthly: MonthlyBar[] = [];
   for (let m = 1; m <= 12; m += 1) {
-    monthly.push(monthlyMap.get(m) || { month: m, seconds: 0, chars: 0, activeDays: 0 });
+    monthly.push(
+      monthlyMap.get(m) || { month: m, seconds: 0, chars: 0, pages: 0, activeDays: 0 }
+    );
   }
 
   // Compute active days per month + best day + streaks.
@@ -299,6 +338,11 @@ export function computeYearSummary(input: YearSummaryInput): YearSummary {
     year,
     totalSeconds,
     totalChars,
+    totalPages,
+    ttsSeconds,
+    ttsCharacters,
+    typewriterSeconds,
+    typewriterCharacters,
     activeDays: activeDayKeys.length,
     completedBooks,
     monthly,

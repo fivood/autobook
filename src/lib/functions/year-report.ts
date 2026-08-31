@@ -37,22 +37,30 @@ interface DayTotals {
 export function buildYearReportMarkdown(input: YearReportInput): string {
   const { label, statistics, highlights, authors, year } = input;
 
-  const totals = { readingTime: 0, charactersRead: 0 };
+  const totals = { readingTime: 0, charactersRead: 0, pages: 0 };
   const perDay = new Map<string, DayTotals>();
   const titles = new Set<string>();
-  const perTitle = new Map<string, { seconds: number; chars: number }>();
+  const perTitle = new Map<string, { seconds: number; chars: number; pages: number }>();
   let completedInRange = 0;
+  // A page is not a character. Books measured in pages (scans without a text
+  // layer, comics) record one unit per page in `charactersRead`; adding that
+  // to a novel's word count is how a 113-page comic used to inflate the year.
+  const pagesOf = (s: BooksDbStatistic) => (s.sectionsTotal ? s.sectionsRead || 0 : 0);
   for (const s of statistics) {
+    const pages = pagesOf(s);
+    const chars = pages ? 0 : s.charactersRead || 0;
     totals.readingTime += s.readingTime || 0;
-    totals.charactersRead += s.charactersRead || 0;
+    totals.charactersRead += chars;
+    totals.pages += pages;
     const bucket = perDay.get(s.dateKey) || { readingTime: 0, charactersRead: 0 };
     bucket.readingTime += s.readingTime || 0;
-    bucket.charactersRead += s.charactersRead || 0;
+    bucket.charactersRead += chars;
     perDay.set(s.dateKey, bucket);
     titles.add(s.title);
-    const t = perTitle.get(s.title) || { seconds: 0, chars: 0 };
+    const t = perTitle.get(s.title) || { seconds: 0, chars: 0, pages: 0 };
     t.seconds += s.readingTime || 0;
-    t.chars += s.charactersRead || 0;
+    t.chars += chars;
+    t.pages += pages;
     perTitle.set(s.title, t);
     if (s.completedBook) completedInRange += s.completedBook;
   }
@@ -67,6 +75,7 @@ export function buildYearReportMarkdown(input: YearReportInput): string {
   lines.push('## 时间段概览', '');
   lines.push(`- 阅读时长：**${toTimeString(totals.readingTime)}**`);
   lines.push(`- 已读字数：**${totals.charactersRead.toLocaleString()}**`);
+  if (totals.pages) lines.push(`- 已读页数：**${totals.pages.toLocaleString()}** 页（扫描版 / 漫画）`);
   lines.push(`- 阅读天数：**${daysRead}**`);
   lines.push(`- 涉及书籍：**${titles.size}** 本`);
   if (completedInRange) lines.push(`- 读完：**${completedInRange}** 本`);
@@ -79,10 +88,11 @@ export function buildYearReportMarkdown(input: YearReportInput): string {
     .slice(0, 10);
   if (topInRange.length) {
     lines.push('## 本期 Top 书籍', '');
-    lines.push('| # | 书名 | 时长 | 字数 |');
+    lines.push('| # | 书名 | 时长 | 字数 / 页数 |');
     lines.push('|---|---|---|---|');
     topInRange.forEach(([title, v], i) => {
-      lines.push(`| ${i + 1} | ${title} | ${toTimeString(v.seconds)} | ${v.chars.toLocaleString()} |`);
+      const amount = v.pages ? `${v.pages.toLocaleString()} 页` : v.chars.toLocaleString();
+      lines.push(`| ${i + 1} | ${title} | ${toTimeString(v.seconds)} | ${amount} |`);
     });
     lines.push('');
   }
@@ -106,6 +116,21 @@ export function buildYearReportMarkdown(input: YearReportInput): string {
     lines.push(`## ${year.year} 年度全景`, '');
     lines.push(`- 全年时长：**${toTimeString(year.totalSeconds)}**`);
     lines.push(`- 全年字数：**${year.totalChars.toLocaleString()}**`);
+    if (year.totalPages) {
+      lines.push(`- 全年页数：**${year.totalPages.toLocaleString()}** 页（扫描版 / 漫画）`);
+    }
+    if (year.ttsSeconds || year.typewriterSeconds) {
+      const parts: string[] = [];
+      if (year.ttsSeconds) {
+        parts.push(`朗读 ${toTimeString(year.ttsSeconds)} / ${year.ttsCharacters.toLocaleString()} 字`);
+      }
+      if (year.typewriterSeconds) {
+        parts.push(
+          `打字机 ${toTimeString(year.typewriterSeconds)} / ${year.typewriterCharacters.toLocaleString()} 字`
+        );
+      }
+      lines.push(`- 其中播放：${parts.join(' · ')}`);
+    }
     lines.push(`- 活跃天数：**${year.activeDays}**`);
     lines.push(`- 读完：**${year.completedBooks}** 本`);
     if (year.longestStreak) {
@@ -140,9 +165,8 @@ export function buildYearReportMarkdown(input: YearReportInput): string {
     if (year.topBooks.length) {
       lines.push('### 全年 Top 书籍', '');
       year.topBooks.forEach((b, i) => {
-        lines.push(
-          `${i + 1}. **${b.title}** — ${toTimeString(b.seconds)} · ${b.chars.toLocaleString()} 字 · ${b.days} 天`
-        );
+        const amount = b.pages ? `${b.pages.toLocaleString()} 页` : `${b.chars.toLocaleString()} 字`;
+        lines.push(`${i + 1}. **${b.title}** — ${toTimeString(b.seconds)} · ${amount} · ${b.days} 天`);
       });
       lines.push('');
     }
