@@ -60,9 +60,10 @@
   let editResetMinMax = false;
 
   function toggleExpanded(dateKey: string) {
-    if (expanded.has(dateKey)) expanded.delete(dateKey);
-    else expanded.add(dateKey);
-    expanded = expanded;
+    const next = new Set(expanded);
+    if (next.has(dateKey)) next.delete(dateKey);
+    else next.add(dateKey);
+    expanded = next;
   }
 
   function startEdit(dateKey: string, tc: DailyTitleContribution) {

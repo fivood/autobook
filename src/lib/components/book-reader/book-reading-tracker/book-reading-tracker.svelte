@@ -365,9 +365,11 @@
     }
     pageDwellMs += elapsedMs;
     if (pageDwellMs >= PAGE_DWELL_THRESHOLD_MS && !pageVisitedToday.has(idx)) {
+      // Every reader of this set is a plain function call that looks at .size,
+      // not a template or a $: block — so the mutation is all that is needed.
+      // A self-assignment used to sit here claiming to drive reactivity; it
+      // does not (see the expander bug in statistics-summary-new.svelte).
       pageVisitedToday.add(idx);
-      // mutate-then-reassign so the reactivity downstream picks up the new size
-      pageVisitedToday = pageVisitedToday;
     }
   }
 
