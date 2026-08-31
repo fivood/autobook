@@ -13,6 +13,8 @@ export default {
   'manager.selectMode.enter': '进入多选',
   'manager.selectMode.exit': '退出多选',
   'manager.selectMode.aria': '多选模式',
+  'manager.selectNone': '取消全选（当前可见的）',
+  'manager.selectedHidden': '其中 {n} 本不在当前视图',
   'manager.selectAll': '全选',
   'manager.backToBook': '返回当前书籍',
   'manager.storageSource': '选择存储源',

@@ -80,6 +80,10 @@
 
   export let hasBookOpened: boolean;
   export let selectMode: boolean;
+  /** Every visible card is selected — the select-all button clears instead. */
+  export let allSelected = false;
+  /** Of `selectedCount`, how many are filtered out of the current view. */
+  export let hiddenSelectedCount = 0;
   export let selectedCount: number;
 
   /** The archive view is on screen, so the archive button restores instead. */
@@ -312,6 +316,15 @@
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}>{selectedCount}</span
           >
+          <!-- Selection outlives a filter change, so the count can include
+               books that are no longer on screen — and 删除 takes all of
+               them. Say so rather than letting the number look like what the
+               reader can see. -->
+          {#if hiddenSelectedCount}
+            <span class="ml-2 text-xs font-normal opacity-70"
+              >{$t('manager.selectedHidden', { n: hiddenSelectedCount })}</span
+            >
+          {/if}
         </div>
       {/if}
 
@@ -338,7 +351,7 @@
             </div>
           {/if}
         {:else}
-          <div title={$t('manager.selectAll')}>
+          <div title={allSelected ? $t('manager.selectNone') : $t('manager.selectAll')}>
             <svg
               tabindex="0"
               role="button"

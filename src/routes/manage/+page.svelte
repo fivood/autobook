@@ -220,6 +220,8 @@
 
   let selectedBookIds: ReadonlySet<BookCardId> = new Set();
   let selectMode = false;
+  /** Last card clicked without shift — the other end of a shift-click range. */
+  let selectionAnchorId: BookCardId | undefined;
   /** True while a book-click's prepareBookForReading is in flight. Guards
    * against double-click stacking a second loading dialog / prepare. */
   let openingBook = false;
@@ -336,13 +338,17 @@
     const titles = titlesForIds(selectedBookIds);
     if (!titles.length) return;
     const restoring = $activeFolderFilter$ === ARCHIVED_FILTER;
+    // Leave select mode before the await, not after. The books vanish from
+    // the shelf as soon as the archive store updates, while the header still
+    // said "selecting" for the rest of the operation — and a click on a card
+    // in that window opened the book instead of ticking it.
+    selectedBookIds = new Set();
+    selectMode = false;
     if (restoring) {
       await unarchiveBooks(titles);
     } else {
       await archiveBooks(titles);
     }
-    selectedBookIds = new Set();
-    selectMode = false;
     flashToast(
       tImmediate(restoring ? 'manager.toast.unarchived' : 'manager.toast.archived', {
         n: titles.length
@@ -417,8 +423,24 @@
     return sortDiff;
   }
 
-  async function onBookClick(bookId: BookCardId) {
+  async function onBookClick(bookId: BookCardId, shiftKey = false, toggleKey = false) {
     if (!operationAllowed()) {
+      return;
+    }
+
+    // Ctrl/Cmd- or shift-clicking a book is a selection gesture in every file
+    // manager there is, so it starts the mode instead of opening the book.
+    // Picking 30 books used to mean finding the toggle in the header first,
+    // then 30 separate clicks.
+    if (!selectMode && (shiftKey || toggleKey)) {
+      selectMode = true;
+      selectionAnchorId = bookId;
+      selectedBookIds = new Set([bookId]);
+      return;
+    }
+
+    if (selectMode && shiftKey && selectionAnchorId !== undefined) {
+      selectRangeTo(bookId);
       return;
     }
 
@@ -498,12 +520,25 @@
       return;
     }
 
+    selectionAnchorId = bookId;
     selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
       if (set.has(bookId)) {
         set.delete(bookId);
         return;
       }
       set.add(bookId);
+    });
+  }
+
+  /** Shift-click: add every visible card between the anchor and this one. */
+  function selectRangeTo(bookId: BookCardId) {
+    const cards = visibleBookCards;
+    const from = cards.findIndex((card) => card.id === selectionAnchorId);
+    const to = cards.findIndex((card) => card.id === bookId);
+    if (from === -1 || to === -1) return;
+    const [start, end] = from <= to ? [from, to] : [to, from];
+    selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
+      for (let i = start; i <= end; i += 1) set.add(cards[i].id);
     });
   }
 
@@ -943,11 +978,52 @@
     cancelTooltip = '';
   }
 
+  /**
+   * Select every card the reader can actually see, and clear when they are
+   * already all selected.
+   *
+   * This used to read `$bookCards$` — the whole library, before the folder,
+   * format, completion and search filters. Measured on a search that matched
+   * nothing: 0 cards on screen, 2 books selected. The next click could have
+   * been 删除.
+   */
   function onSelectAllBooks() {
-    const bookCards = $bookCards$;
+    const cards = visibleBookCards;
+    if (!cards.length) return;
+    if (allVisibleSelected) {
+      selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
+        cards.forEach((card) => set.delete(card.id));
+      });
+      return;
+    }
     selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
-      bookCards.forEach((x) => set.add(x.id));
+      cards.forEach((card) => set.add(card.id));
     });
+  }
+
+  $: hiddenSelectedCount = (() => {
+    if (!selectedBookIds.size) return 0;
+    const visible = new Set(visibleBookCards.map((card) => card.id));
+    let hidden = 0;
+    selectedBookIds.forEach((id) => {
+      if (!visible.has(id)) hidden += 1;
+    });
+    return hidden;
+  })();
+
+  $: allVisibleSelected =
+    visibleBookCards.length > 0 && visibleBookCards.every((card) => selectedBookIds.has(card.id));
+
+  function onManageKeydown(event: KeyboardEvent) {
+    const target = event.target as HTMLElement | null;
+    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    if (event.key === 'Escape' && selectMode) {
+      selectMode = false;
+      event.preventDefault();
+    } else if (event.key === 'a' && (event.ctrlKey || event.metaKey) && selectMode) {
+      onSelectAllBooks();
+      event.preventDefault();
+    }
   }
 
   function backToCurrentBook() {
@@ -1244,6 +1320,8 @@
   }
 </script>
 
+<svelte:window on:keydown={onManageKeydown} />
+
 <svelte:head>
   <title>{formatPageTitle($t('pageTitle.manage'))}</title>
 </svelte:head>
@@ -1260,6 +1338,8 @@
     {replicationToProgress}
     {replicationProgressRemaining}
     bind:selectMode
+    allSelected={allVisibleSelected}
+    {hiddenSelectedCount}
     on:selectAllClick={onSelectAllBooks}
     on:backToBookClick={backToCurrentBook}
     showingArchive={$activeFolderFilter$ === ARCHIVED_FILTER}
@@ -1373,7 +1453,8 @@
       currentBookId={$currentBookId$}
       {selectedBookIds}
       bookCards={visibleBookCards}
-      on:bookClick={(ev) => onBookClick(ev.detail.id)}
+      {selectMode}
+      on:bookClick={(ev) => onBookClick(ev.detail.id, ev.detail.shiftKey, ev.detail.toggleKey)}
       on:removeBookClick={(ev) => handleRemove([ev.detail.id])}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { faCheckCircle, faCircleInfo } from '@fortawesome/free-solid-svg-icons';
+  import { faCircle as faCircleRegular } from '@fortawesome/free-regular-svg-icons';
   import BookCard from '$lib/components/book-card/book-card.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import type { BookCardId } from '$lib/data/book-id';
@@ -13,11 +14,12 @@
   export let bookCards: BookCardProps[] = [];
   export let currentBookId: number | undefined;
   export let selectedBookIds: ReadonlySet<number>;
+  export let selectMode = false;
 
   $: minWidth = Math.max(110, Math.min(360, Number($bookCoverMinWidth$) || 170));
 
   const dispatch = createEventDispatcher<{
-    bookClick: { id: BookCardId };
+    bookClick: { id: BookCardId; shiftKey: boolean; toggleKey: boolean };
     removeBookClick: { id: BookCardId };
     cardDragStart: { id: BookCardId; event: DragEvent };
   }>();
@@ -54,7 +56,11 @@
   })();
 
   function onCardEnter(card: BookCardProps, ev: MouseEvent) {
-    if (selectedBookIds.size) return;
+    // Keyed on the mode, not on `selectedBookIds.size`: with the mode on but
+    // nothing selected yet, the hover delete button used to appear over the
+    // card you were about to select — one pixel of aim away from deleting a
+    // book instead of ticking it.
+    if (selectMode) return;
     hoveringBookId = card.id;
     clearTimeout(hoverTimer);
     const cardEl = (ev.currentTarget as HTMLElement) ?? null;
@@ -90,10 +96,14 @@
     detailId = undefined;
   }
 
-  function onBookCardClick(id: BookCardId) {
+  function onBookCardClick(id: BookCardId, ev?: MouseEvent) {
     clearTimeout(hoverTimer);
     detailId = undefined;
-    dispatch('bookClick', { id });
+    dispatch('bookClick', {
+      id,
+      shiftKey: !!ev?.shiftKey,
+      toggleKey: !!(ev?.ctrlKey || ev?.metaKey)
+    });
   }
 
   function getCardDateInfo(dateTime: number) {
@@ -129,6 +139,7 @@
     <div
       role="banner"
       class="book-grid-item relative cursor-grab active:cursor-grabbing"
+      class:select-mode={selectMode}
       class:opacity-60={bookCard.isPlaceholder}
       draggable="true"
       title={$t('bookCard.dragToFolder')}
@@ -141,7 +152,7 @@
         class:rounded-tl-xl={bookCard.id === currentBookId}
         class:mdc-elevation--z4={selectedBookIds.has(bookCard.id) || bookCard.id === currentBookId}
       >
-        <BookCard {...bookCard} on:click={() => onBookCardClick(bookCard.id)} />
+        <BookCard {...bookCard} on:click={(ev) => onBookCardClick(bookCard.id, ev)} />
 
         {#if selectedBookIds.has(bookCard.id)}
           <div
@@ -149,11 +160,27 @@
             role="button"
             title={$t('bookCard.selectedTitle')}
             class="absolute inset-0 bg-current/10"
-            on:click={() => onBookCardClick(bookCard.id)}
+            on:click={(ev) => onBookCardClick(bookCard.id, ev)}
             on:keyup={activateOnKeyup}
           >
-            <Fa class="absolute left-2 top-2 flex text-xl text-menu" icon={faCheckCircle} />
+            <Fa
+              class="absolute left-2 top-2 z-[3] flex rounded-full bg-menu text-xl text-menu"
+              icon={faCheckCircle}
+            />
           </div>
+        {:else if selectMode}
+          <!-- `bg-menu` behind the glyph on purpose: the tick is drawn in the
+               menu foreground, which is a pale cream — on a white or light
+               cover it disappeared completely, so half the grid looked
+               unticked while it was selected. `z-[3]` because the format chip
+               owns the same corner at z-index 2 and hid the tick outright on
+               every PDF / CBZ / TXT card. An empty tick on every card: without it the mode is invisible
+               until the first click, so a click meant to open a book selects
+               it instead and nothing on screen explains why. -->
+          <Fa
+            class="pointer-events-none absolute left-2 top-2 z-[3] flex rounded-full bg-menu text-xl text-menu opacity-70"
+            icon={faCircleRegular}
+          />
         {/if}
       </div>
       {#if selectedBookIds.has(bookCard.id)}
@@ -241,6 +268,13 @@
      as the user pans. Impact scales with library size — for 1000-book
      libraries the manage page's initial layout drops from O(n) to
      O(viewport). */
+  /* The format chip owns the same corner as the selection tick, and in
+     select mode the tick is the thing you are reading. Hidden rather than
+     stacked: overlapping the two turned "PDF" into an unreadable smear. */
+  .select-mode :global(.format-chip) {
+    opacity: 0;
+  }
+
   .book-grid-item {
     content-visibility: auto;
     contain-intrinsic-size: auto calc(var(--book-card-min, 170px) * 1.5);

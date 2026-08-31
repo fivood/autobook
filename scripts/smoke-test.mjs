@@ -361,25 +361,89 @@ async function archiveHidesAndRestores(bookId) {
   await session.evaluate(`(() => { localStorage.setItem('activeFolderFilter', 'all'); return 1; })()`);
   await goto('/manage', MANAGE_READY);
 
-  const enterSelect = async () => session.evaluate(`(() => {
-    const dismiss = [...document.querySelectorAll('button')].find(b => b.innerText.trim() === '稍后处理');
-    if (dismiss) dismiss.click();
-    const svg = document.querySelector('svg[role=button][aria-label]');
-    if (!svg) return { ok: false, why: 'no select-mode toggle' };
-    svg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    return { ok: true };
-  })()`);
+  // Ask the CARDS, not the header. The header's 退出多选 title also sits on the
+  // exit button, which lingers in the DOM through its out transition — so
+  // "is select mode on" answered yes for ~150ms after it was switched off,
+  // and this helper skipped the click it needed to make. Cards carry
+  // `.select-mode` for exactly as long as the mode is on.
+  const inSelectMode = `!!document.querySelector('.book-grid-item.select-mode')`;
 
-  const clickCard = async () => session.evaluate(js`(() => {
-    const nodes = [...document.querySelectorAll('div,article,li')].filter(
-      (e) => e.innerText && e.innerText.trim().startsWith(${TEST_TITLE})
-        && e.querySelectorAll('div,article,li').length < 6
-    );
-    const card = nodes[nodes.length - 1];
-    if (!card) return { ok: false, why: 'test book not on the shelf' };
-    card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    return { ok: true };
-  })()`);
+  /**
+   * Leaves the library IN select mode, whatever state it started in.
+   *
+   * It used to click the toggle blind and hope. Two ways that lied: a library
+   * already in select mode got switched off, and 归档 flips the mode off
+   * itself one microtask after the book disappears — which is exactly when
+   * this runs. Either way the next card click OPENED the book, and the
+   * scenario reported "the unarchive button never appeared" while sitting in
+   * the reader.
+   */
+  const enterSelect = async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const state = await session.evaluate(`(() => {
+        const dismiss = [...document.querySelectorAll('button')].find(b => b.innerText.trim() === '稍后处理');
+        if (dismiss) dismiss.click();
+        if (${inSelectMode}) return { ok: true, on: true };
+        const svg = document.querySelector('svg[role=button][aria-label]');
+        if (!svg) return { ok: false, why: 'no select-mode toggle' };
+        svg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        return { ok: true, on: false };
+      })()`);
+      if (!state.ok) return state;
+      if (state.on) return state;
+      try {
+        await session.waitFor(inSelectMode, { label: 'select mode to switch on', timeoutMs: 3000 });
+        return { ok: true };
+      } catch {
+        // Something turned it back off between the click and the check; the
+        // loop re-reads the real state instead of trusting the click.
+      }
+    }
+    return { ok: false, why: 'select mode would not stay on' };
+  };
+
+  let lastClick = null;
+  const clickCard = async () => {
+    const r = await session.evaluate(js`(() => {
+      const nodes = [...document.querySelectorAll('div,article,li')].filter(
+        (e) => e.innerText && e.innerText.trim().startsWith(${TEST_TITLE})
+          && e.querySelectorAll('div,article,li').length < 6
+      );
+      const card = nodes[nodes.length - 1];
+      if (!card) return { ok: false, why: 'test book not on the shelf' };
+      const modeBefore = [...document.querySelectorAll('[title]')].map((e) => e.getAttribute('title'))
+        .find((t) => t === '退出多选' || t === '进入多选') || 'none';
+      card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      return {
+        ok: true,
+        modeBefore,
+        matches: nodes.length,
+        picked: (card.className || '').toString().slice(0, 60),
+        inCard: !!card.closest('.book-card-root')
+      };
+    })()`);
+    lastClick = r;
+    return r;
+  };
+
+  const expectSelection = async (where) => {
+    try {
+      await session.waitFor(
+        `[...document.querySelectorAll('.book-grid-item')].some((c) => c.querySelector('[title="已选中书籍"]'))`,
+        { label: `the card click to select a book (${where})`, timeoutMs: 5000 }
+      );
+    } catch (err) {
+      const seen = await session.evaluate(`({
+        path: location.pathname,
+        mode: [...document.querySelectorAll('[title]')].map((e) => e.getAttribute('title'))
+          .find((t) => t === '退出多选' || t === '进入多选') || 'none',
+        cards: document.querySelectorAll('.book-grid-item').length
+      })`);
+      throw new Error(
+        `${err.message} | ${JSON.stringify(seen)} | click=${JSON.stringify(lastClick)}`
+      );
+    }
+  };
 
   const clickByTitlePrefix = async (prefix) => session.evaluate(js`(() => {
     const btn = [...document.querySelectorAll('[title]')]
@@ -422,6 +486,12 @@ async function archiveHidesAndRestores(bookId) {
     const r = await step();
     if (!r.ok) throw new Error(r.why);
   }
+  // Prove the click selected instead of opening the book, here rather than
+  // three steps later as a missing toolbar button.
+  // Count the tick, not `.absolute.inset-0` — the cover image carries those
+  // same two classes, so the naive selector reported "selected" for every
+  // card on the shelf and the assertion passed while nothing was selected.
+  await expectSelection('before archiving');
   await session.waitFor(
     `[...document.querySelectorAll('[title]')].some((e) => (e.getAttribute('title') || '').startsWith('归档'))`,
     { label: 'the archive button to appear' }
@@ -453,12 +523,28 @@ async function archiveHidesAndRestores(bookId) {
     const r = await step();
     if (!r.ok) throw new Error(r.why);
   }
+  // Prove the click selected instead of opening the book, here rather than
+  // three steps later as a missing toolbar button.
+  // Count the tick, not `.absolute.inset-0` — the cover image carries those
+  // same two classes, so the naive selector reported "selected" for every
+  // card on the shelf and the assertion passed while nothing was selected.
+  await expectSelection('in the archive view');
   // The toolbar only renders once a selection exists, and the click above is
   // asynchronous as far as this side is concerned.
-  await session.waitFor(
-    `[...document.querySelectorAll('[title]')].some((e) => (e.getAttribute('title') || '').startsWith('取消归档'))`,
-    { label: 'the unarchive button to appear' }
-  );
+  try {
+    await session.waitFor(
+      `[...document.querySelectorAll('[title]')].some((e) => (e.getAttribute('title') || '').startsWith('取消归档'))`,
+      { label: 'the unarchive button to appear' }
+    );
+  } catch (err) {
+    // Say where we actually ended up. The two ways this fails look identical
+    // from here: still on /manage with nothing selected, or the card click
+    // opened the book and we are in the reader.
+    const seen = await session.evaluate(
+      `({ path: location.pathname, selected: document.querySelectorAll('.book-grid-item .absolute.inset-0').length, titles: [...document.querySelectorAll('[title]')].map((e) => e.getAttribute('title')).filter(Boolean).slice(0, 12) })`
+    );
+    throw new Error(`${err.message} | ${JSON.stringify(seen)}`);
+  }
   const restored = await clickByTitlePrefix('取消归档');
   if (!restored.ok) throw new Error(restored.why);
 

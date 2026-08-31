@@ -7,6 +7,8 @@ export default {
   'manager.selectMode.enter': 'Enter multi-select',
   'manager.selectMode.exit': 'Exit multi-select',
   'manager.selectMode.aria': 'Multi-select mode',
+  'manager.selectNone': 'Clear selection (visible)',
+  'manager.selectedHidden': '{n} not in this view',
   'manager.selectAll': 'Select all',
   'manager.backToBook': 'Back to current book',
   'manager.storageSource': 'Storage source',

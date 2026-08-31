@@ -12,6 +12,8 @@ export default {
   'manager.selectMode.enter': '複数選択モードに入る',
   'manager.selectMode.exit': '複数選択モードを終了',
   'manager.selectMode.aria': '複数選択モード',
+  'manager.selectNone': '選択を解除（表示中）',
+  'manager.selectedHidden': 'うち {n} 冊は表示外',
   'manager.selectAll': 'すべて選択',
   'manager.backToBook': '読書中の本に戻る',
   'manager.storageSource': '保存場所',
