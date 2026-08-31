@@ -36,6 +36,10 @@ import {
   type Observable
 } from 'rxjs';
 import type { AutoScroller } from '../types';
+import {
+  addPlaybackCharacters,
+  setPlaybackMode
+} from '$lib/components/book-reader/playback-progress';
 
 const HIDDEN_CLASS = 'tw-hidden';
 const BLOCK_HIDDEN_CLASS = 'tw-block-hidden';
@@ -85,7 +89,12 @@ export class AutoScrollerContinuous implements AutoScroller {
     if (contentEl) this.contentEl = contentEl;
 
     combineLatest([
-      this.enabled$.pipe(tap((v) => this.wasAutoScrollerEnabled$.next(v))),
+      this.enabled$.pipe(
+        tap((v) => {
+          this.wasAutoScrollerEnabled$.next(v);
+          setPlaybackMode(v ? 'typewriter' : 'manual');
+        })
+      ),
       this.multiplierSubject
     ])
       .pipe(
@@ -315,7 +324,11 @@ export class AutoScrollerContinuous implements AutoScroller {
 
     if (activeBlock >= 0) {
       const local = this.revealedIndex - this.blocks[activeBlock].start - 1;
-      this.wrappedChars[local]?.classList.remove(HIDDEN_CLASS);
+      const revealed = this.wrappedChars[local];
+      revealed?.classList.remove(HIDDEN_CLASS);
+      // What the reader has actually been shown. The tracker cannot get this
+      // from the scroll position — see playback-progress.ts.
+      addPlaybackCharacters(revealed?.textContent || '');
 
       // Throttle scroll-into-view so it doesn't jitter every frame.
       if (this.revealedIndex % 8 === 0) {

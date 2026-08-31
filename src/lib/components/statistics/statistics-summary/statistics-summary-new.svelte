@@ -76,6 +76,37 @@
     editing = null;
   }
 
+  /**
+   * The share of a row that came from playback, when there is one.
+   *
+   * Only the playback part is broken out: those two numbers come from the
+   * engines themselves (sentences spoken, characters revealed), while the
+   * totals beside them are derived from reading position. Presenting them as
+   * parts of one sum would be a lie — under playback the position-based total
+   * can even move backwards. So this reads as an annotation, not a subtotal.
+   */
+  function playbackSplit(tc: { raw: BooksDbStatistic }): string {
+    const stat = tc.raw;
+    const parts: string[] = [];
+    if (stat.ttsSeconds || stat.ttsCharacters) {
+      parts.push(
+        tImmediate('stats.summary.viaTts', {
+          time: formatDuration(stat.ttsSeconds || 0),
+          chars: formatChars(stat.ttsCharacters || 0)
+        })
+      );
+    }
+    if (stat.typewriterSeconds || stat.typewriterCharacters) {
+      parts.push(
+        tImmediate('stats.summary.viaTypewriter', {
+          time: formatDuration(stat.typewriterSeconds || 0),
+          chars: formatChars(stat.typewriterCharacters || 0)
+        })
+      );
+    }
+    return parts.join(' · ');
+  }
+
   function saveEdit() {
     if (!editing) return;
     dispatch('edit', {
@@ -218,7 +249,12 @@
                 class="grid gap-2 py-1.5 text-xs items-center"
                 style="grid-template-columns: 1fr 5rem 5rem 5rem 4rem;"
               >
-                <div class="truncate" title={tc.title}>{tc.title}</div>
+                <div class="min-w-0">
+                  <div class="truncate" title={tc.title}>{tc.title}</div>
+                  {#if playbackSplit(tc)}
+                    <div class="truncate text-[10px] opacity-55">{playbackSplit(tc)}</div>
+                  {/if}
+                </div>
                 {#if isEditing}
                   <input
                     type="number"

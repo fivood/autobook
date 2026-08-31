@@ -979,6 +979,8 @@ export default {
   'stats.summary.deleteDay': 'この日の全記録を削除',
   'stats.summary.deleteRow': 'この行を削除',
   'stats.summary.editRow': 'この行を編集',
+  'stats.summary.viaTts': '読み上げ {time} / {chars}',
+  'stats.summary.viaTypewriter': 'タイプライター {time} / {chars}',
   'stats.summary.save': '保存',
   'stats.summary.cancel': 'キャンセル',
   'stats.summary.minutesPh': '分',

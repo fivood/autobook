@@ -264,6 +264,10 @@
   import { ViewMode } from '$lib/data/view-mode';
   import loadBookData from '$lib/functions/book-data-loader/load-book-data';
   import { elementForCharIndex } from '$lib/components/book-reader/char-index-locator';
+  import {
+    addPlaybackCharacters,
+    setPlaybackMode
+  } from '$lib/components/book-reader/playback-progress';
   import { detectLanguage } from '$lib/functions/file-loaders/detect-language';
   import { ttsIndexToCalculatorIndex } from '$lib/components/book-reader/tts-calculator-index';
   import {
@@ -358,6 +362,14 @@
   }
   let showTrackerIcon = false;
   let wasTrackerPaused = true;
+  /**
+   * The reader deliberately switched tracking off during this session.
+   *
+   * `wasTrackerPaused` cannot answer that: it starts `true` simply because
+   * nothing has started the tracker yet, so treating it as a decision would
+   * block playback from ever starting the clock.
+   */
+  let userPausedTracking = false;
   let frozenPosition = -1;
   let skipFirstFreezeChange = false;
   let bookCompleted = false;
@@ -926,6 +938,12 @@
       const sentence = autoReader?.getCurrentSentence?.();
       if (sentence) {
         ttsHighlighter.setRange(sentence.globalStart, sentence.globalEnd);
+        // Engines report boundaries many times per sentence; count each
+        // sentence once, when it first becomes the spoken one.
+        if (sentence.globalStart !== lastCountedSentenceStart) {
+          lastCountedSentenceStart = sentence.globalStart;
+          addPlaybackCharacters(sentence.text);
+        }
       }
 
       if (typeof charIndex === 'number') {
@@ -1021,7 +1039,9 @@ ${$t('reader.ttsFailed.hint')}`
       }, 0);
     };
     autoReader.wasReaderEnabled$.subscribe((enabled) => {
+      setPlaybackMode(enabled ? 'tts' : 'manual');
       if (enabled) {
+        lastCountedSentenceStart = -1;
         const el = document.querySelector('.book-content') as HTMLElement | null;
         // Nothing to hide or reveal here any more — book-reader-continuous
         // already reveals everything and stops the typewriter when TTS turns
@@ -1036,6 +1056,9 @@ ${$t('reader.ttsFailed.hint')}`
       if (!enabled && ttsWiredReader === autoReader) persistTtsPosition();
     });
   }
+
+  /** Sentence whose characters were already counted into playback progress. */
+  let lastCountedSentenceStart = -1;
 
   /** Sentence start we last scrolled to, so a 50-boundaries-per-sentence
    * engine doesn't re-scroll on every one of them. */
@@ -1332,6 +1355,7 @@ ${$t('reader.ttsFailed.hint')}`
 
     dialogManager.dialogs$.next([]);
     wasTrackerPaused = !$isTrackerPaused$;
+    userPausedTracking = wasTrackerPaused;
     isTrackerPaused$.next(wasTrackerPaused);
   }
 
@@ -2708,7 +2732,8 @@ ${$t('reader.ttsFailed.hint')}`
           scheduleReplication(StorageDataType.STATISTICS);
         }
       }}
-      on:trackerAvailable={() => (showTrackerIcon = true)}
+      {userPausedTracking}
+    on:trackerAvailable={() => (showTrackerIcon = true)}
       on:trackerMenuClosed={() => {
         if (!wasTrackerPaused) {
           isTrackerPaused$.next(false);

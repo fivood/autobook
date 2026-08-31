@@ -1015,6 +1015,8 @@ export default {
   'stats.summary.deleteDay': '删除该日的记录（所有本书）',
   'stats.summary.deleteRow': '删除本行',
   'stats.summary.editRow': '编辑本行',
+  'stats.summary.viaTts': '朗读 {time} / {chars}',
+  'stats.summary.viaTypewriter': '打字机 {time} / {chars}',
   'stats.summary.save': '保存',
   'stats.summary.cancel': '取消',
   'stats.summary.minutesPh': '分钟',

@@ -108,6 +108,19 @@ interface BooksDbV6Statistic {
   /** Total sections in the book at the time the tracker last ran. Used by the
    * statistics UI to render "X / Y pages". */
   sectionsTotal?: number;
+  /**
+   * The share of `readingTime` / `charactersRead` that came from playback,
+   * split by engine. Optional: rows written before this existed simply have
+   * none, and the statistics UI treats a missing value as "unknown", not zero.
+   *
+   * Characters here are what the engine actually delivered — spoken sentences,
+   * revealed characters — not the scroll-position delta the totals use, which
+   * under playback can even run negative (see playback-progress.ts).
+   */
+  ttsSeconds?: number;
+  ttsCharacters?: number;
+  typewriterSeconds?: number;
+  typewriterCharacters?: number;
 }
 
 interface BooksDbV6ReadingGoal extends ReadingGoal {

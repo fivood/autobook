@@ -974,6 +974,8 @@ export default {
   'stats.summary.deleteDay': 'Delete all records for this day',
   'stats.summary.deleteRow': 'Delete row',
   'stats.summary.editRow': 'Edit row',
+  'stats.summary.viaTts': 'TTS {time} / {chars}',
+  'stats.summary.viaTypewriter': 'Typewriter {time} / {chars}',
   'stats.summary.save': 'Save',
   'stats.summary.cancel': 'Cancel',
   'stats.summary.minutesPh': 'minutes',

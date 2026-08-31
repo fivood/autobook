@@ -16,6 +16,11 @@
   } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { PAGE_CHANGE } from '$lib/data/events';
+  import {
+    playbackCharacters$,
+    playbackMode$,
+    type PlaybackMode
+  } from '$lib/components/book-reader/playback-progress';
   import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
   import { getReadingGoalWindow, type ReadingGoal } from '$lib/data/reading-goal';
@@ -62,6 +67,8 @@
   export let backgroundColor: string;
   export let bookTitle: string;
   export let wasTrackerPaused: boolean;
+  /** The reader switched tracking off on purpose; playback must not undo it. */
+  export let userPausedTracking = false;
   export let exploredCharCount: number;
   export let bookCharCount: number;
   export let sectionData: SectionWithProgress[];
@@ -77,7 +84,9 @@
     characterDiff: number,
     timeDiff = 1,
     referenceTick = Date.now(),
-    flushData = true
+    flushData = true,
+    mode: PlaybackMode = 'manual',
+    playbackCharacterDiff = 0
   ) {
     const todayDate = new Date();
     const absoluteTimeDiff = Math.abs(timeDiff);
@@ -119,7 +128,14 @@
       const otherDayStatistics =
         statistics.get(otherDayKey) || getDefaultStatistic(bookTitle, otherDayKey);
 
-      updateStatistic(otherDayStatistics, otherDayTimeDiff, characterDiff, lastStatisticModified);
+      updateStatistic(
+        otherDayStatistics,
+        otherDayTimeDiff,
+        characterDiff,
+        lastStatisticModified,
+        mode,
+        playbackCharacterDiff
+      );
 
       statistics.set(otherDayKey, otherDayStatistics);
       statisticsToStore.add(otherDayKey);
@@ -146,7 +162,9 @@
         todaysStatistics,
         isNegativeTimeDiff ? -timeDiffForToday : timeDiffForToday,
         characterDiff,
-        lastStatisticModified
+        lastStatisticModified,
+        mode,
+        playbackCharacterDiff
       );
     } else {
       updateStatistic(todaysStatistics, 0, 0, lastStatisticModified);
@@ -163,8 +181,22 @@
     statistics.set(todayKey, todaysStatistics);
     statisticsToStore.add(todayKey);
 
-    updateStatistic(sessionStatistics, timeDiff, characterDiff, lastStatisticModified);
-    updateStatistic(allTimeStatistics, timeDiff, characterDiff, lastStatisticModified);
+    updateStatistic(
+      sessionStatistics,
+      timeDiff,
+      characterDiff,
+      lastStatisticModified,
+      mode,
+      playbackCharacterDiff
+    );
+    updateStatistic(
+      allTimeStatistics,
+      timeDiff,
+      characterDiff,
+      lastStatisticModified,
+      mode,
+      playbackCharacterDiff
+    );
 
     // Mirror into the pause-to-pause session buffer. Positive-only accumulation
     // so history-reverts don't turn the row negative when it commits.
@@ -391,6 +423,9 @@
   const yomiObserver = new MutationObserver(handleYomiMutation);
   const dictionaryObserver = new MutationObserver(handleMutation);
 
+  /** Playback counter value at the previous tick, so ticks take deltas. */
+  let lastPlaybackCharacters = playbackCharacters$.getValue();
+
   const readingTracker$ = isTrackerPaused$.pipe(
     switchMap((isPaused) => {
       if (isPaused) {
@@ -406,6 +441,7 @@
 
       lastTrackerFlushTime = now;
       lastTrackerTick = now;
+      lastPlaybackCharacters = playbackCharacters$.getValue();
       startActiveSession(now);
 
       return interval(1000);
@@ -430,6 +466,22 @@
     ),
     reduceToEmptyString()
   );
+
+  /**
+   * Playback is reading, so it starts the clock.
+   *
+   * Before this, the tracker only ever started from the auto-start timer or a
+   * double-click on the tracker icon — and auto-start is off by default. Press
+   * play, listen for an hour, and nothing was recorded: the two flagship ways
+   * of consuming a book were the two the statistics never saw.
+   *
+   * A reader who switched tracking off on purpose keeps it off — that is what
+   * `userPausedTracking` is for. `wasTrackerPaused` cannot stand in for it: it
+   * starts `true` merely because nothing has started the tracker yet.
+   */
+  $: if ($playbackMode$ !== 'manual' && $isTrackerPaused$ && !userPausedTracking) {
+    isTrackerPaused$.next(false);
+  }
 
   $: hasReadingGoal = !!($readingGoal$.goalStartDate && todayKey >= $readingGoal$.goalStartDate);
 
@@ -798,11 +850,20 @@
       previousLastExploredCharCount = lastExploredCharCount;
       lastExploredCharCount = exploredCharCount;
 
+      // Playback delivers a known amount of text; reading position does not
+      // measure it (the follow-scroll corrects backwards and the delta goes
+      // negative). Take the engine's number for the per-mode split.
+      const playbackNow = playbackCharacters$.getValue();
+      const playbackDiff = Math.max(0, playbackNow - lastPlaybackCharacters);
+      lastPlaybackCharacters = playbackNow;
+
       processStatistics(
         finalCharacterDiff,
         elapsed,
         lastTrackerTick,
-        now - lastTrackerFlushTime > 10000
+        now - lastTrackerFlushTime > 10000,
+        $playbackMode$,
+        playbackDiff
       );
     }
   }
@@ -833,12 +894,32 @@
     statisticObject: BooksDbStatistic,
     timeDiff: number,
     characterDiff: number,
-    lastStatisticModified: number
+    lastStatisticModified: number,
+    mode: PlaybackMode = 'manual',
+    playbackCharacterDiff = 0
   ) {
     const statistic = statisticObject;
 
     statistic.readingTime = Math.max(0, statistic.readingTime + timeDiff);
     statistic.charactersRead = Math.max(0, statistic.charactersRead + characterDiff);
+
+    // The playback share is accumulated separately, from what the engine says
+    // it delivered — the totals above still follow reading position, which is
+    // what every existing number and the reading-goal logic are built on.
+    if (mode === 'tts') {
+      if (timeDiff > 0) statistic.ttsSeconds = (statistic.ttsSeconds || 0) + timeDiff;
+      if (playbackCharacterDiff > 0) {
+        statistic.ttsCharacters = (statistic.ttsCharacters || 0) + playbackCharacterDiff;
+      }
+    } else if (mode === 'typewriter') {
+      if (timeDiff > 0) {
+        statistic.typewriterSeconds = (statistic.typewriterSeconds || 0) + timeDiff;
+      }
+      if (playbackCharacterDiff > 0) {
+        statistic.typewriterCharacters =
+          (statistic.typewriterCharacters || 0) + playbackCharacterDiff;
+      }
+    }
     statistic.lastReadingSpeed = statistic.readingTime
       ? Math.ceil((3600 * statistic.charactersRead) / statistic.readingTime)
       : 0;
