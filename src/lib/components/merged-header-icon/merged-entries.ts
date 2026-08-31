@@ -22,10 +22,10 @@ import {
   faFileZipper,
   faFolderPlus,
   faHashtag,
+  faHouse,
   faImages,
   faLightbulb,
   faScroll,
-  faSignOutAlt,
   faTriangleExclamation
 } from '@fortawesome/free-solid-svg-icons';
 
@@ -34,7 +34,14 @@ export const mergeEntries = {
     routeId: '/manage',
     label: '书库',
     labelKey: 'menu.manage.label',
-    icon: faSignOutAlt,
+    /**
+     * A place, not a direction. It used to be the same leave-arrow the reader
+     * uses, which put two near-identical arrows side by side in the page
+     * header — 返回上一页 next to 返回书库 — and every other entry in that group
+     * is a destination icon. Not faBook either: the statistics bar already
+     * has a 书籍 tab with that icon.
+     */
+    icon: faHouse,
     title: '返回书库',
     titleKey: 'menu.manage.title'
   },

@@ -13,7 +13,6 @@
     faPenToSquare,
     faRobot,
     faRotateLeft,
-    faSignOutAlt,
     type IconDefinition
   } from '@fortawesome/free-solid-svg-icons';
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
@@ -315,7 +314,9 @@
       on:click={() => dispatch('bookManagerClick')}
       on:keyup={activateOnKeyup}
     >
-      <Fa icon={faSignOutAlt} />
+      <!-- Same destination as the page headers' 书库 entry, so the same icon
+           comes from the same place — it drifted once already. -->
+      <Fa icon={mergeEntries.MANAGE.icon} />
     </div>
   </div>
 </div>
