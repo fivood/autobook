@@ -446,7 +446,8 @@
           year: selectedYear,
           startDayHours: $startDayHoursForTracker$,
           statistics: statisticsData,
-          sessions
+          sessions,
+          languageByTitle
         })
       : null;
 
@@ -456,7 +457,7 @@
   let manualBooks: import('$lib/data/database/books-db/versions/books-db').BooksDbManualBook[] = [];
   let dataMetas: Pick<
     import('$lib/data/database/books-db/versions/books-db').BooksDbBookData,
-    'title' | 'characters'
+    'title' | 'characters' | 'language'
   >[] = [];
   let bookMetadata: import('$lib/data/database/books-db/versions/books-db').BooksDbBookMetadata[] =
     [];
@@ -475,7 +476,11 @@
       ]);
       manualBooks = mBooks;
       bookMetadata = imported;
-      dataMetas = data.map((d) => ({ title: d.title, characters: d.characters || 0 }));
+      dataMetas = data.map((d) => ({
+        title: d.title,
+        characters: d.characters || 0,
+        language: d.language
+      }));
       bookMetaLoaded = true;
     } finally {
       bookMetaLoading = false;
@@ -484,10 +489,40 @@
 
   $: if (
     ($lastStatisticsTab$ === StatisticsTab.BOOKS ||
-      $lastStatisticsTab$ === StatisticsTab.AUTHORS) &&
+      $lastStatisticsTab$ === StatisticsTab.AUTHORS ||
+      $lastStatisticsTab$ === StatisticsTab.YEAR) &&
     !bookMetaLoaded
   ) {
     ensureBookMetaLoaded();
+  }
+
+  // Imported metadata wins over the book row: it comes from the file's own
+  // `dc:language`, while the row's value can be the importer's guess.
+  $: languageByTitle = new Map<string, string>([
+    ...dataMetas.map((meta) => [meta.title, meta.language || ''] as [string, string]),
+    ...bookMetadata.map((meta) => [meta.title, meta.language || ''] as [string, string])
+  ]);
+
+  let yearHighlights: import('$lib/functions/highlight-stats').HighlightStatsSummary | null = null;
+
+  $: if ($lastStatisticsTab$ === StatisticsTab.YEAR) {
+    loadYearHighlights(selectedYear);
+  }
+
+  async function loadYearHighlights(year: number) {
+    try {
+      const { aggregateHighlightStats } = await import('$lib/functions/highlight-stats');
+      yearHighlights = aggregateHighlightStats(await database.getAllHighlights(), {
+        startDate: `${year}-01-01`,
+        endDate: `${year}-12-31`,
+        startDayHoursForTracker: $startDayHoursForTracker$
+      });
+    } catch (error: any) {
+      // The rest of the year view doesn't depend on highlights, so a failure
+      // here degrades that one module instead of blanking the page.
+      yearHighlights = null;
+      logger.error(`failed to load highlights for ${year}: ${error.message}`);
+    }
   }
 
   /**
@@ -992,7 +1027,12 @@
     />
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.YEAR}
-    <StatisticsYear summary={yearSummary} years={availableYears} bind:year={selectedYear} />
+    <StatisticsYear
+      summary={yearSummary}
+      highlights={yearHighlights}
+      years={availableYears}
+      bind:year={selectedYear}
+    />
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS}
     <StatisticsHighlights

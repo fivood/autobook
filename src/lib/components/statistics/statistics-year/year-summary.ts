@@ -26,6 +26,12 @@ export interface YearSummaryInput {
   statistics: BooksDbStatistic[];
   /** All persisted sessions overlapping the year. */
   sessions: BooksDbSession[];
+  /**
+   * Book language by title, from the imported metadata or the book row.
+   * Optional: the export path doesn't load it, and the language breakdown is
+   * simply empty without it rather than wrong.
+   */
+  languageByTitle?: Map<string, string>;
 }
 
 export interface MonthlyBar {
@@ -81,6 +87,7 @@ export interface YearSummary {
   sessionStats: SessionStats | null;
   weekSplit: WeekSplit;
   sessionBuckets: SessionBuckets | null;
+  structure: YearStructure;
 }
 
 /** Reading time on weekdays vs weekends, from the daily rows. */
@@ -96,6 +103,23 @@ export interface SessionBuckets {
   /** Upper bound of each bucket in minutes; the last one is open-ended. */
   edges: number[];
   counts: number[];
+}
+
+/**
+ * What kind of books the year was made of.
+ *
+ * "Image" here means page-measured — the tracker recorded a page total for
+ * the book instead of characters, which is exactly the comic / un-OCR'd scan
+ * case. There is no stored format field to ask, and inventing one from the
+ * file extension would be a guess; how the book was *counted* is a fact.
+ */
+export interface YearStructure {
+  textSeconds: number;
+  textBooks: number;
+  imageSeconds: number;
+  imageBooks: number;
+  /** Descending by time. `language` is '' for books with none recorded. */
+  byLanguage: { language: string; seconds: number; books: number }[];
 }
 
 export interface SessionStats {
@@ -183,7 +207,7 @@ function binHourHistogram(session: BooksDbSession, out: number[]) {
 }
 
 export function computeYearSummary(input: YearSummaryInput): YearSummary {
-  const { year, startDayHours, statistics, sessions } = input;
+  const { year, startDayHours, statistics, sessions, languageByTitle } = input;
   const { startDateKey, endDateKey } = yearBounds(year, startDayHours);
 
   const inYearStats = statistics.filter(
@@ -403,10 +427,43 @@ export function computeYearSummary(input: YearSummaryInput): YearSummary {
     sessionBuckets = { edges, counts };
   }
 
+  // Book mix. `perTitle` already knows whether a book was counted in pages,
+  // which is the only trustworthy text-vs-image signal in the data.
+  const structure: YearStructure = {
+    textSeconds: 0,
+    textBooks: 0,
+    imageSeconds: 0,
+    imageBooks: 0,
+    byLanguage: []
+  };
+  const langMap = new Map<string, { seconds: number; books: number }>();
+  for (const bucket of perTitle.values()) {
+    // Opening a book writes a row for that day even if nothing is read, so
+    // counting every title would claim 12 books read in a year that had one.
+    if (!bucket.seconds) continue;
+    if (bucket.pages) {
+      structure.imageSeconds += bucket.seconds;
+      structure.imageBooks += 1;
+    } else {
+      structure.textSeconds += bucket.seconds;
+      structure.textBooks += 1;
+    }
+    // 'zh-CN' and 'zh' are the same shelf to a reader.
+    const language = (languageByTitle?.get(bucket.title) || '').split('-')[0].toLowerCase();
+    const entry = langMap.get(language) || { seconds: 0, books: 0 };
+    entry.seconds += bucket.seconds;
+    entry.books += 1;
+    langMap.set(language, entry);
+  }
+  structure.byLanguage = [...langMap]
+    .map(([language, entry]) => ({ language, ...entry }))
+    .sort((a, b) => b.seconds - a.seconds);
+
   return {
     year,
     weekSplit,
     sessionBuckets,
+    structure,
     totalSeconds,
     totalChars,
     totalPages,

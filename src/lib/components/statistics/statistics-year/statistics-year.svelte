@@ -11,14 +11,16 @@
    */
   import { formatChars, formatDuration } from '$lib/components/statistics/statistics-format';
   import type { YearSummary } from '$lib/components/statistics/statistics-year/year-summary';
+  import type { HighlightStatsSummary } from '$lib/functions/highlight-stats';
   import { yearModulesHidden$ } from '$lib/data/store';
   import { t } from '$lib/i18n';
 
   export let summary: YearSummary | null;
+  export let highlights: HighlightStatsSummary | null = null;
   export let years: number[];
   export let year: number;
 
-  const modules = ['overview', 'playback', 'habits', 'books'] as const;
+  const modules = ['overview', 'playback', 'structure', 'habits', 'notes', 'books'] as const;
 
   function toggle(id: string) {
     const next = new Set($yearModulesHidden$);
@@ -225,6 +227,92 @@
             </div>
           {/each}
         </div>
+      {/if}
+    </div>
+  {/if}
+
+  {#if shown('structure')}
+    {@const structure = summary.structure}
+    <div class="my-4 rounded border border-current/30 p-3">
+      <div class="mb-2 text-xs opacity-70">{$t('stats.year.module.structure')}</div>
+      <div class="flex h-3 w-full overflow-hidden rounded bg-current/10">
+        <div
+          class="bg-current/70"
+          style="width: {pct(structure.textSeconds, summary.totalSeconds)}%"
+        ></div>
+        <div
+          class="bg-current/40"
+          style="width: {pct(structure.imageSeconds, summary.totalSeconds)}%"
+        ></div>
+      </div>
+      <div class="mt-2 grid gap-1 text-xs sm:grid-cols-2">
+        <div>
+          {$t('stats.year.textBooks')} · {formatDuration(structure.textSeconds)}
+          <span class="opacity-60">{$t('stats.year.books', { n: structure.textBooks })}</span>
+        </div>
+        <div>
+          {$t('stats.year.imageBooks')} · {formatDuration(structure.imageSeconds)}
+          <span class="opacity-60">{$t('stats.year.books', { n: structure.imageBooks })}</span>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2 text-xs">
+        {#each structure.byLanguage as entry (entry.language)}
+          <div class="rounded border border-current/20 px-2 py-1">
+            <!-- The code, not a translated name: a book can be in any
+                 language and a lookup table would only cover the three the UI
+                 itself speaks. -->
+            <span class="opacity-60"
+              >{entry.language ? entry.language.toUpperCase() : $t('stats.year.langUnknown')}</span
+            >
+            <span class="tabular-nums">{formatDuration(entry.seconds)}</span>
+            <span class="tabular-nums opacity-60"
+              >{$t('stats.year.books', { n: entry.books })}</span
+            >
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
+  {#if shown('notes')}
+    <div class="my-4 rounded border border-current/30 p-3">
+      <div class="mb-2 text-xs opacity-70">{$t('stats.year.module.notes')}</div>
+      {#if highlights && (highlights.totalHighlights || highlights.totalNotes)}
+        <div class="grid gap-1 text-xs sm:grid-cols-4">
+          <div>
+            {$t('stats.year.highlightCount')} ·
+            <span class="tabular-nums">{highlights.totalHighlights}</span>
+          </div>
+          <div>
+            {$t('stats.year.noteCount')} ·
+            <span class="tabular-nums">{highlights.totalNotes}</span>
+          </div>
+          <div>
+            {$t('stats.year.highlightChars')} ·
+            <span class="tabular-nums">{formatChars(highlights.totalCharacters)}</span>
+          </div>
+          <div>
+            {$t('stats.year.highlightDays')} ·
+            <span class="tabular-nums">{highlights.daysWithHighlights}</span>
+          </div>
+        </div>
+        <div class="mt-3 grid gap-1 text-xs">
+          {#each highlights.byBook.slice(0, 5) as book (book.title)}
+            <div class="grid items-center gap-2" style="grid-template-columns: 1fr 5rem 5rem;">
+              <div class="truncate" title={book.title}>{book.title}</div>
+              <div class="text-right tabular-nums">
+                {$t('stats.year.highlightCount')}
+                {book.highlights}
+              </div>
+              <div class="text-right tabular-nums opacity-70">
+                {$t('stats.year.noteCount')}
+                {book.notes}
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="text-xs opacity-60">{$t('stats.year.noHighlights')}</div>
       {/if}
     </div>
   {/if}
