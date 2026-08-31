@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { faCheck, faUpload } from '@fortawesome/free-solid-svg-icons';
+  import { faCheck, faSquareCheck, faSquareMinus, faUpload } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
   import FolderSidebar from '$lib/components/library-folders/folder-sidebar.svelte';
   import {
@@ -1349,9 +1349,7 @@
     {replicationToProgress}
     {replicationProgressRemaining}
     bind:selectMode
-    allSelected={allVisibleSelected}
     {hiddenSelectedCount}
-    on:selectAllClick={onSelectAllBooks}
     on:backToBookClick={backToCurrentBook}
     showingArchive={$activeFolderFilter$ === ARCHIVED_FILTER}
     on:removeClick={() => handleRemove(Array.from(selectedBookIds))}
@@ -1413,24 +1411,44 @@
       <div class="text-xl font-semibold opacity-80">松开以导入书籍</div>
     </div>
   {/if}
-  {#if selectMode && selectedBookIds.size && $folders$.length}
+  <!--
+    The selection bar lives here rather than in the top bar: multi-select is a
+    library-only mode, and the header is shared chrome. It also puts 全选 an
+    inch from the books instead of at the far edge of the window.
+  -->
+  {#if selectMode}
     <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
-      <span class="opacity-70">将选中的 {selectedBookIds.size} 本加入分类：</span>
-      {#each $folders$ as folder (folder.id)}
-        <button
-          class="rounded-full border-2 border-current/40 px-3 py-1 text-xs hover-soft"
-          on:click={() => addSelectedToFolder(folder.id)}
-        >
-          + {folder.name}
-        </button>
-      {/each}
-      {#if $activeFolderFilter$ !== 'all' && $activeFolderFilter$ !== 'uncategorized'}
-        <button
-          class="rounded-full border-2 border-red-400 px-3 py-1 text-xs text-danger hover:bg-red-400/20"
-          on:click={removeSelectedFromActiveFolder}
-        >
-          从当前分类移出
-        </button>
+      <button
+        type="button"
+        class="flex items-center gap-1.5 rounded border border-current/30 px-3 py-1 text-xs hover-soft"
+        title={allVisibleSelected ? $t('manager.selectNone') : $t('manager.selectAll')}
+        on:click={onSelectAllBooks}
+      >
+        <Fa icon={allVisibleSelected ? faSquareMinus : faSquareCheck} />
+        {allVisibleSelected ? $t('manager.selectNone') : $t('manager.selectAll')}
+      </button>
+      <span class="opacity-70">
+        {$t('manager.selectedCount', { n: selectedBookIds.size })}{#if hiddenSelectedCount}
+          · {$t('manager.selectedHidden', { n: hiddenSelectedCount })}{/if}
+      </span>
+      {#if selectedBookIds.size && $folders$.length}
+        <span class="opacity-70">{$t('manager.addToFolder')}</span>
+        {#each $folders$ as folder (folder.id)}
+          <button
+            class="rounded-full border-2 border-current/40 px-3 py-1 text-xs hover-soft"
+            on:click={() => addSelectedToFolder(folder.id)}
+          >
+            + {folder.name}
+          </button>
+        {/each}
+        {#if $activeFolderFilter$ !== 'all' && $activeFolderFilter$ !== 'uncategorized'}
+          <button
+            class="rounded-full border-2 border-red-400 px-3 py-1 text-xs text-danger hover:bg-red-400/20"
+            on:click={removeSelectedFromActiveFolder}
+          >
+            {$t('manager.removeFromFolder')}
+          </button>
+        {/if}
       {/if}
     </div>
   {/if}

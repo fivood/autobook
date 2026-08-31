@@ -30,14 +30,18 @@
    */
   export let backLink = '';
 
-  /** The other main pages, minus this one (MergedHeaderIcon drops it). */
+  /**
+   * The other main pages, minus this one (MergedHeaderIcon drops it).
+   * 书库 goes last so it is always the rightmost icon in the window — the
+   * way out sits in one fixed place no matter which page you are on.
+   */
   const destinations = [
-    mergeEntries.MANAGE,
     mergeEntries.STATISTICS,
     mergeEntries.NOTEBOOK,
     mergeEntries.TRANSLATE,
     mergeEntries.SETTINGS,
-    mergeEntries.CHANGELOG
+    mergeEntries.CHANGELOG,
+    mergeEntries.MANAGE
   ];
 </script>
 

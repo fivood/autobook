@@ -82,8 +82,6 @@
 
   export let hasBookOpened: boolean;
   export let selectMode: boolean;
-  /** Every visible card is selected — the select-all button clears instead. */
-  export let allSelected = false;
   /** Of `selectedCount`, how many are filtered out of the current view. */
   export let hiddenSelectedCount = 0;
   export let selectedCount: number;
@@ -97,7 +95,6 @@
   export let replicationProgressRemaining: string;
 
   const dispatch = createEventDispatcher<{
-    selectAllClick: void;
     removeClick: void;
     domainHintClick: void;
     backToBookClick: void;
@@ -330,68 +327,13 @@
             {/if}
           </div>
         {/if}
-        <!-- Select-all lives beside the count, not floating dead centre in
-             the bar: the middle is equally far from everything and nobody
-             looked there. It is also present the moment the mode starts,
-             which the centre version was not — that one needed a selection
-             to exist first. -->
-        {#if selectMode}
-          <div
-            tabindex="0"
-            role="button"
-            title={allSelected ? $t('manager.selectNone') : $t('manager.selectAll')}
-            aria-label={allSelected ? $t('manager.selectNone') : $t('manager.selectAll')}
-            class="ml-1 {baseIconClasses}"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}
-            on:click={() => dispatch('selectAllClick')}
-            on:keyup={activateOnKeyup}
-          >
-            <Fa icon={allSelected ? faSquareMinus : faSquareCheck} />
-          </div>
-        {/if}
-      </div>
-
-      <div class="absolute left-1/2 h-full -translate-x-1/2 transform-gpu">
+        <!--
+          Left of the bar: controls that open right here — sort, filter, cover
+          size, interface language. Right of it: the things that take you
+          somewhere else (import, the other pages, the library). Before this
+          the two kinds sat interleaved in one run of icons on the right.
+        -->
         {#if !selectMode}
-          {#if hasBookOpened}
-            <div title={$t('manager.backToBook')}>
-              <svg
-                tabindex="0"
-                role="button"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                class={baseIconClasses}
-                in:scale={inAnimationParams}
-                out:scale={outAnimationParams}
-                on:click={() => dispatch('backToBookClick')}
-                on:keyup={activateOnKeyup}
-              >
-                <path
-                  class="fill-current"
-                  d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5zm-3.5-8c.88 0 1.73.09 2.5.26V9.24c-.79-.15-1.64-.24-2.5-.24-1.7 0-3.24.29-4.5.83v1.66c1.13-.64 2.7-.99 4.5-.99zM13 12.49v1.66c1.13-.64 2.7-.99 4.5-.99.88 0 1.73.09 2.5.26V11.9c-.79-.15-1.64-.24-2.5-.24-1.7 0-3.24.3-4.5.83zm4.5 1.84c-1.7 0-3.24.29-4.5.83v1.66c1.13-.64 2.7-.99 4.5-.99.88 0 1.73.09 2.5.26v-1.52c-.79-.16-1.64-.24-2.5-.24z"
-                />
-              </svg>
-            </div>
-          {/if}
-        {/if}
-      </div>
-
-      <div class="flex transform-gpu {translateXHeaderFa}">
-        {#if !selectMode}
-          <div
-            class="relative transform-gpu"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}
-          >
-            <MergedHeaderIcon
-              items={importMenuItems}
-              mergeTo={mergeEntries.FILE_IMPORT}
-              on:action={triggerInput}
-            />
-          </div>
-          <!-- 存储源 picker 从 header 移到「设置 → 存储与备份 → 书库存储源」
-               （1.19.2）。日常几乎不切换，占位不值。 -->
 
           <div
             class="relative transform-gpu"
@@ -564,6 +506,44 @@
           >
             <LocalePicker />
           </div>
+        {/if}
+      </div>
+
+      <div class="flex transform-gpu {translateXHeaderFa}">
+        {#if !selectMode}
+          <div
+            class="relative transform-gpu"
+            in:scale={inAnimationParams}
+            out:scale={outAnimationParams}
+          >
+            <MergedHeaderIcon
+              items={importMenuItems}
+              mergeTo={mergeEntries.FILE_IMPORT}
+              on:action={triggerInput}
+            />
+          </div>
+          <!-- 存储源 picker 从 header 移到「设置 → 存储与备份 → 书库存储源」
+               （1.19.2）。日常几乎不切换，占位不值。 -->
+          {#if hasBookOpened}
+            <div title={$t('manager.backToBook')}>
+              <svg
+                tabindex="0"
+                role="button"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                class={baseIconClasses}
+                in:scale={inAnimationParams}
+                out:scale={outAnimationParams}
+                on:click={() => dispatch('backToBookClick')}
+                on:keyup={activateOnKeyup}
+              >
+                <path
+                  class="fill-current"
+                  d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5zm-3.5-8c.88 0 1.73.09 2.5.26V9.24c-.79-.15-1.64-.24-2.5-.24-1.7 0-3.24.29-4.5.83v1.66c1.13-.64 2.7-.99 4.5-.99zM13 12.49v1.66c1.13-.64 2.7-.99 4.5-.99.88 0 1.73.09 2.5.26V11.9c-.79-.15-1.64-.24-2.5-.24-1.7 0-3.24.3-4.5.83zm4.5 1.84c-1.7 0-3.24.29-4.5.83v1.66c1.13-.64 2.7-.99 4.5-.99.88 0 1.73.09 2.5.26v-1.52c-.79-.16-1.64-.24-2.5-.24z"
+                />
+              </svg>
+            </div>
+          {/if}
           <div
             class="relative transform-gpu"
             in:scale={inAnimationParams}
