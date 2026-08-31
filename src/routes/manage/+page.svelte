@@ -365,21 +365,46 @@
     flashToast(
       tImmediate(restoring ? 'manager.toast.unarchived' : 'manager.toast.archived', {
         n: titles.length
-      })
+      }),
+      // Archiving is reversible, so say so where it happens instead of making
+      // people go find the archive view and put the books back by hand.
+      async () => {
+        if (restoring) {
+          await archiveBooks(titles);
+        } else {
+          await unarchiveBooks(titles);
+        }
+      }
     );
   }
 
   let toastMessage = '';
   let toastVisible = false;
+  let toastUndo: (() => void | Promise<void>) | null = null;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function flashToast(message: string) {
+  /** A toast with an undo stays up longer — 1.8s is not enough to read a
+   *  message, decide, and reach the button. */
+  function flashToast(message: string, undo?: () => void | Promise<void>) {
     toastMessage = message;
+    toastUndo = undo ?? null;
     toastVisible = true;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      toastVisible = false;
-    }, 1800);
+    toastTimer = setTimeout(
+      () => {
+        toastVisible = false;
+        toastUndo = null;
+      },
+      undo ? 6000 : 1800
+    );
+  }
+
+  async function runToastUndo() {
+    const undo = toastUndo;
+    toastVisible = false;
+    toastUndo = null;
+    clearTimeout(toastTimer);
+    await undo?.();
   }
 
   function bookmarkToProgress(
@@ -1071,9 +1096,25 @@
   $: allVisibleSelected =
     visibleBookCards.length > 0 && visibleBookCards.every((card) => selectedBookIds.has(card.id));
 
+  let searchInputEl: HTMLInputElement | undefined;
+
   function onManageKeydown(event: KeyboardEvent) {
     const target = event.target as HTMLElement | null;
-    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) {
+      // Ctrl/Cmd+F still works from inside the field — it selects what is
+      // already there, which is what every other search box does.
+      if (event.key === 'f' && (event.ctrlKey || event.metaKey)) {
+        searchInputEl?.select();
+        event.preventDefault();
+      }
+      return;
+    }
+    if (event.key === '/' || (event.key === 'f' && (event.ctrlKey || event.metaKey))) {
+      searchInputEl?.focus();
+      searchInputEl?.select();
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Escape' && contextMenu) {
       contextMenu = null;
       event.preventDefault();
@@ -1613,9 +1654,10 @@
     <div class="relative flex-1 max-w-md">
       <input
         type="search"
-        placeholder={$t('library.search.placeholder')}
+        placeholder={$t('library.search.hint')}
         class="library-search w-full"
         bind:value={searchQuery}
+        bind:this={searchInputEl}
       />
       {#if searchQuery}
         <button
@@ -1680,15 +1722,25 @@
 </div>
 
 {#if toastVisible}
+  <!-- Lifted above the selection bar when that is on screen; both are
+       bottom-centred and they used to land on top of each other. -->
   <div
-    class="pointer-events-none fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 transform"
-    style="transition: opacity 200ms ease;"
+    class="fixed left-1/2 z-[100] -translate-x-1/2 transform"
+    class:pointer-events-none={!toastUndo}
+    style="transition: opacity 200ms ease; bottom: {selectMode && selectedBookIds.size
+      ? '5.5rem'
+      : '1.5rem'};"
   >
-    <div
-      class="flex items-center gap-2 rounded-full bg-menu px-4 py-2 text-menu shadow-lg"
-    >
+    <div class="flex items-center gap-2 rounded-full bg-menu px-4 py-2 text-menu shadow-lg">
       <Fa icon={faCheck} />
       <span class="text-sm">{toastMessage}</span>
+      {#if toastUndo}
+        <button
+          type="button"
+          class="rounded-full px-2 py-0.5 text-sm underline underline-offset-2 hover-menu-inverted"
+          on:click={runToastUndo}
+        >{$t('manager.undo')}</button>
+      {/if}
     </div>
   </div>
 {/if}

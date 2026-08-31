@@ -535,7 +535,14 @@
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
           >
+            <!--
+              `mergeTo` is the collapsed trigger below lg. Left at its default
+              it was the 书库 house with a 「返回书库」 tooltip — on the library
+              page itself, promising to go where you already are, and actually
+              opening a menu. 更多 says what it does.
+            -->
             <MergedHeaderIcon
+              mergeTo={mergeEntries.MORE}
               items={[
                 ...(isOldUrl
                   ? [mergeEntries.MANAGE, mergeEntries.DOMAIN_HINT, mergeEntries.SETTINGS]

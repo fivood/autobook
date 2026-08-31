@@ -144,8 +144,11 @@ export const mergeEntries = {
     title: '检查桌面端更新',
     titleKey: 'menu.checkUpdate.title'
   },
-  /** Catch-all for the reader header's low-frequency, leaves-the-book actions.
-   * Only ever used as a `mergeTo` icon — it dispatches nothing itself. */
+  /** Catch-all trigger for a collapsed icon group — the reader's overflow
+   * menu, and the library / page headers below `lg`. Only ever used as a
+   * `mergeTo` icon; it dispatches nothing itself, so its wording has to stay
+   * generic (it used to name the reader's three items and then showed up on
+   * the library bar listing something else entirely). */
   MORE: {
     routeId: '',
     label: '更多',

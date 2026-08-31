@@ -104,7 +104,7 @@ export default {
   'menu.checkUpdate.label': '检查更新',
   'menu.checkUpdate.title': '检查桌面端更新',
   'menu.more.label': '更多',
-  'menu.more.title': '更多操作（统计 / 跳转 / 翻译）',
+  'menu.more.title': '更多操作',
   'menu.back.label': '返回',
   'menu.back.title': '返回上一页',
   'menu.changelog.label': '更新历史',
@@ -142,6 +142,8 @@ export default {
   'fsReauth.failed': '授权失败：{err}',
 
   // Library search
+  'library.search.hint': '搜索书名…  (/)',
+  'manager.undo': '撤销',
   'library.search.placeholder': '搜索书名…',
   'library.search.clear': '清空搜索',
 

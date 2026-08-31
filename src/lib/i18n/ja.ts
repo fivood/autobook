@@ -101,7 +101,7 @@ export default {
   'menu.checkUpdate.label': 'アップデート',
   'menu.checkUpdate.title': 'デスクトップ版のアップデートを確認',
   'menu.more.label': 'その他',
-  'menu.more.title': 'その他の操作（統計 / ジャンプ / 翻訳）',
+  'menu.more.title': 'その他の操作',
   'menu.back.label': '戻る',
   'menu.back.title': '前のページへ戻る',
   'menu.changelog.label': '更新履歴',
@@ -659,6 +659,8 @@ export default {
     '復旧するまで、これらのフォルダへの同期は停止したままです。ローカルのライブラリには影響しません。',
   'fsReauth.failed': '認可に失敗しました: {err}',
 
+  'library.search.hint': 'タイトルを検索…  (/)',
+  'manager.undo': '元に戻す',
   'library.search.placeholder': 'タイトルを検索…',
   'library.search.clear': '検索をクリア',
 

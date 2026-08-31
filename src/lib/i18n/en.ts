@@ -96,7 +96,7 @@ export default {
   'menu.checkUpdate.label': 'Update',
   'menu.checkUpdate.title': 'Check for desktop update',
   'menu.more.label': 'More',
-  'menu.more.title': 'More actions (statistics / jump / translate)',
+  'menu.more.title': 'More actions',
   'menu.back.label': 'Back',
   'menu.back.title': 'Back to the previous page',
   'menu.changelog.label': 'Changelog',
@@ -654,6 +654,8 @@ export default {
     'Until restored, syncing to these folders stays stopped. Your local library is unaffected.',
   'fsReauth.failed': 'Authorization failed: {err}',
 
+  'library.search.hint': 'Search titles…  (/)',
+  'manager.undo': 'Undo',
   'library.search.placeholder': 'Search titles…',
   'library.search.clear': 'Clear search',
 

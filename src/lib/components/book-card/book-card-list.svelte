@@ -138,6 +138,13 @@
 
   function onGridMouseDown(event: MouseEvent) {
     if (!selectMode || event.button !== 0) return;
+    // Leave the gesture to the browser when it starts on an already-selected
+    // card: that is a drag of the whole selection onto a folder, and
+    // preventDefault below would kill it.
+    const card = (event.target as HTMLElement | null)?.closest?.('.book-grid-item[data-book-id]');
+    if (card && selectedBookIds.has(Number(card.getAttribute('data-book-id')) as BookCardId)) {
+      return;
+    }
     marqueeFrom = {
       x: event.pageX,
       y: event.pageY,
@@ -247,13 +254,16 @@
   on:click|capture={onGridClickCapture}
 >
   {#each bookCards as bookCard (bookCard.id)}
+    <!-- A selected card stays draggable inside select mode — that is how a
+         whole selection gets dropped onto a folder. Dragging an unselected
+         one starts a marquee instead. -->
     <div
       role="banner"
       class="book-grid-item relative cursor-grab active:cursor-grabbing"
       class:select-mode={selectMode}
       class:opacity-60={bookCard.isPlaceholder}
       data-book-id={bookCard.id}
-      draggable={!selectMode}
+      draggable={!selectMode || selectedBookIds.has(bookCard.id)}
       title={$t('bookCard.dragToFolder')}
       on:dragstart={(ev) => dispatch('cardDragStart', { id: bookCard.id, event: ev })}
       on:mouseenter={(ev) => onCardEnter(bookCard, ev)}
