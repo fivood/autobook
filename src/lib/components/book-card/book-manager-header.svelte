@@ -59,21 +59,13 @@
   import { activateOnKeyup, isMobile$, isOnOldUrl } from '$lib/functions/utils';
   import {
     faArrowDownShortWide,
-    faBoxArchive,
-    faBoxOpen,
     faArrowDownWideShort,
-    faCalendarXmark,
-    faChartLine,
     faCircleXmark,
-    faCloudArrowUp,
     faFilter,
     faSortDown,
     faSortUp,
     faTableCellsLarge,
-    faTimes,
-    faSquareCheck,
-    faSquareMinus,
-    faTrash
+    faTimes
   } from '@fortawesome/free-solid-svg-icons';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
@@ -87,7 +79,6 @@
   export let selectedCount: number;
 
   /** The archive view is on screen, so the archive button restores instead. */
-  export let showingArchive = false;
   export let hasBooks: boolean;
   export let cancelTooltip: string;
   export let replicationProgress: number;
@@ -95,15 +86,10 @@
   export let replicationProgressRemaining: string;
 
   const dispatch = createEventDispatcher<{
-    removeClick: void;
     domainHintClick: void;
     backToBookClick: void;
     filesChange: FileList;
     importBackup: File;
-    selectionToStatistics: void;
-    deleteStatistics: void;
-    archiveClick: void;
-    replicateData: void;
     cancelReplication: void;
   }>();
 
@@ -580,70 +566,6 @@
           {/if}
         {/if}
 
-        {#if selectedCount > 0}
-          <div
-            tabindex="0"
-            role="button"
-            title={$t('manager.exportMenu')}
-            class="transform-gpu {baseIconClasses}"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}
-            on:click={() => dispatch('replicateData')}
-            on:keyup={activateOnKeyup}
-          >
-            <Fa icon={faCloudArrowUp} />
-          </div>
-          {#if $storageSource$ === StorageKey.BROWSER}
-            <div
-              tabindex="0"
-              role="button"
-              title={$t('manager.viewStatistics')}
-              class="transform-gpu {baseIconClasses}"
-              in:scale={inAnimationParams}
-              out:scale={outAnimationParams}
-              on:click={() => dispatch('selectionToStatistics')}
-              on:keyup={activateOnKeyup}
-            >
-              <Fa icon={faChartLine} />
-            </div>
-            <div
-              tabindex="0"
-              role="button"
-              title={$t('manager.deleteStatistics')}
-              class="transform-gpu {baseIconClasses}"
-              in:scale={inAnimationParams}
-              out:scale={outAnimationParams}
-              on:click={() => dispatch('deleteStatistics')}
-              on:keyup={activateOnKeyup}
-            >
-              <Fa icon={faCalendarXmark} />
-            </div>
-          {/if}
-          <div
-            tabindex="0"
-            role="button"
-            title={showingArchive ? $t('manager.unarchiveBooks') : $t('manager.archiveBooks')}
-            class="transform-gpu {baseIconClasses}"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}
-            on:click={() => dispatch('archiveClick')}
-            on:keyup={activateOnKeyup}
-          >
-            <Fa icon={showingArchive ? faBoxOpen : faBoxArchive} />
-          </div>
-          <div
-            tabindex="0"
-            role="button"
-            title={$t('manager.deleteBooks')}
-            class="transform-gpu {baseIconClasses}"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}
-            on:click={() => dispatch('removeClick')}
-            on:keyup={activateOnKeyup}
-          >
-            <Fa icon={faTrash} />
-          </div>
-        {/if}
       </div>
     </div>
   {:else}

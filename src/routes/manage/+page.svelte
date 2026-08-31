@@ -1,7 +1,18 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { faCheck, faSquareCheck, faSquareMinus, faUpload } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faBoxArchive,
+    faBoxOpen,
+    faCalendarXmark,
+    faChartLine,
+    faCheck,
+    faCloudArrowUp,
+    faSquareCheck,
+    faSquareMinus,
+    faTrash,
+    faUpload
+  } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
   import FolderSidebar from '$lib/components/library-folders/folder-sidebar.svelte';
   import {
@@ -98,6 +109,8 @@
   } from 'rxjs';
   import { onDestroy, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
+  import { fly } from 'svelte/transition';
+  import { clickOutside } from '$lib/functions/use-click-outside';
 
   const booksAreLoading$ = database.listLoading$.pipe(map((isLoading) => isLoading));
 
@@ -536,6 +549,39 @@
    * selection, which is what a file manager does — dragging a fresh box is
    * how you start over.
    */
+  /**
+   * Right-click menu. Right-clicking a book that is not in the current
+   * selection makes it the selection first — the menu always acts on what is
+   * ticked, and a menu that silently acted on something else would be the
+   * worst possible surprise next to 删除.
+   */
+  let contextMenu: { x: number; y: number } | null = null;
+
+  function openContextMenu(id: BookCardId, x: number, y: number) {
+    if (!selectedBookIds.has(id)) {
+      selectMode = true;
+      selectedBookIds = new Set([id]);
+      selectionAnchorId = id;
+    }
+    // Keep the menu inside the window; 12rem wide, roughly 13rem tall.
+    contextMenu = {
+      x: Math.min(x, window.innerWidth - 200),
+      y: Math.min(y, window.innerHeight - 230)
+    };
+  }
+
+  function runFromContextMenu(action: () => void) {
+    contextMenu = null;
+    action();
+  }
+
+  function selectionToStatistics() {
+    $preFilteredTitlesForStatistics$ = new Set(
+      $bookCards$.filter((card) => selectedBookIds.has(card.id)).map((book) => book.title)
+    );
+    goto(`${pagePath}${mergeEntries.STATISTICS.routeId}`);
+  }
+
   function onMarqueeSelect(ids: BookCardId[]) {
     selectedBookIds = new Set(ids);
     selectionAnchorId = ids[ids.length - 1] ?? selectionAnchorId;
@@ -1028,7 +1074,10 @@
   function onManageKeydown(event: KeyboardEvent) {
     const target = event.target as HTMLElement | null;
     if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-    if (event.key === 'Escape' && selectMode) {
+    if (event.key === 'Escape' && contextMenu) {
+      contextMenu = null;
+      event.preventDefault();
+    } else if (event.key === 'Escape' && selectMode) {
       selectMode = false;
       event.preventDefault();
     } else if (event.key === 'a' && (event.ctrlKey || event.metaKey) && selectMode) {
@@ -1351,9 +1400,6 @@
     bind:selectMode
     {hiddenSelectedCount}
     on:backToBookClick={backToCurrentBook}
-    showingArchive={$activeFolderFilter$ === ARCHIVED_FILTER}
-    on:removeClick={() => handleRemove(Array.from(selectedBookIds))}
-    on:archiveClick={toggleArchiveForSelection}
     on:filesChange={(ev) => onFilesChange(ev.detail)}
     on:domainHintClick={onDomainHintClick}
     on:cancelReplication={() => {
@@ -1362,15 +1408,6 @@
         replicationProgressRemaining = tImmediate('manager.progressCanceling');
       }
     }}
-    on:selectionToStatistics={() => {
-      $preFilteredTitlesForStatistics$ = new Set(
-        $bookCards$.filter((card) => selectedBookIds.has(card.id)).map((book) => book.title)
-      );
-
-      goto(`${pagePath}${mergeEntries.STATISTICS.routeId}`);
-    }}
-    on:deleteStatistics={onDeleteStatistics}
-    on:replicateData={onReplicateData}
     on:importBackup={(ev) => onImportBackup(ev.detail)}
   />
 </div>
@@ -1404,6 +1441,126 @@
       getDropEventFiles(ev).then(onFilesChange);
     }}
   >
+  <!--
+    Batch actions sit at the bottom, next to the books they act on. They used
+    to live in the top-right corner of the shared header: you framed a
+    selection at the bottom of a long grid and then had to travel to the far
+    corner of the window to act on it — and every other page carried the
+    concept for no reason.
+  -->
+  {#if selectMode && selectedBookIds.size}
+    <div class="selection-actions elevation-4 bg-menu text-menu" transition:fly={{ y: 24, duration: 120 }}>
+      <span class="px-2 text-sm tabular-nums opacity-80"
+        >{$t('manager.selectedCount', { n: selectedBookIds.size })}</span
+      >
+      <button
+        type="button"
+        class="selection-action"
+        title={$t('manager.exportMenu')}
+        on:click={onReplicateData}
+      >
+        <Fa icon={faCloudArrowUp} />
+        {$t('manager.exportMenu')}
+      </button>
+      {#if $storageSource$ === StorageKey.BROWSER}
+        <button
+          type="button"
+          class="selection-action"
+          title={$t('manager.viewStatistics')}
+          on:click={selectionToStatistics}
+        >
+          <Fa icon={faChartLine} />
+          {$t('manager.action.stats')}
+        </button>
+        <button
+          type="button"
+          class="selection-action"
+          title={$t('manager.deleteStatistics')}
+          on:click={onDeleteStatistics}
+        >
+          <Fa icon={faCalendarXmark} />
+          {$t('manager.action.deleteStats')}
+        </button>
+      {/if}
+      <button
+        type="button"
+        class="selection-action"
+        title={$activeFolderFilter$ === ARCHIVED_FILTER
+          ? $t('manager.unarchiveBooks')
+          : $t('manager.archiveBooks')}
+        on:click={toggleArchiveForSelection}
+      >
+        <Fa icon={$activeFolderFilter$ === ARCHIVED_FILTER ? faBoxOpen : faBoxArchive} />
+        {$activeFolderFilter$ === ARCHIVED_FILTER
+          ? $t('manager.action.unarchive')
+          : $t('manager.action.archive')}
+      </button>
+      <button
+        type="button"
+        class="selection-action selection-action-danger"
+        title={$t('manager.deleteBooks')}
+        on:click={() => handleRemove(Array.from(selectedBookIds))}
+      >
+        <Fa icon={faTrash} />
+        {$t('manager.action.delete')}
+      </button>
+    </div>
+  {/if}
+
+  {#if contextMenu}
+    <div
+      class="menu-surface menu-list context-menu"
+      style="left:{contextMenu.x}px;top:{contextMenu.y}px;"
+      use:clickOutside={() => (contextMenu = null)}
+    >
+      {#if selectedBookIds.size === 1}
+        <div
+          tabindex="0"
+          role="button"
+          class="menu-item"
+          on:click={() => runFromContextMenu(() => onBookClick([...selectedBookIds][0]))}
+          on:keyup={() => {}}
+        >{$t('manager.context.open')}</div>
+      {/if}
+      {#each $folders$ as folder (folder.id)}
+        <div
+          tabindex="0"
+          role="button"
+          class="menu-item"
+          on:click={() => runFromContextMenu(() => addSelectedToFolder(folder.id))}
+          on:keyup={() => {}}
+        >+ {folder.name}</div>
+      {/each}
+      <div
+        tabindex="0"
+        role="button"
+        class="menu-item"
+        on:click={() => runFromContextMenu(toggleArchiveForSelection)}
+        on:keyup={() => {}}
+      >
+        {$activeFolderFilter$ === ARCHIVED_FILTER
+          ? $t('manager.action.unarchive')
+          : $t('manager.action.archive')}
+      </div>
+      {#if $storageSource$ === StorageKey.BROWSER}
+        <div
+          tabindex="0"
+          role="button"
+          class="menu-item"
+          on:click={() => runFromContextMenu(selectionToStatistics)}
+          on:keyup={() => {}}
+        >{$t('manager.action.stats')}</div>
+      {/if}
+      <div
+        tabindex="0"
+        role="button"
+        class="menu-item context-menu-danger"
+        on:click={() => runFromContextMenu(() => handleRemove(Array.from(selectedBookIds)))}
+        on:keyup={() => {}}
+      >{$t('manager.action.delete')}</div>
+    </div>
+  {/if}
+
   {#if isDragOver}
     <div
       class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-blue-500/10 border-4 border-dashed border-blue-400 rounded-lg"
@@ -1485,6 +1642,7 @@
       {selectMode}
       on:bookClick={(ev) => onBookClick(ev.detail.id, ev.detail.shiftKey, ev.detail.toggleKey)}
       on:marqueeSelect={(ev) => onMarqueeSelect(ev.detail.ids)}
+      on:cardContextMenu={(ev) => openContextMenu(ev.detail.id, ev.detail.x, ev.detail.y)}
       on:removeBookClick={(ev) => handleRemove([ev.detail.id])}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />
@@ -1534,3 +1692,63 @@
     </div>
   </div>
 {/if}
+
+<style>
+  /* Floating over the grid rather than pinned in the layout: the bar appears
+     and disappears with the selection, and reflowing the whole grid each time
+     made the books jump under the pointer mid-selection. */
+  .selection-actions {
+    position: fixed;
+    bottom: 1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.75rem;
+    max-width: calc(100vw - 2rem);
+  }
+
+  .context-menu {
+    position: fixed;
+    z-index: 50;
+    width: 12rem;
+  }
+
+  /* `.menu-item:hover` inverts to the menu foreground, which would paint the
+     delete row the same as the harmless ones. */
+  .context-menu-danger {
+    color: var(--danger-color);
+  }
+
+  .context-menu-danger:hover {
+    background: var(--danger-color);
+    color: #fff;
+  }
+
+  .selection-action {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 0.5rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .selection-action:hover {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+  }
+
+  /* Danger reads as danger on hover too — the inverted hover would otherwise
+     paint the delete button the same as the harmless ones. */
+  .selection-action-danger:hover {
+    background: var(--danger-color);
+    color: #fff;
+  }
+</style>

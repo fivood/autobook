@@ -21,6 +21,7 @@
   const dispatch = createEventDispatcher<{
     bookClick: { id: BookCardId; shiftKey: boolean; toggleKey: boolean };
     marqueeSelect: { ids: BookCardId[] };
+    cardContextMenu: { id: BookCardId; x: number; y: number };
     removeBookClick: { id: BookCardId };
     cardDragStart: { id: BookCardId; event: DragEvent };
   }>();
@@ -257,6 +258,8 @@
       on:dragstart={(ev) => dispatch('cardDragStart', { id: bookCard.id, event: ev })}
       on:mouseenter={(ev) => onCardEnter(bookCard, ev)}
       on:mouseleave={onCardLeave}
+      on:contextmenu|preventDefault={(ev) =>
+        dispatch('cardContextMenu', { id: bookCard.id, x: ev.clientX, y: ev.clientY })}
     >
       <div
         class="mdc-elevation--z1 hover:mdc-elevation--z8 mdc-elevation-transition relative overflow-hidden"
