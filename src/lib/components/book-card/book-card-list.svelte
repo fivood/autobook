@@ -13,13 +13,14 @@
 
   export let bookCards: BookCardProps[] = [];
   export let currentBookId: number | undefined;
-  export let selectedBookIds: ReadonlySet<number>;
+  export let selectedBookIds: ReadonlySet<BookCardId>;
   export let selectMode = false;
 
   $: minWidth = Math.max(110, Math.min(360, Number($bookCoverMinWidth$) || 170));
 
   const dispatch = createEventDispatcher<{
     bookClick: { id: BookCardId; shiftKey: boolean; toggleKey: boolean };
+    marqueeSelect: { ids: BookCardId[] };
     removeBookClick: { id: BookCardId };
     cardDragStart: { id: BookCardId; event: DragEvent };
   }>();
@@ -106,6 +107,105 @@
     });
   }
 
+  /**
+   * Rubber-band selection, the way a file manager does it: in select mode,
+   * press on the grid and drag a box over the covers. Picking a run of books
+   * used to be one click per book, or the select-all button and then
+   * un-picking what you didn't want.
+   *
+   * Anchors are kept in page coordinates so scrolling mid-drag doesn't drag
+   * the box along with the viewport.
+   */
+  const MARQUEE_THRESHOLD_PX = 4;
+  let marqueeFrom: { x: number; y: number; additive: boolean } | null = null;
+  /** Selection as it stood when this drag started, for modifier-drags. */
+  let marqueeBase: ReadonlySet<BookCardId> = new Set();
+  let marqueeTo: { x: number; y: number } | null = null;
+  let marqueeActive = false;
+  /** A drag ends with a click event; without this it would toggle a card. */
+  let swallowNextClick = false;
+
+  $: marqueeBox =
+    marqueeActive && marqueeFrom && marqueeTo
+      ? {
+          left: Math.min(marqueeFrom.x, marqueeTo.x) - window.scrollX,
+          top: Math.min(marqueeFrom.y, marqueeTo.y) - window.scrollY,
+          width: Math.abs(marqueeFrom.x - marqueeTo.x),
+          height: Math.abs(marqueeFrom.y - marqueeTo.y)
+        }
+      : null;
+
+  function onGridMouseDown(event: MouseEvent) {
+    if (!selectMode || event.button !== 0) return;
+    marqueeFrom = {
+      x: event.pageX,
+      y: event.pageY,
+      additive: event.ctrlKey || event.metaKey || event.shiftKey
+    };
+    marqueeTo = null;
+    marqueeActive = false;
+    marqueeBase = new Set(selectedBookIds);
+    // Also stops the card's own HTML5 drag from hijacking the gesture.
+    event.preventDefault();
+    window.addEventListener('mousemove', onMarqueeMove);
+    window.addEventListener('mouseup', onMarqueeUp);
+  }
+
+  function onMarqueeMove(event: MouseEvent) {
+    if (!marqueeFrom) return;
+    marqueeTo = { x: event.pageX, y: event.pageY };
+    if (
+      !marqueeActive &&
+      Math.hypot(marqueeTo.x - marqueeFrom.x, marqueeTo.y - marqueeFrom.y) < MARQUEE_THRESHOLD_PX
+    ) {
+      return;
+    }
+    marqueeActive = true;
+    const inBox = idsInMarquee();
+    dispatch('marqueeSelect', {
+      ids: marqueeFrom.additive ? [...new Set([...marqueeBase, ...inBox])] : inBox
+    });
+  }
+
+  function onMarqueeUp() {
+    window.removeEventListener('mousemove', onMarqueeMove);
+    window.removeEventListener('mouseup', onMarqueeUp);
+    swallowNextClick = marqueeActive;
+    marqueeFrom = null;
+    marqueeTo = null;
+    marqueeActive = false;
+  }
+
+  function idsInMarquee(): BookCardId[] {
+    if (!marqueeFrom || !marqueeTo) return [];
+    const left = Math.min(marqueeFrom.x, marqueeTo.x);
+    const right = Math.max(marqueeFrom.x, marqueeTo.x);
+    const top = Math.min(marqueeFrom.y, marqueeTo.y);
+    const bottom = Math.max(marqueeFrom.y, marqueeTo.y);
+    const hit: BookCardId[] = [];
+    document.querySelectorAll('.book-grid-item[data-book-id]').forEach((node) => {
+      const box = node.getBoundingClientRect();
+      const cardLeft = box.left + window.scrollX;
+      const cardTop = box.top + window.scrollY;
+      if (
+        cardLeft < right &&
+        cardLeft + box.width > left &&
+        cardTop < bottom &&
+        cardTop + box.height > top
+      ) {
+        hit.push(Number(node.getAttribute('data-book-id')) as BookCardId);
+      }
+    });
+    return hit;
+  }
+
+  function onGridClickCapture(event: MouseEvent) {
+    if (!swallowNextClick) return;
+    swallowNextClick = false;
+    event.stopPropagation();
+    event.preventDefault();
+  }
+
   function getCardDateInfo(dateTime: number) {
     return dateTime ? new Date(dateTime).toLocaleString() : tImmediate('bookCard.noData');
   }
@@ -134,14 +234,25 @@
   }
 </script>
 
-<div class="book-grid gap-5 pb-4" style="--book-card-min: {minWidth}px;">
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<!-- The capture handler is not an affordance: it only cancels the click that
+     ends a drag, so there is nothing for a keyboard user to activate. -->
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<div
+  class="book-grid gap-5 pb-4"
+  class:select-dragging={marqueeActive}
+  style="--book-card-min: {minWidth}px;"
+  on:mousedown={onGridMouseDown}
+  on:click|capture={onGridClickCapture}
+>
   {#each bookCards as bookCard (bookCard.id)}
     <div
       role="banner"
       class="book-grid-item relative cursor-grab active:cursor-grabbing"
       class:select-mode={selectMode}
       class:opacity-60={bookCard.isPlaceholder}
-      draggable="true"
+      data-book-id={bookCard.id}
+      draggable={!selectMode}
       title={$t('bookCard.dragToFolder')}
       on:dragstart={(ev) => dispatch('cardDragStart', { id: bookCard.id, event: ev })}
       on:mouseenter={(ev) => onCardEnter(bookCard, ev)}
@@ -225,6 +336,13 @@
   {/each}
 </div>
 
+{#if marqueeBox}
+  <div
+    class="marquee"
+    style="left:{marqueeBox.left}px;top:{marqueeBox.top}px;width:{marqueeBox.width}px;height:{marqueeBox.height}px;"
+  ></div>
+{/if}
+
 {#if detailCard}
   <div
     class="detail-popover menu-surface"
@@ -285,6 +403,21 @@
     .book-grid {
       grid-template-columns: repeat(auto-fill, minmax(min(var(--book-card-min, 170px), 160px), 1fr));
     }
+  }
+
+  .marquee {
+    position: fixed;
+    z-index: 30;
+    pointer-events: none;
+    border: 1px solid currentColor;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    border-radius: 2px;
+  }
+
+  /* No text cursor and no accidental text selection while dragging a box. */
+  .select-dragging {
+    user-select: none;
+    cursor: crosshair;
   }
 
   .detail-popover {

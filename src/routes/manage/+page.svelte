@@ -530,6 +530,17 @@
     });
   }
 
+  /**
+   * Live result of a rubber-band drag; the list has already folded in the
+   * pre-drag selection when a modifier was held. A plain box replaces the
+   * selection, which is what a file manager does — dragging a fresh box is
+   * how you start over.
+   */
+  function onMarqueeSelect(ids: BookCardId[]) {
+    selectedBookIds = new Set(ids);
+    selectionAnchorId = ids[ids.length - 1] ?? selectionAnchorId;
+  }
+
   /** Shift-click: add every visible card between the anchor and this one. */
   function selectRangeTo(bookId: BookCardId) {
     const cards = visibleBookCards;
@@ -1455,6 +1466,7 @@
       bookCards={visibleBookCards}
       {selectMode}
       on:bookClick={(ev) => onBookClick(ev.detail.id, ev.detail.shiftKey, ev.detail.toggleKey)}
+      on:marqueeSelect={(ev) => onMarqueeSelect(ev.detail.ids)}
       on:removeBookClick={(ev) => handleRemove([ev.detail.id])}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />

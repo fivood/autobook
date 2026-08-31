@@ -71,6 +71,8 @@
     faSortUp,
     faTableCellsLarge,
     faTimes,
+    faSquareCheck,
+    faSquareMinus,
     faTrash
   } from '@fortawesome/free-solid-svg-icons';
   import { createEventDispatcher } from 'svelte';
@@ -269,64 +271,86 @@
 <div class={baseHeaderClasses}>
   {#if !replicationToProgress}
     <div class="flex h-full justify-between px-4 md:px-8 xl:max-w-none 2xl:max-w-6xl mx-auto">
-      {#if selectedCount === 0}
-        <div
-          title={selectMode ? $t('manager.selectMode.exit') : $t('manager.selectMode.enter')}
-          class="transform-gpu {nTranslateXHeaderMat}"
-          in:scale={inAnimationParams}
-          out:scale={outAnimationParams}
-        >
-          <svg
-            tabindex="0"
-            role="button"
-            aria-label={$t('manager.selectMode.aria')}
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-            class:opacity-100={selectMode}
-            class:opacity-60={!selectMode}
-            class={baseIconClasses}
-            on:click={() => (selectMode = hasBooks && !selectMode)}
-            on:keyup={activateOnKeyup}
+      <div class="flex h-full items-center">
+        {#if selectedCount === 0}
+          <div
+            title={selectMode ? $t('manager.selectMode.exit') : $t('manager.selectMode.enter')}
+            class="transform-gpu {nTranslateXHeaderMat}"
+            in:scale={inAnimationParams}
+            out:scale={outAnimationParams}
           >
-            <title>{$t('manager.selectMode.aria')}</title>
-            <path
-              class="fill-current"
-              d="M20,4v12H8V4H20 M20,2H8C6.9,2,6,2.9,6,4v12c0,1.1,0.9,2,2,2h12c1.1,0,2-0.9,2-2V4C22,2.9,21.1,2,20,2L20,2z M12.47,14 L9,10.5l1.4-1.41l2.07,2.08L17.6,6L19,7.41L12.47,14z M4,6H2v14c0,1.1,0.9,2,2,2h14v-2H4V6z"
-            />
-          </svg>
-        </div>
-      {:else}
-        <div
-          class="flex h-full transform-gpu items-center {nTranslateXHeaderFa} text-xl font-medium"
-        >
+            <svg
+              tabindex="0"
+              role="button"
+              aria-label={$t('manager.selectMode.aria')}
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+              class:opacity-100={selectMode}
+              class:opacity-60={!selectMode}
+              class={baseIconClasses}
+              on:click={() => (selectMode = hasBooks && !selectMode)}
+              on:keyup={activateOnKeyup}
+            >
+              <title>{$t('manager.selectMode.aria')}</title>
+              <path
+                class="fill-current"
+                d="M20,4v12H8V4H20 M20,2H8C6.9,2,6,2.9,6,4v12c0,1.1,0.9,2,2,2h12c1.1,0,2-0.9,2-2V4C22,2.9,21.1,2,20,2L20,2z M12.47,14 L9,10.5l1.4-1.41l2.07,2.08L17.6,6L19,7.41L12.47,14z M4,6H2v14c0,1.1,0.9,2,2,2h14v-2H4V6z"
+              />
+            </svg>
+          </div>
+        {:else}
+          <div
+            class="flex h-full transform-gpu items-center {nTranslateXHeaderFa} text-xl font-medium"
+          >
+            <div
+              tabindex="0"
+              role="button"
+              title={$t('manager.selectMode.exit')}
+              class="flex h-full items-center text-2xl xl:text-xl {pHeaderFa} cursor-pointer"
+              in:scale={inAnimationParams}
+              out:scale={outAnimationParams}
+              on:click={() => (selectMode = !selectMode)}
+              on:keyup={activateOnKeyup}
+            >
+              <Fa icon={faTimes} />
+            </div>
+            <span
+              class="translate-x-2 transform-gpu"
+              in:scale={inAnimationParams}
+              out:scale={outAnimationParams}>{selectedCount}</span
+            >
+            <!-- Selection outlives a filter change, so the count can include
+                 books that are no longer on screen — and 删除 takes all of
+                 them. Say so rather than letting the number look like what
+                 the reader can see. -->
+            {#if hiddenSelectedCount}
+              <span class="ml-2 text-xs font-normal opacity-70"
+                >{$t('manager.selectedHidden', { n: hiddenSelectedCount })}</span
+              >
+            {/if}
+          </div>
+        {/if}
+        <!-- Select-all lives beside the count, not floating dead centre in
+             the bar: the middle is equally far from everything and nobody
+             looked there. It is also present the moment the mode starts,
+             which the centre version was not — that one needed a selection
+             to exist first. -->
+        {#if selectMode}
           <div
             tabindex="0"
             role="button"
-            title={$t('manager.selectMode.exit')}
-            class="flex h-full items-center text-2xl xl:text-xl {pHeaderFa} cursor-pointer"
+            title={allSelected ? $t('manager.selectNone') : $t('manager.selectAll')}
+            aria-label={allSelected ? $t('manager.selectNone') : $t('manager.selectAll')}
+            class="ml-1 {baseIconClasses}"
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
-            on:click={() => (selectMode = !selectMode)}
+            on:click={() => dispatch('selectAllClick')}
             on:keyup={activateOnKeyup}
           >
-            <Fa icon={faTimes} />
+            <Fa icon={allSelected ? faSquareMinus : faSquareCheck} />
           </div>
-          <span
-            class="translate-x-2 transform-gpu"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}>{selectedCount}</span
-          >
-          <!-- Selection outlives a filter change, so the count can include
-               books that are no longer on screen — and 删除 takes all of
-               them. Say so rather than letting the number look like what the
-               reader can see. -->
-          {#if hiddenSelectedCount}
-            <span class="ml-2 text-xs font-normal opacity-70"
-              >{$t('manager.selectedHidden', { n: hiddenSelectedCount })}</span
-            >
-          {/if}
-        </div>
-      {/if}
+        {/if}
+      </div>
 
       <div class="absolute left-1/2 h-full -translate-x-1/2 transform-gpu">
         {#if !selectMode}
@@ -350,25 +374,6 @@
               </svg>
             </div>
           {/if}
-        {:else}
-          <div title={allSelected ? $t('manager.selectNone') : $t('manager.selectAll')}>
-            <svg
-              tabindex="0"
-              role="button"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              class={baseIconClasses}
-              in:scale={inAnimationParams}
-              out:scale={outAnimationParams}
-              on:click={() => dispatch('selectAllClick')}
-              on:keyup={activateOnKeyup}
-            >
-              <path
-                class="fill-current"
-                d="M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z"
-              />
-            </svg>
-          </div>
         {/if}
       </div>
 
