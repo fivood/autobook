@@ -17,6 +17,24 @@ export function getParagraphNodes(node: Node) {
     if (isHidden) {
       return false;
     }
+    // The page number the cbz / cbr / pdf loaders print above each page is
+    // this app's own chrome. Counting it made it the *entire* measured content
+    // of an image book: a 162-page scan with no text layer reported 381
+    // characters read, every one of them a page number — and, because those
+    // labels are text, they also suppressed the image fallback below that
+    // exists to give exactly those books a per-page unit.
+    //
+    // The comic translation overlay goes with it, for a different reason: it
+    // is text this app paints over the artwork, and whether it exists depends
+    // on whether the reader has run a translation. Counting it made the same
+    // comic measure 163 characters translated and 113 pages untranslated —
+    // the progress bar would move to a different scale on the same book.
+    if (
+      n instanceof HTMLElement &&
+      (n.classList.contains('pdf-page-label') || n.classList.contains('comic-translation-overlay'))
+    ) {
+      return false;
+    }
     return true;
   }).filter((n) => {
     if (isNodeGaiji(n)) {

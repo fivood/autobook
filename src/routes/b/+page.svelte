@@ -879,6 +879,20 @@
     $bookData$?.language ||
     ($rawBookData$?.elementHtml ? detectLanguage(stripTags($rawBookData$.elementHtml)) : undefined);
 
+  /**
+   * Books whose unit of reading is a page, not a character: scanned PDFs and
+   * comics. The tracker counts pages dwelt on for these, which is the only
+   * meaningful measure when the content is images.
+   *
+   * Comics were excluded by a `pdf-page-` prefix check even though cbz/cbr
+   * number their sections `cbz-page-N`, so a comic got neither a sensible
+   * character count nor a page count.
+   */
+  function isPagedBook(data: { sections?: { reference?: string }[] } | undefined): boolean {
+    const ref = data?.sections?.[0]?.reference || '';
+    return ref.startsWith('pdf-page-') || ref.startsWith('cbz-page-');
+  }
+
   /** Enough to keep tag names out of the Latin-letter count. */
   function stripTags(html: string): string {
     return html.slice(0, 20000).replace(/<[^>]*>/g, ' ');
@@ -2718,7 +2732,7 @@ ${$t('reader.ttsFailed.hint')}`
       backgroundColor={$backgroundColor$}
       bookTitle={$rawBookData$.title}
       sectionData={$sectionData$}
-      isPdfBook={!!$rawBookData$.sections?.[0]?.reference?.startsWith('pdf-page-')}
+      isPdfBook={isPagedBook($rawBookData$)}
       {frozenPosition}
       {exploredCharCount}
       {bookCharCount}
