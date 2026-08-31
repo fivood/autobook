@@ -11,6 +11,8 @@
   import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary-new.svelte';
   import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
   import StatisticsHighlights from '$lib/components/statistics/statistics-highlights/statistics-highlights.svelte';
+  import StatisticsYear from '$lib/components/statistics/statistics-year/statistics-year.svelte';
+  import { computeYearSummary } from '$lib/components/statistics/statistics-year/year-summary';
   import type {
     StatisticsDeleteRequest,
     StatisticsEditRequest
@@ -416,11 +418,37 @@
 
   $: if (
     ($lastStatisticsTab$ === StatisticsTab.MAIN ||
-      $lastStatisticsTab$ === StatisticsTab.SESSIONS) &&
+      $lastStatisticsTab$ === StatisticsTab.SESSIONS ||
+      $lastStatisticsTab$ === StatisticsTab.YEAR) &&
     !sessionsLoaded
   ) {
     ensureSessionsLoaded();
   }
+
+  // The year view picks its own year and ignores the period + title filter,
+  // like the exported year report does: "2026" is the whole of 2026 or it is
+  // not a year summary.
+  let selectedYear = new Date().getFullYear();
+
+  $: availableYears = [
+    ...new Set(statisticsData.map((statistic) => Number(statistic.dateKey.slice(0, 4))))
+  ]
+    .filter((year) => year > 0)
+    .sort((a, b) => b - a);
+
+  $: if (availableYears.length && !availableYears.includes(selectedYear)) {
+    selectedYear = availableYears[0];
+  }
+
+  $: yearSummary =
+    $lastStatisticsTab$ === StatisticsTab.YEAR
+      ? computeYearSummary({
+          year: selectedYear,
+          startDayHours: $startDayHoursForTracker$,
+          statistics: statisticsData,
+          sessions
+        })
+      : null;
 
   // manualBooks + data metadata for the BOOKS / AUTHORS explorer tabs
   // (Phase C, 1.20.4). Same lazy pattern as sessions — cheap in-memory
@@ -962,6 +990,9 @@
       on:delete={handleDeleteRequest}
       on:edit={handleEditRequest}
     />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.YEAR}
+    <StatisticsYear summary={yearSummary} years={availableYears} bind:year={selectedYear} />
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS}
     <StatisticsHighlights

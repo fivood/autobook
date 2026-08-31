@@ -3,6 +3,7 @@
   import {
     faBook,
     faCalendarDays,
+    faChartPie,
     faClock,
     faFileArrowDown,
     faHighlighter,
@@ -41,6 +42,7 @@
     { tab: StatisticsTab.BOOKS, labelKey: 'stats.tab.books', icon: faBook, hintKey: 'stats.tab.booksHint' },
     { tab: StatisticsTab.AUTHORS, labelKey: 'stats.tab.authors', icon: faUserPen, hintKey: 'stats.tab.authorsHint' },
     { tab: StatisticsTab.SESSIONS, labelKey: 'stats.tab.sessions', icon: faClock, hintKey: 'stats.tab.sessionsHint' },
+    { tab: StatisticsTab.YEAR, labelKey: 'stats.tab.year', icon: faChartPie, hintKey: 'stats.tab.yearHint' },
     { tab: StatisticsTab.HIGHLIGHTS, labelKey: 'stats.tab.highlights', icon: faHighlighter, hintKey: '' }
   ];
 </script>

@@ -6,6 +6,7 @@
    * changes to statistics-content's handlers are needed.
    */
   import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
+  import { formatChars, formatDuration } from '$lib/components/statistics/statistics-format';
   import {
     computeDailySummary,
     type DailySummaryRow,
@@ -140,21 +141,6 @@
       titlesToCheck: set,
       takeAsIs: true
     });
-  }
-
-  function formatDuration(sec: number): string {
-    if (sec >= 3600) {
-      const h = Math.floor(sec / 3600);
-      const m = Math.round((sec % 3600) / 60);
-      return m ? `${h}h${m}m` : `${h}h`;
-    }
-    if (sec >= 60) return `${Math.round(sec / 60)}m`;
-    return `${Math.round(sec)}s`;
-  }
-
-  function formatChars(n: number): string {
-    if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
-    return `${n}`;
   }
 
   function weekdayOf(dateKey: string): string {

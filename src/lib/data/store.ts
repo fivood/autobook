@@ -728,6 +728,16 @@ export const lastExportedTypes$ = writableArrayLocalStorageSubject<StorageDataTy
  * kept in localStorage rather than IDB on purpose: losing it to a UI reset
  * costs one click on the next mystery, which does not justify a migration.
  */
+/**
+ * Year-view modules the reader has switched off. Stored as the hidden set
+ * rather than the visible one so a module added in a later release shows up
+ * by default instead of staying invisible until someone finds the toggle.
+ */
+export const yearModulesHidden$ = writableSetLocalStorageSubject<string>()(
+  'yearModulesHidden',
+  new Set<string>()
+);
+
 export const aiSpoilerSafeTitles$ = writableSetLocalStorageSubject<string>()(
   'aiSpoilerSafeTitles',
   new Set<string>()

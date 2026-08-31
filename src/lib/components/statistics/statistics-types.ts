@@ -39,6 +39,7 @@ export enum StatisticsTab {
   AUTHORS = '作者',
   SESSIONS = '会话',
   SUMMARY = '汇总',
+  YEAR = '年度',
   HIGHLIGHTS = '高亮'
 }
 

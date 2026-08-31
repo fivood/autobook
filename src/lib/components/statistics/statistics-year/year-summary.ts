@@ -35,6 +35,11 @@ export interface MonthlyBar {
   /** Pages, for books measured in pages; never added to `chars`. */
   pages: number;
   activeDays: number;
+  /** How the month's time was produced. `manual` is the remainder, so the
+   * three always add up to `seconds` even for rows written before the
+   * playback split existed. */
+  ttsSeconds: number;
+  typewriterSeconds: number;
 }
 
 export interface TopBook {
@@ -74,6 +79,23 @@ export interface YearSummary {
   lastDay: { dateKey: string; titles: string[] } | null;
   /** null when no sessions land in this year — earlier data doesn't have them. */
   sessionStats: SessionStats | null;
+  weekSplit: WeekSplit;
+  sessionBuckets: SessionBuckets | null;
+}
+
+/** Reading time on weekdays vs weekends, from the daily rows. */
+export interface WeekSplit {
+  weekdaySeconds: number;
+  weekendSeconds: number;
+  weekdayDays: number;
+  weekendDays: number;
+}
+
+/** How single sittings were distributed, in minutes-per-session buckets. */
+export interface SessionBuckets {
+  /** Upper bound of each bucket in minutes; the last one is open-ended. */
+  edges: number[];
+  counts: number[];
 }
 
 export interface SessionStats {
@@ -227,11 +249,15 @@ export function computeYearSummary(input: YearSummaryInput): YearSummary {
         seconds: 0,
         chars: 0,
         pages: 0,
-        activeDays: 0
+        activeDays: 0,
+        ttsSeconds: 0,
+        typewriterSeconds: 0
       };
       bar.seconds += row.readingTime || 0;
       bar.chars += rowChars;
       bar.pages += rowPages;
+      bar.ttsSeconds += row.ttsSeconds || 0;
+      bar.typewriterSeconds += row.typewriterSeconds || 0;
       monthlyMap.set(month, bar);
     }
   }
@@ -240,7 +266,15 @@ export function computeYearSummary(input: YearSummaryInput): YearSummary {
   const monthly: MonthlyBar[] = [];
   for (let m = 1; m <= 12; m += 1) {
     monthly.push(
-      monthlyMap.get(m) || { month: m, seconds: 0, chars: 0, pages: 0, activeDays: 0 }
+      monthlyMap.get(m) || {
+        month: m,
+        seconds: 0,
+        chars: 0,
+        pages: 0,
+        activeDays: 0,
+        ttsSeconds: 0,
+        typewriterSeconds: 0
+      }
     );
   }
 
@@ -334,8 +368,45 @@ export function computeYearSummary(input: YearSummaryInput): YearSummary {
     };
   }
 
+  // Weekday vs weekend, by the day key the tracker already binned rows into.
+  const weekSplit: WeekSplit = {
+    weekdaySeconds: 0,
+    weekendSeconds: 0,
+    weekdayDays: 0,
+    weekendDays: 0
+  };
+  for (const [dateKey, bucket] of perDay) {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const dow = new Date(y, (m || 1) - 1, d || 1).getDay();
+    const weekend = dow === 0 || dow === 6;
+    if (weekend) {
+      weekSplit.weekendSeconds += bucket.seconds;
+      if (bucket.seconds) weekSplit.weekendDays += 1;
+    } else {
+      weekSplit.weekdaySeconds += bucket.seconds;
+      if (bucket.seconds) weekSplit.weekdayDays += 1;
+    }
+  }
+
+  // How long a single sitting tends to run. Edges chosen so the buckets read
+  // as habits ("a few minutes" / "half an hour" / "an evening"), not deciles.
+  let sessionBuckets: SessionBuckets | null = null;
+  if (inYearSessions.length) {
+    const edges = [5, 15, 30, 60, 120];
+    const counts = new Array(edges.length + 1).fill(0);
+    for (const session of inYearSessions) {
+      const minutes = (session.durationSec || 0) / 60;
+      let slot = edges.findIndex((edge) => minutes < edge);
+      if (slot < 0) slot = edges.length;
+      counts[slot] += 1;
+    }
+    sessionBuckets = { edges, counts };
+  }
+
   return {
     year,
+    weekSplit,
+    sessionBuckets,
     totalSeconds,
     totalChars,
     totalPages,
