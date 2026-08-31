@@ -86,6 +86,8 @@ export default {
   'menu.checkUpdate.title': 'Check for desktop update',
   'menu.more.label': 'More',
   'menu.more.title': 'More actions (statistics / jump / translate)',
+  'menu.back.label': 'Back',
+  'menu.back.title': 'Back to the previous page',
   'menu.changelog.label': 'Changelog',
   'menu.changelog.title': 'View version history',
 

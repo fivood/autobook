@@ -10,7 +10,7 @@
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { confirmResetUiSettings } from '$lib/functions/reset-ui-settings';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
-  import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
+  import PageHeader from '$lib/components/page-header/page-header.svelte';
   import rawChangelog from '../../../CHANGELOG.md?raw';
 
   interface Section {
@@ -61,6 +61,18 @@
     });
   }
 
+  /**
+   * The changelog is written in markdown and every entry leads with a bold
+   * summary, but this page printed the `**` markers verbatim — for every
+   * version, since the page existed.
+   */
+  function boldSegments(text: string): { text: string; bold: boolean }[] {
+    return text
+      .split(/\*\*/)
+      .map((part, i) => ({ text: part, bold: i % 2 === 1 }))
+      .filter((part) => part.text);
+  }
+
   function needsResetButton(callouts: string[]): boolean {
     return callouts.some((c) => /重置|reset/i.test(c));
   }
@@ -78,14 +90,16 @@
   <title>{formatPageTitle($t('pageTitle.changelog'))}</title>
 </svelte:head>
 
-<div class="flex h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">
-  <header class="flex flex-shrink-0 items-center gap-4 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
-    <h1 class="text-xl font-medium">{$t('pageTitle.changelog')}</h1>
-    <span class="text-sm opacity-50">{$t('changelog.count', { count: sections.length })}</span>
-    <div class="flex-1" />
-    <MergedHeaderIcon leavePageLink={prevPage} />
-  </header>
+<PageHeader
+  icon={mergeEntries.CHANGELOG.icon}
+  titleKey="menu.changelog.title"
+  backLink={prevPage}
+/>
 
+<div
+  class="flex h-screen flex-col pt-12 xl:pt-10"
+  style="color:var(--font-color);background:var(--background-color);"
+>
   <div class="flex flex-1 overflow-hidden">
     <aside class="flex w-40 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-current/10 p-3 text-sm">
       {#each sections as s, i (s.version)}
@@ -134,7 +148,11 @@
           {#each current.items as item, i (i)}
             <li class="flex gap-2 text-sm leading-relaxed">
               <span class="mt-1.5 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full opacity-50" style="background:currentColor;" />
-              <span class="flex-1">{item}</span>
+              <span class="flex-1"
+                >{#each boldSegments(item) as segment, si (si)}{#if segment.bold}<strong
+                      >{segment.text}</strong
+                    >{:else}{segment.text}{/if}{/each}</span
+              >
             </li>
           {/each}
         </ul>

@@ -94,6 +94,8 @@ export default {
   'menu.checkUpdate.title': '检查桌面端更新',
   'menu.more.label': '更多',
   'menu.more.title': '更多操作（统计 / 跳转 / 翻译）',
+  'menu.back.label': '返回',
+  'menu.back.title': '返回上一页',
   'menu.changelog.label': '更新历史',
   'menu.changelog.title': '查看版本更新记录',
 

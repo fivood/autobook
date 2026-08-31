@@ -12,10 +12,12 @@
     faLink,
     faUnlink,
     faShuffle,
+    faFileExport,
     faFolder
   } from '@fortawesome/free-solid-svg-icons';
   import { onMount, onDestroy } from 'svelte';
-  import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
+  import PageHeader from '$lib/components/page-header/page-header.svelte';
+  import { baseIconClasses } from '$lib/css-classes';
   import type {
     BooksDbHighlight,
     BooksDbHighlightFolder,
@@ -550,73 +552,101 @@
   <title>{formatPageTitle($t('notebook.title'))}</title>
 </svelte:head>
 
-<div class="flex min-h-screen flex-col" style="color:var(--font-color);background:var(--background-color);">
-  <header class="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
-    <h1 class="text-xl font-medium">{$t('notebook.title')}</h1>
-    <span class="text-sm opacity-50">{filtered.length}/{highlights.length}</span>
-    <div class="flex-1" />
-    <input
-      type="search"
-      placeholder={$t('notebook.search')}
-      title={$t('notebook.search.syntaxHint')}
-      class="w-64 rounded border border-current/20 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-current/40"
-      bind:value={query}
-      on:input={onQueryInput}
-    />
-    <select
-      class="rounded border border-current/20 bg-transparent px-2 py-1.5 text-sm outline-none"
-      style="color:var(--font-color);"
-      value={sortKey}
-      on:change={setSort}
-      title={$t('notebook.sort.tooltip')}
-    >
-      <option value="auto" style="color:#000;">{$t('notebook.sort.auto')}</option>
-      <option value="modified" style="color:#000;">{$t('notebook.sort.modified')}</option>
-      <option value="created" style="color:#000;">{$t('notebook.sort.created')}</option>
-      <option value="relevance" style="color:#000;">{$t('notebook.sort.relevance')}</option>
-    </select>
-    <button
-      type="button"
-      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
-      title={$t('notebook.review.tooltip')}
-      on:click={openReview}
-    ><Fa icon={faShuffle} size="xs" /> {$t('notebook.review.button')}</button>
-    <button
-      type="button"
-      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
-      on:click={openCreateNote}
-    ><Fa icon={faPlus} size="xs" /> {$t('notebook.new')}</button>
-    <button
-      type="button"
-      class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
-      on:click={exportMarkdown}
-      disabled={!filtered.length}
-    ><Fa icon={faDownload} size="xs" /> {$t('notebook.exportMd')}</button>
-    {#if isTauri()}
-      {#if $obsidianVaultPath$}
-        <button
-          type="button"
-          class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
-          on:click={syncToVault}
-          disabled={syncing || !highlights.length}
-          title="vault: {$obsidianVaultPath$}"
-        ><Fa icon={faDownload} size="xs" /> {syncing ? $t('notebook.syncing') : $t('notebook.syncToVault')}</button>
-        <button
-          type="button"
-          class="text-xs opacity-50 hover:opacity-100"
-          title="vault: {$obsidianVaultPath$}"
-          on:click={pickVaultFolder}
-        >{$t('notebook.changeVault')}</button>
-      {:else}
-        <button
-          type="button"
-          class="flex items-center gap-1 rounded border border-current/20 px-3 py-1.5 text-sm hover-soft"
-          on:click={pickVaultFolder}
-        ><Fa icon={faFolder} size="xs" /> {$t('notebook.pickVault')}</button>
+<div
+  class="flex min-h-screen flex-col pt-12 xl:pt-10"
+  style="color:var(--font-color);background:var(--background-color);"
+>
+  <PageHeader icon={mergeEntries.NOTEBOOK.icon} titleKey="menu.notebook.title" backLink={prevPage}>
+    <svelte:fragment slot="left">
+      <!-- The search field keeps its box: it shows a value the reader typed,
+           which no icon can stand in for. Everything else is icon + tooltip. -->
+      <input
+        type="search"
+        placeholder={$t('notebook.search')}
+        title={$t('notebook.search.syntaxHint')}
+        class="mx-2 w-40 min-w-0 rounded border border-current/30 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-current/50 focus:border-current/60 md:w-64"
+        bind:value={query}
+        on:input={onQueryInput}
+      />
+      <select
+        class="rounded border border-current/30 bg-transparent px-1.5 py-1 text-sm outline-none"
+        style="color:var(--menu-foreground);"
+        value={sortKey}
+        on:change={setSort}
+        title={$t('notebook.sort.tooltip')}
+      >
+        <option value="auto">{$t('notebook.sort.auto')}</option>
+        <option value="modified">{$t('notebook.sort.modified')}</option>
+        <option value="created">{$t('notebook.sort.created')}</option>
+        <option value="relevance">{$t('notebook.sort.relevance')}</option>
+      </select>
+      <span class="ml-2 text-xs opacity-50 tabular-nums">{filtered.length}/{highlights.length}</span>
+    </svelte:fragment>
+
+    <svelte:fragment slot="right">
+      <button
+        type="button"
+        class={baseIconClasses}
+        title={$t('notebook.review.tooltip')}
+        aria-label={$t('notebook.review.button')}
+        on:click={openReview}
+      >
+        <Fa icon={faShuffle} />
+      </button>
+      <button
+        type="button"
+        class={baseIconClasses}
+        title={$t('notebook.new')}
+        aria-label={$t('notebook.new')}
+        on:click={openCreateNote}
+      >
+        <Fa icon={faPlus} />
+      </button>
+      <button
+        type="button"
+        class={baseIconClasses}
+        title={$t('notebook.exportMd')}
+        aria-label={$t('notebook.exportMd')}
+        on:click={exportMarkdown}
+        disabled={!filtered.length}
+      >
+        <Fa icon={faDownload} />
+      </button>
+      {#if isTauri()}
+        {#if $obsidianVaultPath$}
+          <button
+            type="button"
+            class={baseIconClasses}
+            on:click={syncToVault}
+            disabled={syncing || !highlights.length}
+            title="{syncing ? $t('notebook.syncing') : $t('notebook.syncToVault')} — {$obsidianVaultPath$}"
+            aria-label={$t('notebook.syncToVault')}
+          >
+            <Fa icon={faFileExport} spin={syncing} />
+          </button>
+          <button
+            type="button"
+            class={baseIconClasses}
+            title="{$t('notebook.changeVault')} — {$obsidianVaultPath$}"
+            aria-label={$t('notebook.changeVault')}
+            on:click={pickVaultFolder}
+          >
+            <Fa icon={faFolder} />
+          </button>
+        {:else}
+          <button
+            type="button"
+            class={baseIconClasses}
+            title={$t('notebook.pickVault')}
+            aria-label={$t('notebook.pickVault')}
+            on:click={pickVaultFolder}
+          >
+            <Fa icon={faFolder} />
+          </button>
+        {/if}
       {/if}
-    {/if}
-    <MergedHeaderIcon leavePageLink={prevPage} />
-  </header>
+    </svelte:fragment>
+  </PageHeader>
 
   {#if syncMessage}
     <div class="border-b border-current/10 px-4 py-2 text-xs opacity-70">{syncMessage}</div>

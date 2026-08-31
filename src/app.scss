@@ -441,6 +441,25 @@ input[type='range'] {
   .bg-soft-active {
     background-color: color-mix(in srgb, currentColor 10%, transparent);
   }
+  /* A sub-view tab in a page's top bar (statistics, settings, ...). Lives
+     here rather than in each header's <style> block: the copies in
+     statistics-header and settings-header were byte-identical and carried a
+     comment explaining they had to stay that way, which is what a shared
+     class is for. Selected inverts to the menu foreground — the same
+     language the dropdown menus use, so the bar and a menu opened next to it
+     don't read as two different apps. */
+  .chrome-tab {
+    background: transparent;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+  .chrome-tab.is-active {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+  }
+  .chrome-tab.is-inactive:hover {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+  }
 }
 
 @font-face {

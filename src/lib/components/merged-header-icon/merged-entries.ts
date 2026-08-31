@@ -11,6 +11,7 @@
 // `$t()` at render time — untranslated identity is preserved on the
 // wire, only the visible strings switch locale.
 import {
+  faArrowLeft,
   faBug,
   faChartLine,
   faClockRotateLeft,
@@ -145,6 +146,16 @@ export const mergeEntries = {
     icon: faEllipsisVertical,
     title: '更多操作',
     titleKey: 'menu.more.title'
+  },
+  /** Back to wherever you came from — the book you were reading, usually.
+   *  Distinct from MANAGE, which always goes to the library. */
+  BACK: {
+    routeId: '',
+    label: '返回',
+    labelKey: 'menu.back.label',
+    icon: faArrowLeft,
+    title: '返回上一页',
+    titleKey: 'menu.back.title'
   },
   CHANGELOG: {
     routeId: '/changelog',

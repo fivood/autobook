@@ -100,9 +100,7 @@
   <title>{formatPageTitle($t('pageTitle.settings'))}</title>
 </svelte:head>
 
-<div class="elevation-4 fixed inset-x-0 top-0 z-40">
-  <SettingsHeader leavePageLink={prevPage} bind:activeSettings />
-</div>
+<SettingsHeader leavePageLink={prevPage} bind:activeSettings />
 
 <div class="{pxScreen} h-full pt-16 xl:pt-14">
   <div class="max-w-5xl">

@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { afterNavigate, goto } from '$app/navigation';
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
-  import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
+  import PageHeader from '$lib/components/page-header/page-header.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import { pagePath } from '$lib/data/env';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
@@ -1035,14 +1035,9 @@
   <title>{$t('translate.title')}</title>
 </svelte:head>
 
-<header class="sticky top-0 z-10 flex items-center gap-3 border-b border-current/10 px-4 py-3" style="background:var(--background-color);">
-  <h1 class="text-xl font-medium">{$t('translate.title')}</h1>
-  <span class="text-sm opacity-50">{$t('translate.subtitle')}</span>
-  <div class="flex-1" />
-  <MergedHeaderIcon leavePageLink={prevPage} />
-</header>
+<PageHeader icon={mergeEntries.TRANSLATE.icon} titleKey="menu.translate.title" backLink={prevPage} />
 
-<main class="mx-auto flex max-w-4xl flex-col gap-6 p-6">
+<main class="mx-auto flex max-w-4xl flex-col gap-6 p-6 pt-16 xl:pt-14">
 
   {#if latestJob}
     <section class="rounded-lg border border-current/20 bg-current/5 p-4 text-sm">
