@@ -225,6 +225,8 @@ export default {
   'highlight.memo.short': 'メモ',
   'highlight.dict.tooltip': '辞書で調べる',
   'highlight.dict.short': '辞書',
+  'highlight.startHere.tooltip': 'ハイライトを残さず、ここから読み上げ／タイプライターを開始',
+  'highlight.startHere.short': 'ここから',
   'highlight.delete': '削除',
   'highlight.sidebar.title': 'ハイライト・ノート',
   'highlight.sidebar.all': 'すべて',

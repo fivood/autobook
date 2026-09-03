@@ -16,6 +16,10 @@ export interface AutoScroller {
    * the two are mutually exclusive, and the reader has to be able to read
    * ahead and scroll while the voice runs. */
   revealAll: () => void;
+  /** Move the reveal frontier to the start of the block containing `el`,
+   * i.e. "type from here". Optional: only the continuous typewriter has a
+   * frontier to move. */
+  revealFrom?: (el: HTMLElement) => void;
 }
 
 export interface AutoReader {

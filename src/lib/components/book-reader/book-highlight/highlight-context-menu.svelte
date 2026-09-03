@@ -16,6 +16,7 @@
     memo: void;
     editMemo: void;
     lookup: void;
+    startHere: void;
     delete: void;
     close: void;
   }>();
@@ -30,7 +31,12 @@
     return Math.max(min, Math.min(max, v));
   }
 
-  $: menuX = clamp(x, 8, (typeof window !== 'undefined' ? window.innerWidth : 800) - 220);
+  // Measured rather than assumed: the toolbar's width depends on how many
+  // items this mode shows and on how long they are in the active locale, and
+  // the old hardcoded 220 already understated it.
+  let menuWidth = 220;
+
+  $: menuX = clamp(x, 8, (typeof window !== 'undefined' ? window.innerWidth : 800) - menuWidth - 8);
   $: menuY = clamp(y, 8, (typeof window !== 'undefined' ? window.innerHeight : 600) - 60);
 </script>
 
@@ -39,8 +45,9 @@
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="fixed inset-0 z-[80]" on:click={() => dispatch('close')} on:contextmenu|preventDefault={() => dispatch('close')} />
   <div
-    class="menu-surface menu-toolbar fixed z-[81]"
+    class="menu-surface menu-toolbar fixed z-[81] w-max"
     style="left:{menuX}px;top:{menuY}px;"
+    bind:clientWidth={menuWidth}
   >
     {#if mode === 'create'}
       {#each colors as c (c.id)}
@@ -64,6 +71,12 @@
         title={$t('highlight.dict.tooltip')}
         on:click={() => dispatch('lookup')}
       >{$t('highlight.dict.short')}</button>
+      <button
+        type="button"
+        class="menu-item menu-item-inline"
+        title={$t('highlight.startHere.tooltip')}
+        on:click={() => dispatch('startHere')}
+      >{$t('highlight.startHere.short')}</button>
     {:else}
       {#each colors as c (c.id)}
         <button

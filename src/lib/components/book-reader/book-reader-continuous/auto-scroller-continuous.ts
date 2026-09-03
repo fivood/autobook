@@ -176,6 +176,23 @@ export class AutoScrollerContinuous implements AutoScroller {
     this.totalChars = offset;
   }
 
+  /**
+   * Restart the reveal at the block holding `el` — the "start here" action's
+   * typewriter half.
+   *
+   * Takes the element rather than a char offset on purpose: the blocks carry
+   * element references, so matching one costs nothing, while a char offset
+   * would have to be translated out of the selection's counting rules into
+   * this one (see tts-calculator-index.ts for how that goes). Paragraph
+   * granularity is all a reveal frontier can show anyway.
+   */
+  revealFrom(el: HTMLElement) {
+    const block = this.blocks.find((b) => b.el === el || b.el.contains(el));
+    if (!block) return;
+    this.revealedIndex = block.start;
+    this.applyReveal();
+  }
+
   /** Locate the block covering a global char offset. */
   private blockIndexAt(globalIndex: number): number {
     let lo = 0;

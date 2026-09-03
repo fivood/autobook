@@ -220,6 +220,8 @@ export default {
   'highlight.memo.short': 'Note',
   'highlight.dict.tooltip': 'Look up',
   'highlight.dict.short': 'Look up',
+  'highlight.startHere.tooltip': 'Start the voice or the typewriter here, without highlighting',
+  'highlight.startHere.short': 'Read here',
   'highlight.delete': 'Delete',
   'highlight.sidebar.title': 'Highlights & notes',
   'highlight.sidebar.all': 'All',

@@ -2,6 +2,7 @@
   import Fa from 'svelte-fa';
   import { faVolumeHigh, faVolumeXmark, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import type { AutoReader } from '$lib/components/book-reader/types';
+  import { applyStartPosition } from '$lib/components/book-reader/auto-reader-shared';
   import { readerRate$, ttsStartStrategy$, ttsVoiceByLang$ } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
@@ -52,26 +53,11 @@
   function toggle() {
     if (!enabled && autoReader) {
       autoReader.prepare();
-      const strategy = $ttsStartStrategy$;
-
       // The reader knows its own contentEl, so let it figure out where the
       // selection maps to. /b's outer .book-content wrapper has different
       // text-node ordering than the inner container the reader extracts from,
       // which is why the FAB's old DOM walk gave the wrong char index.
-      let seeked = false;
-      if (strategy === 'selection') {
-        seeked = autoReader.seekToSelection();
-      }
-      if (!seeked) {
-        if (strategy === 'section-start') {
-          autoReader.setPosition(0, 0);
-        } else if (resumePosition) {
-          // 'resume' strategy, or 'selection' fallback.
-          autoReader.setPosition(resumePosition.para, resumePosition.offset);
-        } else {
-          autoReader.seekToExplored(seekCharCount);
-        }
-      }
+      applyStartPosition(autoReader, $ttsStartStrategy$, resumePosition, seekCharCount);
     }
     autoReader?.toggle();
   }

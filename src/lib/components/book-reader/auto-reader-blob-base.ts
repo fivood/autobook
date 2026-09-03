@@ -39,6 +39,7 @@ import {
   seekSentencesToExplored,
   selectionToCharIndex,
   splitSentencesDetailed,
+  trackSelectionIn,
   type Sentence
 } from './auto-reader-shared';
 
@@ -117,6 +118,7 @@ export abstract class BlobAutoReader implements AutoReader {
   setContentEl(el: HTMLElement | undefined) {
     if (this.contentEl === el) return;
     this.contentEl = el;
+    trackSelectionIn(el);
     this.reset();
   }
 

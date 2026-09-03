@@ -19,6 +19,7 @@ import {
   seekSentencesToExplored,
   selectionToCharIndex,
   splitSentencesDetailed,
+  trackSelectionIn,
   type Sentence
 } from './auto-reader-shared';
 
@@ -72,6 +73,7 @@ export class AutoReaderContinuous implements AutoReader {
     // playback dies.
     if (this.contentEl === el) return;
     this.contentEl = el;
+    trackSelectionIn(el);
     this.reset();
   }
 

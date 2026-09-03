@@ -6,6 +6,8 @@
  * Shared helpers used by every AutoReader engine.
  */
 
+import type { AutoReader } from './types';
+
 /**
  * One TTS unit. `text` is trimmed (engines choke on whitespace-only input),
  * but `start` / `end` are offsets into the ORIGINAL extractText() string.
@@ -249,16 +251,91 @@ function domPositionToCharIndex(
 }
 
 /**
+ * Where the last selection inside the tracked content started, as a char
+ * index into `extractText(trackedRoot)`.
+ *
+ * Stored as a number rather than as the Range, and that is the whole point:
+ * it is what lets "select a passage, highlight it, press play" start at the
+ * passage. Applying a highlight calls removeAllRanges() — the selection
+ * overlay would otherwise sit on top of the fresh mark — so there is no live
+ * selection left by the time the user reaches the play button. Holding the
+ * Range would not survive either: the highlight renderer unwraps every
+ * <mark>, normalize()s the container and re-wraps, merging and splitting
+ * exactly the text nodes a stale Range points at. A char index is untouched
+ * by all of that, since <mark> contributes no text.
+ */
+let rememberedIndex: number | null = null;
+
+/**
+ * Element the remembered index is measured against — the reader's own
+ * contentEl. /b's outer .book-content wrapper walks text nodes in a different
+ * order, so an index taken there lands somewhere else entirely.
+ */
+let trackedRoot: HTMLElement | undefined;
+
+let listeningForSelection = false;
+
+function rememberSelection() {
+  if (!trackedRoot) return;
+  const sel = window.getSelection();
+  // rangeCount 0 means the selection was wiped rather than moved — the very
+  // case this memory exists for, so keep what we already have.
+  if (!sel || !sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  if (!trackedRoot.contains(range.startContainer)) return;
+  rememberedIndex = domPositionToCharIndex(trackedRoot, range.startContainer, range.startOffset);
+}
+
+/** Point the selection memory at this reader's content. Called from
+ *  setContentEl, so it resets on every section / view-mode change. */
+export function trackSelectionIn(root: HTMLElement | undefined) {
+  trackedRoot = root;
+  rememberedIndex = null;
+  if (root && typeof document !== 'undefined' && !listeningForSelection) {
+    listeningForSelection = true;
+    document.addEventListener('selectionchange', rememberSelection);
+  }
+}
+
+/**
  * Convenience: read the current document selection's start position and map
- * it to a char index inside `root`. Returns null when there's no selection
- * inside the content area.
+ * it to a char index inside `root`. Falls back to the last selection the
+ * tracker saw — once — when nothing is selected any more.
  */
 export function selectionToCharIndex(root: HTMLElement): number | null {
   const sel = typeof window === 'undefined' ? null : window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0);
-  if (!root.contains(range.startContainer)) return null;
-  return domPositionToCharIndex(root, range.startContainer, range.startOffset);
+  if (sel && sel.rangeCount) {
+    const range = sel.getRangeAt(0);
+    if (root.contains(range.startContainer)) {
+      return domPositionToCharIndex(root, range.startContainer, range.startOffset);
+    }
+  }
+  if (root !== trackedRoot) return null;
+  // Consumed on read: a selection made and forgotten ten pages ago must not
+  // hijack the *next* play, which falls back to the resume position as before.
+  const index = rememberedIndex;
+  rememberedIndex = null;
+  return index;
+}
+
+/**
+ * Put the reader where `strategy` says playback should begin. `prepare()`
+ * must already have run — every branch needs the sentence list.
+ *
+ * Shared because two places start playback: the FAB and the tray / global
+ * shortcut handler in /b. The latter used to jump straight to the resume
+ * position, so the start strategy silently did not apply to it.
+ */
+export function applyStartPosition(
+  reader: Pick<AutoReader, 'seekToSelection' | 'setPosition' | 'seekToExplored'>,
+  strategy: string,
+  resumePosition: { para: number; offset: number } | undefined,
+  seekCharCount: number
+) {
+  if (strategy === 'selection' && reader.seekToSelection()) return;
+  if (strategy === 'section-start') reader.setPosition(0, 0);
+  else if (resumePosition) reader.setPosition(resumePosition.para, resumePosition.offset);
+  else reader.seekToExplored(seekCharCount);
 }
 
 /**

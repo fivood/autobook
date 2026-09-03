@@ -336,6 +336,8 @@ export default {
   'highlight.memo.short': '备注',
   'highlight.dict.tooltip': '查词典',
   'highlight.dict.short': '查词',
+  'highlight.startHere.tooltip': '朗读或打字机从这里开始，不留高亮',
+  'highlight.startHere.short': '从这里读',
   'highlight.delete': '删除',
   'highlight.sidebar.title': '高亮笔记',
   'highlight.sidebar.all': '全部',

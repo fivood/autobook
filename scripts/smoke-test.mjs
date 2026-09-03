@@ -91,6 +91,7 @@ async function snapshotSettings() {
       'fsRoot',
       'lastStorageSource',
       'ttsEngine',
+      'ttsStartStrategy',
       'statisticsEnabled',
       'activeFolderFilter'
     ];
@@ -273,6 +274,97 @@ async function ttsLeavesTextAlone(bookId) {
  *  pointing storage at an unauthorised path: that switches the storage source,
  *  which drags in the folder-authorisation modal and leaves the app in a state
  *  the suite then has to repair. */
+/**
+ * Regression: 「选中一段 → 高亮 → 按播放」 started at the saved resume
+ * position instead of at the passage the user had just marked (1.45.0).
+ *
+ * Applying a highlight calls removeAllRanges() — the selection overlay would
+ * sit on top of the fresh mark — so by the time the play button is reached
+ * there is no live selection for the 'selection' start strategy to read, and
+ * it fell through to the resume position. The unit test in
+ * scripts/tts-start-position-test.ts covers the bookkeeping; only the real
+ * window can show that the browser does drop the selection at that moment,
+ * and that a Range kept instead of a char index would not have survived the
+ * renderer re-wrapping those text nodes in <mark>.
+ *
+ * Engine pinned to SAPI: the sentence highlight is the only observable for
+ * "where did it start", and it needs a voice that actually speaks. Windows
+ * ships SAPI, so this does not depend on what is installed on the box.
+ */
+async function ttsStartsAtTheHighlightedPassage(bookId) {
+  await session.evaluate(`(() => {
+    localStorage.setItem('ttsEngine', 'sapi');
+    localStorage.setItem('ttsStartStrategy', 'selection');
+    return 1;
+  })()`);
+  await goto(`/b?id=${bookId}`, `!!document.querySelector('[title^="开始朗读"]')`);
+  await session.waitFor(`document.querySelectorAll('.book-content p').length > 50`, {
+    label: 'the test book text'
+  });
+
+  // Paragraph 50 of 80: far enough from both the resume position (paragraph 0
+  // on a book that was just imported) and the end that a wrong start is
+  // unambiguous.
+  const target = 50;
+  const out = await session.evaluate(`(() => {
+    const p = document.querySelectorAll('.book-content p')[${target}];
+    const tn = [...p.childNodes].find((x) => x.nodeType === 3);
+    const r = document.createRange();
+    r.setStart(tn, 2);
+    r.setEnd(tn, 8);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    const box = p.getBoundingClientRect();
+    p.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      clientX: Math.round(box.left + 20),
+      clientY: Math.round(box.top + 5)
+    }));
+    return new Promise((done) => setTimeout(() => {
+      const swatch = document.querySelector('.menu-toolbar button');
+      if (!swatch) return done({ ok: false, why: 'the selection menu did not open' });
+      swatch.click();
+      // The highlight is written to IndexedDB and re-rendered before the
+      // selection is dropped; play only after that has settled.
+      setTimeout(() => {
+        const marks = document.querySelectorAll('.book-content mark[data-hl-id]').length;
+        const live = (getSelection() || {}).rangeCount || 0;
+        document.querySelector('[title^="开始朗读"]').click();
+        const seen = [];
+        const poll = setInterval(() => {
+          const hl = CSS.highlights && CSS.highlights.get('tts-sentence');
+          if (!hl) return;
+          for (const range of hl) {
+            const text = range.toString();
+            if (text && !seen.includes(text)) seen.push(text);
+            break;
+          }
+        }, 250);
+        setTimeout(() => {
+          clearInterval(poll);
+          document.querySelector('[title^="暂停朗读"]')?.click();
+          if (window.speechSynthesis) window.speechSynthesis.cancel();
+          done({ ok: true, marks, live, spoken: seen[0] || null, count: seen.length });
+        }, 6000);
+      }, 1200);
+    }, 400));
+  })()`);
+
+  if (!out.ok) throw new Error(out.why);
+  if (!out.marks) throw new Error('the highlight was never applied');
+  if (!out.spoken) throw new Error('the sentence highlight never appeared — did the voice start?');
+  // Plain template + explicit escape: the js`` tag would eat the \\d.
+  const at = /第(\d+)段/.exec(out.spoken);
+  if (!at) throw new Error(`spoke something unexpected: ${out.spoken.slice(0, 30)}`);
+  if (Number(at[1]) !== target + 1) {
+    throw new Error(
+      `started at 第${at[1]}段, wanted 第${target + 1}段 (the highlighted one)`
+    );
+  }
+  return `从第${at[1]}段起读（共听到 ${out.count} 句），高亮已落地，按播放时活动选区 ${out.live} 个`;
+}
+
 async function batchImportNamesEveryFailure() {
   await goto('/manage', MANAGE_READY);
 
@@ -818,6 +910,7 @@ try {
   await scenario('书签：书籍开头设的书签能跳回去', () => bookmarkAtStart(bookId));
   await scenario('朗读：正文不被隐藏、可滚动、逐句高亮推进', () => ttsLeavesTextAlone(bookId));
   await scenario('朗读：引擎失败时说明原因', () => ttsFailureExplainsItself(bookId));
+  await scenario('朗读：高亮一段后从那段开读', () => ttsStartsAtTheHighlightedPassage(bookId));
   await scenario('导入：批量失败时逐个报出文件名和原因', () => batchImportNamesEveryFailure());
   await scenario('归档：从书库隐藏、在已归档里能找到、能放回来', () => archiveHidesAndRestores(bookId));
   await scenario('朗读跟随：段落开头的位置解析不跑偏', () =>

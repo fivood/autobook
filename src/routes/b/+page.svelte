@@ -48,8 +48,7 @@
     tap,
     timer
   } from 'rxjs';
-  import {
-  } from '$lib/components/book-reader/auto-reader-shared';
+  import { applyStartPosition } from '$lib/components/book-reader/auto-reader-shared';
   import { TtsHighlighter } from '$lib/components/book-reader/tts-highlight';
   import { quintInOut } from 'svelte/easing';
   import { fade, fly } from 'svelte/transition';
@@ -137,6 +136,7 @@
     verticalTextOrientation$,
     ttsAutoAdvanceSection$,
     ttsPositions$,
+    ttsStartStrategy$,
     ttsToggleRequest$,
     highlightSidebarOpen$
   } from '$lib/data/store';
@@ -1290,11 +1290,7 @@ ${$t('reader.ttsFailed.hint')}`
     lastTtsToggleAt = $ttsToggleRequest$;
     if (!autoReader.wasReaderEnabled$.getValue()) {
       autoReader.prepare();
-      if (ttsResumePosition) {
-        autoReader.setPosition(ttsResumePosition.para, ttsResumePosition.offset);
-      } else {
-        autoReader.seekToExplored(ttsSeekCharCount);
-      }
+      applyStartPosition(autoReader, $ttsStartStrategy$, ttsResumePosition, ttsSeekCharCount);
     }
     autoReader.toggle();
   }
@@ -1968,6 +1964,38 @@ ${$t('reader.ttsFailed.hint')}`
       // sentence only downgrades the gloss, so it is not worth surfacing.
       return '';
     }
+  }
+
+  /**
+   * "Start here": pick where playback begins without leaving a highlight
+   * behind — the selection menu's own answer to the fact that highlighting a
+   * passage and starting from it were the same gesture.
+   *
+   * The typewriter comes first because it is the half that is visibly
+   * running: moving its reveal frontier IS the answer there, and starting the
+   * voice instead would switch the typewriter off (they are exclusive).
+   */
+  function handleHlStartHere() {
+    hlMenuVisible = false;
+
+    if (autoScroller?.wasAutoScrollerEnabled$.getValue()) {
+      const el = hlPendingRange?.startContainer?.parentElement;
+      if (el) {
+        autoScroller.revealFrom?.(el);
+        return;
+      }
+    }
+
+    if (!autoReader) return;
+    // A running voice has to be stopped and restarted: the position is only
+    // read when the next utterance is queued, so a bare seek would finish the
+    // sentence in progress first.
+    if (autoReader.wasReaderEnabled$.getValue()) autoReader.off();
+    autoReader.prepare();
+    // seekToSelection() takes the live selection, or — once clicking this item
+    // has dropped it — the position the tracker remembered for it.
+    autoReader.seekToSelection();
+    autoReader.on();
   }
 
   function handleHlEditMemoRequest() {
@@ -2905,6 +2933,7 @@ ${$t('reader.ttsFailed.hint')}`
   on:memo={handleHlMemoRequest}
   on:editMemo={handleHlEditMemoRequest}
   on:lookup={handleHlLookup}
+  on:startHere={handleHlStartHere}
   on:delete={handleHlDelete}
   on:close={() => { hlMenuVisible = false; hlEditTarget = undefined; }}
 />
