@@ -9,6 +9,15 @@
  * dev server port (vite.config.js `server.port`, default 5281) must be free:
  * tauri dev runs `vite dev` with strictPort and aborts otherwise — which is
  * the usual reason 9223 never appears.
+ *
+ * Two very different reasons a port won't bind, and this script used to report
+ * both as "is another instance running?":
+ *   EADDRINUSE — something really is listening; it will free up.
+ *   EACCES     — on Windows the port sits in a reserved exclusion range
+ *                (Hyper-V / WinNAT / Docker reserve blocks of a hundred at a
+ *                time, and 9223 lands in one on plenty of machines). Nothing
+ *                is listening and nothing ever will free it, so waiting is
+ *                pointless — the fix is a different TAURI_CDP_PORT.
  */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -17,29 +26,40 @@ import { readFileSync } from 'node:fs';
 const PORT = Number(process.env.TAURI_CDP_PORT || 9223);
 const ARG = `--remote-debugging-port=${PORT}`;
 
-function portFree(port) {
+/** null when the port binds, otherwise the errno code — see the header for
+ *  why EADDRINUSE and EACCES need different advice. */
+function probePort(port) {
   return new Promise((resolve) => {
     const srv = createServer();
-    srv.once('error', () => resolve(false));
-    srv.once('listening', () => srv.close(() => resolve(true)));
+    srv.once('error', (err) => resolve(err.code || 'EUNKNOWN'));
+    srv.once('listening', () => srv.close(() => resolve(null)));
     srv.listen(port, '127.0.0.1');
   });
 }
 
+const portFree = async (port) => (await probePort(port)) === null;
+
+/** First of `candidates` that actually binds — so the error can name a port
+ *  the user can paste, instead of telling them to go find one. */
+async function suggestPort(candidates = [9423, 9666, 10223, 11223]) {
+  for (const p of candidates) {
+    if ((await probePort(p)) === null) return p;
+  }
+  return null;
+}
+
+/** Wait for the port to become bindable. Resolves null on success, else the
+ *  last errno. EACCES short-circuits: a reserved range never clears. */
 function pollPort(port, timeoutMs) {
   return new Promise((resolve) => {
     const start = Date.now();
-    const timer = setInterval(async () => {
-      if (await portFree(port)) {
-        clearInterval(timer);
-        resolve(true);
-        return;
-      }
-      if (Date.now() - start > timeoutMs) {
-        clearInterval(timer);
-        resolve(false);
-      }
-    }, 500);
+    const tick = async () => {
+      const code = await probePort(port);
+      if (code === null) return resolve(null);
+      if (code === 'EACCES' || Date.now() - start > timeoutMs) return resolve(code);
+      setTimeout(tick, 500);
+    };
+    tick();
   });
 }
 
@@ -57,9 +77,30 @@ console.log(`[tauri:dev:cdp] will open CDP on 127.0.0.1:${PORT}`);
 console.log(`[tauri:dev:cdp] vite dev port = ${vitePort()}`);
 
 // Block until the CDP port is free so WebView2 can bind it on launch.
-const free = await pollPort(PORT, 15000);
-if (!free) {
-  console.error(`[tauri:dev:cdp] port ${PORT} not free in 15s — is another instance running?`);
+const blocked = await pollPort(PORT, 15000);
+if (blocked === 'EACCES') {
+  const alt = await suggestPort();
+  console.error(
+    `[tauri:dev:cdp] cannot bind 127.0.0.1:${PORT} — EACCES. Nothing is listening: on ` +
+      `Windows this means the port is inside a reserved exclusion range. List them with
+` +
+      `    netsh interface ipv4 show excludedportrange protocol=tcp
+` +
+      (alt
+        ? `  and use a port outside every range — ${alt} binds right now:
+` +
+          `    TAURI_CDP_PORT=${alt} npm run tauri:dev:cdp
+` +
+          `  Pass the same TAURI_CDP_PORT to cdp-eval.mjs / cdp-shot.mjs when you connect.`
+        : `  and pick a port outside every range via TAURI_CDP_PORT.`)
+  );
+  process.exit(1);
+}
+if (blocked) {
+  console.error(
+    `[tauri:dev:cdp] port ${PORT} still held after 15s (${blocked}) — another dev instance is ` +
+      `probably running. Find it with: Get-NetTCPConnection -LocalPort ${PORT} -State Listen`
+  );
   process.exit(1);
 }
 
@@ -67,11 +108,17 @@ if (!free) {
 // dev port, `tauri dev`'s beforeDevCommand (vite) exits nonzero and the app
 // never launches, so 9223 never opens. Surface that up front.
 const vPort = vitePort();
-if (!(await portFree(vPort))) {
+const vBlocked = await probePort(vPort);
+if (vBlocked) {
   console.error(
-    `[tauri:dev:cdp] vite dev port ${vPort} is in use — tauri dev will fail to start. ` +
-      `Kill the process holding ${vPort}, or temporarily change server.port in ` +
-      `vite.config.js + devUrl in src-tauri/tauri.conf.json, then retry.`
+    `[tauri:dev:cdp] cannot bind vite dev port ${vPort} (${vBlocked}) — tauri dev will fail ` +
+      `to start. ` +
+      (vBlocked === 'EACCES'
+        ? `Nothing is listening: it is inside a reserved exclusion range ` +
+          `(netsh interface ipv4 show excludedportrange protocol=tcp). Move server.port in ` +
+          `vite.config.js + devUrl in src-tauri/tauri.conf.json off that range.`
+        : `Kill the process holding ${vPort}, or temporarily change server.port in ` +
+          `vite.config.js + devUrl in src-tauri/tauri.conf.json, then retry.`)
   );
   process.exit(1);
 }
