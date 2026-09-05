@@ -293,6 +293,13 @@ export const ttsPositions$ = writableObjectLocalStorageSubject<Record<string, Tt
 );
 
 export const readerRate$ = writableNumberLocalStorageSubject()('readerRate', 1);
+
+/** A TTS session is open — playing, or paused with a position to resume from.
+ *  The TTS rate pill and the typewriter's speed pill overlay one slot under
+ *  the play button, so they take turns on this rather than on "is speaking
+ *  right now": a paused reader keeps the slot, which is the only way to
+ *  change speed before resuming. Session-only, deliberately not persisted. */
+export const ttsArmed$ = writableSubject<boolean>(false);
 export const readerVoiceUri$ = writableStringLocalStorageSubject()('readerVoiceUri', '');
 
 /** Remembered voice per engine + book language, keyed `${engine}:${zh|ja|en}`.
@@ -330,7 +337,9 @@ export const fontFamilyGroupTwo$ = writableStringLocalStorageSubject()(
   }
 }
 export const fontWeight$ = writableNumberOrNullLocalStorageSubject()('fontWeight', null);
-export const fontSize$ = writableNumberLocalStorageSubject()('fontSize', 20);
+/** Also what Ctrl+0 resets to — see functions/reader-zoom.ts. */
+export const FONT_SIZE_DEFAULT = 20;
+export const fontSize$ = writableNumberLocalStorageSubject()('fontSize', FONT_SIZE_DEFAULT);
 export const lineHeight$ = writableNumberLocalStorageSubject()('lineHeight', 1.65);
 export const textIndentation$ = writableNumberLocalStorageSubject()('textIndentation', 0);
 export const textMarginValue$ = writableNumberLocalStorageSubject()('textMarginValue', 0);

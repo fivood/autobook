@@ -34,6 +34,10 @@ export interface CustomPreset {
   voices?: { value: string; label: string }[];
   /** Dot-path to the voice field inside the body JSON, e.g. "voice.name". */
   voicePath?: string;
+  /** Dot-path to the free-text tone prompt inside the body JSON, for the few
+   *  providers that take one (an `instructions` field, a `prompt` field, a chat
+   *  message). Set it and the settings UI shows the reading-style dropdown. */
+  stylePath?: string;
   /** How the voice value is embedded. JSON = replace field; xml = replace SSML name attribute; url = replace endpoint URL segment. */
   voiceFormat?: 'json' | 'xml' | 'url';
   /** Regex matching the part of the endpoint URL to replace when voiceFormat='url'. */
@@ -81,6 +85,7 @@ export const CUSTOM_PRESETS: Record<string, CustomPreset> = {
       { value: '茉莉', label: '茉莉（默认）' }
     ],
     voicePath: 'audio.voice',
+    stylePath: 'messages.0.content',
     helpUrl: 'https://api.xiaomimimo.com',
     helpHint: '小米 MiMo TTS 限时免费阶段（中文听书白嫖首选）；不绑卡，注册即用'
   },
@@ -295,6 +300,7 @@ export const CUSTOM_PRESETS: Record<string, CustomPreset> = {
       { value: 'Puck', label: 'Puck（男）' }
     ],
     voicePath: 'voice.name',
+    stylePath: 'input.prompt',
     helpUrl: 'https://aistudio.google.com/apikey',
     helpHint: '每月前 100 万字符免费；模型还在 Preview 阶段，可能限流'
   },
@@ -337,6 +343,7 @@ export const CUSTOM_PRESETS: Record<string, CustomPreset> = {
       { value: 'shimmer', label: 'Shimmer' }
     ],
     voicePath: 'voice',
+    stylePath: 'instructions',
     helpUrl: 'https://platform.openai.com/api-keys',
     helpHint:
       'gpt-4o-mini-tts 比老 tts-1 便宜且好，支持中文；instructions 字段可用自然语言控制语气/情绪。约 $0.015/min，需绑卡。'
@@ -473,3 +480,62 @@ export const CUSTOM_PRESETS: Record<string, CustomPreset> = {
     helpHint: '没在上面的列表里？自己填 endpoint / headers / body / audioPath。{text} 占位符会替换成当前句子。'
   },
 };
+
+/**
+ * Reading-style prompts for the presets that expose `stylePath`. The value IS
+ * the prompt sent to the model, so the body textarea stays the escape hatch —
+ * pick the closest genre, then hand-edit if the book needs something else.
+ * The first entry matches the default baked into those presets' templates.
+ */
+export const TTS_STYLE_PRESETS: { label: string; value: string }[] = [
+  {
+    label: '通用听书（默认）',
+    value: '清晰、稳定、平和的朗读语气，适合长时间听书。'
+  },
+  {
+    label: '小说 · 叙事',
+    value:
+      '像有声书演播者一样朗读：叙述沉稳自然，对白按人物身份切换语气，情绪随情节起伏，但不夸张。'
+  },
+  {
+    label: '悬疑 · 恐怖',
+    value:
+      '压低声线，语速偏慢，句间留出停顿，营造紧张不安的氛围；关键处放轻，不要惊叫式的夸张。'
+  },
+  {
+    label: '言情 · 治愈',
+    value: '温柔亲近，语速偏慢，尾音略微上扬带一点笑意，像在耳边讲一个温暖的故事。'
+  },
+  {
+    label: '武侠 · 玄幻 · 历史',
+    value: '评书式的沉稳有力，咬字清楚，节奏张弛分明：叙事处铺陈从容，动作处收紧加快。'
+  },
+  {
+    label: '科普 · 非虚构',
+    value: '讲解式语气，像认真但轻松地给朋友解释；遇到定义和关键结论时放慢并加重。'
+  },
+  {
+    label: '商业 · 自我提升',
+    value: '清醒、笃定、有推进感，像播客主持人；重点句加重，避免煽情。'
+  },
+  {
+    label: '儿童 · 童话',
+    value: '活泼明亮，语速稍慢，夸张而有角色感，象声词和对白都演出来。'
+  },
+  {
+    label: '诗歌 · 散文',
+    value: '缓慢、克制，重视呼吸与停顿，按句读断句，让词句留有余韵，不要抒情过度。'
+  },
+  {
+    label: '学术 · 教材',
+    value: '中性精准，匀速平稳，不带情绪；专有名词、数字和公式咬字清楚，逗号处短停。'
+  },
+  {
+    label: '剧本 · 多人对白',
+    value: '把对白演出来：不同人物用不同语气和节奏，旁白保持中性，标点处自然换气。'
+  },
+  {
+    label: '快速过书',
+    value: '干脆利落，语速偏快，情绪平淡，只做必要断句，适合快速过一遍内容。'
+  }
+];

@@ -95,6 +95,12 @@ export abstract class BlobAutoReader implements AutoReader {
   /** How many upcoming sentences to synthesize during playback. */
   protected prefetchDepth = 1;
 
+  /** Speaking rate baked into `this.audio` at synthesis time. Only meaningful
+   *  for `synthesisHonorsRate` engines: the sentence already playing can't be
+   *  re-baked without a round-trip and an audible gap, so a later rate change
+   *  rides on playbackRate relative to this. */
+  private bakedRate = 1;
+
   onBoundary?: (charIndex: number) => void;
 
   onEnd?: () => void;
@@ -130,6 +136,11 @@ export abstract class BlobAutoReader implements AutoReader {
       // Already-synthesized audio carries the old rate — drop it so upcoming
       // sentences are re-synthesized at the new one.
       this.clearPrefetch();
+      // ...and stretch the one already playing, or the change stays inaudible
+      // until the sentence ends — which is what "调速没反应" was on the two
+      // Microsoft engines. Ratio against the BAKED rate, not the previous
+      // one: two taps inside one sentence must land on 1.2×, not 1.2/1.1.
+      if (this.audio) this.audio.playbackRate = next / this.bakedRate;
     } else if (this.audio) {
       this.audio.playbackRate = next;
     }
@@ -396,7 +407,8 @@ export abstract class BlobAutoReader implements AutoReader {
     const { audio, url } = prepared;
     // Set at play time rather than prepare time so a rate change made while
     // this element sat in the prefetch cache still takes effect.
-    if (!this.synthesisHonorsRate) audio.playbackRate = this._rate;
+    if (this.synthesisHonorsRate) this.bakedRate = this._rate;
+    else audio.playbackRate = this._rate;
 
     // These engines hand back one buffer per sentence with no word-level
     // timing, so the reading cursor is interpolated from playback position.

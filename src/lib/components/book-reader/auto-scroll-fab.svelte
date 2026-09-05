@@ -3,7 +3,7 @@
   import Fa from 'svelte-fa';
   import { faPlay, faPause, faForward, faRotateRight, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import type { AutoScroller, AutoReader } from '$lib/components/book-reader/types';
-  import { autoScrollStopAtChapter$, multiplier$ } from '$lib/data/store';
+  import { autoScrollStopAtChapter$, multiplier$, ttsArmed$ } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
   import { t } from '$lib/i18n';
@@ -39,6 +39,10 @@
   // covering the typewriter's active line on the right side.
   $: faded = enabled && !recentlyMoved && !hovered;
 
+  /** A paused TTS session still owns the shared pill slot, so yield on the
+   *  armed flag, not just on "currently speaking". */
+  $: ttsBusy = ttsActive || $ttsArmed$;
+
   function nudge() {
     recentlyMoved = true;
     if (idleTimer) clearTimeout(idleTimer);
@@ -59,6 +63,9 @@
   });
 
   function toggle() {
+    // Starting the typewriter claims the shared speed-pill slot back from a
+    // paused reader.
+    if (!enabled) ttsArmed$.next(false);
     autoScroller?.toggle();
   }
 
@@ -129,10 +136,10 @@
 
     <div
       class="menu-surface flex items-center gap-1 rounded-full px-2 py-1 backdrop-blur transition-all duration-150"
-      class:opacity-0={!enabled || ttsActive}
-      class:pointer-events-none={!enabled || ttsActive}
-      class:group-hover:opacity-100={!enabled && !ttsActive}
-      class:group-hover:pointer-events-auto={!enabled && !ttsActive}
+      class:opacity-0={!enabled || ttsBusy}
+      class:pointer-events-none={!enabled || ttsBusy}
+      class:group-hover:opacity-100={!enabled && !ttsBusy}
+      class:group-hover:pointer-events-auto={!enabled && !ttsBusy}
     >
       <button
         type="button"

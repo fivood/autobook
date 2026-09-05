@@ -2,31 +2,14 @@
   import { browser } from '$app/environment';
   import Fa from 'svelte-fa';
   import { faMagnifyingGlassPlus, faMagnifyingGlassMinus, faExpand } from '@fortawesome/free-solid-svg-icons';
-  import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-number-local-storage-subject';
   import { t } from '$lib/i18n';
-
-  // Persisted globally so the user's preferred zoom carries across books.
-  const scale$ = writableNumberLocalStorageSubject()('bookImageScale', 1);
-
-  const STEPS = [0.5, 0.66, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
-
-  function nearestIdx(v: number) {
-    let best = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < STEPS.length; i++) {
-      const d = Math.abs(STEPS[i] - v);
-      if (d < bestD) {
-        bestD = d;
-        best = i;
-      }
-    }
-    return best;
-  }
+  // Store + step table live in reader-zoom.ts: Ctrl+wheel has to drive the same
+  // level as these buttons, and it works on books where this widget isn't
+  // mounted. Persisted globally, so the level carries across books.
+  import { bookImageScale$ as scale$, nextImageScale } from '$lib/functions/reader-zoom';
 
   function step(delta: number) {
-    const i = nearestIdx($scale$);
-    const next = Math.max(0, Math.min(STEPS.length - 1, i + delta));
-    $scale$ = STEPS[next];
+    $scale$ = nextImageScale($scale$, delta);
   }
 
   function reset() {

@@ -130,6 +130,19 @@
               </td>
             </tr>
           {/if}
+          <!-- Zoom isn't in the remappable keybind map (it's modifier-based, and
+               the reader's own handlers all bail on Ctrl), so it gets fixed rows
+               here — otherwise nothing in the UI would ever mention it. -->
+          <tr>
+            <td class="action">{$t('shortcuts.zoom.action')}</td>
+            <td class="keys">
+              <kbd>{$t('shortcuts.zoom.wheel')}</kbd><kbd>Ctrl +</kbd><kbd>Ctrl -</kbd>
+            </td>
+          </tr>
+          <tr>
+            <td class="action">{$t('shortcuts.zoom.reset')}</td>
+            <td class="keys"><kbd>Ctrl 0</kbd></td>
+          </tr>
           <tr>
             <td class="action">{$t('shortcuts.panel.action')}</td>
             <td class="keys"><kbd>?</kbd></td>

@@ -282,6 +282,7 @@
   } from '$lib/functions/book-data-loader/load-progress';
   import { Subject } from 'rxjs';
   import { formatPageTitle } from '$lib/functions/format-page-title';
+  import { attachReaderZoom } from '$lib/functions/reader-zoom';
   import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
   import {
     AutoReplicationType,
@@ -855,6 +856,14 @@
 
   $: isPaginated = $viewMode$ === ViewMode.Paginated;
 
+  /** Image books (PDF / CBZ page images) zoom by scaling the page image, text
+   *  books by font size. One flag drives both the zoom widget and Ctrl+wheel so
+   *  the two can't disagree about which a book is. */
+  $: imageZoomMode =
+    !!$rawBookData$ &&
+    !isPaginated &&
+    /pdf-page-img|cbz-img/.test($rawBookData$.elementHtml || '');
+
   // --- TTS position memory ---
   let currentSectionIndex = 0;
   let sectionStartCharCount = 0;
@@ -1269,6 +1278,9 @@ ${$t('reader.ttsFailed.hint')}`
   }
 
   onMount(() => {
+    // Read through a getter, not captured: the same reader instance serves a
+    // text book and an image book across navigations.
+    const detachZoom = attachReaderZoom(() => imageZoomMode);
     document.addEventListener('ttu-action', handleAction, false);
     document.addEventListener('contextmenu', handleGlobalContextMenu);
     document.addEventListener('click', handleGlobalClick);
@@ -1278,6 +1290,7 @@ ${$t('reader.ttsFailed.hint')}`
     const hide = () => (memoCardAnchor = undefined);
     window.addEventListener('scroll', hide, true);
     return () => {
+      detachZoom();
       document.removeEventListener('mouseover', handleGlobalMouseOver);
       window.removeEventListener('scroll', hide, true);
     };
@@ -2642,7 +2655,7 @@ ${$t('reader.ttsFailed.hint')}`
     />
   {/if}
 {/if}
-{#if $rawBookData$ && !isPaginated && /pdf-page-img|cbz-img/.test($rawBookData$.elementHtml || '')}
+{#if imageZoomMode}
   <BookImageZoom />
 {/if}
 {#if $rawBookData$ && /data-pdf-page=/.test($rawBookData$.elementHtml || '')}

@@ -49,6 +49,7 @@
     CUSTOM_PRESETS,
     PRESET_CATEGORY_LABEL,
     PRESET_CATEGORY_ORDER,
+    TTS_STYLE_PRESETS,
     type CustomPreset,
     type PresetCategory
   } from '$lib/data/tts-presets';
@@ -288,6 +289,18 @@
     } else {
       ttsCustomBody$.next(setBodyValue($ttsCustomBody$, activePresetDef.voicePath, voice));
     }
+  }
+
+  // Reading style — same swap-a-field-in-the-body trick as the voice picker,
+  // for the presets whose model takes a natural-language tone prompt.
+  $: currentStyle = activePresetDef.stylePath
+    ? String(getBodyValue($ttsCustomBody$, activePresetDef.stylePath) ?? '')
+    : '';
+  $: styleIsCustom = !TTS_STYLE_PRESETS.some((s) => s.value === currentStyle);
+
+  function onStyleChange(style: string) {
+    if (!activePresetDef.stylePath || !style) return;
+    ttsCustomBody$.next(setBodyValue($ttsCustomBody$, activePresetDef.stylePath, style));
   }
 
   // Seed the manual slot from legacy single-store values on first load — so
@@ -991,6 +1004,25 @@
               <option value={voice.value}>{voice.label}</option>
             {/each}
           </select>
+        {/if}
+
+        {#if activePresetDef.stylePath}
+          <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.style')}</span>
+          <div class="flex flex-col gap-1">
+            <select
+              class="settings-input px-2 py-1 text-sm"
+              value={styleIsCustom ? '' : currentStyle}
+              on:change={(e) => onStyleChange(e.currentTarget.value)}
+            >
+              {#if styleIsCustom}
+                <option value="">-- {$t('settings.ttsCustom.styleCustom')} --</option>
+              {/if}
+              {#each TTS_STYLE_PRESETS as style (style.value)}
+                <option value={style.value}>{style.label}</option>
+              {/each}
+            </select>
+            <p class="text-xs opacity-65 leading-snug">{$t('settings.ttsCustom.styleHint')}</p>
+          </div>
         {/if}
 
         <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.method')}</span>

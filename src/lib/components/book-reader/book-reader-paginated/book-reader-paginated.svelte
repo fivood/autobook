@@ -505,7 +505,10 @@
 
   iffBrowser(() => fromEvent<WheelEvent>(document.body, 'wheel', { passive: true }))
     .pipe(
-      filter(() => !$disableWheelNavigation$ && !$skipKeyDownListener$),
+      // Ctrl+wheel is zoom (functions/reader-zoom.ts), not a page flip. The
+      // continuous reader's wheel path already ignored modified wheels; this
+      // one didn't, so a zoom tick used to turn the page on its way past.
+      filter((ev) => !ev.ctrlKey && !$disableWheelNavigation$ && !$skipKeyDownListener$),
       throttleTime(50),
       takeUntil(destroy$)
     )

@@ -3,7 +3,7 @@
   import { faVolumeHigh, faVolumeXmark, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import type { AutoReader } from '$lib/components/book-reader/types';
   import { applyStartPosition } from '$lib/components/book-reader/auto-reader-shared';
-  import { readerRate$, ttsStartStrategy$, ttsVoiceByLang$ } from '$lib/data/store';
+  import { readerRate$, ttsArmed$, ttsStartStrategy$, ttsVoiceByLang$ } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
   import { t } from '$lib/i18n';
@@ -21,6 +21,13 @@
     sub?.unsubscribe();
     sub = autoReader?.wasReaderEnabled$.subscribe((v) => (enabled = v));
   }
+
+  // `enabled` drops to false on pause, and the rate pill used to be tied
+  // straight to it — so pausing hid the only speed control, and there was no
+  // way to set a new rate for the next play. Arm on any start (FAB, V
+  // shortcut, tray) and hold the slot until the typewriter claims it back.
+  $: if (enabled) ttsArmed$.next(true);
+  $: showRatePill = enabled || $ttsArmed$;
 
   // Voice resolution lives in the reader itself now (autoSelectVoice reads the
   // per-language slot, falling back to the engine's legacy single store), so
@@ -48,6 +55,7 @@
 
   onDestroy(() => {
     sub?.unsubscribe();
+    ttsArmed$.next(false);
   });
 
   function toggle() {
@@ -116,9 +124,10 @@
 
     <div
       class="menu-surface flex items-center gap-1 rounded-full px-2 py-1 backdrop-blur transition-all duration-150"
-      class:opacity-0={!enabled}
-      class:pointer-events-none={!enabled}
-      class:pointer-events-auto={enabled}
+      class:opacity-0={!showRatePill}
+      class:opacity-70={showRatePill && !enabled}
+      class:pointer-events-none={!showRatePill}
+      class:pointer-events-auto={showRatePill}
     >
       <button
         type="button"
