@@ -628,7 +628,28 @@ export const startDayHoursForTracker$ = writableNumberLocalStorageSubject()(
   0
 );
 
-export const statisticsEnabled$ = writableBooleanLocalStorageSubject()('statisticsEnabled', false);
+/**
+ * Reading statistics are on by default as of 1.47.
+ *
+ * They used to default to off, and nothing in the reader ever said so: press
+ * play, listen for an hour, and the tracker component was never even loaded —
+ * the auto-start-on-playback logic added in 1.43.0 lives inside it, so the two
+ * flagship ways of consuming a book recorded nothing at all.
+ *
+ * The flip runs once over existing installs too, not just fresh ones. A stored
+ * `0` carries almost no intent: the old default was off, and merely opening the
+ * statistics settings tab wrote the then-current value back through the toggle
+ * binding. Guarded by its own key, so turning it off after this sticks.
+ */
+const STATS_DEFAULT_ON_KEY = 'statisticsDefaultOnApplied';
+if (browser && !localStorage.getItem(STATS_DEFAULT_ON_KEY)) {
+  localStorage.setItem(STATS_DEFAULT_ON_KEY, '1');
+  if (localStorage.getItem('statisticsEnabled') !== '1') {
+    localStorage.setItem('statisticsEnabled', '1');
+  }
+}
+
+export const statisticsEnabled$ = writableBooleanLocalStorageSubject()('statisticsEnabled', true);
 
 export const statisticsMergeMode$ = writableStringLocalStorageSubject<MergeMode>()(
   'statisticsMergeMode',
