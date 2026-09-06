@@ -102,7 +102,7 @@
 
 <SettingsHeader leavePageLink={prevPage} bind:activeSettings />
 
-<div class="{pxScreen} h-full pt-16 xl:pt-14">
+<div class="settings-scope {pxScreen} h-full pt-16 xl:pt-14">
   <div class="max-w-5xl">
     <SettingsContent
       {activeSettings}

@@ -157,6 +157,81 @@
 @import 'katex/dist/katex.min.css';
 @import 'highlight.js/styles/github.css';
 
+/* ---------------------------------------------------------------------------
+   Settings type scale + button language.
+
+   The settings page grew in two eras. The upstream panels never set a size and
+   inherited the 16px root; everything added later reached for text-xs / text-sm
+   and settings-data-paths even carried its own 0.68/0.7/0.72/0.75rem set — so
+   12px labels ended up sitting next to 16px ones, with eight different button
+   spellings between them.
+
+   Rather than tag 150+ call sites, the scale is declared once here and the two
+   Tailwind steps are re-pointed inside the scope: writing `text-xs` in a
+   settings panel should mean "the settings hint size", not literally 12px.
+   Sizes match the menu language above — .menu-choice is 0.875rem, .menu-label
+   0.8125rem — so settings and popovers finally read as one system.
+
+   Scope class goes on the settings page wrapper and the reader's settings
+   drawer, the only two hosts of these panels.
+   --------------------------------------------------------------------------- */
+.settings-scope {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.settings-scope .text-xs {
+  font-size: 0.8125rem;
+}
+.settings-scope .text-sm {
+  font-size: 0.875rem;
+}
+/* Inputs inherit the scale instead of the root size. */
+.settings-scope .settings-input {
+  font-size: inherit;
+}
+
+/* The one settings button. Same pill vocabulary as .settings-input but
+   transparent until hovered, so a row of actions doesn't read as a row of
+   filled fields. Explicit font-size rather than inherit: it is also used from
+   the statistics panel, which sits outside .settings-scope. */
+.settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  flex: 0 0 auto;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  font-size: 0.875rem;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+.settings-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+.settings-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+/* Icon-only: square off the horizontal padding so it reads as a glyph, not a
+   very short label. */
+.settings-btn-icon {
+  padding: 0.3rem 0.45rem;
+}
+.settings-btn-danger {
+  color: var(--danger-color, #c64a4a);
+  border-color: color-mix(in srgb, var(--danger-color, #c64a4a) 55%, transparent);
+}
+.settings-btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger-color, #c64a4a) 12%, transparent);
+  border-color: var(--danger-color, #c64a4a);
+}
+
 /* Settings inputs: soft filled pill instead of the underline that competes
    with our section divider lines. Background-tinted currentColor so the field
    reads as a UI element, not a horizontal rule. */

@@ -136,7 +136,7 @@
         <span>{model.size}</span>
         {#if model.uninstall}
           <button
-            class="ml-auto rounded border border-current/30 px-2 py-0.5 hover-soft disabled:opacity-50"
+            class="settings-btn settings-btn-icon ml-auto"
             disabled={!st?.ready}
             on:click={() => uninstall(model.id)}
             title={$t('models.uninstallTitle')}

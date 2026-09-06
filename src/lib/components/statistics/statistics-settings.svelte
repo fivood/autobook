@@ -84,7 +84,7 @@
   }
 </script>
 
-<div class="flex items-center p-4">
+<div class="settings-scope flex items-center p-4">
   <button class="flex items-end md:items-center" on:click={() => dispatch('close')}>
     <Fa icon={faXmark} />
   </button>
@@ -110,7 +110,7 @@
     <button class="hover-danger" on:click={() => deleteStatisticsData()}>删除全部</button>
   </div>
 </div>
-<div class="flex-1 p-4 overflow-auto">
+<div class="settings-scope flex-1 p-4 overflow-auto">
   <div class="flex flex-col mb-6">
     <label for="datesTemplate">模板</label>
     <select id="datesTemplate" class="settings-input" bind:value={$lastStatisticsRangeTemplate$}>

@@ -91,7 +91,7 @@
     <div class="flex items-center gap-3">
       <span class="text-xs opacity-70">{$t('settings.ocr.pdfMemory')}</span>
       <button
-        class="rounded border border-current/40 px-3 py-1.5 text-xs hover-soft disabled:opacity-50"
+        class="settings-btn"
         on:click={clearOcrMemory}
         disabled={!$pdfOcrSkippedBookIds$}
       >

@@ -45,7 +45,7 @@
     <div class="flex">
       <button
         title={option.id}
-        class="toggle-btn m-1 rounded-md border-2 p-2 text-lg transition-colors"
+        class="toggle-btn m-1 rounded-md border-2 px-3 py-1.5 transition-colors"
         class:selected={option.id === selectedOptionId}
         class:no-dim={!dimUnselected}
         class:invert-mode={invertColors}
@@ -88,6 +88,8 @@
      - unselected = transparent box with dim text + dim border, no white fill
        so dark theme doesn't make the "off" option look brighter than "on". */
   .toggle-btn {
+    font-size: 0.875rem;
+    line-height: 1.3;
     background: transparent;
     color: currentColor;
     border-color: color-mix(in srgb, currentColor 32%, transparent);

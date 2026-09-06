@@ -639,7 +639,7 @@
         <option value="custom">{$t('settings.value.ttsEngine.custom')}</option>
       </select>
       <button
-        class="settings-input px-3 py-1 text-sm disabled:opacity-40"
+        class="settings-btn"
         disabled={previewState === 'loading' || previewState === 'playing'}
         on:click={previewVoice}
       >
@@ -694,7 +694,7 @@
   <div class="flex items-center gap-2 flex-wrap">
     <button
       type="button"
-      class="rounded border-2 border-current/40 px-3 py-1 text-sm min-w-[8rem] text-center font-mono"
+      class="settings-btn min-w-[8rem] font-mono"
       class:border-danger={recordingShortcut}
       on:click={startRecordShortcut}
       on:keydown={onShortcutKeydown}
@@ -703,14 +703,14 @@
       <Ripple />
     </button>
     <button
-      class="settings-input px-3 py-1 text-sm"
+      class="settings-btn"
       on:click={() => {
         recordingShortcut = false;
         ttsShortcut$.next('ctrl+alt+p');
       }}
     >{$t('common.reset')}<Ripple /></button>
     <button
-      class="settings-input px-3 py-1 text-sm"
+      class="settings-btn"
       on:click={() => {
         recordingShortcut = false;
         ttsShortcut$.next('');
@@ -742,7 +742,7 @@
             <p>{@html $t('settings.tts.kokoro.consent')}</p>
             <p class="mt-1 opacity-70">{@html $t('settings.tts.kokoro.privacy')}</p>
             <button
-              class="settings-input mt-2 inline-flex items-center gap-1 px-3 py-1 text-sm"
+              class="settings-btn mt-2"
               on:click={() => {
                 $kokoroAccepted$ = true;
                 kokoroEnsureLoad();
@@ -761,16 +761,16 @@
           {#if kokoroIsStalled}
             <div class="text-xs mt-1" style="color:var(--danger-color)">
               ⚠ {$t('settings.tts.kokoro.stall', { seconds: kokoroStallSeconds })}
-              <button class="settings-input ml-2 px-2 py-0.5 text-xs" on:click={kokoroRetryLoad}>{$t('common.retry')}</button>
+              <button class="settings-btn settings-btn-icon ml-2" on:click={kokoroRetryLoad}>{$t('common.retry')}</button>
             </div>
           {/if}
         {:else if $kokoroLoadStatus$.phase === 'errored'}
           <p class="text-danger text-xs">{$t('settings.tts.kokoro.downloadFailed')}：{$kokoroLoadStatus$.message}</p>
-          <button class="settings-input px-3 py-1 text-sm" on:click={kokoroRetryLoad}>{$t('common.retry')}</button>
+          <button class="settings-btn" on:click={kokoroRetryLoad}>{$t('common.retry')}</button>
         {:else if $kokoroLoadStatus$.phase === 'ready'}
           <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs">
             <span style="color:rgb(34,197,94)">✓ {$t('settings.tts.kokoro.ready', { modelId: $kokoroLoadStatus$.modelId ?? $kokoroModel$ })}</span>
-            <button class="settings-input px-2 py-0.5 text-xs" on:click={kokoroDeleteCache}>{$t('settings.tts.kokoro.delete')}</button>
+            <button class="settings-btn settings-btn-icon" on:click={kokoroDeleteCache}>{$t('settings.tts.kokoro.delete')}</button>
           </div>
         {/if}
 
@@ -971,18 +971,18 @@
               {/each}
             </select>
             <button
-              class="settings-input px-2 py-1 text-xs"
+              class="settings-btn"
               title={$t('settings.ttsCustom.restoreTemplateTip')}
               on:click={resetActivePresetToDefaults}
             >{$t('settings.ttsCustom.restoreTemplate')}<Ripple /></button>
             <button
-              class="settings-input px-2 py-1 text-xs"
+              class="settings-btn"
               on:click={() => (revealCustomSecrets = !revealCustomSecrets)}
             >{revealCustomSecrets ? $t('settings.ttsCustom.hideContent') : $t('settings.ttsCustom.showContent')}<Ripple /></button>
             {#if activePreset.helpUrl}
               <button
                 type="button"
-                class="settings-input px-2 py-1 text-xs"
+                class="settings-btn"
                 on:click={() => openExternal(activePreset.helpUrl || '')}
               >{$t('settings.ttsCustom.getApiKey')}</button>
             {/if}

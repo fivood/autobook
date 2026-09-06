@@ -207,7 +207,7 @@
         {/each}
       </select>
       <button
-        class="m-1 rounded-md border-2 p-2 text-lg transition-colors"
+        class="settings-btn m-1"
         style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
         on:click={handleCopyTheme}
       >
@@ -288,7 +288,7 @@
         bind:this={themeNameElm}
       />
       <button
-        class="flex justify-center items-center rounded-md border-2 border-current/40 p-2 text-lg"
+        class="settings-btn"
         style={themeStyle}
       >
         中字
@@ -299,14 +299,14 @@
   </div>
   <div class="mt-2 flex grow justify-between" slot="footer">
     <button
-      class="m-1 rounded-md border-2 border-current/20 p-2 text-lg transition-colors hover-soft"
+      class="settings-btn m-1"
       on:click={() => dispatch('close')}
     >
       取消
       <Ripple />
     </button>
     <button
-      class="m-1 rounded-md border-2 p-2 text-lg transition-colors"
+      class="settings-btn m-1"
       style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
       on:click={handleSave}
     >

@@ -237,17 +237,17 @@
         </div>
         <div class="path-row">
           <code class="path" title={paths.fsRoot}>{paths.fsRoot}</code>
-          <button class="btn icon" on:click={() => paths && copyPath(paths.fsRoot)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
-          <button class="btn icon" on:click={() => paths && openInExplorer(paths.fsRoot)} disabled={busy} title={$t('dataPaths.openInExplorer')}>
+          <button class="settings-btn settings-btn-icon" on:click={() => paths && copyPath(paths.fsRoot)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
+          <button class="settings-btn settings-btn-icon" on:click={() => paths && openInExplorer(paths.fsRoot)} disabled={busy} title={$t('dataPaths.openInExplorer')}>
             <Fa icon={faFolderOpen} size="xs" />
           </button>
         </div>
         <div class="fs-actions">
-          <button class="btn" on:click={pickFsRoot} disabled={busy}>
+          <button class="settings-btn" on:click={pickFsRoot} disabled={busy}>
             <Fa icon={faPen} size="xs" /> {$t('dataPaths.section.fs.change')}
           </button>
           {#if !paths.isDefaultFsRoot}
-            <button class="btn" on:click={restoreDefault} disabled={busy}>
+            <button class="settings-btn" on:click={restoreDefault} disabled={busy}>
               <Fa icon={faArrowRotateLeft} size="xs" /> {$t('dataPaths.section.fs.restoreDefault')}
             </button>
           {/if}
@@ -261,7 +261,7 @@
           <div class="path-row">
             <code class="path" title={$vaultSyncRoot$}>{$vaultSyncRoot$}</code>
             <button
-              class="btn icon"
+              class="settings-btn settings-btn-icon"
               on:click={() => openInExplorer($vaultSyncRoot$)}
               disabled={busy}
               title={$t('dataPaths.openInExplorer')}
@@ -271,12 +271,12 @@
           </div>
         {/if}
         <div class="fs-actions">
-          <button class="btn" on:click={pickVaultRoot} disabled={busy}>
+          <button class="settings-btn" on:click={pickVaultRoot} disabled={busy}>
             <Fa icon={faPen} size="xs" />
             {$vaultSyncRoot$ ? $t('vaultSync.change') : $t('vaultSync.choose')}
           </button>
           {#if $vaultSyncRoot$}
-            <button class="btn" on:click={() => vaultSyncRoot$.next('')} disabled={busy}>
+            <button class="settings-btn" on:click={() => vaultSyncRoot$.next('')} disabled={busy}>
               <Fa icon={faArrowRotateLeft} size="xs" /> {$t('vaultSync.disable')}
             </button>
           {/if}
@@ -298,8 +298,8 @@
         {#each paths.indexeddbDirs as p (p)}
           <div class="path-row">
             <code class="path" title={p}>{p}</code>
-            <button class="btn icon" on:click={() => copyPath(p)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
-            <button class="btn icon" on:click={() => openInExplorer(p)} disabled={busy} title={$t('dataPaths.openInExplorer')}><Fa icon={faFolderOpen} size="xs" /></button>
+            <button class="settings-btn settings-btn-icon" on:click={() => copyPath(p)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
+            <button class="settings-btn settings-btn-icon" on:click={() => openInExplorer(p)} disabled={busy} title={$t('dataPaths.openInExplorer')}><Fa icon={faFolderOpen} size="xs" /></button>
           </div>
         {/each}
         <p class="hint">{$t('dataPaths.section.library.hint')}</p>
@@ -311,8 +311,8 @@
         {#each paths.localStorageDirs as p (p)}
           <div class="path-row">
             <code class="path" title={p}>{p}</code>
-            <button class="btn icon" on:click={() => copyPath(p)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
-            <button class="btn icon" on:click={() => openInExplorer(p)} disabled={busy} title={$t('dataPaths.openInExplorer')}><Fa icon={faFolderOpen} size="xs" /></button>
+            <button class="settings-btn settings-btn-icon" on:click={() => copyPath(p)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
+            <button class="settings-btn settings-btn-icon" on:click={() => openInExplorer(p)} disabled={busy} title={$t('dataPaths.openInExplorer')}><Fa icon={faFolderOpen} size="xs" /></button>
           </div>
         {/each}
         <p class="hint">{$t('dataPaths.section.ui.hint')}</p>
@@ -320,10 +320,10 @@
     </div>
 
     <div class="actions">
-      <button class="btn" on:click={load} disabled={busy} title={$t('dataPaths.refreshTooltip')}>
+      <button class="settings-btn" on:click={load} disabled={busy} title={$t('dataPaths.refreshTooltip')}>
         <Fa icon={faRotateRight} size="xs" /> {$t('dataPaths.refresh')}
       </button>
-      <button class="btn danger" on:click={clearAll} disabled={busy}>
+      <button class="settings-btn settings-btn-danger" on:click={clearAll} disabled={busy}>
         <Fa icon={faTrash} size="xs" /> {$t('dataPaths.clearAll')}
       </button>
       {#if message}
@@ -361,7 +361,7 @@
     margin-bottom: 0.15rem;
   }
   .meta {
-    font-size: 0.7rem;
+    font-size: 0.8125rem;
     opacity: 0.65;
     margin-bottom: 0.45rem;
   }
@@ -381,34 +381,10 @@
     direction: rtl;
     text-align: left;
     font-family: ui-monospace, monospace;
-    font-size: 0.7rem;
+    font-size: 0.8125rem;
     padding: 0.25rem 0.4rem;
     background: rgba(127, 127, 127, 0.12);
     border-radius: 0.3rem;
-  }
-  .btn {
-    flex: 0 0 auto;
-    padding: 0.3rem 0.6rem;
-    border: 1px solid var(--fg-dim, currentColor);
-    border-radius: 0.3rem;
-    background: transparent;
-    color: inherit;
-    font-size: 0.75rem;
-    cursor: pointer;
-  }
-  .btn:hover:not(:disabled) {
-    background: rgba(127, 127, 127, 0.1);
-  }
-  .btn.icon {
-    padding: 0.25rem 0.45rem;
-    font-size: 0.7rem;
-  }
-  .btn.danger {
-    color: #c64a4a;
-    border-color: #c64a4a;
-  }
-  .btn.danger:hover:not(:disabled) {
-    background: rgba(198, 74, 74, 0.1);
   }
   .fs-actions {
     display: flex;
@@ -424,11 +400,11 @@
     margin-top: 0.85rem;
   }
   .message {
-    font-size: 0.72rem;
+    font-size: 0.8125rem;
     opacity: 0.7;
   }
   .hint {
-    font-size: 0.68rem;
+    font-size: 0.8125rem;
     opacity: 0.6;
     margin: 0.45rem 0 0;
     line-height: 1.5;

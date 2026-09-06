@@ -95,7 +95,7 @@
   <div class="mb-3 flex items-center gap-2">
     <button
       type="button"
-      class="inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-current/30 px-2 py-1 text-xs hover-soft disabled:opacity-50"
+      class="settings-btn whitespace-nowrap"
       disabled={probing}
       on:click={reprobe}
     >

@@ -158,7 +158,7 @@
     </div>
     <div class="flex items-center gap-2">
       <button
-        class="flex justify-center items-center rounded-md border-2 border-current/40 p-2 text-base"
+        class="settings-btn"
         style={themeStyle}
         title="预览"
       >
@@ -237,7 +237,7 @@
   <div class="mt-4 flex flex-wrap justify-end gap-2">
     {#if isCustom}
       <button
-        class="rounded-md border-2 px-3 py-1 text-sm"
+        class="settings-btn"
         style="border-color:var(--danger-color);color:var(--danger-color);"
         on:click={handleDelete}
       >
@@ -246,7 +246,7 @@
       </button>
     {:else}
       <button
-        class="rounded-md border-2 border-current/40 px-3 py-1 text-sm"
+        class="settings-btn"
         title="还原为内置主题的初始颜色"
         on:click={handleReset}
       >
@@ -255,14 +255,14 @@
       </button>
     {/if}
     <button
-      class="rounded-md border-2 border-current/40 px-3 py-1 text-sm"
+      class="settings-btn"
       on:click={() => dispatch('close')}
     >
       关闭
       <Ripple />
     </button>
     <button
-      class="rounded-md border-2 px-3 py-1 text-sm"
+      class="settings-btn"
       style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
       on:click={handleSave}
     >

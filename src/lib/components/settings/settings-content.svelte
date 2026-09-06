@@ -492,7 +492,7 @@
             <div class="flex">
               <button
                 title="新建主题"
-                class="m-1 rounded-md border-2 border-current/40 p-2 text-lg"
+                class="settings-btn m-1"
                 on:click={handleNewTheme}
               >
                 <Fa icon={faPlus} class="mx-2" />
@@ -500,7 +500,7 @@
               </button>
               <button
                 title="导出自定义主题"
-                class="m-1 rounded-md border-2 border-current/40 p-2 text-lg"
+                class="settings-btn m-1"
                 disabled={!Object.keys($customThemes$).length}
                 class:opacity-40={!Object.keys($customThemes$).length}
                 on:click={exportCustomThemes}
@@ -510,7 +510,7 @@
               </button>
               <button
                 title="导入自定义主题"
-                class="m-1 rounded-md border-2 border-current/40 p-2 text-lg"
+                class="settings-btn m-1"
                 on:click={() => themeImportInput?.click()}
               >
                 <Fa icon={faFileArrowDown} class="mx-2" />
@@ -640,7 +640,7 @@
       tooltip={$t('settings.tip.resetUi')}
     >
       <button
-        class="m-1 rounded-md border-2 border-current/40 p-2 text-danger"
+        class="settings-btn settings-btn-danger m-1"
         on:click={resetUiSettings}
       >
         {$t('settings.button.resetAndReload')}
@@ -699,7 +699,7 @@
     <SettingsSectionHeader title={$t('settings.section.diagnostics')} hint={$t('settings.section.diagnosticsHint')} />
     <SettingsItemGroup title={$t('settings.item.diagnosticLog')} tooltip={$t('settings.tip.diagnosticLog')}>
       <button
-        class="m-1 rounded-md border-2 border-current/40 p-2"
+        class="settings-btn m-1"
         on:click={() =>
           dialogManager.dialogs$.next([
             {
