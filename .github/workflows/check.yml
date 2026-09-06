@@ -1,0 +1,99 @@
+name: check
+
+# The release workflow only fires on a `v*` tag, so until now nothing verified
+# a commit until release day. This runs the same gates CLAUDE.md requires
+# before a commit, on every push and PR.
+on:
+  push:
+    branches:
+      - desktop
+  pull_request:
+  workflow_dispatch:
+
+# Only the newest run per branch matters; cancel superseded ones rather than
+# queueing Windows runners behind stale commits.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # postinstall (copy-vendor-assets) puts libarchive / ort / pdfjs under
+      # static/vendor; the build fails without it.
+      - run: npm ci --no-audit --no-fund
+
+      # tsconfig.json extends .svelte-kit/tsconfig.json, which is generated —
+      # and this repo's postinstall only copies vendor assets, so a fresh clone
+      # has no .svelte-kit and svelte-check dies on the missing file. Locally
+      # it is invisible because any prior dev/build run already created it.
+      - run: npx svelte-kit sync
+
+      - run: npm run check
+
+      - run: npm run lint
+
+      - run: npm test
+
+      - run: npm run build
+
+  rust:
+    # Must be Windows: src-tauri depends on the `windows` crate for WinRT TTS
+    # and shells out to explorer.exe, so it does not compile anywhere else.
+    # This is the same target the release build uses.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      # tauri.conf.json points frontendDist at ../build, and cargo check reads
+      # the config even though it never bundles — without a build directory it
+      # fails on a missing path rather than on any real problem.
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+
+      - name: cargo check
+        working-directory: ./src-tauri
+        run: cargo check --locked --all-targets
+
+      # The Rust unit tests were being compiled by --all-targets and never
+      # run, so proxy parsing and TTS retry classification had assertions
+      # nobody was checking. The corpus-dependent MOBI scans and the network
+      # /timing tests stay #[ignore]d and are skipped here.
+      - name: cargo test
+        working-directory: ./src-tauri
+        run: cargo test --locked --lib
+
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Type-check the sync worker
+        working-directory: ./stats-sync
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit -p .

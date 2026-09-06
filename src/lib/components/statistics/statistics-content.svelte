@@ -1,12 +1,18 @@
 <script lang="ts">
   import { onKeyUpStatisticsTab } from '../../../routes/b/on-keydown-reader';
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
-  import { getDefaultStatistic } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
-  import { HeatmapType } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
-  import StatisticsHeatmap from '$lib/components/statistics/statistics-heatmap/statistics-heatmap.svelte';
-  import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary.svelte';
+  import StatisticsAuthors from '$lib/components/statistics/statistics-authors/statistics-authors.svelte';
+  import StatisticsBooks from '$lib/components/statistics/statistics-books/statistics-books.svelte';
+  import StatisticsMain from '$lib/components/statistics/statistics-main/statistics-main.svelte';
+  import StatisticsPeriodChip from '$lib/components/statistics/statistics-period-chip/statistics-period-chip.svelte';
+  import StatisticsSessions from '$lib/components/statistics/statistics-sessions/statistics-sessions.svelte';
+  import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary-new.svelte';
+  import StatisticsManualEntryDialog from '$lib/components/statistics/statistics-manual-entry-dialog.svelte';
+  import StatisticsHighlights from '$lib/components/statistics/statistics-highlights/statistics-highlights.svelte';
+  import StatisticsYear from '$lib/components/statistics/statistics-year/statistics-year.svelte';
+  import { computeYearSummary } from '$lib/components/statistics/statistics-year/year-summary';
   import type {
     StatisticsDeleteRequest,
     StatisticsEditRequest
@@ -14,25 +20,23 @@
   import StatisticsTitleFilter from '$lib/components/statistics/statistics-title-filter.svelte';
   import {
     type BookStatistic,
+    type ManualStatisticEntry,
     StatisticsTab,
-    StatisticsReadingDataAggregationMode,
     statisticsRangeTemplates,
-    copyStatisticsData$,
     statisticsTitleFilterEnabled$,
     statisticsTitleFilterIsOpen$,
     type StatisticsTitleFilterItem,
     preFilteredTitlesForStatistics$,
     statisticsDataAggregrationModes,
     exportStatisticsData$,
+    exportYearReport$,
+    openManualStatisticsEntry$,
     statisticsActionInProgress$,
     deleteStatisticsData$,
     setStatisticsDatesToAllTime$,
     StatisticsRangeTemplate
   } from '$lib/components/statistics/statistics-types';
-  import type {
-    BooksDbReadingGoal,
-    BooksDbStatistic
-  } from '$lib/data/database/books-db/versions/books-db';
+  import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { logger } from '$lib/data/logger';
   import { getDateRangeLabel } from '$lib/data/reading-goal';
@@ -42,8 +46,6 @@
     confirmStatisticsDeletion$,
     database,
     lastPrimaryReadingDataAggregationMode$,
-    lastReadingDataHeatmapAggregationMode$,
-    lastReadingGoalsHeatmapAggregationMode$,
     lastStatisticsEndDate$,
     lastStatisticsRangeTemplate$,
     lastStatisticsStartDate$,
@@ -53,12 +55,7 @@
     statisticsTabKeybindMap$
   } from '$lib/data/store';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
-  import {
-    getDateString,
-    getNumberFromObject,
-    getStartHoursDate,
-    secondsToMinutes
-  } from '$lib/functions/statistic-util';
+  import { secondsToMinutes } from '$lib/functions/statistic-util';
   import { clickOutside } from '$lib/functions/use-click-outside';
   import { pluralize } from '$lib/functions/utils';
   import pLimit from 'p-limit';
@@ -67,52 +64,6 @@
   import Fa from 'svelte-fa';
   import { quintInOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
-
-  const copyStatisticsDataHandler$ = copyStatisticsData$.pipe(
-    tap((dataKeyToCopy) => {
-      const statistics =
-        $lastPrimaryReadingDataAggregationMode$ === StatisticsReadingDataAggregationMode.TITLE
-          ? aggregratedStatistics
-          : getAggregatedStatistics(StatisticsReadingDataAggregationMode.TITLE);
-
-      let logKey = '';
-
-      switch (dataKeyToCopy) {
-        case 'readingTime':
-          logKey = 'readtime';
-          break;
-
-        default:
-          logKey = 'reading';
-          break;
-      }
-
-      const dataLines = [`Reading Data for ${statisticsDateRangeLabel}\n`];
-
-      for (let index = 0, { length } = statistics; index < length; index += 1) {
-        const statistic = statistics[index];
-
-        let loggedValue = 0;
-
-        if (dataKeyToCopy === 'readingTime') {
-          loggedValue = Math.floor(secondsToMinutes(statistic.readingTime));
-        } else {
-          loggedValue = getNumberFromObject(statistic, dataKeyToCopy);
-        }
-
-        if (loggedValue) {
-          dataLines.push(`.log ${logKey} ${loggedValue} ${statistic.title}`);
-        }
-      }
-
-      if (dataLines.length > 1) {
-        navigator.clipboard
-          .writeText(dataLines.join('\n'))
-          .catch((error) => logger.error(`Error writing to clipboard: ${error.message}`));
-      }
-    }),
-    reduceToEmptyString()
-  );
 
   const exportStatisticsDataHandler$ = exportStatisticsData$.pipe(
     tap(async (exportAllData) => {
@@ -264,15 +215,325 @@
     reduceToEmptyString()
   );
 
+  const exportYearReportHandler$ = exportYearReport$.pipe(
+    tap(async () => {
+      $statisticsActionInProgress$ = true;
+      try {
+        const { aggregateHighlightStats } = await import('$lib/functions/highlight-stats');
+        const { computeYearSummary } = await import(
+          '$lib/components/statistics/statistics-year/year-summary'
+        );
+        const { buildYearReportMarkdown } = await import('$lib/functions/year-report');
+        const { computeAuthorsList } = await import('$lib/components/statistics/books-summary');
+        const { resolvePeriod } = await import('$lib/components/statistics/statistics-period');
+
+        const [highlights, sessions] = await Promise.all([
+          database.getAllHighlights(),
+          database.getAllSessions()
+        ]);
+
+        // The books/authors tabs load this lazily; an export can happen
+        // without ever visiting them, so make sure it's there first.
+        await ensureBookMetaLoaded();
+        const authorPeriod = resolvePeriod(
+          $lastStatisticsStartDate$,
+          $lastStatisticsEndDate$,
+          $startDayHoursForTracker$
+        );
+
+        const scopedStatistics = statisticsData.filter(
+          (s) =>
+            s.dateKey >= $lastStatisticsStartDate$ &&
+            s.dateKey <= $lastStatisticsEndDate$ &&
+            (!statisticsTitleFilters.size || statisticsTitleFilters.get(s.title))
+        );
+
+        const highlightSummary = aggregateHighlightStats(highlights, {
+          startDate: $lastStatisticsStartDate$,
+          endDate: $lastStatisticsEndDate$,
+          startDayHoursForTracker: $startDayHoursForTracker$,
+          titleFilter: statisticsTitleFilters
+        });
+
+        // Pick the year that contains the range start. Multi-year ranges get
+        // the start year's picture; users who want the other year just export
+        // twice with a shifted range.
+        const yearRaw = Number(($lastStatisticsStartDate$ || '').slice(0, 4));
+        const year = Number.isFinite(yearRaw) && yearRaw > 0 ? yearRaw : new Date().getFullYear();
+        const yearSummary = computeYearSummary({
+          year,
+          startDayHours: $startDayHoursForTracker$,
+          statistics: statisticsData,
+          sessions
+        });
+
+        const md = buildYearReportMarkdown({
+          label: statisticsDateRangeLabel,
+          startDate: $lastStatisticsStartDate$,
+          endDate: $lastStatisticsEndDate$,
+          statistics: scopedStatistics,
+          highlights: highlightSummary,
+          authors: authorPeriod
+            ? computeAuthorsList({
+                period: authorPeriod,
+                statistics: statisticsData,
+                manualBooks,
+                bookMetadata,
+                dataMetas,
+                titleFilter: statisticsTitleFilters
+              })
+            : [],
+          year: yearSummary
+        });
+
+        const safeLabel = statisticsDateRangeLabel.replace(/[^\w一-鿿-]+/g, '-');
+        const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `autobook-report-${safeLabel || 'range'}.md`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (error: any) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: { title: '错误', message: `导出失败：${error?.message ?? error}` }
+          }
+        ]);
+      } finally {
+        $statisticsActionInProgress$ = false;
+      }
+    }),
+    reduceToEmptyString()
+  );
+
+  const manualEntryHandler$ = openManualStatisticsEntry$.pipe(
+    tap(async () => {
+      const existingKeys: string[] = [];
+      for (let index = 0, { length } = statisticsData; index < length; index += 1) {
+        const s = statisticsData[index];
+        existingKeys.push(`${s.title}__${s.dateKey}`);
+      }
+
+      // Extracted so both "添加" (final close) and "保存并继续" can share
+      // the same upsert + local table refresh + title-filter update.
+      const applyEntry = async (entry: ManualStatisticEntry) => {
+        const { statistic } = await database.upsertManualStatistic(entry);
+        const nextRow: BookStatistic = {
+          ...statistic,
+          id: `${statistic.title}_${statistic.dateKey}`,
+          averageReadingTime: statistic.readingTime,
+          averageWeightedReadingTime: statistic.readingTime,
+          averageCharactersRead: statistic.charactersRead,
+          averageWeightedCharactersRead: statistic.charactersRead,
+          averageReadingSpeed: statistic.lastReadingSpeed,
+          averageWeightedReadingSpeed: statistic.lastReadingSpeed
+        };
+        const existingIndex = statisticsData.findIndex(
+          (s) => s.title === statistic.title && s.dateKey === statistic.dateKey
+        );
+        if (existingIndex >= 0) {
+          statisticsData[existingIndex] = nextRow;
+        } else {
+          statisticsData = [...statisticsData, nextRow].sort((a, b) =>
+            a.dateKey > b.dateKey ? 1 : -1
+          );
+        }
+        if (!statisticsTitleFilters.has(statistic.title)) {
+          statisticsTitleFilters.set(statistic.title, true);
+          statisticsTitleFilters = statisticsTitleFilters;
+        }
+        // Also refresh existingKeys so the conflict banner stays
+        // accurate across successive "保存并继续" clicks.
+        const dupKey = `${statistic.title}__${statistic.dateKey}`;
+        if (!existingKeys.includes(dupKey)) existingKeys.push(dupKey);
+        updateStatisticsData();
+      };
+
+      const result = await new Promise<ManualStatisticEntry | undefined>((resolver) => {
+        dialogManager.dialogs$.next([
+          {
+            component: StatisticsManualEntryDialog,
+            props: {
+              existingTitles: existingKeys,
+              startDayHoursForTracker: $startDayHoursForTracker$,
+              resolver,
+              onSaveAndContinue: applyEntry
+            },
+            disableCloseOnClick: true,
+            zIndex: '70'
+          }
+        ]);
+      });
+
+      if (!result) return;
+
+      $statisticsActionInProgress$ = true;
+
+      try {
+        await applyEntry(result);
+      } catch (error: any) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: '错误',
+              message: `添加失败：${error?.message ?? error}`
+            }
+          }
+        ]);
+      } finally {
+        $statisticsActionInProgress$ = false;
+      }
+    }),
+    reduceToEmptyString()
+  );
+
   let isLoading = true;
-  let today = getStartHoursDate($startDayHoursForTracker$);
-  let todayKey = getDateString(today);
   let statisticsTitleFilters = new Map<string, boolean>();
   let titlesInStatisticsDateRange = new Set<string>();
   let statisticsData: BookStatistic[] = [];
   let statisticsForSelection: BookStatistic[] = [];
-  let aggregratedStatistics: BookStatistic[] = [];
-  let readingGoals: BooksDbReadingGoal[] = [];
+  // Sessions load lazily the first time a session-aware tab (main tab
+  // from 1.19.0, year tab pre-existing) is opened. Kept as a snapshot;
+  // gets stale if the user reads mid-session but that's fine — the
+  // panel is re-entered on every open so a fresh load happens then.
+  let sessions: import('$lib/data/database/books-db/versions/books-db').BooksDbSession[] = [];
+  let sessionsLoaded = false;
+  let sessionsLoading = false;
+
+  async function ensureSessionsLoaded() {
+    if (sessionsLoaded || sessionsLoading) return;
+    sessionsLoading = true;
+    try {
+      sessions = await database.getAllSessions();
+      sessionsLoaded = true;
+    } finally {
+      sessionsLoading = false;
+    }
+  }
+
+  $: if (
+    ($lastStatisticsTab$ === StatisticsTab.MAIN ||
+      $lastStatisticsTab$ === StatisticsTab.SESSIONS ||
+      $lastStatisticsTab$ === StatisticsTab.YEAR) &&
+    !sessionsLoaded
+  ) {
+    ensureSessionsLoaded();
+  }
+
+  // The year view picks its own year and ignores the period + title filter,
+  // like the exported year report does: "2026" is the whole of 2026 or it is
+  // not a year summary.
+  let selectedYear = new Date().getFullYear();
+
+  $: availableYears = [
+    ...new Set(statisticsData.map((statistic) => Number(statistic.dateKey.slice(0, 4))))
+  ]
+    .filter((year) => year > 0)
+    .sort((a, b) => b - a);
+
+  $: if (availableYears.length && !availableYears.includes(selectedYear)) {
+    selectedYear = availableYears[0];
+  }
+
+  $: yearSummary =
+    $lastStatisticsTab$ === StatisticsTab.YEAR
+      ? computeYearSummary({
+          year: selectedYear,
+          startDayHours: $startDayHoursForTracker$,
+          statistics: statisticsData,
+          sessions,
+          languageByTitle
+        })
+      : null;
+
+  // manualBooks + data metadata for the BOOKS / AUTHORS explorer tabs
+  // (Phase C, 1.20.4). Same lazy pattern as sessions — cheap in-memory
+  // snapshot, refreshed on next panel entry.
+  let manualBooks: import('$lib/data/database/books-db/versions/books-db').BooksDbManualBook[] = [];
+  let dataMetas: Pick<
+    import('$lib/data/database/books-db/versions/books-db').BooksDbBookData,
+    'title' | 'characters' | 'language'
+  >[] = [];
+  let bookMetadata: import('$lib/data/database/books-db/versions/books-db').BooksDbBookMetadata[] =
+    [];
+  let bookMetaLoaded = false;
+  let bookMetaLoading = false;
+
+  async function ensureBookMetaLoaded() {
+    if (bookMetaLoaded || bookMetaLoading) return;
+    bookMetaLoading = true;
+    try {
+      const db = await database.db;
+      const [mBooks, imported, data] = await Promise.all([
+        database.getAllManualBooks(),
+        database.getAllBookMetadata(),
+        db.getAll('data')
+      ]);
+      manualBooks = mBooks;
+      bookMetadata = imported;
+      dataMetas = data.map((d) => ({
+        title: d.title,
+        characters: d.characters || 0,
+        language: d.language
+      }));
+      bookMetaLoaded = true;
+    } finally {
+      bookMetaLoading = false;
+    }
+  }
+
+  $: if (
+    ($lastStatisticsTab$ === StatisticsTab.BOOKS ||
+      $lastStatisticsTab$ === StatisticsTab.AUTHORS ||
+      $lastStatisticsTab$ === StatisticsTab.YEAR) &&
+    !bookMetaLoaded
+  ) {
+    ensureBookMetaLoaded();
+  }
+
+  // Imported metadata wins over the book row: it comes from the file's own
+  // `dc:language`, while the row's value can be the importer's guess.
+  $: languageByTitle = new Map<string, string>([
+    ...dataMetas.map((meta) => [meta.title, meta.language || ''] as [string, string]),
+    ...bookMetadata.map((meta) => [meta.title, meta.language || ''] as [string, string])
+  ]);
+
+  let yearHighlights: import('$lib/functions/highlight-stats').HighlightStatsSummary | null = null;
+
+  $: if ($lastStatisticsTab$ === StatisticsTab.YEAR) {
+    loadYearHighlights(selectedYear);
+  }
+
+  async function loadYearHighlights(year: number) {
+    try {
+      const { aggregateHighlightStats } = await import('$lib/functions/highlight-stats');
+      yearHighlights = aggregateHighlightStats(await database.getAllHighlights(), {
+        startDate: `${year}-01-01`,
+        endDate: `${year}-12-31`,
+        startDayHoursForTracker: $startDayHoursForTracker$
+      });
+    } catch (error: any) {
+      // The rest of the year view doesn't depend on highlights, so a failure
+      // here degrades that one module instead of blanking the page.
+      yearHighlights = null;
+      logger.error(`failed to load highlights for ${year}: ${error.message}`);
+    }
+  }
+
+  /**
+   * The snapshot above is loaded once per panel entry, so a write made from
+   * inside the panel (auto-tagging) has to invalidate it explicitly —
+   * otherwise the applied tags don't show until the panel is reopened.
+   */
+  async function reloadBookMeta() {
+    bookMetaLoaded = false;
+    await ensureBookMetaLoaded();
+  }
 
   $: statisticsDateRangeLabel = getDateRangeLabel(
     $lastStatisticsStartDate$,
@@ -285,9 +546,6 @@
     $lastStatisticsStartDate$ &&
     $lastStatisticsEndDate$
   ) {
-    today = getStartHoursDate($startDayHoursForTracker$);
-    todayKey = getDateString(today);
-
     updateStatisticsData();
   }
 
@@ -629,11 +887,8 @@
       const db = await database.db;
       const hasPrefilteredTitlesForStatistics = !!$preFilteredTitlesForStatistics$.size;
 
-      [statisticsData, readingGoals] = await Promise.all([
-        db.getAllFromIndex('statistic', 'dateKey'),
-        database.getReadingGoals()
-      ]).then(([statistics, readingGoalData]) => [
-        statistics.map((statistic) => {
+      statisticsData = (await db.getAllFromIndex('statistic', 'dateKey')).map(
+        (statistic) => {
           if (
             statistic.readingTime &&
             (!hasPrefilteredTitlesForStatistics ||
@@ -654,9 +909,8 @@
               averageWeightedReadingSpeed: statistic.lastReadingSpeed
             }
           };
-        }),
-        readingGoalData
-      ]);
+        }
+      );
     } catch ({ message }: any) {
       dialogManager.dialogs$.next([
         {
@@ -680,109 +934,6 @@
       filterStatisticsForSelection(statistic, newTitleFilterForStatisticsSet)
     );
     titlesInStatisticsDateRange = newTitleFilterForStatisticsSet;
-
-    aggregratedStatistics = [...getAggregatedStatistics($lastPrimaryReadingDataAggregationMode$)];
-  }
-
-  function getAggregatedStatistics(
-    statisticsDataAggegrationMode: StatisticsReadingDataAggregationMode
-  ) {
-    let aggregatedStatisticsData: BookStatistic[] = [];
-
-    if (statisticsDataAggegrationMode === StatisticsReadingDataAggregationMode.NONE) {
-      aggregatedStatisticsData = statisticsForSelection;
-    } else {
-      const aggregationKey =
-        statisticsDataAggegrationMode === StatisticsReadingDataAggregationMode.DATE
-          ? 'dateKey'
-          : 'title';
-      const aggregrationMap = new Map<string, BookStatistic[]>();
-
-      for (let index = 0, { length } = statisticsForSelection; index < length; index += 1) {
-        const entry = statisticsForSelection[index];
-        const keyValue = entry[aggregationKey];
-        const entries = aggregrationMap.get(keyValue) || [];
-
-        entries.push(entry);
-        aggregrationMap.set(keyValue, entries);
-      }
-
-      const aggregationKeys = [...aggregrationMap.keys()];
-
-      for (let index = 0, { length } = aggregationKeys; index < length; index += 1) {
-        const key = aggregationKeys[index];
-        const entries = aggregrationMap.get(key) || [];
-        const statistic: BookStatistic = {
-          ...getDefaultStatistic('-', '-'),
-          ...{
-            id: `${key}`,
-            averageReadingTime: 0,
-            averageWeightedReadingTime: 0,
-            averageCharactersRead: 0,
-            averageWeightedCharactersRead: 0,
-            averageReadingSpeed: 0,
-            averageWeightedReadingSpeed: 0
-          }
-        };
-
-        let weightedSum = 0;
-        let validReadingDays = 0;
-
-        for (let index2 = 0, { length: length2 } = entries; index2 < length2; index2 += 1) {
-          const entry = entries[index2];
-
-          if (aggregationKey === 'title') {
-            statistic.title = key;
-          } else {
-            statistic.dateKey = key;
-          }
-
-          statistic.readingTime += entry.readingTime;
-          statistic.charactersRead += entry.charactersRead;
-          statistic.minReadingSpeed = statistic.minReadingSpeed
-            ? Math.min(statistic.minReadingSpeed, entry.minReadingSpeed)
-            : entry.minReadingSpeed;
-          statistic.altMinReadingSpeed = statistic.altMinReadingSpeed
-            ? Math.min(statistic.altMinReadingSpeed, entry.altMinReadingSpeed)
-            : statistic.altMinReadingSpeed;
-          statistic.maxReadingSpeed = Math.max(statistic.maxReadingSpeed, entry.lastReadingSpeed);
-          weightedSum += entry.readingTime * entry.charactersRead;
-
-          if (statistic.readingTime) {
-            validReadingDays += 1;
-          }
-        }
-
-        statistic.lastReadingSpeed = statistic.readingTime
-          ? Math.ceil((3600 * statistic.charactersRead) / statistic.readingTime)
-          : 0;
-        statistic.averageReadingTime = validReadingDays
-          ? Math.ceil(statistic.readingTime / validReadingDays)
-          : 0;
-        statistic.averageWeightedReadingTime = statistic.charactersRead
-          ? Math.ceil(weightedSum / statistic.charactersRead)
-          : 0;
-        statistic.averageCharactersRead = validReadingDays
-          ? Math.ceil(statistic.charactersRead / validReadingDays)
-          : 0;
-        statistic.averageWeightedCharactersRead = statistic.readingTime
-          ? Math.ceil(weightedSum / statistic.readingTime)
-          : 0;
-        statistic.averageReadingSpeed = statistic.averageReadingTime
-          ? Math.ceil((3600 * statistic.averageCharactersRead) / statistic.averageReadingTime)
-          : 0;
-        statistic.averageWeightedReadingSpeed = statistic.averageWeightedReadingTime
-          ? Math.ceil(
-              (3600 * statistic.averageWeightedCharactersRead) /
-                statistic.averageWeightedReadingTime
-            )
-          : 0;
-
-        aggregatedStatisticsData.push(statistic);
-      }
-    }
-
-    return aggregatedStatisticsData;
   }
 
   function filterStatisticsForSelection(
@@ -802,45 +953,93 @@
   }
 </script>
 
-{$copyStatisticsDataHandler$ ?? ''}
 {$exportStatisticsDataHandler$ ?? ''}
 {$deleteStatisticsDataHandler$ ?? ''}
 {$setStatisticsDatesToAllTimeHandler$ ?? ''}
+{$manualEntryHandler$ ?? ''}
+{$exportYearReportHandler$ ?? ''}
 <svelte:window on:keyup={onKeyUp} />
 {#if isLoading}
   <div class="flex fixed items-center justify-center inset-0 h-full w-full text-7xl">
     <Fa icon={faSpinner} spin />
   </div>
 {:else}
-  {#if $lastStatisticsTab$ === StatisticsTab.OVERVIEW}
-    <StatisticsHeatmap
-      {statisticsData}
-      {readingGoals}
-      {statisticsTitleFilters}
-      {today}
-      {todayKey}
-      bind:heatmapAggregration={$lastReadingDataHeatmapAggregationMode$}
+  <StatisticsPeriodChip />
+  {#if $lastStatisticsTab$ === StatisticsTab.MAIN}
+    <StatisticsMain
+      statistics={statisticsData}
+      {sessions}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
+      {statisticsDateRangeLabel}
     />
-    {#if readingGoals.length}
-      <div class="mt-8 sm:mt-16">
-        <StatisticsHeatmap
-          {statisticsData}
-          {readingGoals}
-          {statisticsTitleFilters}
-          {today}
-          {todayKey}
-          heatmapType={HeatmapType.READING_GOALS}
-          bind:heatmapAggregration={$lastReadingGoalsHeatmapAggregationMode$}
-        />
-      </div>
-    {/if}
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.BOOKS}
+    <StatisticsBooks
+      statistics={statisticsData}
+      {manualBooks}
+      {bookMetadata}
+      {dataMetas}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
+      {statisticsDateRangeLabel}
+      on:metaChanged={reloadBookMeta}
+    />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.AUTHORS}
+    <StatisticsAuthors
+      statistics={statisticsData}
+      {manualBooks}
+      {bookMetadata}
+      {dataMetas}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
+      {statisticsDateRangeLabel}
+    />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.SESSIONS}
+    <StatisticsSessions
+      statistics={statisticsData}
+      {sessions}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
+      {statisticsDateRangeLabel}
+    />
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.SUMMARY}
     <StatisticsSummary
-      {aggregratedStatistics}
+      statistics={statisticsData}
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      startDayHours={$startDayHoursForTracker$}
+      titleFilter={statisticsTitleFilters}
       {statisticsDateRangeLabel}
       on:delete={handleDeleteRequest}
       on:edit={handleEditRequest}
+    />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.YEAR}
+    <StatisticsYear
+      summary={yearSummary}
+      highlights={yearHighlights}
+      years={availableYears}
+      bind:year={selectedYear}
+    />
+  {/if}
+  {#if $lastStatisticsTab$ === StatisticsTab.HIGHLIGHTS}
+    <StatisticsHighlights
+      startDate={$lastStatisticsStartDate$}
+      endDate={$lastStatisticsEndDate$}
+      {statisticsDateRangeLabel}
+      titleFilter={statisticsTitleFilters}
     />
   {/if}
 {/if}

@@ -5,7 +5,7 @@
   import { userFontsCacheName } from '$lib/data/fonts';
   import { logger } from '$lib/data/logger';
   import { userFonts$ } from '$lib/data/store';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import { faSpinner, faTrashCan } from '@fortawesome/free-solid-svg-icons';
   import type { BehaviorSubject } from 'rxjs';
   import { onMount } from 'svelte';
@@ -116,7 +116,7 @@
                   title="点击选择字体"
                   class="hover:text-blue-700"
                   on:click={() => selectFont(userFont.name)}
-                  on:keyup={dummyFn}
+                  on:keyup={activateOnKeyup}
                 >
                   {userFont.name}
                 </div>
@@ -126,7 +126,7 @@
                   title="点击选择字体"
                   class="hover:text-blue-700"
                   on:click={() => selectFont(userFont.name)}
-                  on:keyup={dummyFn}
+                  on:keyup={activateOnKeyup}
                 >
                   {userFont.fileName}
                 </div>
@@ -136,7 +136,7 @@
                   title="移除字体"
                   class="hover:text-blue-700"
                   on:click={() => removeFont(userFont.path)}
-                  on:keyup={dummyFn}
+                  on:keyup={activateOnKeyup}
                 >
                   <Fa icon={faTrashCan} />
                 </div>

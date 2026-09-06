@@ -1,4 +1,3 @@
-/* eslint-disable */
 // @ts-nocheck
 /**
  * Based on css parser/compiler by NxChg
@@ -83,6 +82,12 @@ function stringifyCss(tree: CssTree, delim = '', cb?: (x: any) => void) {
     supports(node) {
       // FIXED
       return '@supports ' + node.supports + '{' + visit(node.rules) + '}';
+    },
+    // Round-trips the block at-rules the parser does not model individually
+    // (@layer, @container, …). visit() calls renderMethods[type] unguarded,
+    // so a node type with no method here is a TypeError, not a no-op.
+    'unknown-at-rule'(node) {
+      return '@' + node.name + (node.prelude ? ' ' + node.prelude : '') + '{' + visit(node.rules) + '}';
     }
   };
 

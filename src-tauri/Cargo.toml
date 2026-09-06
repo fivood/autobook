@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.10.7"
+version = "1.47.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -36,9 +36,19 @@ windows = { version = "0.58", features = [
   "Storage_Streams",
   "Foundation",
   "Foundation_Collections",
+  # proxy.rs reads the system proxy — the only source a GUI-launched exe sees,
+  # since proxy clients export HTTPS_PROXY into the shell only.
+  "Win32_System_Registry",
 ] }
-tokio = { version = "1", features = ["sync", "rt", "time", "macros"] }
+tokio = { version = "1", features = ["sync", "rt", "time", "macros", "process", "net", "io-util"] }
 reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
 base64 = "0.22"
 mobi = "0.8"
 encoding_rs = "0.8.35"
+# edge_tts: WSS to speech.platform.bing.com + SHA-256 Sec-MS-GEC token +
+# UUID for ConnectionId/X-RequestId. rustls-tls-webpki-roots keeps the TLS
+# stack single-source with reqwest (avoids pulling native-tls on Windows).
+tokio-tungstenite = { version = "0.24", features = ["connect", "rustls-tls-webpki-roots", "url"], default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import type { HighlightColor } from '$lib/data/database/books-db/versions/books-db';
+  import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
+  import { HIGHLIGHT_SLOTS } from '$lib/data/highlight-color';
+  import HighlightSlotSwatch from '$lib/components/highlight-slot-swatch.svelte';
+  import { t } from '$lib/i18n';
 
   export let x = 0;
   export let y = 0;
@@ -9,22 +12,18 @@
   export let hasMemo = false;
 
   const dispatch = createEventDispatcher<{
-    color: HighlightColor;
+    color: HighlightSlot;
     memo: void;
     editMemo: void;
     lookup: void;
+    startHere: void;
     delete: void;
     close: void;
   }>();
 
-  const colors: { id: HighlightColor; bg: string; label: string }[] = [
-    { id: 'yellow', bg: 'rgba(255,235,59,0.6)', label: '黄' },
-    { id: 'blue', bg: 'rgba(100,181,246,0.5)', label: '蓝' },
-    { id: 'green', bg: 'rgba(129,199,132,0.5)', label: '绿' },
-    { id: 'pink', bg: 'rgba(244,143,177,0.5)', label: '粉' }
-  ];
+  const colors = HIGHLIGHT_SLOTS.map((id) => ({ id, label: id }));
 
-  function handleColor(c: HighlightColor) {
+  function handleColor(c: HighlightSlot) {
     dispatch('color', c);
   }
 
@@ -32,7 +31,12 @@
     return Math.max(min, Math.min(max, v));
   }
 
-  $: menuX = clamp(x, 8, (typeof window !== 'undefined' ? window.innerWidth : 800) - 220);
+  // Measured rather than assumed: the toolbar's width depends on how many
+  // items this mode shows and on how long they are in the active locale, and
+  // the old hardcoded 220 already understated it.
+  let menuWidth = 220;
+
+  $: menuX = clamp(x, 8, (typeof window !== 'undefined' ? window.innerWidth : 800) - menuWidth - 8);
   $: menuY = clamp(y, 8, (typeof window !== 'undefined' ? window.innerHeight : 600) - 60);
 </script>
 
@@ -41,53 +45,58 @@
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="fixed inset-0 z-[80]" on:click={() => dispatch('close')} on:contextmenu|preventDefault={() => dispatch('close')} />
   <div
-    class="fixed z-[81] flex items-center gap-1 rounded-lg px-2 py-1.5"
-    style="left:{menuX}px;top:{menuY}px;background:var(--menu-background);color:var(--menu-foreground);box-shadow:0 8px 24px rgba(0,0,0,0.35),0 0 0 1px rgba(255,255,255,0.08) inset,0 0 0 1px rgba(0,0,0,0.15);"
+    class="menu-surface menu-toolbar fixed z-[81] w-max"
+    style="left:{menuX}px;top:{menuY}px;"
+    bind:clientWidth={menuWidth}
   >
     {#if mode === 'create'}
       {#each colors as c (c.id)}
         <button
           type="button"
-          class="h-7 w-7 rounded-full border-2 border-transparent hover:border-white/60 transition-colors"
-          style="background:{c.bg}"
-          title="高亮 ({c.label})"
+          class="rounded-full border-2 border-transparent p-0.5 transition-colors hover:border-current/60"
+          title={$t('highlight.slot.tooltip', { label: c.label })}
           on:click={() => handleColor(c.id)}
-        />
+        ><HighlightSlotSwatch slot={c.id} class="h-6 w-6 text-[0.7rem]" /></button>
       {/each}
-      <span class="mx-0.5 h-5 w-px bg-white/30" />
+      <span class="menu-divider" />
       <button
         type="button"
-        class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
-        title="添加备注"
+        class="menu-item menu-item-inline"
+        title={$t('highlight.addMemo')}
         on:click={() => dispatch('memo')}
-      >备注</button>
+      >{$t('highlight.memo.short')}</button>
       <button
         type="button"
-        class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
-        title="查词典"
+        class="menu-item menu-item-inline"
+        title={$t('highlight.dict.tooltip')}
         on:click={() => dispatch('lookup')}
-      >查词</button>
+      >{$t('highlight.dict.short')}</button>
+      <button
+        type="button"
+        class="menu-item menu-item-inline"
+        title={$t('highlight.startHere.tooltip')}
+        on:click={() => dispatch('startHere')}
+      >{$t('highlight.startHere.short')}</button>
     {:else}
       {#each colors as c (c.id)}
         <button
           type="button"
-          class="h-7 w-7 rounded-full border-2 border-transparent hover:border-white/60 transition-colors"
-          style="background:{c.bg}"
-          title="改色 ({c.label})"
+          class="rounded-full border-2 border-transparent p-0.5 transition-colors hover:border-current/60"
+          title={$t('highlight.recolor.tooltip', { label: c.label })}
           on:click={() => handleColor(c.id)}
-        />
+        ><HighlightSlotSwatch slot={c.id} class="h-6 w-6 text-[0.7rem]" /></button>
       {/each}
-      <span class="mx-0.5 h-5 w-px bg-white/30" />
+      <span class="menu-divider" />
       <button
         type="button"
-        class="rounded px-2 py-0.5 text-xs hover:bg-white/15 transition-colors"
+        class="menu-item menu-item-inline"
         on:click={() => dispatch('editMemo')}
-      >{hasMemo ? '编辑备注' : '添加备注'}</button>
+      >{hasMemo ? $t('highlight.editMemo') : $t('highlight.addMemo')}</button>
       <button
         type="button"
-        class="rounded px-2 py-0.5 text-xs text-red-300 hover:bg-white/15 transition-colors"
+        class="menu-item menu-item-inline menu-item-danger"
         on:click={() => dispatch('delete')}
-      >删除</button>
+      >{$t('highlight.delete')}</button>
     {/if}
   </div>
 {/if}

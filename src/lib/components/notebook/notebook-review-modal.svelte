@@ -23,7 +23,23 @@
     if (current) dispatch('markReviewed', current.id);
     next();
   }
+
+  function handleKeydown(ev: KeyboardEvent) {
+    if (!current) return;
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      markAndNext();
+    } else if (ev.key === 'ArrowRight' || ev.key === ' ') {
+      ev.preventDefault();
+      next();
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      dispatch('close');
+    }
+  }
 </script>
+
+<svelte:window on:keydown={handleKeydown} />
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -60,17 +76,19 @@
           </div>
         {/if}
       </div>
+      <p class="mb-2 text-right text-xs opacity-40">Enter 已看 · → 跳过 · Esc 关闭</p>
       <div class="flex justify-end gap-2">
         <button
           type="button"
-          class="flex items-center gap-1 rounded border border-current/20 px-4 py-1.5 text-sm hover:bg-black/5"
-          title="跳过，不更新回顾时间"
+          class="flex items-center gap-1 rounded border border-current/20 px-4 py-1.5 text-sm hover-soft"
+          title="跳过，不更新回顾时间 (→)"
           on:click={next}
         ><Fa icon={faTimes} size="xs" /> 跳过</button>
         <button
           type="button"
           class="flex items-center gap-1 rounded px-4 py-1.5 text-sm font-medium"
-          style="background:rgba(95,126,123,0.9);color:#f0efe6;"
+          style="background:var(--menu-background);color:var(--menu-foreground);"
+          title="已看，进入下一条 (Enter)"
           on:click={markAndNext}
         ><Fa icon={faCheck} size="xs" /> 已看 <Fa icon={faChevronRight} size="xs" /></button>
       </div>

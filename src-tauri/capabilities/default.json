@@ -26,8 +26,7 @@
       "allow": [
         { "path": "$DOCUMENT/AutoBook" },
         { "path": "$DOCUMENT/AutoBook/**" },
-        { "path": "$DOCUMENT/AutoBook/*" },
-        { "path": "**" }
+        { "path": "$DOCUMENT/AutoBook/*" }
       ]
     }
   ]

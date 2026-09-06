@@ -22,7 +22,10 @@ export class BookmarkManagerPaginated implements BookmarkManager {
 
   scrollToBookmark(bookmarkData: BooksDbBookmarkData) {
     const charCount = bookmarkData.exploredCharCount;
-    if (!charCount) return;
+    // Same as the continuous manager: char 0 is the first page, not a missing
+    // bookmark. getSectionIndexByCharCount(0) / getScrollPosByCharCount(0)
+    // both resolve it correctly once we let them run.
+    if (charCount == null) return;
 
     const index = this.calculator.getSectionIndexByCharCount(charCount);
 

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import {
-    faComputer,
     faFileArrowDown,
     faFileArrowUp,
     faPlus,
@@ -18,142 +17,95 @@
   } from '$lib/components/button-toggle-group/toggle-option';
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import SettingsThemeEditor from '$lib/components/settings/settings-theme-editor.svelte';
+  import {
+    DEFAULT_CUSTOM_COLORS,
+    HIGHLIGHT_SLOTS,
+    type HighlightPaletteMode
+  } from '$lib/data/highlight-color';
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsCustomTheme from '$lib/components/settings/settings-custom-theme.svelte';
-  import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
-  import SettingsFontSelector from '$lib/components/settings/settings-font-selector.svelte';
   import SettingsReadingGoals from '$lib/components/settings/settings-reading-goals.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
-  import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
   import SettingsSync from '$lib/components/settings/settings-sync.svelte';
+  import SettingsTypography from '$lib/components/settings/settings-typography.svelte';
+  import SettingsTts from '$lib/components/settings/settings-tts.svelte';
+  import SettingsAi from '$lib/components/settings/settings-ai.svelte';
+  import SettingsOcr from '$lib/components/settings/settings-ocr.svelte';
+  import SettingsReaderBehavior from '$lib/components/settings/settings-reader-behavior.svelte';
+  import SettingsModels from '$lib/components/settings/settings-models.svelte';
   import SettingsDataPaths from '$lib/components/settings/settings-data-paths.svelte';
-  import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
+  import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
   import { inputClasses } from '$lib/css-classes';
-  import { BlurMode } from '$lib/data/blur-mode';
   import { dialogManager } from '$lib/data/dialog-manager';
-  import { LocalFont } from '$lib/data/fonts';
-  import { FuriganaStyle } from '$lib/data/furigana-style';
+  import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
+  import { confirmResetUiSettings } from '$lib/functions/reset-ui-settings';
   import { ImportHTMLFixMode } from '$lib/data/import-html-fix-mode';
-  import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
-  import { isAppDefault } from '$lib/data/storage/storage-source-manager';
   import {
     customThemes$,
+    highlightCustomColors$,
+    highlightPalette$,
+    highlightSlotStyles$,
     database,
-    fontFamilyGroupOne$,
-    fontFamilyGroupTwo$,
-    lastBookHasImages$,
-    horizontalCustomReadingPosition$,
     textMarginMode$,
     textMarginValue$,
     theme$,
-    ttsCustomAudioPath$,
-    ttsCustomBody$,
-    ttsCustomEndpoint$,
-    ttsCustomHeaders$,
-    ttsCustomMethod$,
-    ttsCustomActivePreset$,
-    ttsCustomPresetStates$,
-    ttsAutoAdvanceSection$,
-    ttsEngine$,
-    ttsSapiVoiceId$,
-    ttsShortcut$,
-    ttsStartStrategy$,
-    verticalCustomReadingPosition$
   } from '$lib/data/store';
   import { isTauri } from '$lib/data/env';
-  import type { TextMarginMode } from '$lib/data/text-margin-mode';
+  import { StorageKey } from '$lib/data/storage/storage-types';
+  import { storageSource$ } from '$lib/data/storage/storage-view';
   import {
     availableThemes as availableThemesMap,
     type ThemeOption
   } from '$lib/data/theme-option';
-  import type { VerticalTextOrientation } from '$lib/data/vertical-text-orientation';
-  import { ViewMode } from '$lib/data/view-mode';
-  import type { WritingMode } from '$lib/data/writing-mode';
+  import { t, tImmediate, locale$, LOCALES } from '$lib/i18n';
   import { secondsToMinutes } from '$lib/functions/statistic-util';
-  import { dummyFn } from '$lib/functions/utils';
   import {
     ReplicationSaveBehavior,
     AutoReplicationType
   } from '$lib/functions/replication/replication-options';
-  import { map } from 'rxjs';
   import Fa from 'svelte-fa';
   import { onDestroy } from 'svelte';
 
   export let selectedTheme: string;
 
-  export let viewMode: ViewMode;
 
-  export let fontFamilyGroupOne: string;
 
-  export let fontFamilyGroupTwo: string;
 
-  export let fontWeight: number | null;
 
-  export let fontSize: number;
 
-  export let lineHeight: number;
 
-  export let textIndentation: number;
 
-  export let textMarginValue: number;
 
-  export let blurImage: boolean;
 
-  export let blurImageMode: string;
 
-  export let hideFurigana: boolean;
 
-  export let furiganaStyle: FuriganaStyle;
 
-  export let writingMode: WritingMode;
 
-  export let enableFontKerning: boolean;
 
-  export let enableFontVPAL: boolean;
 
-  export let verticalTextOrientation: VerticalTextOrientation;
 
-  export let prioritizeReaderStyles: boolean;
 
-  export let enableTextJustification: boolean;
 
-  export let enableTextWrapPretty: boolean;
 
-  export let textMarginMode: TextMarginMode;
 
-  export let enableReaderWakeLock: boolean;
 
-  export let showCharacterCounter: boolean;
 
-  export let showPercentage: boolean;
 
-  export let showFooterChapterCharacterCounter: boolean;
 
-  export let showFooterChapterPercentage: boolean;
 
-  export let secondDimensionMaxValue: number;
 
-  export let firstDimensionMargin: number;
 
-  export let swipeThreshold: number;
 
-  export let disableWheelNavigation: boolean;
 
-  export let autoPositionOnResize: boolean;
 
-  export let avoidPageBreak: boolean;
 
-  export let pauseTrackerOnCustomPointChange: boolean;
 
-  export let customReadingPointEnabled: boolean;
 
-  export let selectionToBookmarkEnabled: boolean;
 
-  export let enableTapEdgeToFlip: boolean;
 
-  export let pageColumns: number;
 
   export let storageQuota: string;
 
@@ -161,13 +113,9 @@
 
   export let hideExternalReadHint: boolean;
 
-  export let confirmClose: boolean;
 
-  export let manualBookmark: boolean;
 
-  export let autoBookmark: boolean;
 
-  export let autoBookmarkTime: number;
 
   export let activeSettings: string;
 
@@ -183,7 +131,6 @@
 
   export let showExternalPlaceholder: boolean;
 
-  export let keepLocalStatisticsOnDeletion: boolean;
 
   export let overwriteBookCompletion: boolean;
 
@@ -237,374 +184,35 @@
     showIcons: true
   }));
 
+  // Each language is labelled in its own script (中文 / English / 日本語) so it
+  // stays findable when the UI is currently in a language you can't read —
+  // which is exactly the state someone opening this setting is trying to fix.
+  $: optionsForLocale = LOCALES.map((loc) => ({ id: loc, text: tImmediate('locale.' + loc) }));
+
+  $: optionsForHighlightPalette = (['color', 'invert', 'custom'] as HighlightPaletteMode[]).map(
+    (id) => ({ id, text: $t(`settings.highlightPalette.${id}`) })
+  );
+
+  // Stored as one comma-separated string so it needs no new storage subject
+  // type; the split is padded because a hand-edited value can be short.
+  $: customSlotColors = HIGHLIGHT_SLOTS.map(
+    (_, i) => $highlightCustomColors$.split(',')[i]?.trim() || DEFAULT_CUSTOM_COLORS[i]
+  );
+
+  function setCustomSlotColor(index: number, value: string) {
+    const next = [...customSlotColors];
+    next[index] = value;
+    $highlightCustomColors$ = next.join(',');
+  }
+
+  /** The applied theme's own page colours, for the preview strip's backdrop. */
+  let previewTheme: Partial<ThemeOption> = {};
+  $: previewTheme = $customThemes$[selectedTheme] || availableThemesMap.get(selectedTheme) || {};
+
   onDestroy(() => dialogManager.dialogs$.next([]));
 
-  let sapiVoices: { id: string; name: string; language: string }[] = [];
-  let sapiVoicesError = '';
-
-  async function loadSapiVoices() {
-    sapiVoicesError = '';
-    if (!isTauri() || $ttsEngine$ !== 'sapi') {
-      sapiVoices = [];
-      return;
-    }
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      sapiVoices = await invoke<{ id: string; name: string; language: string }[]>(
-        'sapi_list_voices'
-      );
-    } catch (err: any) {
-      sapiVoicesError = err?.message ?? String(err);
-      sapiVoices = [];
-    }
-  }
-
-  $: if ($ttsEngine$ === 'sapi') loadSapiVoices();
-
-  interface CustomPreset {
-    label: string;
-    method: string;
-    endpoint: string;
-    headers: string;
-    body: string;
-    audioPath?: string;
-  }
-
-  const CUSTOM_PRESETS: Record<string, CustomPreset> = {
-    manual: {
-      label: '手动配置',
-      method: 'POST',
-      endpoint: '',
-      headers: '{\n  "Content-Type": "application/json"\n}',
-      body: '',
-      audioPath: ''
-    },
-    openai: {
-      label: 'OpenAI TTS',
-      method: 'POST',
-      endpoint: 'https://api.openai.com/v1/audio/speech',
-      headers: JSON.stringify(
-        { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_API_KEY' },
-        null,
-        2
-      ),
-      body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: '{text}' }, null, 2)
-    },
-    elevenlabs: {
-      label: 'ElevenLabs',
-      method: 'POST',
-      endpoint:
-        'https://api.elevenlabs.io/v1/text-to-speech/VOICE_ID?output_format=mp3_44100_128',
-      headers: JSON.stringify(
-        { 'Content-Type': 'application/json', 'xi-api-key': 'YOUR_API_KEY' },
-        null,
-        2
-      ),
-      body: JSON.stringify(
-        {
-          text: '{text}',
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 }
-        },
-        null,
-        2
-      )
-    },
-    azure: {
-      label: 'Azure Speech (REST)',
-      method: 'POST',
-      endpoint: 'https://YOUR_REGION.tts.speech.microsoft.com/cognitiveservices/v1',
-      headers: JSON.stringify(
-        {
-          'Content-Type': 'application/ssml+xml',
-          'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
-          'Ocp-Apim-Subscription-Key': 'YOUR_SUBSCRIPTION_KEY'
-        },
-        null,
-        2
-      ),
-      body: `<speak version='1.0' xml:lang='zh-CN'><voice name='zh-CN-XiaoxiaoNeural'>{text}</voice></speak>`
-    },
-    volcengine: {
-      label: '火山引擎 大模型 TTS',
-      method: 'POST',
-      endpoint: 'https://openspeech.bytedance.com/api/v1/tts',
-      headers: JSON.stringify(
-        { 'Content-Type': 'application/json', Authorization: 'Bearer; YOUR_TOKEN' },
-        null,
-        2
-      ),
-      body: JSON.stringify(
-        {
-          app: { appid: 'YOUR_APPID', token: 'YOUR_TOKEN', cluster: 'volcano_tts' },
-          user: { uid: 'autobook' },
-          audio: { voice_type: 'BV700_streaming', encoding: 'mp3', speed_ratio: 1.0 },
-          request: { reqid: 'autobook', text: '{text}', operation: 'query' }
-        },
-        null,
-        2
-      )
-    },
-    mimo: {
-      label: 'MiMo-V2.5-TTS（小米，限时免费）',
-      method: 'POST',
-      endpoint: 'https://api.xiaomimimo.com/v1/chat/completions',
-      headers: JSON.stringify(
-        { 'Content-Type': 'application/json', 'api-key': 'YOUR_API_KEY' },
-        null,
-        2
-      ),
-      body: JSON.stringify(
-        {
-          model: 'mimo-v2.5-tts',
-          messages: [
-            { role: 'user', content: '清晰、稳定、平和的朗读语气，适合长时间听书。' },
-            { role: 'assistant', content: '{text}' }
-          ],
-          audio: { format: 'wav', voice: '茉莉' },
-          stream: false
-        },
-        null,
-        2
-      ),
-      audioPath: 'choices.0.message.audio.data'
-    }
-  };
-
-  /** Snapshot the live fields into the map under the given preset id. */
-  function saveCurrentPreset(presetId: string) {
-    const map = { ...$ttsCustomPresetStates$ };
-    map[presetId] = {
-      endpoint: $ttsCustomEndpoint$,
-      method: $ttsCustomMethod$,
-      headers: $ttsCustomHeaders$,
-      body: $ttsCustomBody$,
-      audioPath: $ttsCustomAudioPath$
-    };
-    ttsCustomPresetStates$.next(map);
-  }
-
-  function loadPresetIntoFields(presetId: string) {
-    const saved = $ttsCustomPresetStates$[presetId];
-    const fallback = CUSTOM_PRESETS[presetId] ?? CUSTOM_PRESETS.manual;
-    const target = saved ?? fallback;
-    ttsCustomMethod$.next(target.method);
-    ttsCustomEndpoint$.next(target.endpoint);
-    ttsCustomHeaders$.next(target.headers);
-    ttsCustomBody$.next(target.body);
-    ttsCustomAudioPath$.next(target.audioPath || '');
-  }
-
-  /** Save current edits to the outgoing preset's slot, then switch. */
-  function switchCustomPreset(newId: string) {
-    const old = $ttsCustomActivePreset$;
-    if (old === newId) return;
-    saveCurrentPreset(old);
-    ttsCustomActivePreset$.next(newId);
-    loadPresetIntoFields(newId);
-  }
-
-  function resetActivePresetToDefaults() {
-    const id = $ttsCustomActivePreset$;
-    const def = CUSTOM_PRESETS[id];
-    if (!def) return;
-    ttsCustomMethod$.next(def.method);
-    ttsCustomEndpoint$.next(def.endpoint);
-    ttsCustomHeaders$.next(def.headers);
-    ttsCustomBody$.next(def.body);
-    ttsCustomAudioPath$.next(def.audioPath || '');
-  }
-
-  // Seed the manual slot from legacy single-store values on first load — so
-  // upgrading users don't lose what they typed in pre-1.3.1.
-  if (browser && Object.keys($ttsCustomPresetStates$).length === 0) {
-    if (
-      $ttsCustomEndpoint$ ||
-      $ttsCustomBody$ ||
-      $ttsCustomAudioPath$ ||
-      $ttsCustomHeaders$ !== CUSTOM_PRESETS.manual.headers
-    ) {
-      saveCurrentPreset('manual');
-    }
-  }
-
-  // Auto-persist live edits back into the active preset's slot.
-  let presetSaveDebounce: ReturnType<typeof setTimeout> | undefined;
-  $: if (browser && $ttsCustomActivePreset$) {
-    // touch all five so this $: reruns on any edit
-    const _touch = [
-      $ttsCustomEndpoint$,
-      $ttsCustomMethod$,
-      $ttsCustomHeaders$,
-      $ttsCustomBody$,
-      $ttsCustomAudioPath$
-    ];
-    void _touch;
-    if (presetSaveDebounce) clearTimeout(presetSaveDebounce);
-    presetSaveDebounce = setTimeout(() => saveCurrentPreset($ttsCustomActivePreset$), 250);
-  }
-
-  function onPresetSelectChange(ev: Event) {
-    const target = ev.currentTarget as HTMLSelectElement;
-    switchCustomPreset(target.value);
-  }
-
-  // --- TTS shortcut recorder ---
-  let recordingShortcut = false;
-  function startRecordShortcut() {
-    recordingShortcut = true;
-  }
-  function onShortcutKeydown(ev: KeyboardEvent) {
-    if (!recordingShortcut) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    const key = ev.key;
-    // Skip pure-modifier keypresses — wait for the actual key.
-    if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return;
-    const parts: string[] = [];
-    if (ev.ctrlKey) parts.push('ctrl');
-    if (ev.altKey) parts.push('alt');
-    if (ev.shiftKey) parts.push('shift');
-    if (ev.metaKey) parts.push('meta');
-    const k = key === ' ' ? 'space' : key.length === 1 ? key.toLowerCase() : key.toLowerCase();
-    parts.push(k);
-    ttsShortcut$.next(parts.join('+'));
-    recordingShortcut = false;
-  }
-
-  // --- Custom HTTP TTS visual masking ---
-  let revealCustomSecrets = false;
-
-  let previewState: 'idle' | 'loading' | 'playing' | 'error' = 'idle';
-  let previewMessage = '';
-  let previewAudio: HTMLAudioElement | undefined;
-  const previewText = '这是语音测试。床前明月光，疑是地上霜。';
-
-  async function previewVoice() {
-    previewMessage = '';
-    if (previewAudio) {
-      previewAudio.pause();
-      previewAudio = undefined;
-    }
-    if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
-
-    if ($ttsEngine$ === 'web') {
-      const utt = new SpeechSynthesisUtterance(previewText);
-      utt.lang = 'zh-CN';
-      utt.rate = 1;
-      previewState = 'playing';
-      utt.onend = () => (previewState = 'idle');
-      utt.onerror = () => {
-        previewState = 'error';
-        previewMessage = 'Web Speech 播放失败';
-      };
-      window.speechSynthesis.speak(utt);
-      return;
-    }
-
-    if (!isTauri()) return;
-    previewState = 'loading';
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      if ($ttsEngine$ === 'sapi') {
-        const b64 = await invoke<string>('sapi_speak', {
-          text: previewText,
-          voiceId: $ttsSapiVoiceId$ || null,
-          rate: 1
-        });
-        const bin = atob(b64);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/wav' }));
-        previewAudio = new Audio(url);
-        previewAudio.onended = () => {
-          previewState = 'idle';
-          URL.revokeObjectURL(url);
-        };
-        previewAudio.onerror = () => {
-          previewState = 'error';
-          previewMessage = '音频播放失败';
-          URL.revokeObjectURL(url);
-        };
-        previewState = 'playing';
-        await previewAudio.play();
-      } else if ($ttsEngine$ === 'custom') {
-        let headersObj: Record<string, string> = {};
-        try {
-          const parsed = JSON.parse($ttsCustomHeaders$ || '{}');
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            headersObj = Object.fromEntries(
-              Object.entries(parsed).map(([k, v]) => [k, String(v)])
-            );
-          }
-        } catch (err: any) {
-          previewState = 'error';
-          previewMessage = `请求头不是合法 JSON: ${err.message}`;
-          return;
-        }
-        const b64 = await invoke<string>('custom_tts_synthesize', {
-          endpoint: $ttsCustomEndpoint$,
-          method: $ttsCustomMethod$ || 'POST',
-          headers: headersObj,
-          bodyTemplate: $ttsCustomBody$ || '',
-          audioPath: $ttsCustomAudioPath$ || null,
-          text: previewText
-        });
-        const bin = atob(b64);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'audio/mpeg' }));
-        previewAudio = new Audio(url);
-        previewAudio.onended = () => {
-          previewState = 'idle';
-          URL.revokeObjectURL(url);
-        };
-        previewAudio.onerror = () => {
-          previewState = 'error';
-          previewMessage = '音频播放失败';
-          URL.revokeObjectURL(url);
-        };
-        previewState = 'playing';
-        await previewAudio.play();
-      } else {
-        // Unknown engine — bail so the UI doesn't stay in 'loading'.
-        previewState = 'idle';
-      }
-    } catch (err: any) {
-      previewState = 'error';
-      previewMessage = err?.message ?? String(err);
-    }
-  }
-
-  async function resetUiSettings() {
-    if (
-      typeof window === 'undefined' ||
-      !confirm(
-        '将清除本地保存的 UI 设置（主题、字体、自定义快捷键、TTS 引擎选项等），书库与统计数据保留。应用会自动重启。\n\n继续吗？'
-      )
-    ) {
-      return;
-    }
-    if (isTauri()) {
-      // Desktop: schedule a Local Storage wipe in Rust and restart, so it
-      // works even when stale UI state would otherwise block the page.
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('schedule_ui_reset');
-        return;
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[reset] schedule failed, falling back to in-page clear:', err);
-      }
-    }
-    // Browser fallback / desktop degraded path
-    const toClear: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k) toClear.push(k);
-    }
-    toClear.forEach((k) => localStorage.removeItem(k));
-    window.location.reload();
+  function resetUiSettings() {
+    confirmResetUiSettings();
   }
 
   let themeImportInput: HTMLInputElement | undefined;
@@ -614,7 +222,7 @@
     dialogManager.dialogs$.next([
       {
         component: SettingsCustomTheme,
-        props: { existingThemes: optionsForTheme }
+        props: { existingThemes: optionsForTheme, selectedTheme: selectedTheme }
       }
     ]);
   }
@@ -666,174 +274,52 @@
     }
   }
 
-  const optionsForFuriganaStyle: ToggleOption<FuriganaStyle>[] = [
-    {
-      id: FuriganaStyle.Hide,
-      text: '隐藏'
-    },
-    {
-      id: FuriganaStyle.Partial,
-      text: '部分'
-    },
-    {
-      id: FuriganaStyle.Toggle,
-      text: '点击切换'
-    },
-    {
-      id: FuriganaStyle.Full,
-      text: '完整'
-    }
-  ];
+  // 书库存储源 toggle。Tauri 桌面上才显示：TAURI_FS 是默认真书库，
+  // BROWSER 只留给从更早浏览器 IDB 升级过来的用户翻旧数据。
+  $: storageSourceOptions = [
+    { id: StorageKey.TAURI_FS, text: $t('settings.value.storageSource.fs') },
+    { id: StorageKey.BROWSER, text: $t('settings.value.storageSource.browser') }
+  ] as ToggleOption<StorageKey>[];
+  let selectedStorageSource: StorageKey = $storageSource$;
+  $: if (selectedStorageSource !== $storageSource$) {
+    storageSource$.next(selectedStorageSource);
+  }
 
-  const optionsForWritingMode: ToggleOption<WritingMode>[] = [
-    {
-      id: 'horizontal-tb',
-      text: '横排'
-    },
-    {
-      id: 'vertical-rl',
-      text: '竖排'
-    }
-  ];
+  $: optionsForImportHTMLFixes = [
+    { id: ImportHTMLFixMode.OFF, text: $t('settings.value.epubFix.off') },
+    { id: ImportHTMLFixMode.STANDARD, text: $t('settings.value.epubFix.standard') },
+    { id: ImportHTMLFixMode.EXTENDED, text: $t('settings.value.epubFix.extended') }
+  ] as ToggleOption<ImportHTMLFixMode>[];
 
-  const optionsForVerticalTextOrientation: ToggleOption<VerticalTextOrientation>[] = [
-    {
-      id: 'mixed',
-      text: '混合'
-    },
-    {
-      id: 'upright',
-      text: '正立'
-    }
-  ];
+  $: optionsForAutoReplicationType = [
+    { id: AutoReplicationType.Off, text: 'Off' },
+    { id: AutoReplicationType.Up, text: $t('settings.value.autoRepl.up') },
+    { id: AutoReplicationType.Down, text: $t('settings.value.autoRepl.down') },
+    { id: AutoReplicationType.All, text: $t('settings.value.autoRepl.all') }
+  ] as ToggleOption<AutoReplicationType>[];
 
-  const optionsForTextMarginMode: ToggleOption<TextMarginMode>[] = [
-    {
-      id: 'auto',
-      text: '自动'
-    },
-    {
-      id: 'manual',
-      text: '手动'
-    }
-  ];
+  $: optionsForReplicationSaveBehavior = [
+    { id: ReplicationSaveBehavior.NewOnly, text: $t('settings.value.mergeOnly') },
+    { id: ReplicationSaveBehavior.Overwrite, text: $t('settings.value.overwrite') }
+  ] as ToggleOption<ReplicationSaveBehavior>[];
 
-  const optionsForViewMode: ToggleOption<ViewMode>[] = [
-    {
-      id: ViewMode.Continuous,
-      text: '滚动'
-    },
-    {
-      id: ViewMode.Paginated,
-      text: '分页'
-    }
-  ];
+  $: optionsForTrackerAutoPause = [
+    { id: TrackerAutoPause.OFF, text: 'Off' },
+    { id: TrackerAutoPause.MODERATE, text: $t('settings.value.autoPause.moderate') },
+    { id: TrackerAutoPause.STRICT, text: $t('settings.value.autoPause.strict') }
+  ] as ToggleOption<TrackerAutoPause>[];
 
-  const optionsForBlurMode: ToggleOption<BlurMode>[] = [
-    {
-      id: BlurMode.ALL,
-      text: '全部'
-    },
-    {
-      id: BlurMode.AFTER_TOC,
-      text: '封面外'
-    },
-    {
-      id: BlurMode.NONE,
-      text: '不模糊'
-    }
-  ];
+  $: optionsForTrackerSkipThresholdAction = [
+    { id: TrackerSkipThresholdAction.IGNORE, text: $t('settings.value.skipAction.ignore') },
+    { id: TrackerSkipThresholdAction.PAUSE, text: $t('settings.value.skipAction.pause') }
+  ] as ToggleOption<TrackerSkipThresholdAction>[];
 
-  const optionsForImportHTMLFixes: ToggleOption<ImportHTMLFixMode>[] = [
-    {
-      id: ImportHTMLFixMode.OFF,
-      text: 'Off'
-    },
-    {
-      id: ImportHTMLFixMode.STANDARD,
-      text: '标准'
-    },
-    {
-      id: ImportHTMLFixMode.EXTENDED,
-      text: '扩展'
-    }
-  ];
-
-  const optionsForAutoReplicationType: ToggleOption<AutoReplicationType>[] = [
-    {
-      id: AutoReplicationType.Off,
-      text: 'Off'
-    },
-    {
-      id: AutoReplicationType.Up,
-      text: '上传'
-    },
-    {
-      id: AutoReplicationType.Down,
-      text: '下载'
-    },
-    {
-      id: AutoReplicationType.All,
-      text: '双向'
-    }
-  ];
-
-  const optionsForReplicationSaveBehavior: ToggleOption<ReplicationSaveBehavior>[] = [
-    {
-      id: ReplicationSaveBehavior.NewOnly,
-      text: '仅新增'
-    },
-    {
-      id: ReplicationSaveBehavior.Overwrite,
-      text: '覆盖'
-    }
-  ];
-
-  const optionsForTrackerAutoPause: ToggleOption<TrackerAutoPause>[] = [
-    {
-      id: TrackerAutoPause.OFF,
-      text: 'Off'
-    },
-    {
-      id: TrackerAutoPause.MODERATE,
-      text: '适度'
-    },
-    {
-      id: TrackerAutoPause.STRICT,
-      text: '严格'
-    }
-  ];
-
-  const optionsForTrackerSkipThresholdAction: ToggleOption<TrackerSkipThresholdAction>[] = [
-    {
-      id: TrackerSkipThresholdAction.IGNORE,
-      text: '忽略'
-    },
-    {
-      id: TrackerSkipThresholdAction.PAUSE,
-      text: '暂停统计'
-    }
-  ];
-
-  const optionsForMergeMode: ToggleOption<MergeMode>[] = [
-    {
-      id: MergeMode.MERGE,
-      text: '合并'
-    },
-    {
-      id: MergeMode.REPLACE,
-      text: '覆盖'
-    }
-  ];
-
-  const storageSources$ = database.storageSourcesChanged$.pipe(
-    map((storageSources) =>
-      storageSources.filter((storageSource) => !isAppDefault(storageSource.name))
-    )
-  );
+  $: optionsForMergeMode = [
+    { id: MergeMode.MERGE, text: $t('settings.value.merge') },
+    { id: MergeMode.REPLACE, text: $t('settings.value.overwrite') }
+  ] as ToggleOption<MergeMode>[];
 
   let showSpinner = false;
-  let furiganaStyleTooltip = '';
   let importHTMLFixModeTooltip = '';
   let autoReplicationTypeTooltip = '';
   let trackerAutoPauseTooltip = '';
@@ -842,105 +328,157 @@
     $textMarginValue$ = 0;
   }
 
-  $: verticalTextOrientationTooltip =
-    verticalTextOrientation === 'mixed'
-      ? '横向文字字符顺时针旋转 90°'
-      : '横向文字字符正立排版，竖向字符也正立显示。';
-  $: autoBookmarkTooltip = `开启后，超过 ${autoBookmarkTime} 秒未滚动/翻页将自动加书签`;
-  $: wakeLockSupported = browser && 'wakeLock' in navigator;
-  $: verticalMode = writingMode === 'vertical-rl';
-  $: fontCacheSupported = browser && 'caches' in window;
-  $: switch (furiganaStyle) {
-    case FuriganaStyle.Hide:
-      furiganaStyleTooltip = '始终隐藏';
-      break;
-    case FuriganaStyle.Toggle:
-      furiganaStyleTooltip = '默认隐藏，点击可切换显示';
-      break;
-    case FuriganaStyle.Full:
-      furiganaStyleTooltip = '默认隐藏，悬停或点击时显示';
-      break;
-    default:
-      furiganaStyleTooltip = '以灰色显示振假名';
-      break;
-  }
-  $: avoidPageBreakTooltip = avoidPageBreak
-    ? '避免单词/句子被拆分到不同页面'
-    : '允许单词/句子在分页处被拆分';
   $: persistentStorageTooltip = persistentStorage
-    ? '阅读器使用更高的本地存储配额'
-    : '使用较低的临时存储配额。\n启用可能需要书签或通知权限';
+    ? $t('settings.tip.persistent.on')
+    : $t('settings.tip.persistent.off');
   $: switch (importHTMLFixMode) {
     case ImportHTMLFixMode.OFF:
-      importHTMLFixModeTooltip = '原样导入 EPUB 文件';
+      importHTMLFixModeTooltip = $t('settings.tip.epubFix.off');
       break;
     case ImportHTMLFixMode.EXTENDED:
-      importHTMLFixModeTooltip = '对 EPUB 导入应用更多修正：去除控制字符、替换 HTML 实体等';
+      importHTMLFixModeTooltip = $t('settings.tip.epubFix.extended');
       break;
     default:
-      importHTMLFixModeTooltip = '对 EPUB 导入做基础修正：错误的自闭合标签等';
+      importHTMLFixModeTooltip = $t('settings.tip.epubFix.standard');
       break;
   }
   $: cacheStorageDataTooltip = cacheStorageData
-    ? '缓存存储数据。可省网络流量与延迟，但读取最新数据需刷新或新开标签'
-    : '每次操作都重新拉取数据。流量与延迟较高，但保证数据最新';
+    ? $t('settings.tip.cacheData.on')
+    : $t('settings.tip.cacheData.off');
   $: replicationSaveBehaviorTooltip =
     replicationSaveBehavior === ReplicationSaveBehavior.Overwrite
-      ? '总是覆盖目标数据'
-      : '仅当目标无数据、无时间戳或目标数据更旧时才写入';
+      ? $t('settings.tip.replBehavior.overwrite')
+      : $t('settings.tip.replBehavior.newOnly');
   $: switch (autoReplication) {
     case AutoReplicationType.Up:
-      autoReplicationTypeTooltip = '阅读时每分钟将更新数据导出到同步目标';
+      autoReplicationTypeTooltip = $t('settings.tip.autoRepl.up');
       break;
     case AutoReplicationType.Down:
-      autoReplicationTypeTooltip = '打开书时从同步目标导入数据';
+      autoReplicationTypeTooltip = $t('settings.tip.autoRepl.down');
       break;
     case AutoReplicationType.All:
-      autoReplicationTypeTooltip = '双向同步';
+      autoReplicationTypeTooltip = $t('settings.tip.autoRepl.all');
       break;
     default:
-      autoReplicationTypeTooltip = '关闭自动导入/导出';
+      autoReplicationTypeTooltip = $t('settings.tip.autoRepl.off');
       break;
   }
   $: showExternalPlaceholderToolTip = showExternalPlaceholder
-    ? '在浏览器源管理器中显示外部书籍的占位数据'
-    : '隐藏外部书籍的占位数据';
+    ? $t('settings.tip.showPlaceholder.on')
+    : $t('settings.tip.showPlaceholder.off');
 
   $: startOfDayHours = `${`${startDayHoursForTracker}`.padStart(2, '0')}:00`;
+
+  /** 12 hours, the ceiling the tooltip has always promised. */
+  const IDLE_MAX_MINUTES = 720;
 
   $: trackerIdleTimeInMin = secondsToMinutes(trackerIdleTime);
 
   $: switch (trackerAutoPause) {
     case TrackerAutoPause.OFF:
-      trackerAutoPauseTooltip = '除特定阅读事件外，统计不会自动暂停';
+      trackerAutoPauseTooltip = $t('settings.tip.autoPause.off');
       break;
     case TrackerAutoPause.STRICT:
-      trackerAutoPauseTooltip = '阅读事件或任何站点失焦（如词典弹窗）时统计都会自动暂停';
+      trackerAutoPauseTooltip = $t('settings.tip.autoPause.strict');
       break;
     default:
-      trackerAutoPauseTooltip = '阅读事件或阅读标签失焦时统计自动暂停';
+      trackerAutoPauseTooltip = $t('settings.tip.autoPause.moderate');
       break;
   }
 
-  $: if ((activeSettings === 'Data' || activeSettings === 'Statistics') && !$storageSources$) {
-    database
-      .getStorageSources()
-      .then((storageSources) => {
-        database.storageSourcesChanged$.next(storageSources);
-      })
-      .catch((error) => {
-        logger.error(`Failed to retrieve storage sources: ${error.message}`);
-        database.storageSourcesChanged$.next([]);
+  /**
+   * Reading records are kept when a book is deleted — on purpose. So clearing
+   * them has to be a decision the user makes with the list in front of them,
+   * not a one-click sweep of anything that looks unattached.
+   */
+  async function confirmClearOrphanStatistics() {
+    showSpinner = true;
+    try {
+      const handler = getStorageHandler(window, $storageSource$, '');
+      // Books in the current library that own no IDB `data` row still count as
+      // present; without this the sweep offered to delete books on screen.
+      const libraryTitles = await handler
+        .getBookList()
+        .then((cards) => cards.map((card) => card.title))
+        .catch(() => [] as string[]);
+
+      const { statistics, lastModifiedTitles, titles } =
+        await database.findOrphanStatistics(libraryTitles);
+
+      if (!statistics.length && !lastModifiedTitles.length) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: tImmediate('settings.item.clearOrphanStats'),
+              message: tImmediate('settings.tip.clearOrphanStatsNone')
+            }
+          }
+        ]);
+        return;
+      }
+
+      const preview = titles.slice(0, 8).join('\n');
+      const wasCanceled = await new Promise<boolean>((resolver) => {
+        dialogManager.dialogs$.next([
+          {
+            component: ConfirmDialog,
+            props: {
+              dialogHeader: tImmediate('settings.item.clearOrphanStats'),
+              dialogMessage: `${tImmediate('settings.tip.clearOrphanStatsConfirm', {
+                books: titles.length,
+                rows: statistics.length
+              })}\n\n${preview}${titles.length > 8 ? '\n…' : ''}`,
+              contentStyles: 'white-space: pre-line;',
+              resolver
+            }
+          }
+        ]);
       });
+      if (wasCanceled) return;
+
+      await database.deleteStatistics(statistics, lastModifiedTitles);
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: tImmediate('settings.item.clearOrphanStats'),
+            message: tImmediate('settings.tip.clearOrphanStatsDone', {
+              books: titles.length,
+              rows: statistics.length
+            })
+          }
+        }
+      ]);
+    } catch (error: any) {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: tImmediate('common.error'),
+            message: `${tImmediate('settings.tip.clearOrphanStatsError')}: ${error?.message || error}`
+          }
+        }
+      ]);
+    } finally {
+      showSpinner = false;
+    }
   }
+
 </script>
 
 <div class="grid grid-cols-1 items-center sm:grid-cols-2 sm:gap-6 lg:md:gap-8 lg:grid-cols-3">
   {#if activeSettings === 'Appearance'}
     <div class="lg:col-span-3">
-      <SettingsItemGroup title="主题">
+      <SettingsItemGroup title={$t('locale.label')}>
+        <ButtonToggleGroup options={optionsForLocale} bind:selectedOptionId={$locale$} />
+      </SettingsItemGroup>
+    </div>
+    <div class="lg:col-span-3">
+      <SettingsItemGroup title={$t('settings.section.theme')}>
         <ButtonToggleGroup
           options={optionsForTheme}
+          dimUnselected={false}
           bind:selectedOptionId={selectedTheme}
           on:edit={({ detail }) => (inlineEditTheme = detail)}
           on:delete={({ detail }) => {
@@ -954,7 +492,7 @@
             <div class="flex">
               <button
                 title="新建主题"
-                class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+                class="settings-btn m-1"
                 on:click={handleNewTheme}
               >
                 <Fa icon={faPlus} class="mx-2" />
@@ -962,7 +500,7 @@
               </button>
               <button
                 title="导出自定义主题"
-                class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+                class="settings-btn m-1"
                 disabled={!Object.keys($customThemes$).length}
                 class:opacity-40={!Object.keys($customThemes$).length}
                 on:click={exportCustomThemes}
@@ -972,7 +510,7 @@
               </button>
               <button
                 title="导入自定义主题"
-                class="m-1 rounded-md border-2 border-gray-400 p-2 text-lg"
+                class="settings-btn m-1"
                 on:click={() => themeImportInput?.click()}
               >
                 <Fa icon={faFileArrowDown} class="mx-2" />
@@ -998,1044 +536,98 @@
             />
           {/key}
         {:else}
-          <p class="mt-2 text-xs opacity-60">点击主题按钮旁的笔形图标可直接在下方编辑配色，无需弹窗。</p>
+          <p class="mt-2 text-xs opacity-60">{$t('settings.theme.editHint')}</p>
         {/if}
       </SettingsItemGroup>
     </div>
 
-    <SettingsItemGroup title="字体（组 1）">
-      <div slot="header" class="flex items-center">
-        <SettingsFontSelector
-          availableFonts={[
-            LocalFont.NOTOSANSSC,
-            LocalFont.NOTOSERIFJP,
-            LocalFont.KZUDMINCHO,
-            LocalFont.SERIF
-          ]}
-          bind:fontValue={fontFamilyGroupOne}
+    <div class="lg:col-span-3">
+      <SettingsItemGroup
+        title={$t('settings.item.highlightPalette')}
+        tooltip={$t('settings.tip.highlightPalette')}
+      >
+        <ButtonToggleGroup
+          options={optionsForHighlightPalette}
+          bind:selectedOptionId={$highlightPalette$}
         />
-        {#if fontCacheSupported}
-          <div
-            tabindex="0"
-            role="button"
-            title="打开自定义字体对话框"
-            on:click={() =>
-              dialogManager.dialogs$.next([
-                {
-                  component: SettingsUserFontDialog,
-                  props: { fontFamily: fontFamilyGroupOne$ }
-                }
-              ])}
-            on:keyup={dummyFn}
-          >
-            <Fa icon={faComputer} />
+        <div
+          class="mt-3 flex flex-wrap items-center gap-3 rounded-md p-3"
+          style="background:{previewTheme.backgroundColor || 'transparent'};color:{previewTheme.fontColor ||
+            'inherit'}"
+        >
+          {#each HIGHLIGHT_SLOTS as slot (slot)}
+            <span
+              class="rounded-sm px-2 py-1"
+              style="background:rgba({$highlightSlotStyles$[slot].rgb},{$highlightSlotStyles$[slot].alpha});
+                     border-bottom:{$highlightSlotStyles$[slot].underlineWidth} {$highlightSlotStyles$[slot]
+                .underlineStyle} rgb({$highlightSlotStyles$[slot].rgb});
+                     color:{$highlightSlotStyles$[slot].ink}"
+            >
+              {$t('settings.highlightPalette.sample', { slot })}
+            </span>
+          {/each}
+        </div>
+        {#if $highlightPalette$ === 'custom'}
+          <div class="-m-1 mt-2 flex flex-wrap">
+            {#each HIGHLIGHT_SLOTS as slot, i (slot)}
+              <label class="m-1 flex flex-col items-center gap-1">
+                <input
+                  type="color"
+                  class="h-12 w-14 cursor-pointer rounded-md border-2 border-current/40 bg-transparent p-1"
+                  value={customSlotColors[i]}
+                  on:input={(ev) => setCustomSlotColor(i, ev.currentTarget.value)}
+                />
+                <span class="text-xs opacity-60">{slot}</span>
+              </label>
+            {/each}
           </div>
         {/if}
-      </div>
-      <input
-        type="text"
-        class={inputClasses}
-        placeholder="Noto Sans SC"
-        bind:value={fontFamilyGroupOne}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="字体（组 2）">
-      <div slot="header" class="flex items-center">
-        <SettingsFontSelector
-          availableFonts={[LocalFont.NOTOSANSSC, LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF]}
-          bind:fontValue={fontFamilyGroupTwo}
-        />
-        {#if fontCacheSupported}
-          <div
-            tabindex="0"
-            role="button"
-            on:click={() =>
-              dialogManager.dialogs$.next([
-                {
-                  component: SettingsUserFontDialog,
-                  props: { fontFamily: fontFamilyGroupTwo$ }
-                }
-              ])}
-            on:keyup={dummyFn}
-          >
-            <Fa icon={faComputer} />
-          </div>
-        {/if}
-      </div>
-      <input
-        type="text"
-        class={inputClasses}
-        placeholder="Noto Sans SC"
-        bind:value={fontFamilyGroupTwo}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="字号">
-      <input type="number" class={inputClasses} step="1" min="1" bind:value={fontSize} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="行高">
-      <input
-        type="number"
-        class={inputClasses}
-        step="0.05"
-        min="1"
-        bind:value={lineHeight}
-        on:change={() => {
-          if (!lineHeight || lineHeight < 1) {
-            lineHeight = 1.65;
-          }
-        }}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="字重" tooltip={'设置字重，留空使用默认'}>
-      <input
-        type="number"
-        placeholder="默认"
-        class={inputClasses}
-        step="100"
-        min="100"
-        max="1000"
-        bind:value={fontWeight}
-        on:change={() => {
-          if (fontWeight === null) return;
-          if (fontWeight < 100) fontWeight = 100;
-          else if (fontWeight > 1000) fontWeight = 1000;
-        }}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="段落首行缩进" tooltip="段落首行缩进（rem）">
-      <input
-        type="number"
-        class={inputClasses}
-        step=".5"
-        min="0"
-        bind:value={textIndentation}
-        on:blur={() => {
-          const newValue = Number.parseFloat(`${textIndentation ?? 0}`);
-          if (isNaN(newValue) || newValue < 1) textIndentation = 0;
-        }}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="段落间距模式" tooltip={'切到手动模式可指定段落间距值'}>
-      <ButtonToggleGroup
-        options={optionsForTextMarginMode}
-        bind:selectedOptionId={textMarginMode}
-      />
-    </SettingsItemGroup>
-    {#if textMarginMode === 'manual'}
-      <SettingsItemGroup title="段落间距" tooltip="段落间距（rem）">
-        <input
-          type="number"
-          class={inputClasses}
-          step=".5"
-          min="0"
-          bind:value={textMarginValue}
-          on:blur={() => {
-            const newValue = Number.parseFloat(`${textMarginValue ?? 0}`);
-            if (isNaN(newValue) || newValue < 1) textMarginValue = 0;
-          }}
-        />
       </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup title="两端对齐" tooltip={'开启后两端对齐段落文字'}>
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={enableTextJustification}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="美化换行" tooltip={'在支持的浏览器中启用 pretty 换行样式'}>
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTextWrapPretty} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="排版方向">
-      <ButtonToggleGroup options={optionsForWritingMode} bind:selectedOptionId={writingMode} />
-    </SettingsItemGroup>
-    {#if verticalMode}
-      <SettingsItemGroup title="启用字距调整" tooltip={'在字体与浏览器支持时，竖排间距视觉更平衡'}>
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontKerning} />
-      </SettingsItemGroup>
-      <SettingsItemGroup title="启用 VPAL" tooltip={'在字体与浏览器支持时，竖排文字间距更自然'}>
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontVPAL} />
-      </SettingsItemGroup>
-      <SettingsItemGroup title="文字方向" tooltip={verticalTextOrientationTooltip}>
-        <ButtonToggleGroup
-          options={optionsForVerticalTextOrientation}
-          bind:selectedOptionId={verticalTextOrientation}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup title="隐藏振假名">
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
-    </SettingsItemGroup>
-    {#if hideFurigana}
-      <SettingsItemGroup title="振假名样式" tooltip={furiganaStyleTooltip}>
-        <ButtonToggleGroup
-          options={optionsForFuriganaStyle}
-          bind:selectedOptionId={furiganaStyle}
-        />
-      </SettingsItemGroup>
-    {/if}
+    </div>
+
+    <SettingsTypography />
   {:else if activeSettings === 'Reader'}
-    <div class="h-full">
-      <SettingsItemGroup title="阅读视图">
-        <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
-        <p class="mt-1 text-xs opacity-60">滚动模式：自动播放（打字机效果）；分页模式：TTS 语音朗读 + 自动翻页</p>
-      </SettingsItemGroup>
-    </div>
-
-    {#if isTauri() && viewMode === ViewMode.Paginated}
-      <SettingsItemGroup
-        title="朗读引擎"
-        tooltip="推荐：系统 TTS（SAPI）+ Windows 11 自然语音（设置→辅助功能→讲述人→添加自然语音），音质接近云端神经网络且完全离线。Web Speech 是浏览器内建作兜底。Edge 在线音色为实验功能，微软持续升级反爬，大概率连不上，不建议依赖。切换后请重开书生效。"
-      >
-        <div class="flex flex-col gap-2">
-          <div class="flex items-center gap-2 flex-wrap">
-            <select
-              class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-[14rem] truncate"
-              bind:value={$ttsEngine$}
-            >
-              <option value="web">Web Speech（浏览器）</option>
-              <option value="sapi">系统 TTS（SAPI）</option>
-              <option value="custom">自定义 HTTP TTS</option>
-            </select>
-            <button
-              class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm disabled:opacity-40"
-              disabled={previewState === 'loading' || previewState === 'playing'}
-              on:click={previewVoice}
-            >
-              {previewState === 'loading'
-                ? '加载中…'
-                : previewState === 'playing'
-                  ? '播放中…'
-                  : '试听'}
-              <Ripple />
-            </button>
-          </div>
-          {#if previewState === 'error'}
-            <p class="text-red-500 text-xs">{previewMessage}</p>
-          {/if}
-        </div>
-      </SettingsItemGroup>
-
-      <SettingsItemGroup
-        title="朗读起点"
-        tooltip="按播放按钮（或 V 快捷键）时从哪里开始读。选区：用当前选中文字或光标位置（无选区时降级到上次保存位置）；上次位置：从上次暂停的字位置续读；章节开头：从当前章节第一段开始。"
-      >
-        <select
-          class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-[12rem]"
-          bind:value={$ttsStartStrategy$}
-        >
-          <option value="selection">选区 / 光标位置（默认）</option>
-          <option value="resume">上次保存位置</option>
-          <option value="section-start">章节开头</option>
-        </select>
-      </SettingsItemGroup>
-
-      <SettingsItemGroup
-        title="章末自动续读"
-        tooltip="读到本章最后一段时，是否自动翻到下一章继续。关闭则停在章末。"
-      >
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={$ttsAutoAdvanceSection$}
-        />
-      </SettingsItemGroup>
-
-      <SettingsItemGroup
-        title="朗读全局快捷键"
-        tooltip="任意窗口前台时按下都能切换朗读。点「录制」然后按下你想要的组合键（如 Ctrl+Alt+P）即可；注册冲突时不报错只是按下无反应。"
-      >
-        <div class="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            class="rounded border-2 px-3 py-1 text-sm min-w-[8rem] text-center font-mono"
-            class:border-red-500={recordingShortcut}
-            class:border-gray-400={!recordingShortcut}
-            on:click={startRecordShortcut}
-            on:keydown={onShortcutKeydown}
-          >
-            {recordingShortcut ? '按下按键…' : $ttsShortcut$ || '(已禁用)'}
-            <Ripple />
-          </button>
-          <button
-            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-            on:click={() => {
-              recordingShortcut = false;
-              ttsShortcut$.next('ctrl+alt+p');
-            }}
-          >
-            重置
-            <Ripple />
-          </button>
-          <button
-            class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-            on:click={() => {
-              recordingShortcut = false;
-              ttsShortcut$.next('');
-            }}
-          >
-            禁用
-            <Ripple />
-          </button>
-        </div>
-      </SettingsItemGroup>
-
-      {#if $ttsEngine$ === 'sapi'}
-        <div class="lg:col-span-3">
-          <SettingsItemGroup
-            title="系统 TTS 语音"
-            tooltip="注：Windows 11 设置里的「Natural 自然语音」是 Narrator 专属，应用层（包括本 app）调不到。要高质量本地 TTS 暂时无解，建议改用自定义 HTTP TTS 接 OpenAI / Azure 等付费 API。下面是系统暴露给应用的 SAPI 5 老音色，质量基础。"
-          >
-            {#if sapiVoicesError}
-              <p class="text-red-500 text-sm">{sapiVoicesError}</p>
-            {:else if !sapiVoices.length}
-              <p class="text-sm opacity-60">未检测到可用语音</p>
-            {:else}
-              <select
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm max-w-xs"
-                bind:value={$ttsSapiVoiceId$}
-              >
-                <option value="">系统默认</option>
-                {#each sapiVoices as voice (voice.id)}
-                  <option value={voice.id}>{voice.name} ({voice.language})</option>
-                {/each}
-              </select>
-            {/if}
-          </SettingsItemGroup>
-        </div>
-      {/if}
-
-      {#if $ttsEngine$ === 'custom'}
-        <div class="lg:col-span-3">
-          <SettingsItemGroup
-            title="自定义 HTTP TTS"
-            tooltip={'把任意 TTS API 接进来。{text} 会被替换为当前句子并 JSON 转义。响应是音频字节（OpenAI/ElevenLabs/Azure）「音频路径」留空；响应是 JSON 包 base64 音频（MiMo 等）则填出 base64 字段的 dot-path，如 choices.0.message.audio.data。'}
-          >
-            <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
-              <span class="text-xs opacity-80 pt-2">服务预设</span>
-              <div class="flex items-center gap-2 flex-wrap">
-                <select
-                  class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
-                  value={$ttsCustomActivePreset$}
-                  on:change={onPresetSelectChange}
-                >
-                  {#each Object.entries(CUSTOM_PRESETS) as [id, preset] (id)}
-                    <option value={id}>{preset.label}</option>
-                  {/each}
-                </select>
-                <button
-                  class="rounded-md border-2 border-gray-400 px-2 py-1 text-xs"
-                  title="把当前预设的字段重置为默认模板（不影响其他预设保存的 key）"
-                  on:click={resetActivePresetToDefaults}
-                >
-                  恢复模板
-                  <Ripple />
-                </button>
-                <button
-                  class="rounded-md border-2 border-gray-400 px-2 py-1 text-xs"
-                  on:click={() => (revealCustomSecrets = !revealCustomSecrets)}
-                >
-                  {revealCustomSecrets ? '隐藏内容' : '显示内容'}
-                  <Ripple />
-                </button>
-              </div>
-
-              <span class="text-xs opacity-80 pt-2">请求方法</span>
-              <select
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm w-24"
-                bind:value={$ttsCustomMethod$}
-              >
-                <option value="POST">POST</option>
-                <option value="PUT">PUT</option>
-                <option value="GET">GET</option>
-              </select>
-
-              <span class="text-xs opacity-80 pt-2">端点 URL</span>
-              <input
-                type="text"
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm"
-                placeholder="https://api.openai.com/v1/audio/speech"
-                bind:value={$ttsCustomEndpoint$}
-              />
-
-              <span class="text-xs opacity-80 pt-2">请求头（JSON）</span>
-              <textarea
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
-                class:secret-masked={!revealCustomSecrets}
-                rows="4"
-                bind:value={$ttsCustomHeaders$}
-              ></textarea>
-
-              <span class="text-xs opacity-80 pt-2">请求体模板</span>
-              <textarea
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-xs font-mono"
-                class:secret-masked={!revealCustomSecrets}
-                rows="8"
-                bind:value={$ttsCustomBody$}
-              ></textarea>
-
-              <span class="text-xs opacity-80 pt-2">音频路径</span>
-              <input
-                type="text"
-                class="rounded bg-background-color border-b-2 border-gray-400/50 px-2 py-1 text-sm font-mono"
-                placeholder="留空 = 响应是裸音频字节；否则填 JSON 里 base64 字段的 dot-path"
-                bind:value={$ttsCustomAudioPath$}
-              />
-            </div>
-          </SettingsItemGroup>
-        </div>
-      {/if}
-
-    {/if}
-
-    <!-- 视图模式专属 -->
-    {#if viewMode === ViewMode.Continuous}
-      <SettingsItemGroup
-        title="自定义阅读点"
-        tooltip={'开启后可在阅读器中设置固定起算点，进度和书签从该点开始计算'}
-      >
-        <div class="flex items-center">
-          <ButtonToggleGroup
-            options={optionsForToggle}
-            bind:selectedOptionId={customReadingPointEnabled}
-          />
-          {#if customReadingPointEnabled}
-            <div
-              tabindex="0"
-              role="button"
-              class="ml-4 hover:underline"
-              on:click={() => {
-                verticalCustomReadingPosition$.next(100);
-                horizontalCustomReadingPosition$.next(0);
-              }}
-              on:keyup={dummyFn}
-            >
-              重置阅读点
-            </div>
-          {/if}
-        </div>
-      </SettingsItemGroup>
-      <SettingsItemGroup title="窗口变化时自动定位">
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={autoPositionOnResize}
-        />
-      </SettingsItemGroup>
-    {:else}
-      <SettingsItemGroup title="避免分页打断" tooltip={avoidPageBreakTooltip}>
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={avoidPageBreak} />
-      </SettingsItemGroup>
-      <SettingsItemGroup
-        title="选中即书签"
-        tooltip={'开启后，书签会落在当前/上次选中文本附近段落，而不是页首'}
-      >
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={selectionToBookmarkEnabled}
-        />
-      </SettingsItemGroup>
-      <SettingsItemGroup title="点击翻页" tooltip="在两侧保留小边缘区域，点击可翻页">
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTapEdgeToFlip} />
-      </SettingsItemGroup>
-      {#if !verticalMode}
-        <SettingsItemGroup title="分栏数" tooltip="渲染的文本栏数">
-          <input type="number" class={inputClasses} step="1" min="0" bind:value={pageColumns} />
-        </SettingsItemGroup>
-      {/if}
-      <SettingsItemGroup title="滑动阈值" tooltip={'触发翻页所需的滑动距离'}>
-        <input
-          type="number"
-          step="1"
-          min="10"
-          class={inputClasses}
-          bind:value={swipeThreshold}
-          on:blur={() => {
-            if (swipeThreshold < 10 || typeof swipeThreshold !== 'number') swipeThreshold = 10;
-          }}
-        />
-      </SettingsItemGroup>
-      <SettingsItemGroup title="禁用滚轮翻页">
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={disableWheelNavigation}
-        />
-      </SettingsItemGroup>
-    {/if}
-
-    <!-- 阅读区尺寸 -->
-    <SettingsItemGroup title={verticalMode ? '阅读区左右边距' : '阅读区上下边距'}>
-      <SettingsDimensionPopover
-        slot="header"
-        isFirstDimension
-        isVertical={verticalMode}
-        bind:dimensionValue={firstDimensionMargin}
-      />
-      <input
-        type="number"
-        class={inputClasses}
-        step="1"
-        min="0"
-        bind:value={firstDimensionMargin}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={verticalMode ? '阅读区最大高度' : '阅读区最大宽度'}>
-      <SettingsDimensionPopover
-        slot="header"
-        isVertical={verticalMode}
-        bind:dimensionValue={secondDimensionMaxValue}
-      />
-      <input
-        type="number"
-        class={inputClasses}
-        step="1"
-        min="0"
-        bind:value={secondDimensionMaxValue}
-      />
-    </SettingsItemGroup>
-
-    <!-- 书签 -->
-    <SettingsItemGroup title="自动书签" tooltip={autoBookmarkTooltip}>
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
-    </SettingsItemGroup>
-    {#if autoBookmark}
-      <SettingsItemGroup title="自动书签延时" tooltip={'触发自动书签的秒数'}>
-        <input
-          type="number"
-          step="1"
-          min="1"
-          class={inputClasses}
-          bind:value={autoBookmarkTime}
-          on:blur={() => {
-            if (autoBookmarkTime < 1 || typeof autoBookmarkTime !== 'number') autoBookmarkTime = 3;
-          }}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup
-      title="仅手动书签"
-      tooltip={'开启后，通过菜单离开阅读器时不会将当前位置加为书签'}
-    >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
-    </SettingsItemGroup>
-
-    <!-- 页脚显示 -->
-    <SettingsItemGroup title="显示字数">
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showCharacterCounter} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="显示百分比">
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showPercentage} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="页脚显示章节字数">
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={showFooterChapterCharacterCounter}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="页脚显示章节百分比">
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={showFooterChapterPercentage}
-      />
-    </SettingsItemGroup>
-
-    <!-- 图片 / 统计阅读点 -->
-    {#if $lastBookHasImages$}
-      <SettingsItemGroup
-        title="图片模糊"
-        tooltip="对包含插图的电子书（如轻小说）有效，可避免剧透图直接显示"
-      >
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
-      </SettingsItemGroup>
-      {#if blurImage}
-        <SettingsItemGroup title="模糊范围" tooltip="模糊范围：全部 / 仅封面外（保留封面，封底+正文图片都模糊）/ 不模糊">
-          <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
-        </SettingsItemGroup>
-      {/if}
-    {/if}
-    {#if statisticsEnabled}
-      <SettingsItemGroup
-        title="自定义阅读点暂停统计"
-        tooltip={'开启后，设置自定义阅读点时统计会自动暂停/恢复'}
-      >
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={pauseTrackerOnCustomPointChange}
-        />
-      </SettingsItemGroup>
-    {/if}
-
-    <!-- 杂项 -->
-    {#if wakeLockSupported}
-      <SettingsItemGroup
-        title="屏幕常亮"
-        tooltip={'开启后请求屏幕常亮（WakeLock），防止屏幕变暗或锁屏'}
-      >
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableReaderWakeLock} />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup
-      title="关闭确认"
-      tooltip={'开启后，存在未保存改动时关闭/刷新阅读器标签前会确认'}
-    >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={confirmClose} />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="优先阅读器样式"
-      tooltip={'开启后，对边距/对齐等规则添加 !important，与书内样式冲突时更易生效'}
-    >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={prioritizeReaderStyles} />
-    </SettingsItemGroup>
-
-    <!-- 旧 Reader 残留（不再使用） -->
-    <div class="hidden">
-    <SettingsItemGroup title="字体（组 1）">
-      <div slot="header" class="flex items-center">
-        <SettingsFontSelector
-          availableFonts={[
-            LocalFont.NOTOSANSSC,
-            LocalFont.NOTOSERIFJP,
-            LocalFont.KZUDMINCHO,
-            LocalFont.SERIF
-          ]}
-          bind:fontValue={fontFamilyGroupOne}
-        />
-        {#if fontCacheSupported}
-          <div
-            tabindex="0"
-            role="button"
-            title="打开自定义字体对话框"
-            on:click={() =>
-              dialogManager.dialogs$.next([
-                {
-                  component: SettingsUserFontDialog,
-                  props: { fontFamily: fontFamilyGroupOne$ }
-                }
-              ])}
-            on:keyup={dummyFn}
-          >
-            <Fa icon={faComputer} />
-          </div>
-        {/if}
-      </div>
-      <input
-        type="text"
-        class={inputClasses}
-        placeholder="Noto Sans SC"
-        bind:value={fontFamilyGroupOne}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="字体（组 2）">
-      <div slot="header" class="flex items-center">
-        <SettingsFontSelector
-          availableFonts={[LocalFont.NOTOSANSSC, LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF]}
-          bind:fontValue={fontFamilyGroupTwo}
-        />
-        {#if fontCacheSupported}
-          <div
-            tabindex="0"
-            role="button"
-            on:click={() =>
-              dialogManager.dialogs$.next([
-                {
-                  component: SettingsUserFontDialog,
-                  props: { fontFamily: fontFamilyGroupTwo$ }
-                }
-              ])}
-            on:keyup={dummyFn}
-          >
-            <Fa icon={faComputer} />
-          </div>
-        {/if}
-      </div>
-      <input
-        type="text"
-        class={inputClasses}
-        placeholder="Noto Sans SC"
-        bind:value={fontFamilyGroupTwo}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="字重"
-      tooltip={'设置字重，留空使用默认'}
-    >
-      <input
-        type="number"
-        placeholder="默认"
-        class={inputClasses}
-        step="100"
-        min="100"
-        max="1000"
-        bind:value={fontWeight}
-        on:change={() => {
-          if (fontWeight === null) {
-            return;
-          }
-
-          if (fontWeight < 100) {
-            fontWeight = 100;
-          } else if (fontWeight > 1000) {
-            fontWeight = 1000;
-          }
-        }}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="字号">
-      <input type="number" class={inputClasses} step="1" min="1" bind:value={fontSize} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="行高">
-      <input
-        type="number"
-        class={inputClasses}
-        step="0.05"
-        min="1"
-        bind:value={lineHeight}
-        on:change={() => {
-          if (!lineHeight || lineHeight < 1) {
-            lineHeight = 1.65;
-          }
-        }}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="段落首行缩进"
-      tooltip="段落首行缩进（rem）"
-    >
-      <input
-        type="number"
-        class={inputClasses}
-        step=".5"
-        min="0"
-        bind:value={textIndentation}
-        on:blur={() => {
-          const newValue = Number.parseFloat(`${textIndentation ?? 0}`);
-
-          if (isNaN(newValue) || newValue < 1) {
-            textIndentation = 0;
-          }
-        }}
-      />
-    </SettingsItemGroup>
-    {#if textMarginMode === 'manual'}
-      <SettingsItemGroup title="段落间距" tooltip="段落间距（rem）">
-        <input
-          type="number"
-          class={inputClasses}
-          step=".5"
-          min="0"
-          bind:value={textMarginValue}
-          on:blur={() => {
-            const newValue = Number.parseFloat(`${textMarginValue ?? 0}`);
-
-            if (isNaN(newValue) || newValue < 1) {
-              textMarginValue = 0;
-            }
-          }}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup
-      title={verticalMode ? '阅读区左右边距' : '阅读区上下边距'}
-    >
-      <SettingsDimensionPopover
-        slot="header"
-        isFirstDimension
-        isVertical={verticalMode}
-        bind:dimensionValue={firstDimensionMargin}
-      />
-      <input
-        type="number"
-        class={inputClasses}
-        step="1"
-        min="0"
-        bind:value={firstDimensionMargin}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={verticalMode ? '阅读区最大高度' : '阅读区最大宽度'}>
-      <SettingsDimensionPopover
-        slot="header"
-        isVertical={verticalMode}
-        bind:dimensionValue={secondDimensionMaxValue}
-      />
-      <input
-        type="number"
-        class={inputClasses}
-        step="1"
-        min="0"
-        bind:value={secondDimensionMaxValue}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="滑动阈值"
-      tooltip={'触发翻页所需的滑动距离'}
-    >
-      <input
-        type="number"
-        step="1"
-        min="10"
-        class={inputClasses}
-        bind:value={swipeThreshold}
-        on:blur={() => {
-          if (swipeThreshold < 10 || typeof swipeThreshold !== 'number') {
-            swipeThreshold = 10;
-          }
-        }}
-      />
-    </SettingsItemGroup>
-    {#if autoBookmark}
-      <SettingsItemGroup title="自动书签延时" tooltip={'触发自动书签的秒数'}>
-        <input
-          type="number"
-          step="1"
-          min="1"
-          class={inputClasses}
-          bind:value={autoBookmarkTime}
-          on:blur={() => {
-            if (autoBookmarkTime < 1 || typeof autoBookmarkTime !== 'number') {
-              autoBookmarkTime = 3;
-            }
-          }}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup title="排版方向">
-      <ButtonToggleGroup options={optionsForWritingMode} bind:selectedOptionId={writingMode} />
-    </SettingsItemGroup>
-    {#if verticalMode}
-      <SettingsItemGroup
-        title="启用字距调整"
-        tooltip={'在字体与浏览器支持时，竖排间距视觉更平衡'}
-      >
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontKerning} />
-      </SettingsItemGroup>
-      <SettingsItemGroup
-        title="启用 VPAL"
-        tooltip={'在字体与浏览器支持时，竖排文字间距更自然'}
-      >
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontVPAL} />
-      </SettingsItemGroup>
-      <SettingsItemGroup title="文字方向" tooltip={verticalTextOrientationTooltip}>
-        <ButtonToggleGroup
-          options={optionsForVerticalTextOrientation}
-          bind:selectedOptionId={verticalTextOrientation}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup
-      title="优先阅读器样式"
-      tooltip={'开启后，对边距/对齐等规则添加 !important，与书内样式冲突时更易生效'}
-    >
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={prioritizeReaderStyles}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="两端对齐"
-      tooltip={'开启后两端对齐段落文字'}
-    >
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={enableTextJustification}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="美化换行"
-      tooltip={'在支持的浏览器中启用 pretty 换行样式'}
-    >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTextWrapPretty} />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="段落间距模式"
-      tooltip={'切到手动模式可指定段落间距值'}
-    >
-      <ButtonToggleGroup
-        options={optionsForTextMarginMode}
-        bind:selectedOptionId={textMarginMode}
-      />
-    </SettingsItemGroup>
-    {#if wakeLockSupported}
-      <SettingsItemGroup
-        title="屏幕常亮"
-        tooltip={'开启后请求屏幕常亮（WakeLock），防止屏幕变暗或锁屏'}
-      >
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={enableReaderWakeLock}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <SettingsItemGroup title="显示字数">
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showCharacterCounter} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="显示百分比">
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showPercentage} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="页脚显示章节字数">
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={showFooterChapterCharacterCounter}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="页脚显示章节百分比">
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={showFooterChapterPercentage}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="禁用滚轮翻页">
-      <ButtonToggleGroup
-        options={optionsForToggle}
-        bind:selectedOptionId={disableWheelNavigation}
-      />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="关闭确认"
-      tooltip={'开启后，存在未保存改动时关闭/刷新阅读器标签前会确认'}
-    >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={confirmClose} />
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="仅手动书签"
-      tooltip={'开启后，通过菜单离开阅读器时不会将当前位置加为书签'}
-    >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="自动书签" tooltip={autoBookmarkTooltip}>
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
-    </SettingsItemGroup>
-    {#if $lastBookHasImages$}
-      <SettingsItemGroup
-        title="图片模糊"
-        tooltip="对包含插图的电子书（如轻小说）有效，可避免剧透图直接显示"
-      >
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
-      </SettingsItemGroup>
-      {#if blurImage}
-        <SettingsItemGroup
-          title="模糊范围"
-          tooltip="模糊范围：全部 / 仅封面外（保留封面，封底+正文图片都模糊）/ 不模糊"
-        >
-          <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
-        </SettingsItemGroup>
-      {/if}
-    {/if}
-    <SettingsItemGroup title="隐藏振假名">
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
-    </SettingsItemGroup>
-    {#if hideFurigana}
-      <SettingsItemGroup title="振假名样式" tooltip={furiganaStyleTooltip}>
-        <ButtonToggleGroup
-          options={optionsForFuriganaStyle}
-          bind:selectedOptionId={furiganaStyle}
-        />
-      </SettingsItemGroup>
-    {/if}
-    {#if statisticsEnabled}
-      <SettingsItemGroup
-        title="自定义阅读点暂停统计"
-        tooltip={'开启后，设置自定义阅读点时统计会自动暂停/恢复'}
-      >
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={pauseTrackerOnCustomPointChange}
-        />
-      </SettingsItemGroup>
-    {/if}
-    {#if viewMode === ViewMode.Continuous}
-      <SettingsItemGroup
-        title="自定义阅读点"
-        tooltip={'开启后可在阅读器中设置固定起算点，进度和书签从该点开始计算'}
-      >
-        <div class="flex items-center">
-          <ButtonToggleGroup
-            options={optionsForToggle}
-            bind:selectedOptionId={customReadingPointEnabled}
-          />
-          {#if customReadingPointEnabled}
-            <div
-              tabindex="0"
-              role="button"
-              class="ml-4 hover:underline"
-              on:click={() => {
-                verticalCustomReadingPosition$.next(100);
-                horizontalCustomReadingPosition$.next(0);
-              }}
-              on:keyup={dummyFn}
-            >
-              重置阅读点
-            </div>
-          {/if}
-        </div>
-      </SettingsItemGroup>
-      <SettingsItemGroup title="窗口变化时自动定位">
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={autoPositionOnResize}
-        />
-      </SettingsItemGroup>
-    {:else}
-      <SettingsItemGroup title="避免分页打断" tooltip={avoidPageBreakTooltip}>
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={avoidPageBreak} />
-      </SettingsItemGroup>
-      <SettingsItemGroup
-        title="选中即书签"
-        tooltip={'开启后，书签会落在当前/上次选中文本附近段落，而不是页首'}
-      >
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={selectionToBookmarkEnabled}
-        />
-      </SettingsItemGroup>
-      <SettingsItemGroup
-        title="点击翻页"
-        tooltip="在两侧保留小边缘区域，点击可翻页"
-      >
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTapEdgeToFlip} />
-      </SettingsItemGroup>
-      {#if !verticalMode}
-        <SettingsItemGroup title="分栏数" tooltip="渲染的文本栏数">
-          <input type="number" class={inputClasses} step="1" min="0" bind:value={pageColumns} />
-        </SettingsItemGroup>
-      {/if}
-    {/if}
-    </div>
+    <SettingsReaderBehavior />
     <!-- end legacy hidden block -->
+  {:else if activeSettings === 'TTS'}
+    <SettingsTts />
+
+  {:else if activeSettings === 'AI'}
+    <SettingsSectionHeader title={$t('settings.section.ai')} hint={$t('settings.section.aiHint')} />
+    <div class="lg:col-span-3">
+      <SettingsModels />
+    </div>
+    <div class="lg:col-span-3">
+      <SettingsAi />
+    </div>
+
+  {:else if activeSettings === 'OCR'}
+    <SettingsSectionHeader title={$t('settings.section.ocr')} hint={$t('settings.section.ocrHint')} />
+    <div class="lg:col-span-3">
+      <SettingsOcr />
+    </div>
+
   {:else if activeSettings === 'Data'}
-    <SettingsItemGroup title="跨设备同步阅读统计" tooltip="把每天的阅读时长同步到云端，桌面 + 手机 PWA 都能看到合并的数据">
-      <SettingsSync />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="本地数据位置" tooltip="查看书库、设置、同步副本各自的物理位置。提供一键打开和彻底清空。">
-      <SettingsDataPaths />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="诊断日志" tooltip="导出包含设置与运行日志的诊断文件，反馈问题时附上能加快定位">
-      <button
-        class="m-1 rounded-md border-2 border-gray-400 p-2"
-        on:click={() =>
-          dialogManager.dialogs$.next([
-            {
-              component: LogReportDialog,
-              props: {
-                title: '诊断日志',
-                message: '导出当前会话的设置与运行日志（JSON 文件）。'
-              }
-            }
-          ])}
-      >
-        导出诊断日志
-        <Ripple />
-      </button>
-    </SettingsItemGroup>
-    <SettingsItemGroup
-      title="重置 UI 设置"
-      tooltip="清除本地保存的所有界面设置（主题、字体、TTS 引擎、快捷键、自定义主题等），书库和阅读统计保留。从更早版本升级后界面表现异常时用这个，比手动卸载重装快。"
-    >
-      <button
-        class="m-1 rounded-md border-2 border-gray-400 p-2 text-red-600"
-        on:click={resetUiSettings}
-      >
-        重置并刷新
-        <Ripple />
-      </button>
-    </SettingsItemGroup>
-    <SettingsItemGroup title="持久化存储" tooltip={persistentStorageTooltip}>
+    <SettingsSectionHeader title={$t('settings.section.storageBackup')} hint={$t('settings.section.storageBackupHint')} />
+    <div class="lg:col-span-3">
+      <SettingsItemGroup title={$t('settings.item.syncStats')} tooltip="把每天的阅读时长同步到云端，桌面 + 手机 PWA 都能看到合并的数据">
+        <SettingsSync />
+      </SettingsItemGroup>
+    </div>
+    <div class="lg:col-span-3">
+      <SettingsItemGroup title={$t('settings.item.localDataPaths')} tooltip={$t('settings.tip.localDataPaths')}>
+        <SettingsDataPaths />
+      </SettingsItemGroup>
+    </div>
+    {#if isTauri()}
+      <SettingsItemGroup title={$t('settings.item.storageSource')} tooltip={$t('settings.tip.storageSource')}>
+        <ButtonToggleGroup
+          options={storageSourceOptions}
+          bind:selectedOptionId={selectedStorageSource}
+        />
+      </SettingsItemGroup>
+    {/if}
+    <SettingsItemGroup title={$t('settings.item.persistentStorage')} tooltip={persistentStorageTooltip}>
       <div class="flex items-center">
         <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={persistentStorage} />
         {#if storageQuota}
@@ -2044,12 +636,20 @@
       </div>
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="隐藏来源提示"
-      tooltip="打开外部存储源中的书时隐藏警告提示"
+      title={$t('settings.item.resetUi')}
+      tooltip={$t('settings.tip.resetUi')}
     >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideExternalReadHint} />
+      <button
+        class="settings-btn settings-btn-danger m-1"
+        on:click={resetUiSettings}
+      >
+        {$t('settings.button.resetAndReload')}
+        <Ripple />
+      </button>
     </SettingsItemGroup>
-    <SettingsItemGroup title="EPUB 导入修正" tooltip={importHTMLFixModeTooltip}>
+
+    <SettingsSectionHeader title={$t('settings.section.importExport')} hint={$t('settings.section.importExportHint')} />
+    <SettingsItemGroup title={$t('settings.item.epubFix')} tooltip={importHTMLFixModeTooltip}>
       <ButtonToggleGroup
         options={optionsForImportHTMLFixes}
         bind:selectedOptionId={importHTMLFixMode}
@@ -2057,8 +657,8 @@
     </SettingsItemGroup>
     {#if importHTMLFixMode !== ImportHTMLFixMode.OFF}
       <SettingsItemGroup
-        title="仅限制链接"
-        tooltip="仅对链接标签做自闭合修正"
+        title={$t('settings.item.linkOnly')}
+        tooltip={$t('settings.tip.linkOnly')}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
@@ -2066,68 +666,74 @@
         />
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title="缓存数据" tooltip={cacheStorageDataTooltip}>
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={cacheStorageData} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="自动导入/导出" tooltip={autoReplicationTypeTooltip}>
+    <SettingsItemGroup title={$t('settings.item.autoImportExport')} tooltip={autoReplicationTypeTooltip}>
       <ButtonToggleGroup
         options={optionsForAutoReplicationType}
         bind:selectedOptionId={autoReplication}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="导入/导出策略" tooltip={replicationSaveBehaviorTooltip}>
+    <SettingsItemGroup title={$t('settings.item.importExportStrategy')} tooltip={replicationSaveBehaviorTooltip}>
       <ButtonToggleGroup
         options={optionsForReplicationSaveBehavior}
         bind:selectedOptionId={replicationSaveBehavior}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="显示占位卡片" tooltip={showExternalPlaceholderToolTip}>
+    <SettingsItemGroup title={$t('settings.item.cacheData')} tooltip={cacheStorageDataTooltip}>
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={cacheStorageData} />
+    </SettingsItemGroup>
+
+    <SettingsSectionHeader title={$t('settings.section.readerBehaviorData')} hint={$t('settings.section.readerBehaviorDataHint')} />
+    <SettingsItemGroup
+      title={$t('settings.item.hideExternalHint')}
+      tooltip={$t('settings.item.hideExternalHint')}
+    >
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideExternalReadHint} />
+    </SettingsItemGroup>
+    <SettingsItemGroup title={$t('settings.item.showPlaceholderCards')} tooltip={showExternalPlaceholderToolTip}>
       <ButtonToggleGroup
         options={optionsForToggle}
         bind:selectedOptionId={showExternalPlaceholder}
       />
     </SettingsItemGroup>
-    <SettingsStorageSourceList storageSources={$storageSources$} />
+
+    <SettingsSectionHeader title={$t('settings.section.diagnostics')} hint={$t('settings.section.diagnosticsHint')} />
+    <SettingsItemGroup title={$t('settings.item.diagnosticLog')} tooltip={$t('settings.tip.diagnosticLog')}>
+      <button
+        class="settings-btn m-1"
+        on:click={() =>
+          dialogManager.dialogs$.next([
+            {
+              component: LogReportDialog,
+              props: {
+                title: tImmediate('settings.button.exportDiagnostics'),
+                message: tImmediate('settings.tip.exportDiagnosticsMsg')
+              }
+            }
+          ])}
+      >
+        {$t('settings.button.exportDiagnostics')}
+        <Ripple />
+      </button>
+    </SettingsItemGroup>
   {:else}
+    <SettingsSectionHeader title={$t('settings.section.statsBasics')} hint={$t('settings.section.statsBasicsHint')} />
     <SettingsItemGroup
-      title="删除时保留本地数据"
-      tooltip={'删除本地书籍副本时是否同时删除本地统计'}
+      title={$t('settings.item.clearOrphanStats')}
+      tooltip={$t('settings.tip.clearOrphanStats')}
     >
-      <div class="flex items-center">
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={keepLocalStatisticsOnDeletion}
-        />
-        <div
-          tabindex="0"
-          role="button"
-          class="ml-4 hover:underline"
-          on:click={() => {
-            showSpinner = true;
-            database
-              .clearZombieStatistics()
-              .catch(({ message }) =>
-                dialogManager.dialogs$.next([
-                  {
-                    component: MessageDialog,
-                    props: {
-                      title: '错误',
-                      message: `清除僵尸统计数据出错: ${message}`
-                    }
-                  }
-                ])
-              )
-              .finally(() => (showSpinner = false));
-          }}
-          on:keyup={() => {}}
-        >
-          清除僵尸统计
-        </div>
+      <div
+        tabindex="0"
+        role="button"
+        class="hover:underline"
+        on:click={confirmClearOrphanStatistics}
+        on:keyup={() => {}}
+      >
+        {$t('settings.button.clearOrphanStats')}
       </div>
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="覆盖书籍完成状态"
-      tooltip={'是只记录首次完成，还是始终更新为最新一次完成'}
+      title={$t('settings.item.overwriteBookCompletion')}
+      tooltip={$t('settings.tip.overwriteBookCompletion')}
     >
       <ButtonToggleGroup
         options={optionsForToggle}
@@ -2135,8 +741,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title={`每日起始小时: ${startOfDayHours}`}
-      tooltip={'设定新一天的开始时间，此时刻之前的数据计入前一天'}
+      title={$t('settings.item.startOfDayHour', { n: startOfDayHours })}
+      tooltip={$t('settings.tip.startOfDayHour')}
     >
       <input
         type="range"
@@ -2147,9 +753,10 @@
         bind:value={startDayHoursForTracker}
       />
     </SettingsItemGroup>
+    <SettingsSectionHeader title={$t('settings.section.statsSync')} hint={$t('settings.section.statsSyncHint')} />
     <SettingsItemGroup
-      title="统计合并方式"
-      tooltip={'同步时统计按条目合并还是整体覆盖'}
+      title={$t('settings.item.statsMergeMode')}
+      tooltip={$t('settings.tip.statsMergeMode')}
     >
       <ButtonToggleGroup
         options={optionsForMergeMode}
@@ -2157,45 +764,48 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="阅读目标合并方式"
-      tooltip={'同步时阅读目标按条目合并还是整体覆盖'}
+      title={$t('settings.item.readingGoalMergeMode')}
+      tooltip={$t('settings.tip.readingGoalMergeMode')}
     >
       <ButtonToggleGroup
         options={optionsForMergeMode}
         bind:selectedOptionId={readingGoalsMergeMode}
       />
     </SettingsItemGroup>
+    <SettingsSectionHeader title={$t('settings.section.statsTracking')} hint={$t('settings.section.statsTrackingHint')} />
     <SettingsItemGroup
-      title="启用统计"
-      tooltip="在阅读器左下角显示统计追踪图标，需手动点击开始记录会话"
+      title={$t('settings.item.enableStats')}
+      tooltip={$t('settings.tip.enableStats')}
     >
       <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={statisticsEnabled} />
     </SettingsItemGroup>
     {#if statisticsEnabled}
-      <SettingsItemGroup title="统计自动暂停" tooltip={trackerAutoPauseTooltip}>
+      <SettingsSectionHeader title={$t('settings.section.trackerBehavior')} hint={$t('settings.section.trackerBehaviorHint')} />
+      <SettingsItemGroup title={$t('settings.item.statsAutoPause')} tooltip={trackerAutoPauseTooltip}>
         <ButtonToggleGroup
           options={optionsForTrackerAutoPause}
           bind:selectedOptionId={trackerAutoPause}
         />
       </SettingsItemGroup>
-      <SettingsItemGroup title="完成时打开统计">
+      <SettingsItemGroup title={$t('settings.item.statsOnComplete')}>
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={openTrackerOnCompletion}
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="完成时更新"
-        tooltip={'当前位置与全书总字数之间的差额是否计入统计'}
+        title={$t('settings.item.updateOnComplete')}
+        tooltip={$t('settings.tip.updateOnComplete')}
       >
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={addCharactersOnCompletion}
         />
       </SettingsItemGroup>
+      <SettingsSectionHeader title={$t('settings.section.autoThreshold')} hint={$t('settings.section.autoThresholdHint')} />
       <SettingsItemGroup
-        title="自动启动统计 (秒)"
-        tooltip={'字数无变化达到此秒数后统计将自动启动（0 = 关闭，建议设大些避免误触发）'}
+        title={$t('settings.item.autoStartSec')}
+        tooltip={$t('settings.tip.autoStartSec')}
       >
         <input
           type="number"
@@ -2214,25 +824,31 @@
       </SettingsItemGroup>
       <SettingsItemGroup
         title="空闲时间 (分钟)"
-        tooltip={'无页面交互达到此分钟数后统计自动暂停（0 = 关闭，最大 12 小时）'}
+        tooltip={'无页面交互（滚动 / 指针 / 选择）达到此分钟数后统计自动暂停，并把这段空闲从已计入的时长里扣回。默认 5 分钟，0 = 关闭（关掉的话，人离开了时长也会一直涨），最大 12 小时'}
       >
         <input
           type="number"
           class={inputClasses}
           step="0.5"
           min="0"
+          max={IDLE_MAX_MINUTES}
           bind:value={trackerIdleTimeInMin}
           on:blur={() => {
+            // The ceiling is in minutes because that is what this field holds.
+            // It used to compare against 43200 — the *seconds* in 12 hours —
+            // so the clamp only fired above 30 days, and then dropped the
+            // value to 900 seconds (15 min) rather than the 12 h it promised.
             if (!trackerIdleTimeInMin || trackerIdleTimeInMin < 0) {
               trackerIdleTime = 0;
-            } else if (trackerIdleTimeInMin > 43200) {
-              trackerIdleTime = 900;
+            } else if (trackerIdleTimeInMin > IDLE_MAX_MINUTES) {
+              trackerIdleTime = IDLE_MAX_MINUTES * 60;
             } else {
               trackerIdleTime = Math.floor(trackerIdleTimeInMin * 60);
             }
           }}
         />
       </SettingsItemGroup>
+      <SettingsSectionHeader title="跳过检测" hint="单次采样字数突变（跳读 / 后退）的判定阈值与动作" />
       <SettingsItemGroup
         title="正向跳过阈值"
         tooltip={'两次采样间正向字数增量超过此阈值触发相应动作（0 = 关闭）'}
@@ -2305,10 +921,10 @@
           />
         </SettingsItemGroup>
       {/if}
-      <SettingsReadingGoals
-        storageSources={$storageSources$}
-        on:spinner={({ detail }) => (showSpinner = detail)}
-      />
+      <SettingsSectionHeader title="阅读目标" hint="按日 / 周设定的字数与时长目标" />
+      <div class="lg:col-span-3">
+        <SettingsReadingGoals on:spinner={({ detail }) => (showSpinner = detail)} />
+      </div>
     {/if}
   {/if}
   {#if showSpinner}
@@ -2318,9 +934,3 @@
     </div>
   {/if}
 </div>
-
-<style>
-  .secret-masked {
-    -webkit-text-security: disc;
-  }
-</style>

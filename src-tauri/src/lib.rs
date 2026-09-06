@@ -5,13 +5,20 @@ use tauri::{
   tray::{TrayIconBuilder, TrayIconEvent},
   Emitter, Manager, WindowEvent,
 };
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_fs::FsExt;
 
 mod calibre_converter;
 mod custom_tts;
+mod edge_tts;
+mod kf8_indx;
 mod kf8_parser;
 mod mobi_parser;
+mod proxy;
 mod winrt_tts;
+
+#[cfg(test)]
+mod mobi_scan_test;
 
 
 /// Set when the tray "退出" menu item is chosen so the WindowEvent handler
@@ -23,7 +30,10 @@ fn request_quit(app: &tauri::AppHandle) {
   app.exit(0);
 }
 
-const BOOK_EXTS: [&str; 9] = ["epub", "txt", "htmlz", "md", "markdown", "mobi", "azw3", "pdf", "cbz"];
+const BOOK_EXTS: [&str; 13] = [
+    "epub", "txt", "htmlz", "md", "markdown", "mobi", "azw", "azw3", "pdf",
+    "cbz", "cbr", "cb7", "cbt",
+];
 
 /// File paths handed to the app via file association / command line, waiting
 /// for the frontend to pick them up.
@@ -49,8 +59,111 @@ fn collect_book_files<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
 fn allow_paths(app: &tauri::AppHandle, paths: &[String]) {
   let scope = app.fs_scope();
   for path in paths {
+    // Best-effort: a path the scope refuses simply fails to open later, with
+    // the frontend's own import error. There is no UI at this point in
+    // startup to report it through, and refusing to launch over one bad
+    // association argument would be worse.
     let _ = scope.allow_file(path);
   }
+}
+
+/// Roots the user pointed us at themselves — custom library folder, Obsidian
+/// vault, dictionary folder. The static fs scope only covers
+/// `Documents/AutoBook`, and the grant the dialog plugin adds when a folder is
+/// picked dies with the process, so the choices are remembered here and
+/// re-granted on the next launch.
+///
+/// Rust owns this list deliberately. An "allow this path" command callable
+/// from the webview would hand any injected script the whole disk back for the
+/// price of one `invoke`, which is exactly what dropping the `**` scope was
+/// meant to prevent. The list can only grow through `pick_user_dir`, and that
+/// cannot return a path the user did not select in a native dialog.
+fn allowed_roots_path() -> std::path::PathBuf {
+  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/allowed-roots.json")
+}
+
+fn read_allowed_roots() -> Vec<String> {
+  std::fs::read_to_string(allowed_roots_path())
+    .ok()
+    .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+    .unwrap_or_default()
+}
+
+fn remember_allowed_root(path: &str) {
+  let mut roots = read_allowed_roots();
+  if roots.iter().any(|r| r == path) {
+    return;
+  }
+  roots.push(path.to_string());
+  // Someone who reorganizes their folders often should not accumulate grants
+  // forever; oldest choice falls off first.
+  while roots.len() > 32 {
+    roots.remove(0);
+  }
+  let file = allowed_roots_path();
+  if let Some(parent) = file.parent() {
+    let _ = std::fs::create_dir_all(parent);
+  }
+  if let Ok(json) = serde_json::to_string(&roots) {
+    let _ = std::fs::write(file, json);
+  }
+}
+
+/// Re-grant remembered roots at startup. A folder the user has since deleted
+/// is skipped rather than granted back.
+fn grant_remembered_roots(app: &tauri::AppHandle) {
+  let scope = app.fs_scope();
+  for root in read_allowed_roots() {
+    let path = std::path::PathBuf::from(&root);
+    if path.is_dir() {
+      let _ = scope.allow_directory(&path, true);
+    }
+  }
+}
+
+/// Open a native folder picker, grant the choice, and remember it for next
+/// launch. Replaces the frontend calling the dialog plugin directly: the pick
+/// and the persistence of its grant have to happen together, or a vault picked
+/// today stops working after a restart.
+#[tauri::command]
+async fn pick_user_dir(
+  app: tauri::AppHandle,
+  title: Option<String>,
+  default_path: Option<String>,
+) -> Result<Option<String>, String> {
+  let mut builder = app.dialog().file();
+  if let Some(title) = title {
+    builder = builder.set_title(title);
+  }
+  if let Some(default_path) = default_path {
+    let candidate = std::path::PathBuf::from(&default_path);
+    if candidate.is_dir() {
+      builder = builder.set_directory(candidate);
+    }
+  }
+
+  let (tx, rx) = tokio::sync::oneshot::channel();
+  builder.pick_folder(move |picked| {
+    let _ = tx.send(picked);
+  });
+
+  let Some(picked) = rx.await.map_err(|e| e.to_string())? else {
+    return Ok(None);
+  };
+  let path = picked.into_path().map_err(|e| e.to_string())?;
+
+  // The dialog plugin already widened the live scope for this pick; the
+  // explicit grant covers the recursive flag and keeps this command honest on
+  // its own terms.
+  app
+    .fs_scope()
+    .allow_directory(&path, true)
+    .map_err(|e| e.to_string())?;
+
+  let path_str = path.to_string_lossy().into_owned();
+  remember_allowed_root(&path_str);
+  Ok(Some(path_str))
 }
 
 /// Path to the marker file that signals "delete WebView2 Local Storage on next launch".
@@ -146,10 +259,13 @@ fn take_launch_files(state: tauri::State<LaunchFiles>) -> Vec<String> {
   std::mem::take(&mut *guard)
 }
 
-/// Schedule a Local Storage wipe on next launch and restart. Used by both the
-/// tray menu and the settings page reset button.
-#[tauri::command]
-fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
+/// Drop the marker Local Storage wipe reads on next launch, then restart.
+/// Never returns on success — `restart()` diverges.
+///
+/// The tray menu used to inline a copy of this that swallowed the write
+/// error, so a failed write still restarted and the user just saw "nothing
+/// happened". One path, one error.
+fn do_ui_reset(app: &tauri::AppHandle) -> Result<(), String> {
   let flag = reset_flag_path();
   if let Some(parent) = flag.parent() {
     let _ = std::fs::create_dir_all(parent);
@@ -157,6 +273,13 @@ fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
   std::fs::write(&flag, b"1").map_err(|e| e.to_string())?;
   QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
   app.restart();
+}
+
+/// Schedule a Local Storage wipe on next launch and restart. Used by both the
+/// tray menu and the settings page reset button.
+#[tauri::command]
+fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
+  do_ui_reset(&app)
 }
 
 /// Schedule a FULL data wipe on next launch (Local Storage + IndexedDB) and
@@ -173,11 +296,25 @@ fn schedule_full_reset(app: tauri::AppHandle) -> Result<(), String> {
   app.restart();
 }
 
-/// Return paths the frontend can show in a Settings → Data panel so the
-/// user knows where their books and settings actually live. Sizes are
-/// computed best-effort; huge directories may report 0 to avoid blocking.
+fn default_documents_root_path() -> std::path::PathBuf {
+  std::env::var("USERPROFILE")
+    .map(|h| std::path::PathBuf::from(h).join("Documents").join("AutoBook"))
+    .unwrap_or_default()
+}
+
+/// The default library folder (`%USERPROFILE%\Documents\AutoBook`) — the
+/// frontend uses this to show what "restore default" would pick.
 #[tauri::command]
-fn get_data_paths() -> serde_json::Value {
+fn default_fs_root() -> String {
+  default_documents_root_path().to_string_lossy().into_owned()
+}
+
+/// Return paths the frontend can show in a Settings → Data panel so the
+/// user knows where their books and settings actually live. `fs_root` is
+/// the user-chosen library folder (empty = default). Sizes are computed
+/// best-effort; huge directories may report 0 to avoid blocking.
+#[tauri::command]
+fn get_data_paths(fs_root: Option<String>) -> serde_json::Value {
   fn dir_size(p: &std::path::Path) -> u64 {
     let mut total: u64 = 0;
     if let Ok(entries) = std::fs::read_dir(p) {
@@ -197,9 +334,13 @@ fn get_data_paths() -> serde_json::Value {
   let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
   let webview_root =
     std::path::PathBuf::from(&local_appdata).join("io.github.fukki.ebookreader/EBWebView");
-  let docs_root = std::env::var("USERPROFILE")
-    .map(|h| std::path::PathBuf::from(h).join("Documents").join("AutoBook"))
-    .unwrap_or_default();
+  let default_root = default_documents_root_path();
+  let effective_root = fs_root
+    .as_deref()
+    .map(str::trim)
+    .filter(|s| !s.is_empty())
+    .map(std::path::PathBuf::from)
+    .unwrap_or_else(|| default_root.clone());
 
   let ls_dirs: Vec<String> = webview_local_storage_dirs()
     .into_iter()
@@ -211,17 +352,103 @@ fn get_data_paths() -> serde_json::Value {
     .collect();
 
   let idb_size: u64 = webview_indexeddb_dirs().iter().map(|p| dir_size(p)).sum();
-  let docs_size = if docs_root.exists() { dir_size(&docs_root) } else { 0 };
+  let root_size = if effective_root.exists() { dir_size(&effective_root) } else { 0 };
 
   serde_json::json!({
     "webviewRoot": webview_root.to_string_lossy(),
     "localStorageDirs": ls_dirs,
     "indexeddbDirs": idb_dirs,
     "indexeddbBytes": idb_size,
-    "documentsRoot": docs_root.to_string_lossy(),
-    "documentsBytes": docs_size,
-    "documentsExists": docs_root.exists(),
+    "fsRoot": effective_root.to_string_lossy(),
+    "fsRootBytes": root_size,
+    "fsRootExists": effective_root.exists(),
+    "defaultFsRoot": default_root.to_string_lossy(),
+    "isDefaultFsRoot": effective_root == default_root,
   })
+}
+
+fn dir_is_empty(p: &std::path::Path) -> bool {
+  std::fs::read_dir(p).map(|mut it| it.next().is_none()).unwrap_or(false)
+}
+
+/// Resolve `..`, short (8.3) names and case so two spellings of the same
+/// folder compare equal. A path that does not exist yet has no canonical
+/// form, so fall back to canonicalizing the nearest ancestor that does.
+fn canonical_ish(p: &std::path::Path) -> std::path::PathBuf {
+  if let Ok(c) = p.canonicalize() {
+    return c;
+  }
+  match (p.parent(), p.file_name()) {
+    (Some(parent), Some(name)) => canonical_ish(parent).join(name),
+    _ => p.to_path_buf(),
+  }
+}
+
+/// Move a directory to a new location. Tries a plain rename first (instant,
+/// same volume); on cross-volume rename failure it falls back to recursive
+/// copy + remove. `to` may be an empty existing directory — that's the normal
+/// case when the frontend's folder picker returned an already-created folder.
+/// Refuses to clobber a target that already contains files.
+#[tauri::command]
+fn move_directory(from: String, to: String) -> Result<(), String> {
+  let from_path = std::path::PathBuf::from(&from);
+  let to_path = std::path::PathBuf::from(&to);
+  if !from_path.exists() {
+    return Err(format!("源文件夹不存在: {from}"));
+  }
+  let from_c = canonical_ish(&from_path);
+  let to_c = canonical_ish(&to_path);
+  if from_c == to_c {
+    return Ok(());
+  }
+  // Nothing stops the folder picker from returning a subfolder of the current
+  // library root, and that case is quietly catastrophic: Windows refuses to
+  // rename a directory into itself, so control falls through to the recursive
+  // copy — which walks `from` while creating the copy *inside* `from`, and
+  // duplicates the entire library once per nesting level until the path
+  // length limit finally errors out. A 10 GB library writes hundreds of GB
+  // before that happens.
+  if to_c.starts_with(&from_c) {
+    return Err(format!("目标文件夹在源文件夹内部，无法移动: {to}"));
+  }
+  if to_path.exists() {
+    if !to_path.is_dir() {
+      return Err(format!("目标不是目录: {to}"));
+    }
+    if !dir_is_empty(&to_path) {
+      return Err(format!("目标已存在且不为空: {to}"));
+    }
+    // Rename won't work when the target dir already exists (even empty) on
+    // Windows — remove it first so the rename can create it fresh.
+    std::fs::remove_dir(&to_path).map_err(|e| e.to_string())?;
+  }
+  if let Some(parent) = to_path.parent() {
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+  }
+
+  if std::fs::rename(&from_path, &to_path).is_ok() {
+    return Ok(());
+  }
+
+  // Cross-volume or locked — fall back to copy + remove.
+  copy_dir_recursive(&from_path, &to_path).map_err(|e| e.to_string())?;
+  std::fs::remove_dir_all(&from_path).map_err(|e| e.to_string())?;
+  Ok(())
+}
+
+fn copy_dir_recursive(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+  std::fs::create_dir_all(to)?;
+  for entry in std::fs::read_dir(from)? {
+    let entry = entry?;
+    let file_type = entry.file_type()?;
+    let target = to.join(entry.file_name());
+    if file_type.is_dir() {
+      copy_dir_recursive(&entry.path(), &target)?;
+    } else {
+      std::fs::copy(entry.path(), &target)?;
+    }
+  }
+  Ok(())
 }
 
 /// Open a folder in the OS file manager (Explorer on Windows). The path
@@ -279,6 +506,7 @@ async fn custom_tts_synthesize(
   headers: std::collections::HashMap<String, String>,
   body_template: String,
   audio_path: Option<String>,
+  proxy_url: Option<String>,
   text: String,
 ) -> Result<String, String> {
   let audio = custom_tts::synthesize(
@@ -287,6 +515,7 @@ async fn custom_tts_synthesize(
     &headers,
     &body_template,
     audio_path.as_deref(),
+    proxy_url.as_deref(),
     &text,
   )
   .await?;
@@ -306,6 +535,81 @@ fn set_tts_shortcut(app: tauri::AppHandle, accelerator: String) -> Result<(), St
     return Ok(());
   }
   gs.register(trimmed).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod move_directory_tests {
+  use super::*;
+
+  fn tmp(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("autobook_move_test_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+  }
+
+  /// The regression that motivated the guard: picking a subfolder of the
+  /// library root used to fall through to the recursive copy and duplicate
+  /// the whole library once per nesting level.
+  #[test]
+  fn refuses_a_target_inside_the_source() {
+    let root = tmp("nested");
+    let src = root.join("AutoBook");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("book.epub"), b"x").unwrap();
+    let dst = src.join("newfolder");
+    std::fs::create_dir_all(&dst).unwrap();
+
+    let err = move_directory(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+    )
+    .unwrap_err();
+    assert!(err.contains("内部"), "unexpected error: {err}");
+    // The source must be untouched — no copy started, nothing removed.
+    assert!(src.join("book.epub").exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// A sibling whose name merely starts with the source's name is not inside
+  /// it — `starts_with` on Path compares components, and this pins that.
+  #[test]
+  fn allows_a_sibling_with_a_prefix_name() {
+    let root = tmp("sibling");
+    let src = root.join("e");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("book.epub"), b"x").unwrap();
+    let dst = root.join("ebooks");
+
+    move_directory(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+    )
+    .unwrap();
+    assert!(dst.join("book.epub").exists());
+    assert!(!src.exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// Two spellings of the same folder are a no-op, not an error — the
+  /// comparison runs on canonical paths so a trailing separator or `..`
+  /// cannot make it look like a real move.
+  #[test]
+  fn same_folder_spelled_differently_is_a_noop() {
+    let root = tmp("same");
+    let src = root.join("lib");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("book.epub"), b"x").unwrap();
+    let alias = root.join("other").join("..").join("lib");
+
+    move_directory(
+      src.to_string_lossy().into_owned(),
+      alias.to_string_lossy().into_owned(),
+    )
+    .unwrap();
+    assert!(src.join("book.epub").exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -333,21 +637,48 @@ pub fn run() {
       sapi_list_voices,
       sapi_speak,
       custom_tts_synthesize,
+      edge_tts::edge_tts_synthesize,
       schedule_ui_reset,
       schedule_full_reset,
       get_data_paths,
       open_data_folder,
+      default_fs_root,
+      pick_user_dir,
+      move_directory,
       mobi_parser::parse_mobi,
       calibre_converter::check_calibre,
       calibre_converter::convert_with_calibre
     ])
     .setup(|app| {
+      // tauri.conf.json's title is a hand-typed string nobody remembers to
+      // touch on release — it sat at "AutoBook v1.33.0" through two whole
+      // versions. The version now comes from the package instead, and the
+      // config carries the bare product name so it can never be wrong.
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_title(&format!("AutoBook v{}", app.package_info().version));
+      }
+
+      // Before any window can ask for them: the static scope is
+      // Documents/AutoBook only, so a custom library root, vault or dictionary
+      // folder is unreachable until its remembered grant is restored.
+      grant_remembered_roots(app.handle());
+
       if cfg!(debug_assertions) {
-        app.handle().plugin(
+        // The log plugin writes to AppData/<identifier>/logs. A leftover file
+        // from a prior crashed run can make its rotator hit `os error 183`
+        // (file exists) — that must not take the whole app down. Degrade to
+        // stderr so dev logs still surface in the terminal.
+        if let Err(err) = app.handle().plugin(
           tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Info)
+            .targets([
+              tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
+              tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+            ])
             .build(),
-        )?;
+        ) {
+          eprintln!("[log-plugin] init failed, continuing without file log: {err}");
+        }
       }
 
       // Files passed on first launch (double-click association / CLI)
@@ -393,13 +724,38 @@ pub fn run() {
               let _ = app.emit("tts-toggle", ());
             }
             "reset" => {
-              let flag = reset_flag_path();
-              if let Some(parent) = flag.parent() {
-                let _ = std::fs::create_dir_all(parent);
-              }
-              let _ = std::fs::write(&flag, b"1");
-              QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
-              app.restart();
+              // The settings-page button for this same action confirms first;
+              // the tray one sits one row above 退出 in a four-item menu, so it
+              // is the copy that most needs a guard, not the one that can skip it.
+              let handle = app.clone();
+              app
+                .dialog()
+                .message(
+                  "将清除本地保存的 UI 设置（主题、字体、快捷键、TTS 选项等），书库与统计数据保留。应用会重启。",
+                )
+                .title("重置 UI 设置")
+                .buttons(MessageDialogButtons::OkCancelCustom(
+                  "重置并重启".to_string(),
+                  "取消".to_string(),
+                ))
+                .show(move |confirmed| {
+                  if !confirmed {
+                    return;
+                  }
+                  // This callback runs on a thread the dialog plugin spawns;
+                  // restart() tears down the windows and the tray, so hop back
+                  // to the main thread before touching either.
+                  let app = handle.clone();
+                  let _ = handle.run_on_main_thread(move || {
+                    if let Err(err) = do_ui_reset(&app) {
+                      app
+                        .dialog()
+                        .message(format!("重置失败：{err}"))
+                        .title("重置 UI 设置")
+                        .show(|_| {});
+                    }
+                  });
+                });
             }
             "quit" => request_quit(app),
             _ => {}

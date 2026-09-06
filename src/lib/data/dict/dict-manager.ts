@@ -2,8 +2,7 @@ import {
   buildStarDict,
   decompressDictDz,
   parseIdx,
-  parseIfo,
-  type StarDict
+  parseIfo
 } from '$lib/data/dict/stardict';
 
 export interface LoadedDict {
@@ -119,7 +118,7 @@ export async function scanDictFolder(rootPath: string): Promise<DictScanResult> 
       if (/\.gz$/i.test(idxFile.name)) {
         idxBytes = await decompressDictDz(idxBytes);
       }
-      const idxParsed = parseIdx(idxBytes);
+      const idxParsed = parseIdx(idxBytes, meta.idxOffsetBits);
       let dictBytes = await dictFile.bytes();
       if (/\.dz$/i.test(dictFile.name)) {
         dictBytes = await decompressDictDz(dictBytes);
@@ -170,8 +169,4 @@ export async function scanDictFolder(rootPath: string): Promise<DictScanResult> 
 
   loadedDicts$.set(result.loaded);
   return result;
-}
-
-export function clearLoadedDicts() {
-  loadedDicts$.set([]);
 }

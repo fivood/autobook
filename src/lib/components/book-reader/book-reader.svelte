@@ -207,22 +207,18 @@
   );
 
   const imageLoadingState$ = contentEl$.pipe(
-    tap((contentEl) => {
-      // eslint-disable-next-line no-console
-      console.log('[book-reader] contentChange received', contentEl?.className, contentEl?.querySelectorAll('img').length);
-    }),
     mergeMap((contentEl) => imageLoadingState(contentEl)),
-    tap((loading) => {
-      // eslint-disable-next-line no-console
-      console.log('[book-reader] imageLoadingState changed:', loading);
-    }),
     share()
   );
 
   const blurListener$ = contentEl$.pipe(
     tap((contentEl) => {
       mutationObserver.disconnect();
-      mutationObserver.observe(contentEl, { attributes: true });
+      // Only watch inline `style` — handleMutation reads target.style.filter
+      // (spoofiler tools like exstatic blur via inline style). Observing all
+      // attributes would fire on every class toggle the typewriter makes per
+      // character (~60/s), a needless main-thread tax during TTS/reveal.
+      mutationObserver.observe(contentEl, { attributes: true, attributeFilter: ['style'] });
       lastBookHasImages$.next(!!contentEl.querySelector('img,image'));
     }),
     reduceToEmptyString()

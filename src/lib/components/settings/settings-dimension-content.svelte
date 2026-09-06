@@ -42,21 +42,33 @@
   });
 </script>
 
-<div class="text-center">
+<div class="menu-panel text-center">
   {presetValue}% - {calculatedValue}px
-</div>
-<input
-  class="mb-2 mt-4"
+  <input
+    class="mb-3 mt-3 w-full"
   type="range"
   step={progressStep}
   {min}
   {max}
   bind:value={presetValue}
-  on:change={() => (dimensionValue = calculatedValue)}
-/>
-<div class="flex justify-evenly">
-  <button on:click={() => setToValue(quarter)}>
+    on:change={() => (dimensionValue = calculatedValue)}
+  />
+</div>
+<div class="menu-toolbar justify-center">
+  <button
+    type="button"
+    class="menu-choice"
+    class:menu-choice-active={presetValue === quarter}
+    on:click={() => setToValue(quarter)}
+  >
     {quarter}%
   </button>
-  <button on:click={() => setToValue(50)}> 50% </button>
+  <button
+    type="button"
+    class="menu-choice"
+    class:menu-choice-active={presetValue === 50}
+    on:click={() => setToValue(50)}
+  >
+    50%
+  </button>
 </div>

@@ -4,27 +4,43 @@
  * All rights reserved.
  */
 
+import { asBookCardId, type BookCardId } from '$lib/data/book-id';
 import { BackupStorageHandler } from '$lib/data/storage/handler/backup-handler';
 import { BaseStorageHandler, FilePrefix } from '$lib/data/storage/handler/base-handler';
 import { storage } from '$lib/data/window/navigator/storage';
 import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
 import { database, requestPersistentStorage$ } from '$lib/data/store';
-import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
-import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
-import loadMd from '$lib/functions/file-loaders/md/load-md';
-import loadMobi, { setForceNativeParser } from '$lib/functions/file-loaders/mobi/load-mobi';
-import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
-import loadPdf from '$lib/functions/file-loaders/pdf/load-pdf';
 import { sniffFormat, sniffZipKind } from '$lib/functions/file-loaders/utils/sniff-format';
 
+// dev-only console toggle: window.__forceNativeMobi(true) forces the built-in
+// MOBI parser, bypassing Calibre. Lazy-loads the MOBI module so the parser
+// (and its dep tree) stays off the /manage bundle for users who never touch it.
 if (typeof window !== 'undefined') {
-  (window as any).__forceNativeMobi = (val = true) => {
+  (window as any).__forceNativeMobi = async (val = true) => {
+    const { setForceNativeParser } = await import('$lib/functions/file-loaders/mobi/load-mobi');
     setForceNativeParser(val);
-    console.log(val ? '已切换到内置 MOBI 解析器' : '已恢复 Calibre 优先模式');
+    console.info(val ? '已切换到内置 MOBI 解析器' : '已恢复 Calibre 优先模式');
   };
 }
-import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
+
 import type { LoadData } from '$lib/functions/file-loaders/types';
+
+// Every format loader below is imported per-branch so the /manage entry
+// bundle isn't dragged into loading pdfjs / hljs / katex / marked /
+// libarchive / mobi-parser upfront. Only the format the user actually
+// imports pays the code-split cost.
+const loadEpub = () => import('$lib/functions/file-loaders/epub/load-epub').then((m) => m.default);
+const loadTxt = () => import('$lib/functions/file-loaders/txt/load-txt').then((m) => m.default);
+const loadMd = () => import('$lib/functions/file-loaders/md/load-md').then((m) => m.default);
+const loadMobi = () =>
+  import('$lib/functions/file-loaders/mobi/load-mobi').then((m) => m.default);
+const loadPdf = () => import('$lib/functions/file-loaders/pdf/load-pdf').then((m) => m.default);
+const loadCbz = () => import('$lib/functions/file-loaders/cbz/load-cbz').then((m) => m.default);
+const loadCbr = () => import('$lib/functions/file-loaders/cbr/load-cbr').then((m) => m.default);
+const loadHtmlz = () =>
+  import('$lib/functions/file-loaders/htmlz/load-htmlz').then((m) => m.default);
+import { detectSourceFormat } from '$lib/functions/book-format';
+import { logger } from '$lib/data/logger';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import {
@@ -35,6 +51,13 @@ import pLimit from 'p-limit';
 
 export const exporterVersion = 1;
 
+export interface ImportedBook {
+  file: File;
+  /** Whatever id this storage source gives the library card — the IDB row id
+   * under browser storage, `stableIdFromTitle` under external file storage. */
+  id: BookCardId;
+}
+
 export async function importData(
   document: Document,
   targetHandler: BaseStorageHandler,
@@ -42,14 +65,26 @@ export async function importData(
   cancelSignal: AbortSignal,
   fileCountData?: Record<string, number>
 ) {
-  const dataIds: number[] = [];
+  // Paired with the source File so the caller can map an import back to the
+  // folder it came from. `dataIds` was collected here and never read.
+  const imported: ImportedBook[] = [];
   const tasks: Promise<void>[] = [];
   const lastBookModified = new Date().getTime();
   const progressBase = 3; // load -> save -> cover;
   const maxProgress = progressBase * files.length;
   const limiter = pLimit(1);
 
-  let errorMessage = '';
+  /**
+   * One entry per file that failed. This used to be a single string that each
+   * failure overwrote, so importing a folder where several books fail reported
+   * only the last one — the others were invisible until you retried and hit
+   * them one at a time. Cancels never land here: handleErrorDuringReplication
+   * rethrows AbortError.
+   */
+  const failures: string[] = [];
+  /** Beyond this the dialog stops being readable; the count still tells the
+   *  full story. */
+  const MAX_REPORTED_FAILURES = 10;
 
   replicationProgress$.next({ progressBase, maxProgress });
 
@@ -83,38 +118,52 @@ export async function importData(
           // Step 2: if the extension didn't match anything, sniff the magic
           // bytes so renamed/extensionless files still load correctly.
           if (file.name.endsWith('.epub')) {
-            bookContent = await loadEpub(file, document, lastBookModified);
+            bookContent = await (await loadEpub())(file, document, lastBookModified);
           } else if (file.name.endsWith('.txt')) {
-            bookContent = await loadTxt(file, lastBookModified);
+            bookContent = await (await loadTxt())(file, lastBookModified);
           } else if (/\.(md|markdown)$/i.test(file.name)) {
-            bookContent = await loadMd(file, lastBookModified);
+            bookContent = await (await loadMd())(file, lastBookModified);
           } else if (/\.(mobi|azw3?)$/i.test(file.name)) {
-            bookContent = await loadMobi(file, lastBookModified);
+            bookContent = await (await loadMobi())(file, lastBookModified);
           } else if (/\.pdf$/i.test(file.name)) {
-            bookContent = await loadPdf(file, lastBookModified);
+            bookContent = await (await loadPdf())(file, lastBookModified, (page, total) => {
+              // Surface per-page progress so a long scanned-PDF import shows a
+              // moving bar + live ETA instead of sitting on "load" with
+              // `~ ??:??:??`. The load step's budget is 1 progress unit; each
+              // page adds its slice, and completeStep() ceil-corrects at the end.
+              if (page < total) {
+                BaseStorageHandler.reportProgress(1 / total);
+              }
+            }, cancelSignal);
           } else if (/\.cbz$/i.test(file.name)) {
-            bookContent = await loadCbz(file, lastBookModified);
+            bookContent = await (await loadCbz())(file, lastBookModified);
+          } else if (/\.(cbr|cb7|cbt)$/i.test(file.name)) {
+            bookContent = await (await loadCbr())(file, lastBookModified);
           } else if (/\.htmlz$/i.test(file.name)) {
-            bookContent = await loadHtmlz(file, document, lastBookModified);
+            bookContent = await (await loadHtmlz())(file, document, lastBookModified);
           } else {
             const sniffed = await sniffFormat(file);
             if (sniffed === 'pdf') {
-              bookContent = await loadPdf(file, lastBookModified);
+              bookContent = await (await loadPdf())(file, lastBookModified, (page, total) => {
+                if (page < total) {
+                  BaseStorageHandler.reportProgress(1 / total);
+                }
+              }, cancelSignal);
             } else if (sniffed === 'mobi') {
-              bookContent = await loadMobi(file, lastBookModified);
+              bookContent = await (await loadMobi())(file, lastBookModified);
             } else if (sniffed === 'zip') {
               const kind = await sniffZipKind(file);
               if (kind === 'cbz') {
-                bookContent = await loadCbz(file, lastBookModified);
+                bookContent = await (await loadCbz())(file, lastBookModified);
               } else if (kind === 'htmlz') {
-                bookContent = await loadHtmlz(file, document, lastBookModified);
+                bookContent = await (await loadHtmlz())(file, document, lastBookModified);
               } else {
                 // EPUB or fallback to EPUB (most common ZIP-based ebook)
-                bookContent = await loadEpub(file, document, lastBookModified);
+                bookContent = await (await loadEpub())(file, document, lastBookModified);
               }
             } else {
               // Last resort: try EPUB (it'll error out cleanly if not actually one)
-              bookContent = await loadEpub(file, document, lastBookModified);
+              bookContent = await (await loadEpub())(file, document, lastBookModified);
             }
           }
 
@@ -131,14 +180,42 @@ export async function importData(
 
           checkCancelAndProgress(cancelSignal, true, true);
 
+          // 1.20.2: remember the source format so the hover popover +
+          // card corner chip can display it even after loaders strip the
+          // extension from the title (EPUB/MOBI extract clean titles
+          // from EXTH; only TXT/MD/CBZ tend to keep the extension).
+          // detectSourceFormat (not detectBookFormat) so a CBR keeps its CBR
+          // badge instead of being lumped under CBZ.
+          bookContent.originalFormat = detectSourceFormat(file.name);
+
           currentTitle = bookContent.title;
+
+          // Side channel off the loader — must not reach saveBook, which
+          // persists whatever it is handed (IDB row for browser storage, a
+          // JSON file on disk for tauri-fs).
+          const extractedMetadata = bookContent._extractedMetadata;
+          delete bookContent._extractedMetadata;
 
           targetHandler.startContext(
             { title: bookContent.title, imagePath: bookContent.coverImage || '' },
             cancelSignal
           );
 
-          dataIds.push(await targetHandler.saveBook(bookContent, false));
+          // saveBook hands back the library-card id for whichever storage
+          // source this handler is; tagging it here is the one audited
+          // crossing between the raw number and the branded space.
+          imported.push({ file, id: asBookCardId(await targetHandler.saveBook(bookContent, false)) });
+
+          if (extractedMetadata) {
+            try {
+              await database.putBookMetadata({ title: bookContent.title, ...extractedMetadata });
+            } catch (error: any) {
+              // The book itself imported fine; losing its author line is not
+              // worth failing the import over, and the user can fill it in by
+              // hand. Warn so it still shows up in the log report.
+              logger.warn(`bookMetadata write failed for ${bookContent.title}: ${error?.message}`);
+            }
+          }
 
           checkCancelAndProgress(cancelSignal, false);
 
@@ -150,9 +227,9 @@ export async function importData(
 
           checkCancelAndProgress(cancelSignal, true, !bookContent.coverImage);
         } catch (error: any) {
-          errorMessage = handleErrorDuringReplication(error, `Error importing ${currentTitle}: `, [
-            limiter
-          ]);
+          failures.push(
+            handleErrorDuringReplication(error, `Error importing ${currentTitle}: `, [limiter])
+          );
         }
       })
     )
@@ -177,7 +254,12 @@ export async function importData(
     });
   }
 
-  return errorMessage;
+  const shown = failures.slice(0, MAX_REPORTED_FAILURES);
+  if (failures.length > shown.length) {
+    shown.push(`…还有 ${failures.length - shown.length} 个文件失败`);
+  }
+
+  return { error: shown.join('\n'), imported };
 }
 
 export async function importBackup(

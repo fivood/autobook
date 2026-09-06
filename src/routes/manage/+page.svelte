@@ -1,7 +1,18 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { faCheck, faUpload } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faBoxArchive,
+    faBoxOpen,
+    faCalendarXmark,
+    faChartLine,
+    faCheck,
+    faCloudArrowUp,
+    faSquareCheck,
+    faSquareMinus,
+    faTrash,
+    faUpload
+  } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
   import FolderSidebar from '$lib/components/library-folders/folder-sidebar.svelte';
   import {
@@ -10,20 +21,29 @@
     activeFolderFilter$,
     refreshFolders,
     addBooksToFolder,
+    findOrCreateLocalFolder,
     removeBooksFromFolder,
     clearBookFolderAssignments
   } from '$lib/data/library-folders';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+  import { asBookCardId, type BookCardId } from '$lib/data/book-id';
+  import {
+    ARCHIVED_FILTER,
+    archiveBooks,
+    archivedTitles$,
+    clearArchiveForTitles,
+    refreshArchive,
+    unarchiveBooks
+  } from '$lib/data/library-archive';
   import BookManagerHeader from '$lib/components/book-card/book-manager-header.svelte';
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
-  import ExternalReadDialog from '$lib/components/external-read-dialog.svelte';
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
+  import LoadingDialog from '$lib/components/loading-dialog.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { preFilteredTitlesForStatistics$ } from '$lib/components/statistics/statistics-types';
-  import { pxScreen } from '$lib/css-classes';
-  import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
+  import type { BooksDbBookData, BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
@@ -31,31 +51,41 @@
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
+  import { isTauri } from '$lib/data/env';
   import {
     booklistSortOptions$,
     cacheStorageData$,
     confirmStatisticsDeletion$,
     database,
     fileCountData$,
-    hideExternalReadHint$,
-    isOnline$,
-    keepLocalStatisticsOnDeletion$,
     lastExportedTarget$,
     lastExportedTypes$,
+    libraryFilter$,
     pendingLaunchFiles$,
     readingGoalsMergeMode$,
     replicationSaveBehavior$,
     showExternalPlaceholder$,
+    vaultSyncRoot$,
     statisticsMergeMode$
   } from '$lib/data/store';
+  import { t, tImmediate } from '$lib/i18n';
+  import { detectBookFormat } from '$lib/functions/book-format';
+  import { categoryOfPath, planVaultSync, readVaultFiles } from '$lib/functions/vault-sync';
+  import { vaultSyncLastError$ } from '$lib/data/store';
+  import { formatTextSource, getEditableTextFormat } from '$lib/functions/file-loaders/text-source';
   import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
   import { cloneMutateSet } from '$lib/functions/clone-mutate-set';
   import { getDropEventFiles } from '$lib/functions/file-dom/get-drop-event-files';
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { formatPageTitle } from '$lib/functions/format-page-title';
-  import { keyBy } from '$lib/functions/key-by';
   import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
-  import { importBackup, importData, replicateData } from '$lib/functions/replication/replicator';
+  import { submitReport } from '$lib/functions/report-error';
+  import {
+    importBackup,
+    importData,
+    replicateData,
+    type ImportedBook
+  } from '$lib/functions/replication/replicator';
   import { throwIfAborted } from '$lib/functions/replication/replication-error';
   import {
     replicationProgress$,
@@ -65,41 +95,82 @@
   import { pluralize } from '$lib/functions/utils';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import pLimit from 'p-limit';
-  import { combineLatest, map, Observable, share, Subject, switchMap, takeUntil } from 'rxjs';
+  import {
+    combineLatest,
+    defer,
+    map,
+    Observable,
+    share,
+    shareReplay,
+    startWith,
+    Subject,
+    switchMap,
+    takeUntil
+  } from 'rxjs';
   import { onDestroy, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
+  import { fly } from 'svelte/transition';
+  import { clickOutside } from '$lib/functions/use-click-outside';
+  import { activateOnKeyup } from '$lib/functions/utils';
 
   const booksAreLoading$ = database.listLoading$.pipe(map((isLoading) => isLoading));
+
+  // IDB data.id → title map. Tauri FS card.id is stableIdFromTitle(title) (a
+  // hash), but bookmark.dataId is the IDB book.id (autoincrement, e.g. 5).
+  // The two id spaces never overlap, so any merge keyed on dataId/id always
+  // misses. Bridge: bookmark.dataId → IDB data row → title, then match FS
+  // cards by title. Re-fetches whenever books are added or removed.
+  const idbTitleByDataId$ = database.dataListChanged$.pipe(
+    startWith(undefined as unknown),
+    switchMap(() =>
+      defer(async () => {
+        const db = await database.db;
+        const records = await db.getAll('data');
+        const m = new Map<number, string>();
+        for (const r of records) m.set(r.id, r.title);
+        return m;
+      })
+    ),
+    shareReplay({ refCount: true, bufferSize: 1 })
+  );
 
   const bookCards$: Observable<BookCardProps[]> = combineLatest([
     database.dataList$,
     database.bookmarks$,
-    booklistSortOptions$
+    booklistSortOptions$,
+    idbTitleByDataId$
   ]).pipe(
-    map(([dataList, bookmarks]) => {
+    map(([dataList, bookmarks, _sortOpts, titleByDataId]) => {
       const sortProp = $booklistSortOptions$[$storageSource$];
       const isTitleSort = sortProp.property === 'title';
+      const isBrowserSource = $storageSource$ === StorageKey.BROWSER;
 
-      if ($storageSource$ === StorageKey.BROWSER) {
-        const bookmarkMap = keyBy(bookmarks, 'dataId');
-
-        return [
-          ...dataList
-            .filter((d) => $showExternalPlaceholder$ || !d.isPlaceholder)
-            .map((d) => ({
-              ...d,
-              ...bookmarkToProgress(bookmarkMap.get(d.id))
-            }))
-            .sort((card1: BookCardProps, card2: BookCardProps) =>
-              sortBookCards(card1, card2, sortProp, isTitleSort)
-            )
-        ];
+      // Build title → bookmark map by joining bookmarks (keyed by IDB id)
+      // through the IDB data store. Works for both BROWSER and Tauri FS:
+      // browser-handler card.title === IDB data.title; tauri-fs-handler card
+      // title is desanitizeFilename(dirName), which round-trips through the
+      // same sanitizeFilename used at write time.
+      const titleToBookmark = new Map<string, BooksDbBookmarkData>();
+      for (const b of bookmarks) {
+        const title = titleByDataId.get(b.dataId);
+        if (title) titleToBookmark.set(title, b);
       }
 
       return [
-        ...dataList.sort((card1: BookCardProps, card2: BookCardProps) =>
-          sortBookCards(card1, card2, sortProp, isTitleSort)
-        )
+        ...dataList
+          .filter((d) => !isBrowserSource || $showExternalPlaceholder$ || !d.isPlaceholder)
+          .map((d) => {
+            const bm = titleToBookmark.get(d.title);
+            // No IDB bookmark for this title? Keep handler-provided values
+            // (tauri-fs-handler reads progress / lastBookmarkModified from
+            // on-disk `progress_*.json` filename when the book was synced
+            // but not opened locally).
+            if (!bm) return d;
+            return { ...d, ...bookmarkToProgress(bm, d.characters || 0) };
+          })
+          .sort((card1: BookCardProps, card2: BookCardProps) =>
+            sortBookCards(card1, card2, sortProp, isTitleSort)
+          )
       ];
     }),
     share()
@@ -111,20 +182,47 @@
   const filteredBookCards$: Observable<BookCardProps[]> = combineLatest([
     bookCards$,
     bookFolders$,
-    activeFolderFilter$
+    activeFolderFilter$,
+    libraryFilter$,
+    archivedTitles$
   ]).pipe(
-    map(([cards, bookFolders, filter]) => {
-      if (filter === 'all') return cards;
+    map(([cards, bookFolders, filter, libFilter, archived]) => {
+      // Archived books are hidden from every view except the archive itself —
+      // that is the whole point of putting a book away.
+      let result =
+        filter === ARCHIVED_FILTER
+          ? cards.filter((c) => archived.has(c.title))
+          : cards.filter((c) => !archived.has(c.title));
       if (filter === 'uncategorized') {
         const assigned = new Set(bookFolders.map((bf) => bf.bookId));
-        return cards.filter((c) => !assigned.has(c.id));
+        result = result.filter((c) => !assigned.has(c.id));
+      } else if (filter !== 'all' && filter !== ARCHIVED_FILTER) {
+        const folderId = Number(filter);
+        if (Number.isFinite(folderId)) {
+          const inFolder = new Set(
+            bookFolders.filter((bf) => bf.folderId === folderId).map((bf) => bf.bookId)
+          );
+          result = result.filter((c) => inFolder.has(c.id));
+        }
       }
-      const folderId = Number(filter);
-      if (!Number.isFinite(folderId)) return cards;
-      const inFolder = new Set(
-        bookFolders.filter((bf) => bf.folderId === folderId).map((bf) => bf.bookId)
-      );
-      return cards.filter((c) => inFolder.has(c.id));
+
+      if (libFilter.formats.length) {
+        const allowed = new Set(libFilter.formats);
+        result = result.filter((c) => allowed.has(detectBookFormat(c.title)));
+      }
+
+      if (libFilter.completion !== 'all') {
+        result = result.filter((c) => {
+          // bookmarkToProgress normalizes to 0–1; "done" is anything >= 0.995
+          // to absorb floating-point drift in the final-bookmark calculation.
+          const p = c.progress || 0;
+          if (libFilter.completion === 'unread') return p === 0;
+          if (libFilter.completion === 'done') return p >= 0.995;
+          return p > 0 && p < 0.995;
+        });
+      }
+
+      return result;
     }),
     share()
   );
@@ -134,15 +232,47 @@
     share()
   );
 
-  let selectedBookIds: ReadonlySet<number> = new Set();
+  let selectedBookIds: ReadonlySet<BookCardId> = new Set();
   let selectMode = false;
+  /** Last card clicked without shift — the other end of a shift-click range. */
+  let selectionAnchorId: BookCardId | undefined;
+  /** True while a book-click's prepareBookForReading is in flight. Guards
+   * against double-click stacking a second loading dialog / prepare. */
+  let openingBook = false;
+  /** Free-text title search. Deliberately NOT persisted — users
+   * expect to see their full library on next open. */
+  let searchQuery = '';
+  // Applied query — the `visibleBookCards` filter runs off this rather than
+  // `searchQuery` directly, so a fast typist doesn't re-scan the whole
+  // library on every keystroke. 120ms is under the perceptual threshold for
+  // "instant" while collapsing the burst into a single filter pass.
+  let debouncedSearchQuery = '';
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  $: {
+    clearTimeout(searchDebounceTimer);
+    const q = searchQuery;
+    if (!q) {
+      debouncedSearchQuery = '';
+    } else {
+      searchDebounceTimer = setTimeout(() => {
+        debouncedSearchQuery = q;
+      }, 120);
+    }
+  }
+  $: visibleBookCards = (() => {
+    const cards = $filteredBookCards$ || [];
+    const q = debouncedSearchQuery.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter((c) => c.title.toLowerCase().includes(q));
+  })();
   let cancelToken = new AbortController();
   let cancelSignal = cancelToken.signal;
   let cancelTooltip = '';
   let isDragOver = false;
+  let fileInputEl: HTMLInputElement | undefined;
   let replicationProgress = 0;
   let replicationToProgress = 0;
-  let replicationProgressRemaining = '~ ??:??:??';
+  let replicationProgressRemaining = tImmediate('manager.progressPreparing');
   let replicationDone = new Subject<void>();
   let progressBase = 0;
   let executionStart: number;
@@ -156,18 +286,23 @@
   onDestroy(() => dialogManager.dialogs$.next([]));
 
   onMount(() => {
-    refreshFolders().catch(() => {});
+    refreshArchive().catch(() => {});
+    refreshFolders()
+      // Once per library visit, after folders are loaded so newly synced books
+      // land in their categories immediately. Failure is logged inside.
+      .then(() => runVaultSync())
+      .catch(() => {});
   });
 
   /** Book IDs to assign when the user drags onto a folder. If the dragged
    * book is part of the current selection, drag the whole selection;
    * otherwise drag just that one book. */
-  function buildDragPayload(bookId: number): number[] {
+  function buildDragPayload(bookId: BookCardId): BookCardId[] {
     if (selectedBookIds.has(bookId)) return Array.from(selectedBookIds);
     return [bookId];
   }
 
-  function onCardDragStart(ev: DragEvent, bookId: number) {
+  function onCardDragStart(ev: DragEvent, bookId: BookCardId) {
     if (!ev.dataTransfer) return;
     const ids = buildDragPayload(bookId);
     ev.dataTransfer.setData('application/x-autobook-book-ids', JSON.stringify(ids));
@@ -183,35 +318,120 @@
     await removeBooksFromFolder(ids, folderId);
     selectedBookIds = new Set();
     activeFolderFilter$.next('uncategorized');
-    flashToast(`已移出当前分类（${ids.length} 本），已切到未分类视图`);
+    flashToast(tImmediate('manager.toast.removedFromFolder', { n: ids.length }));
   }
 
   async function addSelectedToFolder(folderId: number) {
     const ids = Array.from(selectedBookIds);
     await addBooksToFolder(ids, folderId);
-    flashToast(`已加入分类（${ids.length} 本）`);
+    flashToast(tImmediate('manager.toast.addedToFolder', { n: ids.length }));
+  }
+
+  /** Archived books that actually exist in this library, as card ids. */
+  $: archivedCardIds = new Set(
+    ($bookCards$ || []).filter((card) => $archivedTitles$.has(card.title)).map((card) => card.id)
+  );
+
+  $: visibleLibraryCount = Math.max(0, ($bookCards$?.length ?? 0) - archivedCardIds.size);
+
+  /** Every card the current source knows about, archived or not. */
+  $: shelfCardIds = new Set(($bookCards$ || []).map((card) => card.id));
+
+  /** Card ids → titles, since the archive is keyed by title. */
+  function titlesForIds(ids: Iterable<number>): string[] {
+    const wanted = new Set(ids);
+    return ($bookCards$ || []).filter((card) => wanted.has(card.id)).map((card) => card.title);
+  }
+
+  /**
+   * Put the selection away, or bring it back when the archive is what's on
+   * screen. One button rather than two: the archive view is the only place
+   * un-archiving makes sense, and the only place archiving does not.
+   */
+  async function toggleArchiveForSelection() {
+    const titles = titlesForIds(selectedBookIds);
+    if (!titles.length) return;
+    const restoring = $activeFolderFilter$ === ARCHIVED_FILTER;
+    // Leave select mode before the await, not after. The books vanish from
+    // the shelf as soon as the archive store updates, while the header still
+    // said "selecting" for the rest of the operation — and a click on a card
+    // in that window opened the book instead of ticking it.
+    selectedBookIds = new Set();
+    selectMode = false;
+    if (restoring) {
+      await unarchiveBooks(titles);
+    } else {
+      await archiveBooks(titles);
+    }
+    flashToast(
+      tImmediate(restoring ? 'manager.toast.unarchived' : 'manager.toast.archived', {
+        n: titles.length
+      }),
+      // Archiving is reversible, so say so where it happens instead of making
+      // people go find the archive view and put the books back by hand.
+      async () => {
+        if (restoring) {
+          await archiveBooks(titles);
+        } else {
+          await unarchiveBooks(titles);
+        }
+      }
+    );
   }
 
   let toastMessage = '';
   let toastVisible = false;
+  let toastUndo: (() => void | Promise<void>) | null = null;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function flashToast(message: string) {
+  /** A toast with an undo stays up longer — 1.8s is not enough to read a
+   *  message, decide, and reach the button. */
+  function flashToast(message: string, undo?: () => void | Promise<void>) {
     toastMessage = message;
+    toastUndo = undo ?? null;
     toastVisible = true;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      toastVisible = false;
-    }, 1800);
+    toastTimer = setTimeout(
+      () => {
+        toastVisible = false;
+        toastUndo = null;
+      },
+      undo ? 6000 : 1800
+    );
   }
 
-  function bookmarkToProgress(b: BooksDbBookmarkData | undefined) {
-    return b?.progress
-      ? {
-          progress: typeof b.progress === 'string' ? +b.progress.slice(0, -1) : b.progress,
-          lastBookmarkModified: b.lastBookmarkModified || 0
-        }
-      : { progress: 0, lastBookmarkModified: 0 };
+  async function runToastUndo() {
+    const undo = toastUndo;
+    toastVisible = false;
+    toastUndo = null;
+    clearTimeout(toastTimer);
+    await undo?.();
+  }
+
+  function bookmarkToProgress(
+    b: BooksDbBookmarkData | undefined,
+    bookCharCount: number
+  ) {
+    if (!b) return { progress: 0, lastBookmarkModified: 0 };
+    // Normalize to 0–1. Three cases observed in IDB across versions:
+    //   1. New (≥1.5): bookmark.progress is a 0–1 number
+    //   2. Legacy: bookmark.progress is a "45%" string
+    //   3. Very old: no progress field at all — only exploredCharCount.
+    //      Without the fallback below, finished books from old versions
+    //      keep showing 0% on hover / 0%-wide progress bar.
+    let raw: number | undefined;
+    if (b.progress != null) {
+      raw = typeof b.progress === 'string' ? +b.progress.slice(0, -1) / 100 : b.progress;
+    } else if (b.exploredCharCount && bookCharCount > 0) {
+      raw = b.exploredCharCount / bookCharCount;
+    }
+    if (raw == null || Number.isNaN(raw)) {
+      return { progress: 0, lastBookmarkModified: b.lastBookmarkModified || 0 };
+    }
+    return {
+      progress: Math.max(0, Math.min(1, raw)),
+      lastBookmarkModified: b.lastBookmarkModified || 0
+    };
   }
 
   function sortBookCards(
@@ -242,20 +462,46 @@
     return sortDiff;
   }
 
-  async function onBookClick(bookId: number) {
+  async function onBookClick(bookId: BookCardId, shiftKey = false, toggleKey = false) {
     if (!operationAllowed()) {
       return;
     }
 
+    // Ctrl/Cmd- or shift-clicking a book is a selection gesture in every file
+    // manager there is, so it starts the mode instead of opening the book.
+    // Picking 30 books used to mean finding the toggle in the header first,
+    // then 30 separate clicks.
+    if (!selectMode && (shiftKey || toggleKey)) {
+      selectMode = true;
+      selectionAnchorId = bookId;
+      selectedBookIds = new Set([bookId]);
+      return;
+    }
+
+    if (selectMode && shiftKey && selectionAnchorId !== undefined) {
+      selectRangeTo(bookId);
+      return;
+    }
+
     if (!selectMode) {
+      // A second click while the first open is still preparing must not
+      // stack another dialog — the loading dialog also blocks the click,
+      // but guard here anyway so a double-click can't fire two prepares.
+      if (openingBook) return;
+      openingBook = true;
+
       dialogManager.dialogs$.next([
         {
-          component: '<div/>',
+          component: LoadingDialog,
           disableCloseOnClick: true
         }
       ]);
 
-      let idToOpen = bookId;
+      // The reader is addressed by the IDB row id, which is a different space
+      // from the card id we were clicked with — prepareBookForReading is the
+      // conversion. Seeded with 0 rather than bookId to make that explicit;
+      // every path that reaches openBook() assigns it first.
+      let idToOpen = 0;
 
       try {
         const bookItem = $bookCards$.find((book) => book.id === bookId);
@@ -288,36 +534,9 @@
 
         idToOpen = await handler.prepareBookForReading();
 
-        if (false) {
-          const nextAction = await new Promise<string>((resolver) => {
-            dialogManager.dialogs$.next([
-              {
-                component: ExternalReadDialog,
-                props: { resolver },
-                disableCloseOnClick: true
-              }
-            ]);
-          });
-
-          if (nextAction === 'cancel') {
-            return;
-          }
-
-          if (nextAction === 'export') {
-            selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
-              set.add(bookId);
-            });
-            selectMode = true;
-
-            await tick();
-
-            return onReplicateData();
-          }
-        }
-
         dialogManager.dialogs$.next([]);
       } catch (error: any) {
-        const message = `Error opening book: ${error.message}`;
+        const message = tImmediate('errors.openBook', { detail: error.message });
 
         logger.warn(message);
 
@@ -331,19 +550,78 @@
           }
         ]);
 
+        openingBook = false;
         return;
       }
 
+      openingBook = false;
       openBook(idToOpen);
       return;
     }
 
+    selectionAnchorId = bookId;
     selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
       if (set.has(bookId)) {
         set.delete(bookId);
         return;
       }
       set.add(bookId);
+    });
+  }
+
+  /**
+   * Live result of a rubber-band drag; the list has already folded in the
+   * pre-drag selection when a modifier was held. A plain box replaces the
+   * selection, which is what a file manager does — dragging a fresh box is
+   * how you start over.
+   */
+  /**
+   * Right-click menu. Right-clicking a book that is not in the current
+   * selection makes it the selection first — the menu always acts on what is
+   * ticked, and a menu that silently acted on something else would be the
+   * worst possible surprise next to 删除.
+   */
+  let contextMenu: { x: number; y: number } | null = null;
+
+  function openContextMenu(id: BookCardId, x: number, y: number) {
+    if (!selectedBookIds.has(id)) {
+      selectMode = true;
+      selectedBookIds = new Set([id]);
+      selectionAnchorId = id;
+    }
+    // Keep the menu inside the window; 12rem wide, roughly 13rem tall.
+    contextMenu = {
+      x: Math.min(x, window.innerWidth - 200),
+      y: Math.min(y, window.innerHeight - 230)
+    };
+  }
+
+  function runFromContextMenu(action: () => void) {
+    contextMenu = null;
+    action();
+  }
+
+  function selectionToStatistics() {
+    $preFilteredTitlesForStatistics$ = new Set(
+      $bookCards$.filter((card) => selectedBookIds.has(card.id)).map((book) => book.title)
+    );
+    goto(`${pagePath}${mergeEntries.STATISTICS.routeId}`);
+  }
+
+  function onMarqueeSelect(ids: BookCardId[]) {
+    selectedBookIds = new Set(ids);
+    selectionAnchorId = ids[ids.length - 1] ?? selectionAnchorId;
+  }
+
+  /** Shift-click: add every visible card between the anchor and this one. */
+  function selectRangeTo(bookId: BookCardId) {
+    const cards = visibleBookCards;
+    const from = cards.findIndex((card) => card.id === selectionAnchorId);
+    const to = cards.findIndex((card) => card.id === bookId);
+    if (from === -1 || to === -1) return;
+    const [start, end] = from <= to ? [from, to] : [to, from];
+    selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
+      for (let i = start; i <= end; i += 1) set.add(cards[i].id);
     });
   }
 
@@ -382,16 +660,243 @@
     await goto(`${pagePath}/b?id=${id}`);
   }
 
+  /**
+   * Category path for an imported file, or '' when it carries no directory.
+   *
+   * `webkitRelativePath` is `<picked dir>/<sub…>/<file>`; the first segment is
+   * the folder the user pointed at, which is the same for every file in the
+   * import and so says nothing — drop it along with the filename. What is
+   * left mirrors the tree the user chose to build, at whatever depth they
+   * built it. Files from a plain multi-select (or unpacked from a zip) have no
+   * relative path and stay uncategorized.
+   */
+  function categoryPathOf(file: File): string {
+    const rel = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+    if (!rel) return '';
+    return rel.split('/').slice(1, -1).join('/');
+  }
+
+  /** Mirror the imported directory tree into library categories. */
+  async function assignImportedFolders(imported: ImportedBook[]) {
+    const byPath = new Map<string, BookCardId[]>();
+    for (const { file, id } of imported) {
+      const path = categoryPathOf(file);
+      if (!path) continue;
+      const ids = byPath.get(path);
+      if (ids) ids.push(id);
+      else byPath.set(path, [id]);
+    }
+    // Grouped by path so each folder is resolved and refreshed once, not once
+    // per book — refreshFolders re-reads both stores every call.
+    for (const [path, ids] of byPath) {
+      try {
+        const folder = await findOrCreateLocalFolder(path);
+        if (folder) await addBooksToFolder(ids, folder.id);
+      } catch (err: any) {
+        // The books themselves imported fine; losing a category assignment is
+        // not worth failing the import over.
+        logger.warn(`folder assignment failed for ${path}: ${err?.message}`);
+      }
+    }
+  }
+
+  // ponytail: vault sync lives here because the import pipeline, the delete
+  // pipeline, the progress bar and the dialog manager all already do. Worth
+  // extracting together with those if this file is ever split.
+  let vaultSyncing = false;
+
+  /** Books that mirror a file under the current sync root. */
+  async function syncedBooks(): Promise<BooksDbBookData[]> {
+    const db = await database.db;
+    const all = await db.getAll('data');
+    return all.filter((b) => typeof b.sourcePath === 'string' && b.sourcePath);
+  }
+
+  /**
+   * Pull the sync root into the library. One-way: the files win, and nothing
+   * is ever written back to them.
+   */
+  async function runVaultSync(manual = false) {
+    const root = $vaultSyncRoot$.trim();
+    if (!root || vaultSyncing || !isTauri()) return;
+    vaultSyncing = true;
+    vaultSyncLastError$.next('');
+    try {
+      const [files, books] = await Promise.all([readVaultFiles(root), syncedBooks()]);
+      const plan = planVaultSync(
+        files,
+        books.map((b) => ({ id: b.id, sourcePath: b.sourcePath as string, sourceText: b.sourceText }))
+      );
+
+      const db = await database.db;
+
+      // Edited in the vault: re-render in place so reading progress, folder
+      // membership and highlights all survive.
+      for (const { book, content } of plan.changed) {
+        const current = await db.get('data', book.id);
+        if (!current) continue;
+        const format = getEditableTextFormat(current);
+        if (!format) continue;
+        const formatted = formatTextSource(content, format);
+        await db.put('data', {
+          ...current,
+          sourceText: content,
+          elementHtml: formatted.elementHtml,
+          characters: formatted.characters,
+          sections: formatted.sections,
+          lastBookModified: Date.now()
+        });
+      }
+
+      // Moved or renamed with the content untouched: only the path and the
+      // category change.
+      for (const { book, path } of plan.moved) {
+        const current = await db.get('data', book.id);
+        if (!current) continue;
+        await db.put('data', { ...current, sourcePath: path });
+        await reassignVaultCategory(asBookCardId(current.id), path);
+      }
+
+      let importedCount = 0;
+      let importError: string | undefined;
+      if (plan.added.length) {
+        const res = await importVaultFiles(plan.added);
+        importedCount = res.imported;
+        importError = res.error;
+      }
+
+      // Deletions mirror the vault, but only for books that would cost the
+      // user nothing. A rename the content match failed to catch looks exactly
+      // like a deletion, so anything carrying reading progress or highlights
+      // is left alone and reported instead.
+      const removable: BooksDbBookData[] = [];
+      const kept: BooksDbBookData[] = [];
+      for (const orphan of plan.removed) {
+        const current = await db.get('data', orphan.id);
+        if (!current) continue;
+        const hlCount = await db.countFromIndex('highlight', 'dataId', current.id);
+        const read = (current.lastBookOpen || 0) > 0;
+        (hlCount || read ? kept : removable).push(current);
+      }
+      if (removable.length) await removeBooks(removable.map((b) => asBookCardId(b.id)));
+
+      if (plan.changed.length || plan.moved.length || plan.added.length || removable.length) {
+        await refreshFolders();
+        database.dataListChanged$.next(undefined as any);
+      }
+
+      if (kept.length) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: tImmediate('vaultSync.keptTitle'),
+              message: tImmediate('vaultSync.keptMessage', {
+                titles: kept.map((b) => b.title).join('\n')
+              })
+            }
+          }
+        ]);
+      } else if (importError) {
+        // Not gated on `manual`: nothing ever passes it. This sync only runs
+        // automatically, so its whole toast/dialog layer is unreachable and a
+        // failure would otherwise leave no trace outside logger.warn. Same
+        // treatment as the reading-time sync — state the reason in
+        // 设置 → 数据 rather than interrupting with a dialog.
+        vaultSyncLastError$.next(
+          tImmediate('vaultSync.partialMessage', {
+            imported: importedCount,
+            planned: plan.added.length,
+            detail: importError
+          })
+        );
+      } else if (manual) {
+        flashToast(
+          tImmediate('vaultSync.done', {
+            changed: plan.changed.length + plan.moved.length,
+            added: importedCount,
+            removed: removable.length
+          })
+        );
+      }
+    } catch (err: any) {
+      logger.warn(`vault sync failed: ${err?.message || err}`);
+      vaultSyncLastError$.next(err?.message || String(err));
+      if (manual) showError(tImmediate('vaultSync.failedTitle'), err?.message || String(err), '');
+    } finally {
+      vaultSyncing = false;
+    }
+  }
+
+  /**
+   * Import notes the library has never seen, tagging each with its path.
+   *
+   * Returns how many actually landed plus the failure reason, if any.
+   * `importData` reports failure by *returning* `{error}` rather than
+   * throwing, so the enclosing try/catch in syncVault never saw it: the sync
+   * went on to announce 「同步完成：新增 5」 using plan.added.length — the
+   * number it meant to add — while none of the five had imported.
+   */
+  async function importVaultFiles(
+    added: { path: string; content: string }[]
+  ): Promise<{ imported: number; error?: string }> {
+    const files = added.map(
+      (f) => new File([f.content], f.path.split('/').pop() || 'note.md', { type: 'text/plain' })
+    );
+    const result = await importData(
+      document,
+      getStorageHandler(
+        window,
+        $storageSource$,
+        '',
+        $storageSource$ === StorageKey.BROWSER,
+        $cacheStorageData$,
+        $replicationSaveBehavior$,
+        $statisticsMergeMode$,
+        $readingGoalsMergeMode$
+      ),
+      files,
+      cancelSignal
+    ).catch((err) => ({ error: err.message as string, imported: [] as ImportedBook[] }));
+    resetProgress();
+
+    const db = await database.db;
+    for (let i = 0; i < result.imported.length; i += 1) {
+      const entry = result.imported[i];
+      const source = added[files.indexOf(entry.file)];
+      if (!source) continue;
+      // importData returns the library-card id; the row we need to stamp is
+      // keyed by the IDB id, so find it by title rather than by that number.
+      const row = (await db.getAll('data')).find((b) => b.title === entry.file.name && !b.sourcePath);
+      if (row) await db.put('data', { ...row, sourcePath: source.path });
+      await reassignVaultCategory(entry.id, source.path);
+    }
+    if (result.error) logger.warn(`vault import: ${result.error}`);
+    return { imported: result.imported.length, error: result.error };
+  }
+
+  /** Put a synced book in the folder matching its directory, and only there. */
+  async function reassignVaultCategory(cardId: BookCardId, path: string) {
+    const category = categoryOfPath(path);
+    for (const bf of $bookFolders$.filter((b) => b.bookId === cardId)) {
+      const folder = $folders$.find((f) => f.id === bf.folderId);
+      if (folder?.source === 'local') await removeBooksFromFolder([cardId], folder.id);
+    }
+    if (!category) return;
+    const folder = await findOrCreateLocalFolder(category);
+    if (folder) await addBooksToFolder([cardId], folder.id);
+  }
+
   async function onFilesChange(fileList: FileList | File[]) {
     if (!operationAllowed()) {
       return;
     }
 
-    cancelTooltip = `取消当前导入\n已导入的数据不会被删除`;
+    cancelTooltip = tImmediate('manager.cancelImport');
 
     initializeReplicationProgressData();
 
-    const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz)$/i;
+    const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz|cbr|cb7|cbt)$/i;
     const errorTitle = '书籍导入失败';
     const expanded = await expandZipArchives(Array.from(fileList)).catch((err) => {
       logger.warn(`Error expanding zip: ${err.message}`);
@@ -404,13 +909,13 @@
 
       showError(
         errorTitle,
-        '文件必须是 EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3 / PDF，或包含这些格式的 ZIP',
+        '文件必须是 EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3 / PDF / CBZ / CBR / CB7 / CBT，或包含这些格式的 ZIP',
         ''
       );
       return;
     }
 
-    const error = await importData(
+    const result = await importData(
       document,
       getStorageHandler(
         window,
@@ -425,12 +930,35 @@
       files,
       cancelSignal,
       $fileCountData$
-    ).catch((catchedError) => catchedError.message);
+    ).catch((catchedError) => ({ error: catchedError.message as string, imported: [] }));
+
+    const error = result.error;
+
+    await assignImportedFolders(result.imported);
 
     resetProgress();
 
     if (error) {
+      // Auto-submit telemetry for MOBI/AZW import failures so we can see how
+      // often Calibre / native parser hangs in the wild.
+      const hasMobi = files.some((f) => /\.(mobi|azw3?)$/i.test(f.name));
+      if (hasMobi) {
+        submitReport({ type: 'import', message: error, context: { filenames: files.map((f) => f.name) } }).catch(
+          () => undefined
+        );
+      }
       showError(errorTitle, error, '书籍导入期间发生错误');
+    } else {
+      // Large-file hint: a big comic/scanned-PDF imported into the browser
+      // (IndexedDB) store bloats it and slows every book-list refresh. When a
+      // Tauri filesystem is available, nudge the user to switch instead of
+      // silently changing their chosen storage source.
+      const largeFileCount = files.filter((f) => f.size > 100 * 1024 * 1024).length;
+      if (largeFileCount > 0 && $storageSource$ === StorageKey.BROWSER && isTauri()) {
+        flashToast(
+          `检测到 ${largeFileCount} 个超过 100MB 的大文件，建议在设置中启用「外部文件存储」以节省浏览器存储`
+        );
+      }
     }
   }
 
@@ -474,10 +1002,9 @@
 
         for (const entry of entries) {
           if (entry.directory || !entry.getData) continue;
-          if (!/\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz)$/i.test(entry.filename)) continue;
+          if (!/\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz|cbr|cb7|cbt)$/i.test(entry.filename)) continue;
 
           const name = entry.filename.split('/').pop() || entry.filename;
-          // eslint-disable-next-line no-await-in-loop
           const blob = await entry.getData(new BlobWriter());
           out.push(new File([blob], name, { lastModified: file.lastModified }));
         }
@@ -490,6 +1017,13 @@
   }
 
   function showError(title: string, message: string, fallbackMessage: string) {
+    // errorCount is per-operation — initializeReplicationProgressData calls
+    // logger.clearHistory() first — so `> 1` really does mean "several things
+    // failed in this one run", and escalating to the log report is right.
+    // What was wrong is that it *replaced* the reason: LogReportDialog renders
+    // nothing but `message`, so a 3-file import failure showed one generic
+    // sentence and three buttons, with the per-file causes reachable only by
+    // downloading a report. The report is an addition, not a substitute.
     const showReport = logger.errorCount > 1;
 
     logger.warn(message);
@@ -499,7 +1033,7 @@
         component: showReport ? LogReportDialog : MessageDialog,
         props: {
           title,
-          message: showReport ? fallbackMessage : message
+          message: message || fallbackMessage
         }
       }
     ]);
@@ -527,11 +1061,71 @@
     cancelTooltip = '';
   }
 
+  /**
+   * Select every card the reader can actually see, and clear when they are
+   * already all selected.
+   *
+   * This used to read `$bookCards$` — the whole library, before the folder,
+   * format, completion and search filters. Measured on a search that matched
+   * nothing: 0 cards on screen, 2 books selected. The next click could have
+   * been 删除.
+   */
   function onSelectAllBooks() {
-    const bookCards = $bookCards$;
+    const cards = visibleBookCards;
+    if (!cards.length) return;
+    if (allVisibleSelected) {
+      selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
+        cards.forEach((card) => set.delete(card.id));
+      });
+      return;
+    }
     selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
-      bookCards.forEach((x) => set.add(x.id));
+      cards.forEach((card) => set.add(card.id));
     });
+  }
+
+  $: hiddenSelectedCount = (() => {
+    if (!selectedBookIds.size) return 0;
+    const visible = new Set(visibleBookCards.map((card) => card.id));
+    let hidden = 0;
+    selectedBookIds.forEach((id) => {
+      if (!visible.has(id)) hidden += 1;
+    });
+    return hidden;
+  })();
+
+  $: allVisibleSelected =
+    visibleBookCards.length > 0 && visibleBookCards.every((card) => selectedBookIds.has(card.id));
+
+  let searchInputEl: HTMLInputElement | undefined;
+
+  function onManageKeydown(event: KeyboardEvent) {
+    const target = event.target as HTMLElement | null;
+    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) {
+      // Ctrl/Cmd+F still works from inside the field — it selects what is
+      // already there, which is what every other search box does.
+      if (event.key === 'f' && (event.ctrlKey || event.metaKey)) {
+        searchInputEl?.select();
+        event.preventDefault();
+      }
+      return;
+    }
+    if (event.key === '/' || (event.key === 'f' && (event.ctrlKey || event.metaKey))) {
+      searchInputEl?.focus();
+      searchInputEl?.select();
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Escape' && contextMenu) {
+      contextMenu = null;
+      event.preventDefault();
+    } else if (event.key === 'Escape' && selectMode) {
+      selectMode = false;
+      event.preventDefault();
+    } else if (event.key === 'a' && (event.ctrlKey || event.metaKey) && selectMode) {
+      onSelectAllBooks();
+      event.preventDefault();
+    }
   }
 
   function backToCurrentBook() {
@@ -543,14 +1137,14 @@
   /** Card X / multi-select "remove" inside a folder view: only detach from the
    * current folder, don't delete the book. Library-wide views (全部 / 未分类)
    * still delete. */
-  async function handleRemove(bookIds: number[]) {
+  async function handleRemove(bookIds: BookCardId[]) {
     const filter = $activeFolderFilter$;
     if (filter !== 'all' && filter !== 'uncategorized') {
       const folderId = Number(filter);
       if (Number.isFinite(folderId)) {
         await removeBooksFromFolder(bookIds, folderId);
         selectedBookIds = new Set();
-        flashToast(`已从当前分类移出（${bookIds.length} 本，未删除）`);
+        flashToast(tImmediate('manager.toast.removedFromCurrentFolder', { n: bookIds.length }));
         return;
       }
     }
@@ -562,36 +1156,39 @@
       return;
     }
 
-    cancelTooltip = `取消删除\n已删除的数据无法恢复`;
+    cancelTooltip = tImmediate('manager.cancelDelete');
 
     initializeReplicationProgressData();
 
     const currentBookCount = $bookCards$.length;
     const handler = getStorageHandler(window, $storageSource$, '');
-    const { error, deleted } = await handler.deleteBookData(
-      $bookCards$.reduce((toDelete, card) => {
-        if (bookIds.includes(card.id)) {
-          toDelete.push(card.title);
-        }
-        return toDelete;
-      }, [] as string[]),
-      cancelSignal,
-      $keepLocalStatisticsOnDeletion$
-    );
+    const titlesToDelete = $bookCards$.reduce((toDelete, card) => {
+      if (bookIds.includes(card.id)) {
+        toDelete.push(card.title);
+      }
+      return toDelete;
+    }, [] as string[]);
+    const { error, deleted } = await handler.deleteBookData(titlesToDelete, cancelSignal);
 
     resetProgress();
 
     await tick();
 
-    // Strip folder assignments for any book we just removed. deleted[] is
-    // book IDs (numbers).
-    await Promise.all(deleted.map((id: number) => clearBookFolderAssignments(id).catch(() => {})));
+    // deleteBookData reports the cards it removed, so these are card ids —
+    // the same space bookFolder is keyed by. Tagged here rather than branding
+    // the handler's return, which would spread through every storage source.
+    await Promise.all(
+      deleted.map((id: number) => clearBookFolderAssignments(asBookCardId(id)).catch(() => {}))
+    );
+    // Unlike reading records, an archive flag with no book is meaningless —
+    // and worse, it would silently hide the book if it were re-imported.
+    await clearArchiveForTitles(titlesToDelete).catch(() => {});
 
     if (deleted.length === currentBookCount) {
       selectMode = false;
     } else {
       selectedBookIds = cloneMutateSet(selectedBookIds, (set) => {
-        deleted.forEach((deletedBookId) => set.delete(deletedBookId));
+        deleted.forEach((deletedBookId: number) => set.delete(asBookCardId(deletedBookId)));
       });
     }
 
@@ -607,7 +1204,7 @@
 
     const errorTitle = '导入失败';
 
-    cancelTooltip = `Cancels the current Import\nAlready imported data will not be deleted`;
+    cancelTooltip = tImmediate('manager.cancelImport');
 
     initializeReplicationProgressData();
 
@@ -681,12 +1278,8 @@
           {
             component: ConfirmDialog,
             props: {
-              dialogHeader: '删除数据',
-              dialogMessage: `This will delete all Statistics for the selected ${pluralize(
-                titles.length,
-                '书籍',
-                false
-              )} (which may include start and/or completion Data)\n\nExecute a one time Sync with an export behavior of "replace" and/or statistics merge mode of "replace" to apply deletions to other devices`,
+              dialogHeader: tImmediate('manager.deleteStatisticsConfirm.header'),
+              dialogMessage: tImmediate('manager.deleteStatisticsConfirm.body', { n: titles.length }),
               contentStyles: 'white-space: pre-line;',
               resolver
             }
@@ -699,7 +1292,7 @@
       return;
     }
 
-    cancelTooltip = `取消当前操作`;
+    cancelTooltip = tImmediate('manager.cancelOperation');
 
     initializeReplicationProgressData();
 
@@ -773,9 +1366,10 @@
       const processPerSecond = replicationProgress / duration;
       const remainingTime = (replicationToProgress - replicationProgress) / processPerSecond;
 
+      const eta = getTimestamp(Math.ceil(remainingTime));
       replicationProgressRemaining =
         replicationToProgress > replicationProgress
-          ? `~ ${getTimestamp(Math.ceil(remainingTime))}`
+          ? (eta === tImmediate('manager.progressPreparing') ? eta : `~ ${eta}`)
           : '~ 00:00:01';
     }
   }
@@ -786,7 +1380,7 @@
         return;
       }
 
-      cancelTooltip = '取消当前导出';
+      cancelTooltip = tImmediate('manager.cancelExport');
 
       initializeReplicationProgressData();
 
@@ -824,12 +1418,14 @@
   function getTimestamp(seconds: number) {
     return seconds && Number.isFinite(seconds)
       ? new Date(seconds * 1000).toISOString().substr(11, 8)
-      : '??:??:??';
+      : tImmediate('manager.progressPreparing');
   }
 </script>
 
+<svelte:window on:keydown={onManageKeydown} />
+
 <svelte:head>
-  <title>{formatPageTitle('书库管理')}</title>
+  <title>{formatPageTitle($t('pageTitle.manage'))}</title>
 </svelte:head>
 
 {$replicator$ ?? ''}
@@ -844,39 +1440,32 @@
     {replicationToProgress}
     {replicationProgressRemaining}
     bind:selectMode
-    on:selectAllClick={onSelectAllBooks}
+    {hiddenSelectedCount}
     on:backToBookClick={backToCurrentBook}
-    on:removeClick={() => handleRemove(Array.from(selectedBookIds))}
     on:filesChange={(ev) => onFilesChange(ev.detail)}
     on:domainHintClick={onDomainHintClick}
     on:cancelReplication={() => {
       if (!cancelSignal.aborted) {
         cancelToken.abort();
-        replicationProgressRemaining = '正在取消 ...';
+        replicationProgressRemaining = tImmediate('manager.progressCanceling');
       }
     }}
-    on:selectionToStatistics={() => {
-      $preFilteredTitlesForStatistics$ = new Set(
-        $bookCards$.filter((card) => selectedBookIds.has(card.id)).map((book) => book.title)
-      );
-
-      goto(`${pagePath}${mergeEntries.STATISTICS.routeId}`);
-    }}
-    on:deleteStatistics={onDeleteStatistics}
-    on:replicateData={onReplicateData}
     on:importBackup={(ev) => onImportBackup(ev.detail)}
   />
 </div>
 
 <div class="flex min-h-screen pt-16 xl:pt-14">
   <FolderSidebar
-    totalBookCount={$bookCards$?.length ?? 0}
-    on:booksAddedToFolder={({ detail }) => flashToast(`已加入分类（${detail.count} 本）`)}
+    totalBookCount={visibleLibraryCount}
+    archivedCount={archivedCardIds.size}
+    archivedBookIds={archivedCardIds}
+    shelfBookIds={shelfCardIds}
+    on:booksAddedToFolder={({ detail }) => flashToast(tImmediate('manager.toast.addedToFolder', { n: detail.count }))}
   />
+  <!-- svelte-ignore a11y-no-static-element-interactions — this is the library
+       drop target; drag-and-drop is pointer-only, so no keyboard role applies. -->
   <div
-    tabindex="0"
-    role="button"
-    class="{pxScreen} relative flex-1 overflow-auto"
+    class="px-4 md:px-8 mx-auto w-full relative flex-1 overflow-auto"
     on:dragenter={(ev) => {
       ev.preventDefault();
       if (ev.dataTransfer?.types?.includes('Files')) isDragOver = true;
@@ -894,6 +1483,126 @@
       getDropEventFiles(ev).then(onFilesChange);
     }}
   >
+  <!--
+    Batch actions sit at the bottom, next to the books they act on. They used
+    to live in the top-right corner of the shared header: you framed a
+    selection at the bottom of a long grid and then had to travel to the far
+    corner of the window to act on it — and every other page carried the
+    concept for no reason.
+  -->
+  {#if selectMode && selectedBookIds.size}
+    <div class="selection-actions elevation-4 bg-menu text-menu" transition:fly={{ y: 24, duration: 120 }}>
+      <span class="px-2 text-sm tabular-nums opacity-80"
+        >{$t('manager.selectedCount', { n: selectedBookIds.size })}</span
+      >
+      <button
+        type="button"
+        class="selection-action"
+        title={$t('manager.exportMenu')}
+        on:click={onReplicateData}
+      >
+        <Fa icon={faCloudArrowUp} />
+        {$t('manager.exportMenu')}
+      </button>
+      {#if $storageSource$ === StorageKey.BROWSER}
+        <button
+          type="button"
+          class="selection-action"
+          title={$t('manager.viewStatistics')}
+          on:click={selectionToStatistics}
+        >
+          <Fa icon={faChartLine} />
+          {$t('manager.action.stats')}
+        </button>
+        <button
+          type="button"
+          class="selection-action"
+          title={$t('manager.deleteStatistics')}
+          on:click={onDeleteStatistics}
+        >
+          <Fa icon={faCalendarXmark} />
+          {$t('manager.action.deleteStats')}
+        </button>
+      {/if}
+      <button
+        type="button"
+        class="selection-action"
+        title={$activeFolderFilter$ === ARCHIVED_FILTER
+          ? $t('manager.unarchiveBooks')
+          : $t('manager.archiveBooks')}
+        on:click={toggleArchiveForSelection}
+      >
+        <Fa icon={$activeFolderFilter$ === ARCHIVED_FILTER ? faBoxOpen : faBoxArchive} />
+        {$activeFolderFilter$ === ARCHIVED_FILTER
+          ? $t('manager.action.unarchive')
+          : $t('manager.action.archive')}
+      </button>
+      <button
+        type="button"
+        class="selection-action selection-action-danger"
+        title={$t('manager.deleteBooks')}
+        on:click={() => handleRemove(Array.from(selectedBookIds))}
+      >
+        <Fa icon={faTrash} />
+        {$t('manager.action.delete')}
+      </button>
+    </div>
+  {/if}
+
+  {#if contextMenu}
+    <div
+      class="menu-surface menu-list context-menu"
+      style="left:{contextMenu.x}px;top:{contextMenu.y}px;"
+      use:clickOutside={() => (contextMenu = null)}
+    >
+      {#if selectedBookIds.size === 1}
+        <div
+          tabindex="0"
+          role="button"
+          class="menu-item"
+          on:click={() => runFromContextMenu(() => onBookClick([...selectedBookIds][0]))}
+          on:keyup={activateOnKeyup}
+        >{$t('manager.context.open')}</div>
+      {/if}
+      {#each $folders$ as folder (folder.id)}
+        <div
+          tabindex="0"
+          role="button"
+          class="menu-item"
+          on:click={() => runFromContextMenu(() => addSelectedToFolder(folder.id))}
+          on:keyup={activateOnKeyup}
+        >+ {folder.name}</div>
+      {/each}
+      <div
+        tabindex="0"
+        role="button"
+        class="menu-item"
+        on:click={() => runFromContextMenu(toggleArchiveForSelection)}
+        on:keyup={activateOnKeyup}
+      >
+        {$activeFolderFilter$ === ARCHIVED_FILTER
+          ? $t('manager.action.unarchive')
+          : $t('manager.action.archive')}
+      </div>
+      {#if $storageSource$ === StorageKey.BROWSER}
+        <div
+          tabindex="0"
+          role="button"
+          class="menu-item"
+          on:click={() => runFromContextMenu(selectionToStatistics)}
+          on:keyup={activateOnKeyup}
+        >{$t('manager.action.stats')}</div>
+      {/if}
+      <div
+        tabindex="0"
+        role="button"
+        class="menu-item context-menu-danger"
+        on:click={() => runFromContextMenu(() => handleRemove(Array.from(selectedBookIds)))}
+        on:keyup={activateOnKeyup}
+      >{$t('manager.action.delete')}</div>
+    </div>
+  {/if}
+
   {#if isDragOver}
     <div
       class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-blue-500/10 border-4 border-dashed border-blue-400 rounded-lg"
@@ -901,73 +1610,198 @@
       <div class="text-xl font-semibold opacity-80">松开以导入书籍</div>
     </div>
   {/if}
-  {#if selectMode && selectedBookIds.size && $folders$.length}
+  <!--
+    The selection bar lives here rather than in the top bar: multi-select is a
+    library-only mode, and the header is shared chrome. It also puts 全选 an
+    inch from the books instead of at the far edge of the window.
+  -->
+  {#if selectMode}
     <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
-      <span class="opacity-70">将选中的 {selectedBookIds.size} 本加入分类：</span>
-      {#each $folders$ as folder (folder.id)}
-        <button
-          class="rounded-full border-2 border-gray-400 px-3 py-1 text-xs hover:bg-gray-400/20"
-          on:click={() => addSelectedToFolder(folder.id)}
-        >
-          + {folder.name}
-        </button>
-      {/each}
-      {#if $activeFolderFilter$ !== 'all' && $activeFolderFilter$ !== 'uncategorized'}
-        <button
-          class="rounded-full border-2 border-red-400 px-3 py-1 text-xs text-red-500 hover:bg-red-400/20"
-          on:click={removeSelectedFromActiveFolder}
-        >
-          从当前分类移出
-        </button>
+      <button
+        type="button"
+        class="flex items-center gap-1.5 rounded border border-current/30 px-3 py-1 text-xs hover-soft"
+        title={allVisibleSelected ? $t('manager.selectNone') : $t('manager.selectAll')}
+        on:click={onSelectAllBooks}
+      >
+        <Fa icon={allVisibleSelected ? faSquareMinus : faSquareCheck} />
+        {allVisibleSelected ? $t('manager.selectNone') : $t('manager.selectAll')}
+      </button>
+      <span class="opacity-70">
+        {$t('manager.selectedCount', { n: selectedBookIds.size })}{#if hiddenSelectedCount}
+          · {$t('manager.selectedHidden', { n: hiddenSelectedCount })}{/if}
+      </span>
+      {#if selectedBookIds.size && $folders$.length}
+        <span class="opacity-70">{$t('manager.addToFolder')}</span>
+        {#each $folders$ as folder (folder.id)}
+          <button
+            class="rounded-full border-2 border-current/40 px-3 py-1 text-xs hover-soft"
+            on:click={() => addSelectedToFolder(folder.id)}
+          >
+            + {folder.name}
+          </button>
+        {/each}
+        {#if $activeFolderFilter$ !== 'all' && $activeFolderFilter$ !== 'uncategorized'}
+          <button
+            class="rounded-full border-2 border-red-400 px-3 py-1 text-xs text-danger hover:bg-red-400/20"
+            on:click={removeSelectedFromActiveFolder}
+          >
+            {$t('manager.removeFromFolder')}
+          </button>
+        {/if}
       {/if}
     </div>
   {/if}
+  <div class="mb-3 flex items-center gap-2">
+    <div class="relative flex-1 max-w-md">
+      <input
+        type="search"
+        placeholder={$t('library.search.hint')}
+        class="library-search w-full"
+        bind:value={searchQuery}
+        bind:this={searchInputEl}
+      />
+      {#if searchQuery}
+        <button
+          type="button"
+          class="absolute right-2 top-1/2 -translate-y-1/2 text-xs opacity-50 hover:opacity-100"
+          on:click={() => (searchQuery = '')}
+          title={$t('library.search.clear')}
+        >✕</button>
+      {/if}
+    </div>
+    {#if visibleBookCards && $filteredBookCards$ && visibleBookCards.length !== $filteredBookCards$.length}
+      <span class="text-xs opacity-60">
+        {visibleBookCards.length} / {$filteredBookCards$.length}
+      </span>
+    {/if}
+  </div>
   {#if !$filteredBookCards$ || $booksAreLoading$}
     加载中...
-  {:else if $filteredBookCards$.length}
+  {:else if visibleBookCards.length}
     <BookCardList
       currentBookId={$currentBookId$}
       {selectedBookIds}
-      bookCards={$filteredBookCards$}
-      on:bookClick={(ev) => onBookClick(ev.detail.id)}
+      bookCards={visibleBookCards}
+      {selectMode}
+      on:bookClick={(ev) => onBookClick(ev.detail.id, ev.detail.shiftKey, ev.detail.toggleKey)}
+      on:marqueeSelect={(ev) => onMarqueeSelect(ev.detail.ids)}
+      on:cardContextMenu={(ev) => openContextMenu(ev.detail.id, ev.detail.x, ev.detail.y)}
       on:removeBookClick={(ev) => handleRemove([ev.detail.id])}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />
+  {:else if $activeFolderFilter$ === ARCHIVED_FILTER}
+    <div class="mt-20 text-center text-sm opacity-60">{$t('manager.emptyArchive')}</div>
   {:else if $activeFolderFilter$ !== 'all'}
     <div class="mt-20 text-center text-sm opacity-60">这个分类还是空的；拖书过来或框选后点上面的胶囊加入</div>
   {:else}
-    <label
-      class="group mx-auto mt-44 flex w-3/6 cursor-pointer flex-col items-center justify-center text-gray-400 text-opacity-40 hover:text-opacity-60 xl:w-3/12"
+    <div
+      class="mx-auto mt-44 flex w-3/6 flex-col items-center justify-center text-gray-400 text-opacity-40 hover:text-opacity-60 xl:w-3/12"
     >
-      <div class="flex w-full justify-center transition-transform group-hover:scale-105">
-        <Fa icon={faUpload} style="width: 100%; height: auto" />
-      </div>
-      <span class="mt-4 text-sm opacity-0 transition-opacity group-hover:opacity-100">
-        点击添加书籍
-      </span>
+      <button
+        type="button"
+        class="flex w-full cursor-pointer flex-col items-center justify-center"
+        on:click={() => fileInputEl?.click()}
+      >
+        <div class="flex w-full justify-center transition-transform">
+          <Fa icon={faUpload} style="width: 100%; height: auto" />
+        </div>
+        <span class="mt-4 text-sm opacity-60">
+          点击添加书籍
+        </span>
+      </button>
       <input
         type="file"
-        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,.cbz,application/zip,.zip"
+        accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,text/markdown,.md,.markdown,.mobi,.azw,.azw3,application/pdf,.pdf,.cbz,.cbr,.cb7,.cbt,application/zip,.zip"
         multiple
         hidden
+        bind:this={fileInputEl}
         use:inputFile={onFilesChange}
       />
-    </label>
+    </div>
   {/if}
   </div>
 </div>
 
 {#if toastVisible}
+  <!-- Lifted above the selection bar when that is on screen; both are
+       bottom-centred and they used to land on top of each other. -->
   <div
-    class="pointer-events-none fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 transform"
-    style="transition: opacity 200ms ease;"
+    class="fixed left-1/2 z-[100] -translate-x-1/2 transform"
+    class:pointer-events-none={!toastUndo}
+    style="transition: opacity 200ms ease; bottom: {selectMode && selectedBookIds.size
+      ? '5.5rem'
+      : '1.5rem'};"
   >
-    <div
-      class="flex items-center gap-2 rounded-full px-4 py-2 shadow-lg"
-      style="background: rgba(95,126,123,0.95); color: #f0efe6;"
-    >
+    <div class="flex items-center gap-2 rounded-full bg-menu px-4 py-2 text-menu shadow-lg">
       <Fa icon={faCheck} />
       <span class="text-sm">{toastMessage}</span>
+      {#if toastUndo}
+        <button
+          type="button"
+          class="rounded-full px-2 py-0.5 text-sm underline underline-offset-2 hover-menu-inverted"
+          on:click={runToastUndo}
+        >{$t('manager.undo')}</button>
+      {/if}
     </div>
   </div>
 {/if}
+
+<style>
+  /* Floating over the grid rather than pinned in the layout: the bar appears
+     and disappears with the selection, and reflowing the whole grid each time
+     made the books jump under the pointer mid-selection. */
+  .selection-actions {
+    position: fixed;
+    bottom: 1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.75rem;
+    max-width: calc(100vw - 2rem);
+  }
+
+  .context-menu {
+    position: fixed;
+    z-index: 50;
+    width: 12rem;
+  }
+
+  /* `.menu-item:hover` inverts to the menu foreground, which would paint the
+     delete row the same as the harmless ones. */
+  .context-menu-danger {
+    color: var(--danger-color);
+  }
+
+  .context-menu-danger:hover {
+    background: var(--danger-color);
+    color: #fff;
+  }
+
+  .selection-action {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 0.5rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .selection-action:hover {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+  }
+
+  /* Danger reads as danger on hover too — the inverted hover would otherwise
+     paint the delete button the same as the harmless ones. */
+  .selection-action-danger:hover {
+    background: var(--danger-color);
+    color: #fff;
+  }
+</style>

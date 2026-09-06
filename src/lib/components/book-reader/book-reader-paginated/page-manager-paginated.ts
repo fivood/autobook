@@ -18,12 +18,19 @@ export class PageManagerPaginated implements PageManager {
 
   private sectionData: Map<string, SectionWithProgress> = new Map();
 
+  /** Refs in reading order, mirroring sectionData's insertion order, so
+   * progress updates can touch only the affected range instead of the whole
+   * book on every page turn. */
+  private sectionOrder: string[] = [];
+
+  private lastCurrentIndex = -1;
+
   private calculator: SectionCharacterStatsCalculator | undefined;
 
   constructor(
     private contentEl: HTMLElement,
     private scrollEl: HTMLElement,
-    private sections: Element[],
+    private sections: ReadonlyArray<{ id: string }>,
     private sectionIndex$: BehaviorSubject<number>,
     private virtualScrollPos$: BehaviorSubject<number>,
     private width: number,
@@ -40,6 +47,7 @@ export class PageManagerPaginated implements PageManager {
 
       entries.forEach((section) => {
         this.sectionData.set(section.reference, { ...section, progress: 0 });
+        this.sectionOrder.push(section.reference);
       });
 
       sectionProgress$.next(this.sectionData);
@@ -267,26 +275,26 @@ export class PageManagerPaginated implements PageManager {
   private updateSectionData(ref: string, progress: number, emit = true) {
     if (!ref || !this.sectionData.has(ref)) return;
 
-    const sections = [...this.sectionData.values()];
-    let currentRefSeen = false;
+    const newIndex = this.sectionOrder.indexOf(ref);
+    if (newIndex < 0) return;
 
-    sections.forEach((section) => {
-      const entry = this.sectionData.get(section.reference) as SectionWithProgress;
-      const isCurrentRef = section.reference === ref;
+    // Only rewrite the range between the previous current section and the new
+    // one: sections before `newIndex` are 100, after are 0 — the rest already
+    // holds that invariant from the previous update. Adjacent page turns touch
+    // ~2 sections instead of the whole book; a TOC jump touches only its span.
+    const from = Math.min(this.lastCurrentIndex, newIndex);
+    const to = Math.max(this.lastCurrentIndex, newIndex);
 
-      if (isCurrentRef) {
-        entry.progress = progress;
-      } else if (currentRefSeen) {
-        entry.progress = 0;
-      } else {
-        entry.progress = 100;
-      }
+    for (let i = from; i <= to; i += 1) {
+      if (i < 0) continue;
+      const sectionRef = this.sectionOrder[i];
+      const entry = this.sectionData.get(sectionRef);
+      if (!entry) continue;
+      entry.progress = i < newIndex ? 100 : i === newIndex ? progress : 0;
+      this.sectionData.set(sectionRef, entry);
+    }
 
-      if (!currentRefSeen && isCurrentRef) {
-        currentRefSeen = true;
-      }
-      this.sectionData.set(section.reference, entry);
-    });
+    this.lastCurrentIndex = newIndex;
 
     if (emit) {
       sectionProgress$.next(this.sectionData);

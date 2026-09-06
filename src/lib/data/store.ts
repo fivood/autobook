@@ -14,7 +14,6 @@ import {
   TrackerAutoPause,
   TrackerSkipThresholdAction
 } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
-import { HeatmapDataAggregration } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
 import {
   StatisticsRangeTemplate,
   StatisticsTab,
@@ -40,6 +39,13 @@ import {
   ReplicationSaveBehavior
 } from '$lib/functions/replication/replication-options';
 import { writableSubject } from '$lib/functions/svelte/store';
+import {
+  DEFAULT_CUSTOM_COLORS,
+  highlightSlotStyles,
+  type HighlightPaletteMode,
+  type HighlightSlotStyle
+} from '$lib/data/highlight-color';
+import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
 import { map } from 'rxjs';
 import { BookReaderAvailableKeybind, type BookReaderKeybindMap } from './book-reader-keybind';
 import { DatabaseService } from './database/books-db/database.service';
@@ -60,18 +66,104 @@ import { ViewMode } from './view-mode';
 import type { WritingMode } from './writing-mode';
 import { writableSetLocalStorageSubject } from './internal/writable-set-local-storage-subject';
 import { writableStringLocalStorageSubject } from './internal/writable-string-local-storage-subject';
+import type { OcrModelProfile } from '$lib/functions/file-loaders/pdf/ocr-options';
 
 export const theme$ = writableStringLocalStorageSubject()('theme', 'sage-green-theme');
 export const obsidianVaultPath$ = writableStringLocalStorageSubject()('obsidianVaultPath', '');
+/** How the four highlight slots are painted. `invert` drops hue entirely so
+ *  the slots stay distinguishable to colour-blind readers. */
+export const highlightPalette$ = writableStringLocalStorageSubject<HighlightPaletteMode>()(
+  'highlightPalette',
+  'color'
+);
+/** Resolved per-slot styles for the active theme + palette. Published by
+ *  +layout.svelte, which is the only place that resolves a theme; every swatch
+ *  (menu chip, sidebar dot, filter pill, statistics bar) reads it so they can
+ *  never drift from what the text actually looks like. */
+export const highlightSlotStyles$ = writableSubject<Record<HighlightSlot, HighlightSlotStyle>>(
+  highlightSlotStyles({ mode: 'color', darkPage: false })
+);
+/** Comma-separated hex, slot order. Only read when the palette is 'custom'. */
+export const highlightCustomColors$ = writableStringLocalStorageSubject()(
+  'highlightCustomColors',
+  DEFAULT_CUSTOM_COLORS.join(',')
+);
 export const aiProvider$ = writableStringLocalStorageSubject()('aiProvider', 'anthropic');
 export const aiApiKey$ = writableStringLocalStorageSubject()('aiApiKey', '');
 export const aiBaseUrl$ = writableStringLocalStorageSubject()('aiBaseUrl', '');
 export const aiModel$ = writableStringLocalStorageSubject()('aiModel', 'claude-sonnet-4-6');
+/** Qwen-MT (阿里云百炼) translation-specialized draft provider. Separate from
+ * the generic LLM config — the draft pass uses it, the review pass stays on
+ * the general model. */
+export const qwenMtBaseUrl$ = writableStringLocalStorageSubject()('qwenMtBaseUrl', '');
+export const qwenMtApiKey$ = writableStringLocalStorageSubject()('qwenMtApiKey', '');
+export const qwenMtModel$ = writableStringLocalStorageSubject()('qwenMtModel', 'qwen-mt-plus');
+// Local runtime (Ollama and anything speaking its /api surface). Kept separate
+// from the cloud endpoint above so a user can have both configured and let each
+// task pick: short interactive work goes local when a model is present, the
+// spoiler-safe assistant stays on the cloud model that follows constraints better.
+export const aiLocalBaseUrl$ = writableStringLocalStorageSubject()(
+  'aiLocalBaseUrl',
+  'http://127.0.0.1:11434'
+);
+/** Empty means "whatever is installed" — resolved to the largest local model. */
+export const aiLocalModel$ = writableStringLocalStorageSubject()('aiLocalModel', '');
+export const translateDraftSource$ = writableStringLocalStorageSubject()('translateDraftSource', 'local');
+export const translateReviewSource$ = writableStringLocalStorageSubject()('translateReviewSource', 'cloud');
+export const translateTargetLang$ = writableStringLocalStorageSubject()('translateTargetLang', 'zh-CN');
+export const translateLocalModel$ = writableStringLocalStorageSubject()('translateLocalModel', '');
+export const translateChunkChars$ = writableStringLocalStorageSubject()('translateChunkChars', '24000');
+/** Max segments per translation batch. Smaller batches are steadier on slow
+ * local models — a long request is more likely to time out or get truncated
+ * mid-output. */
+export const translateBatchSegments$ = writableStringLocalStorageSubject()('translateBatchSegments', '3');
+/** Approximate source character budget per batch. Together with the segment
+ * count this bounds how much context each model call must digest. */
+export const translateMaxSourceChars$ = writableStringLocalStorageSubject()('translateMaxSourceChars', '12000');
+export const translateOcrLang$ = writableStringLocalStorageSubject()('translateOcrLang', 'japan');
+/** Shared PaddleOCR model profile for scanned PDFs and comic OCR. */
+export const ocrModelProfile$ = writableStringLocalStorageSubject<OcrModelProfile>()(
+  'ocrModelProfile',
+  'v6-small'
+);
+export const translateComicAutoOcr$ = writableBooleanLocalStorageSubject()('translateComicAutoOcr', false);
+/** IOPaint (LaMa) sidecar endpoint for complex-background comic inpainting.
+ * Empty = disabled; the pipeline falls back to flat-fill bubbles. */
+export const translateLamaEndpoint$ = writableStringLocalStorageSubject()('translateLamaEndpoint', '');
+/** Contextual gloss beside the offline dictionary. Off until a model is found. */
+export const aiGlossEnabled$ = writableBooleanLocalStorageSubject()('aiGlossEnabled', true);
+/** Offer LLM post-correction of an OCR'd text layer. */
+export const aiOcrCorrectEnabled$ = writableBooleanLocalStorageSubject()(
+  'aiOcrCorrectEnabled',
+  true
+);
+/**
+ * OCR recognition language. Lives here rather than in the components that read
+ * it: pdf-ocr-banner and pdf-page-context-menu each used to build their own
+ * subject over this same localStorage key, so they held two independent
+ * BehaviorSubjects — changing the language in one left the other's subscribers
+ * on the old value until a reload.
+ */
+export const pdfOcrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'ch');
 export const dictFolderPath$ = writableStringLocalStorageSubject()('dictFolderPath', '');
 export const syncToken$ = writableStringLocalStorageSubject()('syncToken', '');
 export const syncDeviceId$ = writableStringLocalStorageSubject()('syncDeviceId', '');
 export const syncEnabled$ = writableBooleanLocalStorageSubject()('syncEnabled', false);
 export const syncLastAt$ = writableNumberLocalStorageSubject()('syncLastAt', 0);
+/** Why the last automatic sync failed, '' when the last one worked.
+ *
+ * The background loop must not pop dialogs — a bad token would produce one per
+ * push, i.e. one every few seconds while reading. But `console.warn` alone
+ * meant a desktop user had no way at all to find out sync was dead; the only
+ * hint was a "last synced" timestamp that quietly stopped moving. Shown in
+ * 设置 → 数据 next to that timestamp, which is where you look when you wonder. */
+export const syncLastError$ = writableSubject<string>('');
+
+/** Outcome of the last 笔记目录同步 run, rendered in 设置 → 数据 beside the
+ * vault path. That sync only ever runs automatically — `runVaultSync(manual)`
+ * has never had a caller passing true — so its whole toast/dialog reporting
+ * layer is unreachable and every failure went to logger.warn alone. */
+export const vaultSyncLastError$ = writableSubject<string>('');
 export const customThemes$ = writableObjectLocalStorageSubject<Record<string, ThemeOption>>()(
   'customThemes',
   {}
@@ -137,6 +229,18 @@ export const highlightSidebarOpen$ = writableBooleanLocalStorageSubject()('highl
 
 export const ttsEngine$ = writableStringLocalStorageSubject()('ttsEngine', 'web');
 export const ttsSapiVoiceId$ = writableStringLocalStorageSubject()('ttsSapiVoiceId', '');
+// Microsoft Edge unofficial TTS voice id (like zh-CN-XiaoxiaoNeural).
+// Default is the Chinese female neural voice most Chinese-audiobook users
+// picked in v1.6.0 field tests before we cut Edge TTS out.
+export const ttsEdgeVoiceId$ = writableStringLocalStorageSubject()(
+  'ttsEdgeVoiceId',
+  'zh-CN-XiaoxiaoNeural'
+);
+/** Proxy for the Edge TTS WebSocket. Empty = auto (env vars, then the Windows
+ * system proxy); `direct` forces a direct connection. tokio-tungstenite reads
+ * no proxy config on its own, so without this mainland-China users get
+ * `tls handshake eof` while every other engine works. */
+export const ttsEdgeProxyUrl$ = writableStringLocalStorageSubject()('ttsEdgeProxyUrl', '');
 
 // User-configurable HTTP TTS
 export const ttsCustomEndpoint$ = writableStringLocalStorageSubject()('ttsCustomEndpoint', '');
@@ -150,6 +254,8 @@ export const ttsCustomHeaders$ = writableStringLocalStorageSubject()(
 export const ttsCustomBody$ = writableStringLocalStorageSubject()('ttsCustomBody', '');
 /** Dot-path to base64 audio in a JSON response (e.g. choices.0.message.audio.data). Empty = raw audio bytes. */
 export const ttsCustomAudioPath$ = writableStringLocalStorageSubject()('ttsCustomAudioPath', '');
+/** Optional HTTP/SOCKS5 proxy for the TTS request (e.g. http://127.0.0.1:7890). Empty = no proxy. */
+export const ttsCustomProxyUrl$ = writableStringLocalStorageSubject()('ttsCustomProxyUrl', '');
 
 export interface TtsCustomPresetState {
   endpoint: string;
@@ -157,6 +263,7 @@ export interface TtsCustomPresetState {
   headers: string;
   body: string;
   audioPath: string;
+  proxyUrl: string;
 }
 
 /** Which named preset is currently active. The five ttsCustom* stores above
@@ -186,8 +293,23 @@ export const ttsPositions$ = writableObjectLocalStorageSubject<Record<string, Tt
 );
 
 export const readerRate$ = writableNumberLocalStorageSubject()('readerRate', 1);
+
+/** A TTS session is open — playing, or paused with a position to resume from.
+ *  The TTS rate pill and the typewriter's speed pill overlay one slot under
+ *  the play button, so they take turns on this rather than on "is speaking
+ *  right now": a paused reader keeps the slot, which is the only way to
+ *  change speed before resuming. Session-only, deliberately not persisted. */
+export const ttsArmed$ = writableSubject<boolean>(false);
 export const readerVoiceUri$ = writableStringLocalStorageSubject()('readerVoiceUri', '');
-export const readerEnabled$ = writableBooleanLocalStorageSubject()('readerEnabled', false);
+
+/** Remembered voice per engine + book language, keyed `${engine}:${zh|ja|en}`.
+ * The single-value stores above (readerVoiceUri$, ttsSapiVoiceId$, ...) stay
+ * as the fallback for slots the user never set — see data/tts/voice-by-lang.ts
+ * for why language rather than book is the axis. */
+export const ttsVoiceByLang$ = writableObjectLocalStorageSubject<Record<string, string>>()(
+  'ttsVoiceByLang',
+  {}
+);
 export const lastBookHasImages$ = writableBooleanLocalStorageSubject()(
   'lastBookHasImages',
   false
@@ -215,7 +337,9 @@ export const fontFamilyGroupTwo$ = writableStringLocalStorageSubject()(
   }
 }
 export const fontWeight$ = writableNumberOrNullLocalStorageSubject()('fontWeight', null);
-export const fontSize$ = writableNumberLocalStorageSubject()('fontSize', 20);
+/** Also what Ctrl+0 resets to — see functions/reader-zoom.ts. */
+export const FONT_SIZE_DEFAULT = 20;
+export const fontSize$ = writableNumberLocalStorageSubject()('fontSize', FONT_SIZE_DEFAULT);
 export const lineHeight$ = writableNumberLocalStorageSubject()('lineHeight', 1.65);
 export const textIndentation$ = writableNumberLocalStorageSubject()('textIndentation', 0);
 export const textMarginValue$ = writableNumberLocalStorageSubject()('textMarginValue', 0);
@@ -347,6 +471,106 @@ export const hideExternalReadHint$ = writableBooleanLocalStorageSubject()(
   false
 );
 
+export const pdfOcrPromptEnabled$ = writableBooleanLocalStorageSubject()(
+  'pdfOcrPromptEnabled',
+  true
+);
+
+export const pdfOcrSkippedBookIds$ = writableStringLocalStorageSubject()(
+  'pdfOcrSkippedBookIds',
+  ''
+);
+
+// Kokoro-82M offline TTS engine. The model is NOT downloaded until the
+// user opts in via the settings UI; the accepted flag persists so they
+// don't have to re-consent on every cold start.
+export const kokoroAccepted$ = writableBooleanLocalStorageSubject()(
+  'kokoroAccepted',
+  false
+);
+
+/** Which Kokoro variant to load. v1.0 is English-only (28 voices). v1.1-zh
+ *  from 2025-03 drops most v1.0 voices but adds 40+ Mandarin voices plus
+ *  three new English speakers (Maple/Sol/Vale) — the pick for Chinese
+ *  audiobook use. Default is v1.1-zh: the reader is Chinese-first and the
+ *  v1.0 English voices it drops aren't the ones users typically pick anyway.
+ *  Swapping the id invalidates the current voice, so the settings UI must
+ *  clamp `kokoroVoiceId$` into the new list. */
+export type KokoroModelId = 'v1.0' | 'v1.1-zh';
+export const kokoroModel$ = writableStringLocalStorageSubject<KokoroModelId>()(
+  'kokoroModel',
+  'v1.1-zh'
+);
+export const KOKORO_MODEL_REPOS: Record<KokoroModelId, string> = {
+  'v1.0': 'onnx-community/Kokoro-82M-v1.0-ONNX',
+  'v1.1-zh': 'onnx-community/Kokoro-82M-v1.1-zh-ONNX'
+};
+// Default voice per model. v1.1-zh drops af_heart, so the default there is
+// the leading Chinese female voice from that build.
+export const kokoroVoiceId$ = writableStringLocalStorageSubject()(
+  'kokoroVoiceId',
+  'zf_001'
+);
+
+export interface KokoroLoadStatus {
+  phase: 'idle' | 'loading' | 'ready' | 'errored';
+  message: string;
+  loaded: number;
+  total: number;
+  /** modelId this status refers to — needed so the settings UI can show which
+   *  variant is ready when the user has both v1.0 and v1.1-zh cached. */
+  modelId?: string;
+  /** Epoch ms of the last progress tick. Empty during idle/ready/errored. UI
+   *  uses this to warn when a download has stopped making progress. */
+  lastProgressAt?: number;
+}
+export const kokoroLoadStatus$ = writableSubject<KokoroLoadStatus>({
+  phase: 'idle',
+  message: '',
+  loaded: 0,
+  total: 0
+});
+
+// Library cover card min-width in px. Grid uses repeat(auto-fill, minmax(..., 1fr))
+// so smaller value = denser library (more columns at the same window width).
+export const bookCoverMinWidth$ = writableNumberLocalStorageSubject()(
+  'bookCoverMinWidth',
+  170
+);
+
+// Library filter — applied AFTER the folder filter, before sort.
+// Empty formats[] means "all formats"; completion 'all' means no filter.
+// Persisted via localStorage so the user's filter survives reloads.
+export type LibraryCompletion = 'all' | 'unread' | 'reading' | 'done';
+export interface LibraryFilter {
+  formats: string[];
+  completion: LibraryCompletion;
+}
+const _libFilterRaw$ = writableStringLocalStorageSubject()('libraryFilter', '');
+export const libraryFilter$ = writableSubject<LibraryFilter>({
+  formats: [],
+  completion: 'all'
+});
+if (typeof window !== 'undefined') {
+  const initial = _libFilterRaw$.getValue();
+  if (initial) {
+    try {
+      const parsed = JSON.parse(initial);
+      if (parsed && typeof parsed === 'object') {
+        libraryFilter$.next({
+          formats: Array.isArray(parsed.formats) ? parsed.formats : [],
+          completion: ['all', 'unread', 'reading', 'done'].includes(parsed.completion)
+            ? parsed.completion
+            : 'all'
+        });
+      }
+    } catch {
+      /* corrupt entry — fall back to default */
+    }
+  }
+  libraryFilter$.subscribe((v) => _libFilterRaw$.next(JSON.stringify(v)));
+}
+
 export const importHTMLFixMode$ = writableStringLocalStorageSubject<ImportHTMLFixMode>()(
   'importHTMLFixMode',
   ImportHTMLFixMode.OFF
@@ -376,12 +600,23 @@ export const showExternalPlaceholder$ = writableBooleanLocalStorageSubject()(
 );
 
 
-export const syncTarget$ = writableStringLocalStorageSubject()('syncTarget', '');
+/**
+ * User-chosen absolute path for the on-disk library folder used by
+ * TauriFsStorageHandler. Empty string = fall back to Documents/AutoBook
+ * (BaseDirectory.Document + "AutoBook").
+ */
+export const fsRoot$ = writableStringLocalStorageSubject()('fsRoot', '');
 
-export const keepLocalStatisticsOnDeletion$ = writableBooleanLocalStorageSubject()(
-  'keepLocalStatisticsOnDeletion',
-  true
-);
+/**
+ * Folder of plain-text notes mirrored into the library (an Obsidian vault or,
+ * more usefully, a subfolder of one). Empty = feature off.
+ *
+ * Deliberately not `obsidianVaultPath$`: that one is where notebook export
+ * *writes*, under `<vault>/AutoBook`. Pointing sync at the same root would
+ * re-import AutoBook's own exported notes as books, and then export them
+ * again.
+ */
+export const vaultSyncRoot$ = writableStringLocalStorageSubject()('vaultSyncRoot', '');
 
 export const overwriteBookCompletion$ = writableBooleanLocalStorageSubject()(
   'overwriteBookCompletion',
@@ -393,7 +628,28 @@ export const startDayHoursForTracker$ = writableNumberLocalStorageSubject()(
   0
 );
 
-export const statisticsEnabled$ = writableBooleanLocalStorageSubject()('statisticsEnabled', false);
+/**
+ * Reading statistics are on by default as of 1.47.
+ *
+ * They used to default to off, and nothing in the reader ever said so: press
+ * play, listen for an hour, and the tracker component was never even loaded —
+ * the auto-start-on-playback logic added in 1.43.0 lives inside it, so the two
+ * flagship ways of consuming a book recorded nothing at all.
+ *
+ * The flip runs once over existing installs too, not just fresh ones. A stored
+ * `0` carries almost no intent: the old default was off, and merely opening the
+ * statistics settings tab wrote the then-current value back through the toggle
+ * binding. Guarded by its own key, so turning it off after this sticks.
+ */
+const STATS_DEFAULT_ON_KEY = 'statisticsDefaultOnApplied';
+if (browser && !localStorage.getItem(STATS_DEFAULT_ON_KEY)) {
+  localStorage.setItem(STATS_DEFAULT_ON_KEY, '1');
+  if (localStorage.getItem('statisticsEnabled') !== '1') {
+    localStorage.setItem('statisticsEnabled', '1');
+  }
+}
+
+export const statisticsEnabled$ = writableBooleanLocalStorageSubject()('statisticsEnabled', true);
 
 export const statisticsMergeMode$ = writableStringLocalStorageSubject<MergeMode>()(
   'statisticsMergeMode',
@@ -422,7 +678,29 @@ export const addCharactersOnCompletion$ = writableBooleanLocalStorageSubject()(
 
 export const trackerAutostartTime$ = writableNumberLocalStorageSubject()('trackerAutoStartTime', 0);
 
-export const trackerIdleTime$ = writableNumberLocalStorageSubject()('trackerIdleTime', 0);
+/** Seconds of no page interaction (scroll / pointer / selection) after which
+ * the tracker stops counting — and, with `adjustStatisticsAfterIdleTime$`,
+ * retroactively drops the idle window it already counted.
+ *
+ * On by default since 1.38. Off (0) meant the tracker billed wall-clock time
+ * for as long as the reader was open: walk away mid-chapter and the day's
+ * "reading time" kept climbing. Five minutes rather than one or two because
+ * activity here is scroll / pointer / selection — someone reading a dense
+ * page on a big screen genuinely can sit still for a couple of minutes, and
+ * over-trimming real reading is the worse error of the two. */
+export const trackerIdleTime$ = writableNumberLocalStorageSubject()('trackerIdleTime', 300);
+
+/** One-shot flag for the 1.38 default change. Installs that predate it have
+ * `trackerIdleTime` persisted as 0 — including everyone who merely opened the
+ * settings page, since the number inputs there write on mount — so the new
+ * default alone would never reach them. Flipping once, and only from an exact
+ * 0, keeps a deliberate later "off" sticking. */
+const trackerIdleMigrated$ = writableBooleanLocalStorageSubject()('trackerIdleMigrated', false);
+
+if (browser && !trackerIdleMigrated$.getValue()) {
+  if (trackerIdleTime$.getValue() === 0) trackerIdleTime$.next(300);
+  trackerIdleMigrated$.next(true);
+}
 
 export const trackerForwardSkipThreshold$ = writableNumberLocalStorageSubject()(
   'trackerForwardSkipThreshold',
@@ -468,6 +746,33 @@ export const lastExportedTypes$ = writableArrayLocalStorageSubject<StorageDataTy
   [StorageDataType.PROGRESS, StorageDataType.STATISTICS]
 );
 
+/**
+ * Books the reader asked the AI to stay spoiler-safe on, by title.
+ *
+ * Off by default and opt-in per book: withholding unread text is only worth
+ * anything for mysteries and thrillers, and on everything else it turns the
+ * assistant into a wall — ask a non-fiction book what its argument is and a
+ * spoiler-safe assistant answers 「目前还没读到」.
+ *
+ * Keyed by title rather than book id (two id spaces — see CLAUDE.md), and
+ * kept in localStorage rather than IDB on purpose: losing it to a UI reset
+ * costs one click on the next mystery, which does not justify a migration.
+ */
+/**
+ * Year-view modules the reader has switched off. Stored as the hidden set
+ * rather than the visible one so a module added in a later release shows up
+ * by default instead of staying invisible until someone finds the toggle.
+ */
+export const yearModulesHidden$ = writableSetLocalStorageSubject<string>()(
+  'yearModulesHidden',
+  new Set<string>()
+);
+
+export const aiSpoilerSafeTitles$ = writableSetLocalStorageSubject<string>()(
+  'aiSpoilerSafeTitles',
+  new Set<string>()
+);
+
 export const lastBlurredTrackerItems$ = writableSetLocalStorageSubject<string>()(
   'lastBlurredTrackerItems',
   new Set<string>()
@@ -490,13 +795,24 @@ export const lastReadingGoalsModified$ = writableNumberLocalStorageSubject()(
 
 export const lastStatisticsTab$ = writableStringLocalStorageSubject<StatisticsTab>()(
   'lastStatisticsTab',
-  StatisticsTab.OVERVIEW
+  StatisticsTab.MAIN
 );
+// Auto-heal legacy values: 1.20.0 removed the OVERVIEW (日历) tab.
+// Users upgrading with that value stored would land on an empty view.
+if (typeof window !== 'undefined') {
+  const valid = new Set<string>(Object.values(StatisticsTab));
+  if (!valid.has(lastStatisticsTab$.getValue())) {
+    lastStatisticsTab$.next(StatisticsTab.MAIN);
+  }
+}
 
+/** A single day was too narrow a default: backdating a reading record showed
+ *  nothing at all, which reads as "the entry did not save" rather than "it is
+ *  outside the range". A month covers the ordinary logging case. */
 export const lastStatisticsRangeTemplate$ =
   writableStringLocalStorageSubject<StatisticsRangeTemplate>()(
     'lastStatisticsRangeTemplate',
-    StatisticsRangeTemplate.TODAY
+    StatisticsRangeTemplate.MONTH
   );
 
 export const lastStatisticsStartDate$ = writableStringLocalStorageSubject()(
@@ -546,28 +862,6 @@ export const lastStatisticsFilterShowSelectedTitlesOnly$ = writableBooleanLocalS
   'lastStatisticsFilterShowSelectedTitlesOnly',
   false
 );
-
-export const lastReadingDataHeatmapAggregationMode$ =
-  writableStringLocalStorageSubject<HeatmapDataAggregration>()(
-    'lastReadingDataHeatmapAggregationMode',
-    HeatmapDataAggregration.ALL_TIME
-  );
-
-export const lastReadingGoalsHeatmapAggregationMode$ =
-  writableStringLocalStorageSubject<HeatmapDataAggregration>()(
-    'lastReadingGoalsHeatmapAggregationMode',
-    HeatmapDataAggregration.ALL_TIME
-  );
-
-export const lastStatisticsSummarySortProperty$ = writableStringLocalStorageSubject<
-  keyof BookStatistic
->()('lastStatisticsSummarySortProperty', 'readingTime');
-
-export const lastStatisticsSummarySortDirection$ =
-  writableStringLocalStorageSubject<SortDirection>()(
-    'lastStatisticsSummarySortDirection',
-    SortDirection.DESC
-  );
 
 export const fileCountData$ = writableSubject<Record<string, number> | undefined>(undefined);
 
@@ -668,3 +962,20 @@ export const isOnline$ = writableSubject<boolean>(true);
 export const skipKeyDownListener$ = writableSubject<boolean>(false);
 
 export const userFonts$ = writableArrayLocalStorageSubject<UserFont>()('userfonts', []);
+
+// --- Dev-only console handle. Run `npm run dev` and inspect
+// `window.__autobook.database.bookmarks$.subscribe(b => console.log(b))`
+// to watch bookmarks observable updates live. Stripped in prod builds. ---
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  (window as any).__autobook = {
+    database,
+    bookmarksChanged$: undefined as any, // populated below once available
+    stores: {
+      ttsPositions$,
+      bookReaderKeybindMap$,
+      lastItem$: database.lastItem$
+    }
+  };
+  // database isn't a circular ref problem because we just exposed it above.
+  (window as any).__autobook.bookmarksChanged$ = database.bookmarksChanged$;
+}
