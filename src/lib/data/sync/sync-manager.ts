@@ -18,8 +18,22 @@ import {
   generateDeviceId,
   pullState,
   pushDelta,
+  sumModeField,
+  type ModeTotals,
   type RemoteState
 } from '$lib/data/sync/sync-client';
+
+/** Wire field to statistic-row field. The wire names are short because they
+ *  repeat per device per book per day inside a 2 MB KV blob. */
+const MODE_KEYS = ['ttsSeconds', 'ttsChars', 'twSeconds', 'twChars'] as const;
+type ModeKey = (typeof MODE_KEYS)[number];
+const DB_FIELD = {
+  ttsSeconds: 'ttsSeconds',
+  ttsChars: 'ttsCharacters',
+  twSeconds: 'typewriterSeconds',
+  twChars: 'typewriterCharacters'
+} as const;
+type DbModeField = (typeof DB_FIELD)[ModeKey];
 
 const MY_CONTRIB_KEY = 'syncMyContrib';
 const REMOTE_CACHE_KEY = 'syncRemoteState';
@@ -40,6 +54,10 @@ interface MyContribState {
   othersBooks?: Record<string, Record<string, number>>;
   /** othersBooksChars[title][dateKey] = chars contributed by OTHER devices (sum). */
   othersBooksChars?: Record<string, Record<string, number>>;
+  /** modes[title][dateKey] = this device's playback split as last pushed. */
+  modes?: Record<string, Record<string, ModeTotals>>;
+  /** othersModes[title][dateKey] = playback split contributed by OTHER devices. */
+  othersModes?: Record<string, Record<string, ModeTotals>>;
 }
 
 function loadMyContrib(): MyContribState {
@@ -83,22 +101,30 @@ export function ensureDeviceId(): string {
  * build the wire payload. We only send entries that grew (in either dimension)
  * since the last successful push to keep payloads small.
  */
+interface PushEntry {
+  clients: Record<string, number>;
+  charsClients?: Record<string, number>;
+  modes?: Record<string, ModeTotals>;
+}
+
+interface ChangedKey {
+  title: string;
+  date: string;
+  time: number;
+  chars: number;
+  modes: ModeTotals;
+}
+
 async function buildPushPayload(): Promise<{
-  books: Record<
-    string,
-    Record<string, { clients: Record<string, number>; charsClients?: Record<string, number> }>
-  >;
-  changedKeys: Array<[string, string, number, number]>;
+  books: Record<string, Record<string, PushEntry>>;
+  changedKeys: ChangedKey[];
 } | null> {
   const deviceId = ensureDeviceId();
   const db = await database.db;
   const stats = await db.getAll('statistic');
   const cache = loadMyContrib();
-  const books: Record<
-    string,
-    Record<string, { clients: Record<string, number>; charsClients?: Record<string, number> }>
-  > = {};
-  const changed: Array<[string, string, number, number]> = [];
+  const books: Record<string, Record<string, PushEntry>> = {};
+  const changed: ChangedKey[] = [];
   for (const s of stats) {
     const totalTime = s.readingTime || 0;
     const totalChars = s.charactersRead || 0;
@@ -112,19 +138,39 @@ async function buildPushPayload(): Promise<{
     const myTime = Math.max(0, totalTime - othersTime);
     const myChars = Math.max(0, totalChars - othersChars);
     if (myTime <= 0 && myChars <= 0) continue;
+    // The playback split gets the same treatment, one field at a time.
+    const othersModes = cache.othersModes?.[s.title]?.[s.dateKey] || {};
+    const localModes: Record<ModeKey, number> = {
+      ttsSeconds: s.ttsSeconds || 0,
+      ttsChars: s.ttsCharacters || 0,
+      twSeconds: s.typewriterSeconds || 0,
+      twChars: s.typewriterCharacters || 0
+    };
+    const myModes: ModeTotals = {};
+    for (const key of MODE_KEYS) {
+      const mine = Math.max(0, localModes[key] - (othersModes[key] || 0));
+      if (mine > 0) myModes[key] = mine;
+    }
     const priorTime = cache.books[s.title]?.[s.dateKey] ?? -1;
     const priorChars = cache.booksChars?.[s.title]?.[s.dateKey] ?? -1;
-    if (myTime === priorTime && myChars === priorChars) continue;
+    const priorModes = cache.modes?.[s.title]?.[s.dateKey] || {};
+    // The split is part of the "did anything change" test, not just the totals:
+    // a day already pushed by a pre-1.47 build has its totals cached and would
+    // otherwise never be re-sent, leaving its split missing forever.
+    const modesUnchanged = MODE_KEYS.every(
+      (key) => (myModes[key] || 0) === (priorModes[key] || 0)
+    );
+    if (myTime === priorTime && myChars === priorChars && modesUnchanged) continue;
     books[s.title] = books[s.title] || {};
-    const entry: {
-      clients: Record<string, number>;
-      charsClients?: Record<string, number>;
-    } = { clients: { [deviceId]: myTime } };
+    const entry: PushEntry = { clients: { [deviceId]: myTime } };
     if (myChars > 0) {
       entry.charsClients = { [deviceId]: myChars };
     }
+    if (Object.keys(myModes).length) {
+      entry.modes = { [deviceId]: myModes };
+    }
     books[s.title][s.dateKey] = entry;
-    changed.push([s.title, s.dateKey, myTime, myChars]);
+    changed.push({ title: s.title, date: s.dateKey, time: myTime, chars: myChars, modes: myModes });
   }
   if (!changed.length) return null;
   return { books, changedKeys: changed };
@@ -154,10 +200,25 @@ async function applyRemoteToLocal(remote: RemoteState) {
     contrib.othersBooksChars = contrib.othersBooksChars || {};
     contrib.othersBooksChars[row.book] = contrib.othersBooksChars[row.book] || {};
     contrib.othersBooksChars[row.book][row.date] = otherDevicesChars;
+    const otherDevicesModes: ModeTotals = {};
+    for (const key of MODE_KEYS) {
+      otherDevicesModes[key] = sumModeField(row.modes, key, deviceId);
+    }
+    contrib.othersModes = contrib.othersModes || {};
+    contrib.othersModes[row.book] = contrib.othersModes[row.book] || {};
+    contrib.othersModes[row.book][row.date] = otherDevicesModes;
     if (!existing) {
       if (otherDevicesTime > 0 || otherDevicesChars > 0) {
         const speed =
           otherDevicesTime > 0 ? Math.ceil((3600 * otherDevicesChars) / otherDevicesTime) : 0;
+        // Carry the split onto the new row too. Without it a book read only on
+        // another device produced a row with time but no breakdown, and the
+        // year page counted that time as belonging to no reading mode at all.
+        const modeFields: Partial<Record<DbModeField, number>> = {};
+        for (const key of MODE_KEYS) {
+          const value = otherDevicesModes[key] || 0;
+          if (value > 0) modeFields[DB_FIELD[key]] = value;
+        }
         await store.put({
           title: row.book,
           dateKey: row.date,
@@ -167,7 +228,8 @@ async function applyRemoteToLocal(remote: RemoteState) {
           altMinReadingSpeed: speed,
           lastReadingSpeed: speed,
           maxReadingSpeed: speed,
-          lastStatisticModified: Date.now()
+          lastStatisticModified: Date.now(),
+          ...modeFields
         });
       }
       continue;
@@ -178,9 +240,22 @@ async function applyRemoteToLocal(remote: RemoteState) {
     const desiredChars = myCharsKnown + otherDevicesChars;
     const timeGrew = desiredTime > (existing.readingTime || 0);
     const charsGrew = desiredChars > (existing.charactersRead || 0);
-    if (timeGrew || charsGrew) {
+    const myModesKnown = contrib.modes?.[row.book]?.[row.date];
+    const modeFields: Partial<Record<DbModeField, number>> = {};
+    let modesGrew = false;
+    for (const key of MODE_KEYS) {
+      const dbField = DB_FIELD[key];
+      const mine = myModesKnown?.[key] ?? existing[dbField] ?? 0;
+      const desired = mine + (otherDevicesModes[key] || 0);
+      if (desired > (existing[dbField] || 0)) {
+        modeFields[dbField] = desired;
+        modesGrew = true;
+      }
+    }
+    if (timeGrew || charsGrew || modesGrew) {
       await store.put({
         ...existing,
+        ...modeFields,
         readingTime: timeGrew ? desiredTime : existing.readingTime,
         charactersRead: charsGrew ? desiredChars : existing.charactersRead,
         lastStatisticModified: Date.now()
@@ -201,14 +276,17 @@ export async function pushNow(): Promise<{ pushed: number } | null> {
   try {
     const merged = await pushDelta(token, { books: payload.books });
     const cache = loadMyContrib();
-    for (const [title, date, timeSec, chars] of payload.changedKeys) {
+    for (const { title, date, time, chars, modes } of payload.changedKeys) {
       cache.books[title] = cache.books[title] || {};
-      cache.books[title][date] = timeSec;
+      cache.books[title][date] = time;
       if (chars > 0) {
         cache.booksChars = cache.booksChars || {};
         cache.booksChars[title] = cache.booksChars[title] || {};
         cache.booksChars[title][date] = chars;
       }
+      cache.modes = cache.modes || {};
+      cache.modes[title] = cache.modes[title] || {};
+      cache.modes[title][date] = modes;
     }
     saveMyContrib(cache);
     saveCachedRemote(merged);

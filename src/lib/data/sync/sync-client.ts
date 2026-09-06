@@ -5,11 +5,29 @@
 
 const SYNC_ENDPOINT = 'https://sync.fivood.com/sync';
 
+/**
+ * A device's playback share of its own daily total — what the statistics page
+ * splits into 朗读 / 打字机 / 手动.
+ *
+ * Optional at every level, and a missing split means "unknown", not "zero":
+ * the PWA has no TTS and never sends one, and neither do desktop builds before
+ * 1.47. Their time still lands in the totals; it just doesn't get attributed.
+ */
+export interface ModeTotals {
+  ttsSeconds?: number;
+  ttsChars?: number;
+  twSeconds?: number;
+  twChars?: number;
+}
+
 export interface DayClients {
   clients: Record<string, number>;
   /** Per-device chars-read totals; absent for entries only pushed by pre-v2
    * clients. Merged server-side with the same max-by-device rule. */
   charsClients?: Record<string, number>;
+  /** modes[deviceId] = that device's playback split. Same max-by-device merge,
+   * one field at a time. */
+  modes?: Record<string, ModeTotals>;
   updatedAt?: number;
 }
 
@@ -80,6 +98,7 @@ export interface PushPayload {
       {
         clients: Record<string, number>;
         charsClients?: Record<string, number>;
+        modes?: Record<string, ModeTotals>;
       }
     >
   >;
@@ -120,23 +139,19 @@ async function safeMessage(res: Response): Promise<string> {
   }
 }
 
-/** Convert remote state into a flat list of (book, date, sum-across-devices). */
-export function flattenRemote(state: RemoteState): Array<{
+export interface RemoteRow {
   book: string;
   date: string;
   totalSeconds: number;
   totalChars: number;
   clients: Record<string, number>;
   charsClients: Record<string, number>;
-}> {
-  const out: Array<{
-    book: string;
-    date: string;
-    totalSeconds: number;
-    totalChars: number;
-    clients: Record<string, number>;
-    charsClients: Record<string, number>;
-  }> = [];
+  modes: Record<string, ModeTotals>;
+}
+
+/** Convert remote state into a flat list of (book, date, sum-across-devices). */
+export function flattenRemote(state: RemoteState): RemoteRow[] {
+  const out: RemoteRow[] = [];
   for (const [book, dates] of Object.entries(state.books || {})) {
     for (const [date, entry] of Object.entries(dates || {})) {
       const clients = entry?.clients || {};
@@ -145,8 +160,30 @@ export function flattenRemote(state: RemoteState): Array<{
       for (const v of Object.values(clients)) totalSeconds += v;
       let totalChars = 0;
       for (const v of Object.values(charsClients)) totalChars += v;
-      out.push({ book, date, totalSeconds, totalChars, clients, charsClients });
+      out.push({
+        book,
+        date,
+        totalSeconds,
+        totalChars,
+        clients,
+        charsClients,
+        modes: entry?.modes || {}
+      });
     }
   }
   return out;
+}
+
+/** Sum one field of the split across every device except `exceptDeviceId`. */
+export function sumModeField(
+  modes: Record<string, ModeTotals>,
+  field: keyof ModeTotals,
+  exceptDeviceId: string
+): number {
+  let total = 0;
+  for (const [id, totals] of Object.entries(modes || {})) {
+    if (id === exceptDeviceId) continue;
+    total += totals?.[field] || 0;
+  }
+  return total;
 }
