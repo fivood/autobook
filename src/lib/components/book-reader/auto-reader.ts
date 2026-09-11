@@ -22,6 +22,7 @@ import {
   trackSelectionIn,
   type Sentence
 } from './auto-reader-shared';
+import { domPositionForCharIndex } from './char-index-locator';
 
 export interface AutoReader {
   wasReaderEnabled$: BehaviorSubject<boolean>;
@@ -196,11 +197,23 @@ export class AutoReaderContinuous implements AutoReader {
     return { globalStart: sentence.start, globalEnd: sentence.end, text: sentence.text };
   }
 
-  seekToExplored(exploredCharCount: number) {
-    const pos = seekSentencesToExplored(this.sentences, exploredCharCount);
+  seekToExplored(exploredCharCount: number, snapToSentenceStart = false) {
+    const pos = seekSentencesToExplored(this.sentences, exploredCharCount, snapToSentenceStart);
     this.paraIndex = pos.index;
     this.charOffset = pos.offset;
   }
+
+  /**
+   * Start of the current sentence as a DOM position inside this reader's own
+   * content. The typewriter measures characters differently, so it is handed a
+   * position and resolves it with its own walk rather than a translated index.
+   */
+  currentSentencePosition(): { node: Node; offset: number } | null {
+    const sentence = this.getCurrentSentence();
+    if (!sentence || !this.contentEl) return null;
+    return domPositionForCharIndex(this.contentEl, sentence.globalStart);
+  }
+
 
   seekToSelection(): boolean {
     if (!this.contentEl) return false;

@@ -48,7 +48,10 @@
     tap,
     timer
   } from 'rxjs';
-  import { applyStartPosition } from '$lib/components/book-reader/auto-reader-shared';
+  import {
+    applyStartPosition,
+    rememberPlaybackHandoff
+  } from '$lib/components/book-reader/auto-reader-shared';
   import { TtsHighlighter } from '$lib/components/book-reader/tts-highlight';
   import { quintInOut } from 'svelte/easing';
   import { fade, fly } from 'svelte/transition';
@@ -953,6 +956,39 @@
    * to reach this value before re-preparing + resuming reading. */
   let ttsAwaitingSection = -1;
 
+  /**
+   * Playback handover between the typewriter and the voice.
+   *
+   * The two are mutually exclusive, so pausing one is nearly always a prelude
+   * to starting the other, and the reader expects to carry on from the same
+   * sentence — not from the scroll position, which is where both used to
+   * start. Each engine records where it stopped when it stops; the other
+   * consumes it when it next starts.
+   *
+   * Only a genuine pause counts. Starting the voice turns the typewriter off
+   * as a side effect (and runs revealAll() first, so its frontier is at the
+   * end of the section by then) — recording that would hand the wrong position
+   * to whichever engine started next. Hence the `!other.isRunning` guards, and
+   * the latches: both subjects are BehaviorSubjects that replay their current
+   * value to a new subscriber, so without one the initial `false` reads as a
+   * pause that never happened.
+   */
+  let ttsWasOn = false;
+  let scrollerWasOn = false;
+  let scrollerWiredHandoff: AutoScroller | undefined;
+
+  $: if (autoScroller && autoScroller !== scrollerWiredHandoff && browser) {
+    scrollerWiredHandoff = autoScroller;
+    const scroller = autoScroller;
+    scroller.wasAutoScrollerEnabled$.subscribe((on) => {
+      const paused = scrollerWasOn && !on;
+      scrollerWasOn = on;
+      if (!paused || autoReader?.wasReaderEnabled$.getValue()) return;
+      const position = scroller.frontierPosition?.();
+      if (position) rememberPlaybackHandoff(position.node, position.offset);
+    });
+  }
+
   $: if (autoReader && autoReader !== ttsWiredReader && browser) {
     ttsWiredReader = autoReader;
     autoReader.onBoundary = (charIndex) => {
@@ -1074,6 +1110,14 @@ ${$t('reader.ttsFailed.hint')}`
         ttsHighlighter.prepare(el || undefined);
       } else {
         ttsHighlighter.clear();
+      }
+      const ttsPaused = ttsWasOn && !enabled;
+      ttsWasOn = enabled;
+      // Paginated mode has no typewriter at all, so there is nothing to hand
+      // over to — and resolving the sentence costs a walk of the whole section.
+      if (ttsPaused && autoScroller && !autoScroller.wasAutoScrollerEnabled$.getValue()) {
+        const position = autoReader?.currentSentencePosition?.();
+        if (position) autoScroller.revealFromPositionLater?.(position.node, position.offset);
       }
       // Pausing saves the precise spot (throttled boundary saves lag ~2s).
       if (!enabled && ttsWiredReader === autoReader) persistTtsPosition();

@@ -3,7 +3,7 @@
  * Copyright (c) 2026, AutoBook Authors
  * All rights reserved.
  *
- * Map a character index in `extractText()`'s space back to the element that
+ * Map a character index in `extractText()`'s space back to the DOM that
  * renders it.
  *
  * Its own module for two reasons: it is the third walk in the codebase that
@@ -31,13 +31,22 @@
  */
 
 /**
- * The element containing `globalIdx`, or null when the index is past the end.
+ * The text node and offset rendering `globalIdx`, or null when the index is
+ * past the end.
  *
  * `globalIdx` is an offset into the string `extractText(root)` returns, so the
  * walk below must mirror it exactly: same order, same exclusions, same
  * lengths.
+ *
+ * A DOM position rather than just the element, because the typewriter needs to
+ * put its reveal frontier at a character inside a paragraph, not at the
+ * paragraph. `elementForCharIndex` is the element-only view of the same walk —
+ * one walk, so the two cannot drift apart.
  */
-export function elementForCharIndex(root: HTMLElement, globalIdx: number): Element | null {
+export function domPositionForCharIndex(
+  root: HTMLElement,
+  globalIdx: number
+): { node: Text; offset: number } | null {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   let total = 0;
   let node: Node | null = walker.nextNode();
@@ -49,11 +58,18 @@ export function elementForCharIndex(root: HTMLElement, globalIdx: number): Eleme
       if (text.length > 0) {
         // Strictly inside: an index equal to `total + text.length` belongs to
         // the next node, not this one.
-        if (globalIdx < total + text.length) return parent;
+        if (globalIdx < total + text.length) {
+          return { node: node as Text, offset: Math.max(0, globalIdx - total) };
+        }
         total += text.length;
       }
     }
     node = walker.nextNode();
   }
   return null;
+}
+
+/** The element containing `globalIdx`, or null when the index is past the end. */
+export function elementForCharIndex(root: HTMLElement, globalIdx: number): Element | null {
+  return domPositionForCharIndex(root, globalIdx)?.node.parentElement ?? null;
 }

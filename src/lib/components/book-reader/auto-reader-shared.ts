@@ -220,7 +220,7 @@ export function computeGlobalCharIndex(
  * a character index that aligns with extractText() output — so it can feed
  * straight into seekSentencesToExplored / autoReader.seekToExplored.
  */
-function domPositionToCharIndex(
+export function domPositionToCharIndex(
   root: HTMLElement,
   targetNode: Node,
   targetOffset: number
@@ -286,11 +286,44 @@ function rememberSelection() {
   rememberedIndex = domPositionToCharIndex(trackedRoot, range.startContainer, range.startOffset);
 }
 
+/**
+ * Where the typewriter stopped revealing, as a char index into
+ * `extractText(trackedRoot)`.
+ *
+ * The two playback engines are mutually exclusive, so pausing one is usually a
+ * prelude to starting the other, and the reader expects to carry on from the
+ * same sentence rather than from wherever the scroll position happens to be.
+ * The typewriter hands over a DOM position because its own character space is
+ * a different one — it concatenates block `textContent`, which drops any text
+ * that is not inside a block element — and translating between the two
+ * numerically is exactly the mistake `revealFrom`'s comment warns about. A DOM
+ * position costs each side only the walk it already owns.
+ *
+ * Consumed on read, like the selection memory and for the same reason: a
+ * frontier from twenty minutes ago must not hijack a play the reader started
+ * somewhere else entirely.
+ */
+let handoffIndex: number | null = null;
+
+/** Called when the typewriter pauses. */
+export function rememberPlaybackHandoff(node: Node, offset: number) {
+  if (!trackedRoot) return;
+  handoffIndex = domPositionToCharIndex(trackedRoot, node, offset);
+}
+
+/** Called by `applyStartPosition`; leaves the memory empty. */
+export function takePlaybackHandoff(): number | null {
+  const index = handoffIndex;
+  handoffIndex = null;
+  return index;
+}
+
 /** Point the selection memory at this reader's content. Called from
  *  setContentEl, so it resets on every section / view-mode change. */
 export function trackSelectionIn(root: HTMLElement | undefined) {
   trackedRoot = root;
   rememberedIndex = null;
+  handoffIndex = null;
   if (root && typeof document !== 'undefined' && !listeningForSelection) {
     listeningForSelection = true;
     document.addEventListener('selectionchange', rememberSelection);
@@ -333,8 +366,20 @@ export function applyStartPosition(
   seekCharCount: number
 ) {
   if (strategy === 'selection' && reader.seekToSelection()) return;
-  if (strategy === 'section-start') reader.setPosition(0, 0);
-  else if (resumePosition) reader.setPosition(resumePosition.para, resumePosition.offset);
+  if (strategy === 'section-start') {
+    reader.setPosition(0, 0);
+    return;
+  }
+  // A frontier the typewriter just handed over beats the saved resume
+  // position: the resume position is where the *voice* last stopped, which the
+  // reveal has since moved past. Snapped to the sentence start — the reader saw
+  // half of that sentence go by, and a voice starting mid-clause sounds broken.
+  const handoff = takePlaybackHandoff();
+  if (handoff != null) {
+    reader.seekToExplored(handoff, true);
+    return;
+  }
+  if (resumePosition) reader.setPosition(resumePosition.para, resumePosition.offset);
   else reader.seekToExplored(seekCharCount);
 }
 
@@ -360,12 +405,15 @@ export function ttsIndexToCalculatorIndex(extractedText: string, ttsIndex: numbe
  */
 export function seekSentencesToExplored(
   sentences: Sentence[],
-  exploredCharCount: number
+  exploredCharCount: number,
+  snapToSentenceStart = false
 ): { index: number; offset: number } {
   for (let i = 0; i < sentences.length; i += 1) {
     const s = sentences[i];
     if (exploredCharCount < s.start) return { index: i, offset: 0 };
-    if (exploredCharCount < s.end) return { index: i, offset: exploredCharCount - s.start };
+    if (exploredCharCount < s.end) {
+      return { index: i, offset: snapToSentenceStart ? 0 : exploredCharCount - s.start };
+    }
   }
   return { index: sentences.length, offset: 0 };
 }

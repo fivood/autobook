@@ -78,6 +78,10 @@ export class AutoScrollerContinuous implements AutoScroller {
 
   private contentEl: HTMLElement | undefined;
 
+  /** Where the voice stopped, waiting for the next start. See
+   *  `revealFromPositionLater`. */
+  private pendingReveal: { node: Node; offset: number } | null = null;
+
   constructor(
     initialMultiplier: number,
     public verticalMode: boolean,
@@ -101,6 +105,9 @@ export class AutoScrollerContinuous implements AutoScroller {
         switchMap(([enabled, mult]) => {
           if (!enabled) return EMPTY;
           this.ensurePrepared();
+          // After ensurePrepared, which on a first start reveals everything
+          // already scrolled past and would otherwise overwrite the handover.
+          this.consumePendingReveal();
           const charsPerSec = Math.max(1, Math.min(60, mult));
           const delay = Math.max(16, Math.floor(1000 / charsPerSec));
           return interval(delay);
@@ -133,6 +140,8 @@ export class AutoScrollerContinuous implements AutoScroller {
     this.blocks = [];
     this.totalChars = 0;
     this.revealedIndex = 0;
+    // The position pointed into DOM that is being replaced.
+    this.pendingReveal = null;
   }
 
   private ensurePrepared() {
@@ -191,6 +200,85 @@ export class AutoScrollerContinuous implements AutoScroller {
     if (!block) return;
     this.revealedIndex = block.start;
     this.applyReveal();
+  }
+
+  /**
+   * Type from this DOM position the next time playback starts.
+   *
+   * Deferred rather than applied immediately: the voice hands it over when it
+   * pauses, and TTS turning on already ran `revealAll()`, so applying it now
+   * would re-hide the text the reader was left free to scroll through.
+   */
+  revealFromPositionLater(node: Node, offset: number) {
+    this.pendingReveal = { node, offset };
+  }
+
+  private consumePendingReveal() {
+    const pending = this.pendingReveal;
+    this.pendingReveal = null;
+    if (!pending) return;
+    const index = this.charIndexOfPosition(pending.node, pending.offset);
+    if (index == null) return;
+    this.revealedIndex = index;
+    this.applyReveal();
+  }
+
+  /**
+   * Where the reveal frontier sits, as a DOM position — the voice's half of
+   * the handover.
+   *
+   * A position, not this class's `revealedIndex`: that index counts block
+   * `textContent`, which skips any text not inside a block element, while the
+   * reader counts every text node. Handing over the number would mean
+   * translating between the two counting rules, which is the mistake
+   * `revealFrom` exists to avoid.
+   */
+  frontierPosition(): { node: Node; offset: number } | null {
+    if (!this.blocks.length) return null;
+    const block = this.blocks[this.blockIndexAt(this.revealedIndex)];
+    if (!block) return null;
+    const local = Math.max(0, this.revealedIndex - block.start);
+    // While this block is wrapped every character sits in its own <span>, but
+    // the text nodes still carry the same characters in the same order, so the
+    // walk reads identically either way.
+    const walker = this.doc.createTreeWalker(block.el, NodeFilter.SHOW_TEXT, null);
+    let seen = 0;
+    let last: { node: Node; offset: number } | null = null;
+    let node: Node | null = walker.nextNode();
+    while (node) {
+      const length = (node.textContent || '').length;
+      if (length > 0) {
+        if (local < seen + length) return { node, offset: local - seen };
+        seen += length;
+        last = { node, offset: length };
+      }
+      node = walker.nextNode();
+    }
+    // Frontier exactly at the block end — the end of its last text node.
+    return last;
+  }
+
+  /** Inverse of `frontierPosition`, in this class's own character space. */
+  private charIndexOfPosition(target: Node, offsetInNode: number): number | null {
+    const element =
+      target.nodeType === Node.TEXT_NODE ? target.parentElement : (target as HTMLElement);
+    if (!element) return null;
+    const blockIndex = this.blocks.findIndex((b) => b.el === element || b.el.contains(element));
+    if (blockIndex < 0) return null;
+    const block = this.blocks[blockIndex];
+    const walker = this.doc.createTreeWalker(block.el, NodeFilter.SHOW_TEXT, null);
+    let local = 0;
+    let node: Node | null = walker.nextNode();
+    while (node) {
+      if (node === target) {
+        return Math.min(block.start + local + offsetInNode, block.end);
+      }
+      local += (node.textContent || '').length;
+      node = walker.nextNode();
+    }
+    // The position is inside the block but not on one of its text nodes (an
+    // element anchor); the block start is the honest answer.
+    return block.start;
   }
 
   /** Locate the block covering a global char offset. */
