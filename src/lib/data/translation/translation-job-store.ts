@@ -62,15 +62,26 @@ export async function getLatestTranslationJob(): Promise<TranslationJob | undefi
 }
 
 /**
- * The most recently updated image-book job (cbz/cbr) matching a book title.
- * The reader uses this to find the translation to overlay on a comic. Falls
- * back to any comic-format job when no title matches — one comic at a time
- * is the common case.
+ * The most recently updated image-book job (cbz/cbr) for a book title.
  *
  * Prefers the newest job that *has translations*: OCR re-runs create fresh
  * empty jobs (glossary-review / drafting, 0 translations) that would shadow a
  * translated one, hiding the overlay. Only when nothing translated exists do
- * we fall back to the newest job.
+ * we fall back to the newest job with that title.
+ *
+ * A titled lookup that finds nothing answers "nothing", and that is the whole
+ * point of this shape. It used to fall through to *any* comic job — "one comic
+ * at a time is the common case" — which stops being true the moment a second
+ * comic exists, and then every untranslated comic silently adopted some other
+ * book's job: the reader showed its page count as 「N 段译文」, opened 编辑 onto
+ * a job belonging to a different book, rendered that book's bubbles wherever
+ * the page indices happened to land, and suppressed the "this book isn't
+ * translated yet" banner on every comic in the library. Observed on a
+ * freshly imported Avatar book, which claimed 20 translated bubbles it had
+ * never had.
+ *
+ * The untitled call still means "whatever comic job is newest" — that one has
+ * no book to be wrong about.
  */
 export async function findComicTranslationJob(title?: string): Promise<TranslationJob | undefined> {
   const jobs = await (await getDatabase()).getAll('jobs');
@@ -79,9 +90,7 @@ export async function findComicTranslationJob(title?: string): Promise<Translati
   const hasOutput = (job: TranslationJob) => Object.keys(job.translations || {}).length > 0;
   if (title) {
     const byTitle = sorted.filter((job) => isComic(job) && job.document.title === title);
-    const translated = byTitle.find(hasOutput);
-    if (translated) return translated;
-    if (byTitle.length) return byTitle[0];
+    return byTitle.find(hasOutput) ?? byTitle[0];
   }
   const translatedAny = sorted.find((job) => isComic(job) && hasOutput(job));
   if (translatedAny) return translatedAny;
