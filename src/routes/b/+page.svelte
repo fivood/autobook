@@ -2664,7 +2664,7 @@ ${$t('reader.ttsFailed.hint')}`
 
 {$collectReaderImageGallerySpoilerToggles$ ?? ''}
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
-{#if !showSpinner && !isPaginated}
+{#if !showSpinner}
   <AutoScrollFab {autoScroller} {autoReader} />
 {/if}
 {#if !showSpinner}

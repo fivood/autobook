@@ -82,6 +82,24 @@ export class AutoScrollerContinuous implements AutoScroller {
    *  `revealFromPositionLater`. */
   private pendingReveal: { node: Node; offset: number } | null = null;
 
+  /**
+   * Paginated mode lays the whole section out in columns and shows one page at
+   * a time. Hiding is `visibility`, so revealing never reflows and the page
+   * boundaries stay put — measured on a real section: scrollWidth and
+   * scrollHeight identical before and after wrapping a paragraph into 165
+   * per-character spans, and the calculator's char indices unchanged at every
+   * probe. What does change is what "keep up with the frontier" means:
+   * scrolling is meaningless there, the answer is to turn the page.
+   */
+  paginated = false;
+
+  /**
+   * Bring the frontier back on screen. Left to the host in paginated mode
+   * because turning the page needs the page manager and the calculator's own
+   * character counting, neither of which belongs in here.
+   */
+  onFrontierRevealed?: (span: HTMLElement) => void;
+
   constructor(
     initialMultiplier: number,
     public verticalMode: boolean,
@@ -221,6 +239,22 @@ export class AutoScrollerContinuous implements AutoScroller {
     if (index == null) return;
     this.revealedIndex = index;
     this.applyReveal();
+    this.followFrontierNow();
+  }
+
+  /**
+   * Bring the frontier on screen right now.
+   *
+   * Only after a handover, never on a plain start: at a plain start the
+   * frontier sits at the end of what the reader can already see, which
+   * `blockIndexAt` resolves to the FIRST HIDDEN block — the next page. Following
+   * that turned the page before a single character had been typed.
+   */
+  private followFrontierNow() {
+    if (this.wrappedBlock < 0 || !this.wrappedChars.length) return;
+    const local = this.revealedIndex - this.blocks[this.wrappedBlock].start;
+    const clamped = Math.min(this.wrappedChars.length - 1, Math.max(0, local));
+    this.keepFrontierVisible(this.wrappedChars[clamped]);
   }
 
   /**
@@ -400,17 +434,49 @@ export class AutoScrollerContinuous implements AutoScroller {
   private revealAlreadyScrolled() {
     if (!this.blocks.length) return;
     const w = this.doc.defaultView || window;
-    const viewportBottom = (w.scrollY || 0) + (w.innerHeight || 0);
+
+    // What the reader has already been shown, and so keeps.
+    //
+    // Scrolling: everything above the fold — the frontier then continues down
+    // the visible page.
+    //
+    // Paginated: everything BEFORE the current page, not including it. Taking
+    // the current page too would leave the frontier exactly at the page
+    // boundary, so the first character to type is on the next page and the
+    // reader gets a page turn before a single character appears. Starting at
+    // the top of the page they are looking at means they watch it type out.
+    const behindFrontier = (rect: DOMRect) => {
+      if (!this.paginated) return rect.top < (w.innerHeight || 0);
+      return this.verticalMode ? rect.top < 0 : rect.left < 0;
+    };
 
     let revealed = 0;
     for (const block of this.blocks) {
-      const rect = block.el.getBoundingClientRect();
-      const absTop = rect.top + (w.scrollY || 0);
-      if (absTop < viewportBottom) revealed = block.end;
+      if (behindFrontier(block.el.getBoundingClientRect())) revealed = block.end;
       else break;
     }
     this.revealedIndex = revealed;
     this.applyReveal();
+  }
+
+  /** Continuous mode's answer to a frontier that has walked off screen. */
+  private scrollFrontierIntoView(span: HTMLElement) {
+    const rect = span.getBoundingClientRect();
+    const w = this.doc.defaultView || window;
+    const vh = w.innerHeight || 0;
+    // Keep the active line well above the bottom-right FAB stack
+    // (pause / speed / keyboard-help take ~220px); scrolling sooner
+    // means the typewriter caret never enters the occluded region.
+    const safeBottom = Math.max(120, Math.floor(vh * 0.32));
+    if (rect.bottom > vh - safeBottom) {
+      span.scrollIntoView({ block: 'center', behavior: 'auto' });
+    }
+  }
+
+  private keepFrontierVisible(span: HTMLElement | undefined) {
+    if (!span) return;
+    if (this.onFrontierRevealed) this.onFrontierRevealed(span);
+    else this.scrollFrontierIntoView(span);
   }
 
   private revealNext() {
@@ -435,21 +501,10 @@ export class AutoScrollerContinuous implements AutoScroller {
       // from the scroll position — see playback-progress.ts.
       addPlaybackCharacters(revealed?.textContent || '');
 
-      // Throttle scroll-into-view so it doesn't jitter every frame.
+      // Throttled so it doesn't jitter every frame — and in paginated mode so
+      // the page-position lookup doesn't run per character.
       if (this.revealedIndex % 8 === 0) {
-        const span = this.wrappedChars[local];
-        if (span) {
-          const rect = span.getBoundingClientRect();
-          const w = this.doc.defaultView || window;
-          const vh = w.innerHeight || 0;
-          // Keep the active line well above the bottom-right FAB stack
-          // (pause / speed / keyboard-help take ~220px); scrolling sooner
-          // means the typewriter caret never enters the occluded region.
-          const safeBottom = Math.max(120, Math.floor(vh * 0.32));
-          if (rect.bottom > vh - safeBottom) {
-            span.scrollIntoView({ block: 'center', behavior: 'auto' });
-          }
-        }
+        this.keepFrontierVisible(this.wrappedChars[local]);
       }
       return;
     }

@@ -369,6 +369,7 @@
       {hideSpoilerImage}
       {hideFurigana}
       {furiganaStyle}
+      {multiplier}
       loadingState={$imageLoadingState$ ?? true}
       {avoidPageBreak}
       {pageColumns}
@@ -380,6 +381,7 @@
       bind:isBookmarkScreen
       bind:bookmarkData
       bind:autoReader
+      bind:autoScroller
       bind:currentSectionIndex
       bind:sectionStartCharCount
       bind:bookmarkManager

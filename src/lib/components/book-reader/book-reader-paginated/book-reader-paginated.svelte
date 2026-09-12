@@ -40,8 +40,11 @@
   } from 'rxjs';
   import Fa from 'svelte-fa';
   import { swipe } from 'svelte-gestures';
-  import type { AutoReader, BookmarkManager, PageManager } from '../types';
+  import type { AutoReader, AutoScroller, BookmarkManager, PageManager } from '../types';
   import { createAutoReader } from '../auto-reader-factory';
+  import { AutoScrollerContinuous } from '../book-reader-continuous/auto-scroller-continuous';
+  import { domPositionToCharIndex } from '../auto-reader-shared';
+  import { ttsIndexToCalculatorIndex } from '../tts-calculator-index';
   import { ttsEngine$ } from '$lib/data/store';
   import { BookmarkManagerPaginated } from './bookmark-manager-paginated';
   import { PageManagerPaginated } from './page-manager-paginated';
@@ -122,6 +125,10 @@
 
   export let autoReader: AutoReader | undefined;
 
+  export let multiplier: number;
+
+  export let autoScroller: AutoScroller | undefined;
+
   export let currentSectionIndex = 0;
 
   export let sectionStartCharCount = 0;
@@ -178,6 +185,8 @@
 
   let autoReaderConcrete: AutoReader | undefined;
 
+  let autoScrollerConcrete: AutoScrollerContinuous | undefined;
+
   let currentSectionId = '';
 
   const width$ = new Subject<number>();
@@ -206,6 +215,40 @@
     autoReaderConcrete = createAutoReader($ttsEngine$, destroy$);
     if (language) autoReaderConcrete.lang = language;
     autoReader = autoReaderConcrete;
+
+    // The typewriter runs here too. Nothing about revealing characters is
+    // continuous-specific — hiding is `visibility`, so the columns never
+    // reflow and the page count stays fixed. Only "keep up with the frontier"
+    // differs, and that is the callback below.
+    autoScrollerConcrete = new AutoScrollerContinuous(
+      multiplier,
+      verticalMode,
+      destroy$,
+      document,
+      contentEl
+    );
+    autoScrollerConcrete.paginated = true;
+    autoScrollerConcrete.onFrontierRevealed = (span) => {
+      if (!contentEl || !concretePageManager) return;
+      // The frontier is a DOM position; the page manager counts characters its
+      // own way. Same two-step translation the voice's auto-page-flip uses.
+      const ttsIndex = domPositionToCharIndex(contentEl, span.firstChild ?? span, 0);
+      if (ttsIndex == null) return;
+      concretePageManager.ensureCharVisible(
+        ttsIndexToCalculatorIndex(contentEl, ttsIndex) + sectionStartCharCount
+      );
+    };
+    autoScroller = autoScrollerConcrete;
+
+    autoReaderConcrete.wasReaderEnabled$.subscribe((enabled) => {
+      if (enabled) {
+        // TTS and the typewriter are mutually exclusive: stop the typewriter
+        // and put the whole text back on screen, so the reader can page
+        // through freely while the voice runs.
+        autoScrollerConcrete?.revealAll();
+        autoScrollerConcrete?.off();
+      }
+    });
   });
 
   $: bookmarkData.then((data) => {
@@ -296,6 +339,11 @@
     }
     if (autoReaderConcrete && language) {
       autoReaderConcrete.lang = language;
+    }
+    if (autoScrollerConcrete) {
+      autoScrollerConcrete.multiplier = multiplier;
+      autoScrollerConcrete.verticalMode = verticalMode;
+      if (contentEl) autoScrollerConcrete.setContentEl(contentEl);
     }
   }
 
@@ -545,6 +593,7 @@
     if (!scrollEl) return;
 
     autoReaderConcrete?.prepare();
+    autoScrollerConcrete?.markContentChanged();
 
     calculator = new SectionCharacterStatsCalculator(
       scrollEl,
