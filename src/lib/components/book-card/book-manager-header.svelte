@@ -604,6 +604,37 @@
 </div>
 
 <style>
+  /* The bar sits on the menu-coloured header, so it is drawn out of
+     currentColor rather than fixed values — it then follows whatever theme is
+     active. Left unstyled it renders in the UA's own blue-on-grey, which is
+     the one thing on this header that ignores the theme entirely. */
+  progress {
+    appearance: none;
+    height: 0.5rem;
+    border: none;
+    border-radius: 999px;
+    overflow: hidden;
+    /* Firefox draws the track on the element itself; Chromium needs the
+       pseudo-element below. Both are set so neither falls back to the UA look. */
+    background: color-mix(in srgb, currentColor 22%, transparent);
+    color: inherit;
+  }
+
+  progress::-webkit-progress-bar {
+    background: color-mix(in srgb, currentColor 22%, transparent);
+  }
+
+  progress::-webkit-progress-value {
+    background: currentColor;
+    border-radius: 999px;
+    transition: width 120ms linear;
+  }
+
+  progress::-moz-progress-bar {
+    background: currentColor;
+    border-radius: 999px;
+  }
+
   .filter-badge {
     position: absolute;
     top: 0.55rem;
