@@ -37,6 +37,7 @@ import {
   BaseDirectory,
   exists,
   mkdir,
+  open,
   readDir,
   readFile,
   remove,
@@ -74,7 +75,54 @@ function joinPath(...parts: string[]): string {
 }
 
 function fileFromBytes(bytes: Uint8Array, name: string, mimeType = ''): File {
+  // The re-wrap looks redundant and is a second copy, but it is also what
+  // normalises Uint8Array<ArrayBufferLike> into the ArrayBuffer-backed view
+  // BlobPart wants. Only small files come through here — covers, progress,
+  // statistics; the book itself streams via readFileAsBlob.
   return new File([new Uint8Array(bytes)], name, mimeType ? { type: mimeType } : undefined);
+}
+
+/** 8 MB: big enough that the IPC round-trips don't dominate, small enough that
+ *  the JS heap never notices. */
+const READ_CHUNK_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Read a file into a Blob without ever holding it whole.
+ *
+ * `readFile()` hands back one contiguous Uint8Array across the IPC bridge. For
+ * a 991 MB / 185-page comic that is a ~1 GB allocation — and opening such a
+ * book took the WebView renderer down with it, which the reader sees as the
+ * window turning black (the Tauri host survives, so there is no crash dialog
+ * and no error anywhere).
+ *
+ * Chunks are appended to a Blob instead. Blob parts live in the browser's own
+ * blob storage, which is disk-backed once it grows, so the JS heap never holds
+ * more than one chunk no matter how large the book is.
+ */
+async function readFileAsBlob(
+  path: string,
+  baseDir: BaseDirectory | undefined,
+  mimeType = ''
+): Promise<Blob> {
+  const handle = await open(path, baseDir === undefined ? { read: true } : { read: true, baseDir });
+  const options = mimeType ? { type: mimeType } : undefined;
+
+  try {
+    let blob = new Blob([], options);
+    const buffer = new Uint8Array(READ_CHUNK_BYTES);
+
+    for (;;) {
+      const read = await handle.read(buffer);
+      if (read === null || read === 0) break;
+      // Concatenating onto a Blob references the existing parts rather than
+      // copying their bytes, so this stays cheap across hundreds of chunks.
+      blob = new Blob([blob, buffer.slice(0, read)], options);
+    }
+
+    return blob;
+  } finally {
+    await handle.close();
+  }
 }
 
 export class TauriFsStorageHandler extends BaseStorageHandler {
@@ -348,8 +396,11 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   async getBook(onProgress?: (done: number, total: number) => void) {
     const { file } = await this.getExternalFile('bookdata_', this.isForBrowser ? 0.4 : 0.8);
     if (!file) return undefined;
-    const bytes = await readFile(file.path, { baseDir: this.baseDir });
-    const bookFile = fileFromBytes(bytes, file.name);
+    // Streamed: this is the one read that can be gigabytes (a comic archive
+    // holds every page image), and materialising it whole is what black-screened
+    // the reader. Everything else here is small enough for readFile.
+    const bookBlob = await readFileAsBlob(file.path, this.baseDir);
+    const bookFile = new File([bookBlob], file.name);
     return this.isForBrowser
       ? this.extractBookData(bookFile, bookFile.name, 0.6, onProgress)
       : bookFile;
@@ -467,13 +518,19 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
       }
     }
 
-    let bookBytes: Uint8Array;
+    // Streamed, never materialised. `new Uint8Array(await blob.arrayBuffer())`
+    // asks for one contiguous allocation the size of the whole book: a 991 MB
+    // / 185-page comic took the WebView renderer down right here, and because
+    // the Tauri host process survives, the reader just sees the window turn
+    // black with no error. writeFile takes a ReadableStream and writes it in
+    // chunks.
+    let bookBytes: ReadableStream<Uint8Array>;
     if (isFile) {
-      bookBytes = new Uint8Array(await data.arrayBuffer());
+      bookBytes = data.stream();
       BaseStorageHandler.reportProgress(0.2);
     } else {
       const zipped = await this.zipBookData(data, 0.4);
-      bookBytes = new Uint8Array(await zipped.arrayBuffer());
+      bookBytes = zipped.stream();
     }
 
     await this.writeFileTo(dirPath, filename, bookBytes, files, file, isFile ? 0.6 : 0.4);
@@ -787,7 +844,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   private async writeFileTo(
     dirPath: string,
     filename: string,
-    data: Uint8Array,
+    data: Uint8Array | ReadableStream<Uint8Array>,
     files: FileEntry[],
     file: FileEntry | undefined,
     progressBase = 0.4,

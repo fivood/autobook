@@ -17,6 +17,7 @@
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/v4/books-db-v4';
 import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
+import shrinkComicPage from '$lib/functions/file-loaders/utils/shrink-comic-page';
 import { pagePath } from '$lib/data/env';
 
 const IMAGE_RE = /\.(jpe?g|png|webp|gif|bmp)$/i;
@@ -127,11 +128,14 @@ export default async function loadCbr(file: File, lastBookModified: number): Pro
       // tagged application/octet-stream which would otherwise reach the
       // <img> as the wrong type and fail to render in some browsers.
       const raw = await entry.file.extract();
-      const blob = new Blob([await raw.arrayBuffer()], { type: mime });
+      const extracted = new Blob([await raw.arrayBuffer()], { type: mime });
+      // Oversized scans are re-encoded to screen size here rather than carried
+      // through the rest of the pipeline — see shrink-comic-page.ts.
+      const { blob, ext: storedExt } = await shrinkComicPage(extracted, ext);
       // Reuse the cbz-page-* blob key prefix so the OCR runner finds
       // images identically (it already probes both pdf-page-N and
       // cbz-page-N keys).
-      const blobName = `cbz-page-${pageNum}.${ext}`;
+      const blobName = `cbz-page-${pageNum}.${storedExt}`;
       blobs[blobName] = blob;
       if (pageNum === 1) coverImage = blob;
 

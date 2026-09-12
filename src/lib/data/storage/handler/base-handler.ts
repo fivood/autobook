@@ -479,6 +479,15 @@ export abstract class BaseStorageHandler {
 
     if (data instanceof Blob) {
       await zipWriter.add(name, new BlobReader(data), {
+        // Everything reaching here as a Blob is already-compressed media —
+        // page images and covers. Deflating them buys ~nothing and costs
+        // everything: a 991 MB / 185-page CBR spent 70 seconds in deflate and
+        // then took the WebView renderer down with it, which the reader sees
+        // as the window going black (the Tauri host survives, so there is not
+        // even a crash dialog). Stored, the same book zips in 9.6 seconds with
+        // the JS heap flat at ~59 MB. Existing archives are unaffected: a zip
+        // reader does not care which method each entry used.
+        level: 0,
         onprogress: (...args) => this.reportFunction(...args)
       });
     } else if (data) {

@@ -16,6 +16,7 @@ import { BlobReader, BlobWriter, ZipReader, type Entry } from '@zip.js/zip.js';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/v4/books-db-v4';
 import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
+import shrinkComicPage from '$lib/functions/file-loaders/utils/shrink-comic-page';
 
 const IMAGE_RE = /\.(jpe?g|png|webp|gif|bmp)$/i;
 
@@ -109,8 +110,10 @@ export default async function loadCbz(file: File, lastBookModified: number): Pro
       const pageNum = i + 1;
       const ext = entry.filename.slice(entry.filename.lastIndexOf('.') + 1).toLowerCase();
       const mime = mimeFromExt(entry.filename);
-      const blob = await entry.getData(new BlobWriter(mime));
-      const blobName = `cbz-page-${pageNum}.${ext}`;
+      const extracted = await entry.getData(new BlobWriter(mime));
+      // Same screen-size re-encode as the CBR path — see shrink-comic-page.ts.
+      const { blob, ext: storedExt } = await shrinkComicPage(extracted, ext);
+      const blobName = `cbz-page-${pageNum}.${storedExt}`;
       blobs[blobName] = blob;
       if (pageNum === 1) coverImage = blob;
 
