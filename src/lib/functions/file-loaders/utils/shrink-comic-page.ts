@@ -28,9 +28,23 @@ const PASSTHROUGH_BYTES = 1_500_000;
  *  so zooming a page still has pixels to show. */
 const MAX_EDGE = 2400;
 
-/** WebP at this quality is visually clean on line art and screentone alike and
- *  lands roughly an order of magnitude below an 8 MB scan. */
+/**
+ * JPEG, not WebP, and this is the whole difference between a tolerable import
+ * and an unusable one. Measured on this book at 1561x2400, per page:
+ *
+ *   webp q0.85   456 ms   635 KB
+ *   webp q0.80   410 ms   524 KB
+ *   jpeg q0.85    39 ms   842 KB
+ *
+ * WebP costs 12x the encode time to save a third of the bytes — 84 seconds
+ * versus 7 across 185 pages, on a step that is already the slowest part of
+ * importing a comic. The extra bytes are worth it; the minutes are not. (This
+ * is also why there is no worker pool here: at 39 ms a page there is nothing
+ * left worth parallelising.)
+ */
 const QUALITY = 0.85;
+const OUTPUT_TYPE = 'image/jpeg';
+const OUTPUT_EXT = 'jpg';
 
 export interface ShrunkPage {
   blob: Blob;
@@ -67,13 +81,17 @@ export default async function shrinkComicPage(
     const context = canvas.getContext('2d');
     if (!context) return { blob, ext: originalExt };
 
+    // JPEG has no alpha, and a transparent PNG page would otherwise come out
+    // with a black background.
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
     context.drawImage(bitmap, 0, 0, width, height);
 
-    const shrunk = await canvas.convertToBlob({ type: 'image/webp', quality: QUALITY });
+    const shrunk = await canvas.convertToBlob({ type: OUTPUT_TYPE, quality: QUALITY });
 
     // A page that got bigger (already-optimised art at low resolution) keeps
     // its original bytes rather than paying for a lossy round trip.
-    return shrunk.size < blob.size ? { blob: shrunk, ext: 'webp' } : { blob, ext: originalExt };
+    return shrunk.size < blob.size ? { blob: shrunk, ext: OUTPUT_EXT } : { blob, ext: originalExt };
   } catch {
     // Decoder said no — CMYK JPEG, a format this build has no decoder for, a
     // truncated entry. Keep what the archive gave us.

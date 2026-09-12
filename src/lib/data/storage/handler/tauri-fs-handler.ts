@@ -86,6 +86,37 @@ function fileFromBytes(bytes: Uint8Array, name: string, mimeType = ''): File {
  *  the JS heap never notices. */
 const READ_CHUNK_BYTES = 8 * 1024 * 1024;
 
+/** Same reasoning as READ_CHUNK_BYTES, except the write cost turns out to be
+ *  purely per byte — 8 MB and 32 MB chunks time identically — so this is just
+ *  the largest slice worth holding in the heap. */
+const WRITE_CHUNK_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Write a Blob without ever holding it whole, one appended chunk at a time.
+ *
+ * `writeFile` also accepts a ReadableStream, which looks like the obvious way
+ * to do this and is 21x slower: it forwards every chunk through
+ * `FileHandle.write`, which passes the bytes *inside* an args object, so the
+ * IPC layer JSON-serialises them — `{"0":12,"1":255,...}`, about five bytes
+ * sent per byte written. Measured on a 152 MB comic: 61 s streamed against
+ * 2.9 s here, and chunk size makes no difference to the streamed figure
+ * because the cost is per byte, not per call. A top-level Uint8Array takes the
+ * raw path instead, so every append is one flat write.
+ */
+async function writeBlobChunked(path: string, blob: Blob, baseDir?: BaseDirectory) {
+  let offset = 0;
+
+  // Runs at least once: a zero-length blob still has to truncate whatever is
+  // already at that path.
+  do {
+    const end = Math.min(offset + WRITE_CHUNK_BYTES, blob.size);
+    const chunk = new Uint8Array(await blob.slice(offset, end).arrayBuffer());
+
+    await writeFile(path, chunk, { baseDir, append: offset > 0 });
+    offset = end;
+  } while (offset < blob.size);
+}
+
 /**
  * Read a file into a Blob without ever holding it whole.
  *
@@ -518,19 +549,18 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
       }
     }
 
-    // Streamed, never materialised. `new Uint8Array(await blob.arrayBuffer())`
-    // asks for one contiguous allocation the size of the whole book: a 991 MB
-    // / 185-page comic took the WebView renderer down right here, and because
-    // the Tauri host process survives, the reader just sees the window turn
-    // black with no error. writeFile takes a ReadableStream and writes it in
-    // chunks.
-    let bookBytes: ReadableStream<Uint8Array>;
+    // Handed over as a Blob, never materialised. `new Uint8Array(await
+    // blob.arrayBuffer())` asks for one contiguous allocation the size of the
+    // whole book: a 991 MB / 185-page comic took the WebView renderer down
+    // right here, and because the Tauri host process survives, the reader just
+    // sees the window turn black with no error. writeBlobChunked writes it in
+    // slices.
+    let bookBytes: Blob;
     if (isFile) {
-      bookBytes = data.stream();
+      bookBytes = data;
       BaseStorageHandler.reportProgress(0.2);
     } else {
-      const zipped = await this.zipBookData(data, 0.4);
-      bookBytes = zipped.stream();
+      bookBytes = await this.zipBookData(data, 0.4);
     }
 
     await this.writeFileTo(dirPath, filename, bookBytes, files, file, isFile ? 0.6 : 0.4);
@@ -844,7 +874,7 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
   private async writeFileTo(
     dirPath: string,
     filename: string,
-    data: Uint8Array | ReadableStream<Uint8Array>,
+    data: Uint8Array | Blob,
     files: FileEntry[],
     file: FileEntry | undefined,
     progressBase = 0.4,
@@ -864,7 +894,11 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
     }
 
     const newPath = joinPath(targetDir, filename);
-    await writeFile(newPath, data, { baseDir: this.baseDir });
+    if (data instanceof Blob) {
+      await writeBlobChunked(newPath, data, this.baseDir);
+    } else {
+      await writeFile(newPath, data, { baseDir: this.baseDir });
+    }
     BaseStorageHandler.reportProgress(progressPerStep);
 
     // Remove every sibling sharing this prefix, not just the one we read at
