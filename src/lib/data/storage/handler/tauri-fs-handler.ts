@@ -103,7 +103,14 @@ const WRITE_CHUNK_BYTES = 8 * 1024 * 1024;
  * because the cost is per byte, not per call. A top-level Uint8Array takes the
  * raw path instead, so every append is one flat write.
  */
-async function writeBlobChunked(path: string, blob: Blob, baseDir?: BaseDirectory) {
+async function writeBlobChunked(
+  path: string,
+  blob: Blob,
+  baseDir?: BaseDirectory,
+  progressBase = 0
+) {
+  const chunks = Math.max(1, Math.ceil(blob.size / WRITE_CHUNK_BYTES));
+  const progressPerChunk = progressBase / chunks;
   let offset = 0;
 
   // Runs at least once: a zero-length blob still has to truncate whatever is
@@ -114,6 +121,11 @@ async function writeBlobChunked(path: string, blob: Blob, baseDir?: BaseDirector
 
     await writeFile(path, chunk, { baseDir, append: offset > 0 });
     offset = end;
+
+    // Reported per chunk rather than once at the end: writing a 150 MB comic
+    // is seconds of wall clock during which the import bar would otherwise sit
+    // at whatever the zip step left it at.
+    if (progressPerChunk) BaseStorageHandler.reportProgress(progressPerChunk);
   } while (offset < blob.size);
 }
 
@@ -895,11 +907,12 @@ export class TauriFsStorageHandler extends BaseStorageHandler {
 
     const newPath = joinPath(targetDir, filename);
     if (data instanceof Blob) {
-      await writeBlobChunked(newPath, data, this.baseDir);
+      // Spends this step's budget across the chunks instead of after them.
+      await writeBlobChunked(newPath, data, this.baseDir, progressPerStep);
     } else {
       await writeFile(newPath, data, { baseDir: this.baseDir });
+      BaseStorageHandler.reportProgress(progressPerStep);
     }
-    BaseStorageHandler.reportProgress(progressPerStep);
 
     // Remove every sibling sharing this prefix, not just the one we read at
     // the start. Everything downstream does `files.find(startsWith(prefix))`

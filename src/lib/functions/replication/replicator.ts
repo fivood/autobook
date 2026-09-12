@@ -113,6 +113,20 @@ export async function importData(
           throwIfAborted(cancelSignal);
 
           let bookContent: LoadData;
+          // Loaders that know their page count fill the load step as they go,
+          // so a long comic/scanned-PDF import shows a moving bar and a live
+          // ETA instead of sitting at 0% with `~ ??:??:??` for a minute. The
+          // step's budget is one progress unit; the last page is left to
+          // completeStep() below, which ceil-corrects whatever rounding left
+          // over. Formats without a page count keep the old single jump.
+          let loaderReportedPages = false;
+          const reportPageProgress = (page: number, total: number) => {
+            loaderReportedPages = true;
+
+            if (page < total) {
+              BaseStorageHandler.reportProgress(1 / total);
+            }
+          };
 
           // Step 1: try by extension (fast path, covers 99% of cases).
           // Step 2: if the extension didn't match anything, sniff the magic
@@ -126,35 +140,33 @@ export async function importData(
           } else if (/\.(mobi|azw3?)$/i.test(file.name)) {
             bookContent = await (await loadMobi())(file, lastBookModified);
           } else if (/\.pdf$/i.test(file.name)) {
-            bookContent = await (await loadPdf())(file, lastBookModified, (page, total) => {
-              // Surface per-page progress so a long scanned-PDF import shows a
-              // moving bar + live ETA instead of sitting on "load" with
-              // `~ ??:??:??`. The load step's budget is 1 progress unit; each
-              // page adds its slice, and completeStep() ceil-corrects at the end.
-              if (page < total) {
-                BaseStorageHandler.reportProgress(1 / total);
-              }
-            }, cancelSignal);
+            bookContent = await (await loadPdf())(
+              file,
+              lastBookModified,
+              reportPageProgress,
+              cancelSignal
+            );
           } else if (/\.cbz$/i.test(file.name)) {
-            bookContent = await (await loadCbz())(file, lastBookModified);
+            bookContent = await (await loadCbz())(file, lastBookModified, reportPageProgress);
           } else if (/\.(cbr|cb7|cbt)$/i.test(file.name)) {
-            bookContent = await (await loadCbr())(file, lastBookModified);
+            bookContent = await (await loadCbr())(file, lastBookModified, reportPageProgress);
           } else if (/\.htmlz$/i.test(file.name)) {
             bookContent = await (await loadHtmlz())(file, document, lastBookModified);
           } else {
             const sniffed = await sniffFormat(file);
             if (sniffed === 'pdf') {
-              bookContent = await (await loadPdf())(file, lastBookModified, (page, total) => {
-                if (page < total) {
-                  BaseStorageHandler.reportProgress(1 / total);
-                }
-              }, cancelSignal);
+              bookContent = await (await loadPdf())(
+                file,
+                lastBookModified,
+                reportPageProgress,
+                cancelSignal
+              );
             } else if (sniffed === 'mobi') {
               bookContent = await (await loadMobi())(file, lastBookModified);
             } else if (sniffed === 'zip') {
               const kind = await sniffZipKind(file);
               if (kind === 'cbz') {
-                bookContent = await (await loadCbz())(file, lastBookModified);
+                bookContent = await (await loadCbz())(file, lastBookModified, reportPageProgress);
               } else if (kind === 'htmlz') {
                 bookContent = await (await loadHtmlz())(file, document, lastBookModified);
               } else {
@@ -178,7 +190,7 @@ export async function importData(
             return;
           }
 
-          checkCancelAndProgress(cancelSignal, true, true);
+          checkCancelAndProgress(cancelSignal, true, !loaderReportedPages);
 
           // 1.20.2: remember the source format so the hover popover +
           // card corner chip can display it even after loaders strip the

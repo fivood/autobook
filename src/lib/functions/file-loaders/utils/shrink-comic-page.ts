@@ -38,9 +38,7 @@ const MAX_EDGE = 2400;
  *
  * WebP costs 12x the encode time to save a third of the bytes — 84 seconds
  * versus 7 across 185 pages, on a step that is already the slowest part of
- * importing a comic. The extra bytes are worth it; the minutes are not. (This
- * is also why there is no worker pool here: at 39 ms a page there is nothing
- * left worth parallelising.)
+ * importing a comic. The extra bytes are worth it; the minutes are not.
  */
 const QUALITY = 0.85;
 const OUTPUT_TYPE = 'image/jpeg';
@@ -53,20 +51,20 @@ export interface ShrunkPage {
   ext: string;
 }
 
+export function canShrink() {
+  return typeof createImageBitmap === 'function' && typeof OffscreenCanvas === 'function';
+}
+
 /**
- * Returns the page unchanged unless it is both large and shrinkable.
+ * Decode, scale to screen size, re-encode. Returns null when the page should
+ * keep the bytes it already has — too small to bother with, undecodable, or a
+ * re-encode that came out bigger than the original.
  *
- * Never throws: a page the decoder cannot read is passed through as-is. A
- * too-big page still renders; a missing one does not.
+ * The worker (shrink-comic-page.worker.ts) imports this same function, so both
+ * paths produce identical files.
  */
-export default async function shrinkComicPage(
-  blob: Blob,
-  originalExt: string
-): Promise<ShrunkPage> {
-  if (blob.size <= PASSTHROUGH_BYTES) return { blob, ext: originalExt };
-  if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas !== 'function') {
-    return { blob, ext: originalExt };
-  }
+export async function encodeToScreenSize(blob: Blob): Promise<Blob | null> {
+  if (blob.size <= PASSTHROUGH_BYTES || !canShrink()) return null;
 
   let bitmap: ImageBitmap | undefined;
 
@@ -79,7 +77,7 @@ export default async function shrinkComicPage(
 
     const canvas = new OffscreenCanvas(width, height);
     const context = canvas.getContext('2d');
-    if (!context) return { blob, ext: originalExt };
+    if (!context) return null;
 
     // JPEG has no alpha, and a transparent PNG page would otherwise come out
     // with a black background.
@@ -91,12 +89,154 @@ export default async function shrinkComicPage(
 
     // A page that got bigger (already-optimised art at low resolution) keeps
     // its original bytes rather than paying for a lossy round trip.
-    return shrunk.size < blob.size ? { blob: shrunk, ext: OUTPUT_EXT } : { blob, ext: originalExt };
+    return shrunk.size < blob.size ? shrunk : null;
   } catch {
     // Decoder said no — CMYK JPEG, a format this build has no decoder for, a
     // truncated entry. Keep what the archive gave us.
-    return { blob, ext: originalExt };
+    return null;
   } finally {
     bitmap?.close();
   }
+}
+
+/**
+ * Returns the page unchanged unless it is both large and shrinkable.
+ *
+ * Never throws: a page the decoder cannot read is passed through as-is. A
+ * too-big page still renders; a missing one does not.
+ */
+export default async function shrinkComicPage(
+  blob: Blob,
+  originalExt: string
+): Promise<ShrunkPage> {
+  const shrunk = await encodeToScreenSize(blob);
+
+  return shrunk ? { blob: shrunk, ext: OUTPUT_EXT } : { blob, ext: originalExt };
+}
+
+/**
+ * Four workers, not sixteen. Measured per page on a 1988x3056 scan: 152 ms in
+ * process, 53 ms across four workers, 39 ms across eight. The last doubling
+ * buys 14 ms a page and doubles the number of decoded bitmaps alive at once
+ * (~24 MB each at this size) — and on the book that motivated all of this,
+ * memory headroom is the thing that was actually scarce.
+ */
+const POOL_SIZE = 4;
+
+/** How far the caller's extraction loop may run ahead of the pool. Two pages
+ *  per worker keeps every worker fed without letting a whole archive's worth of
+ *  extracted pages pile up behind them. */
+export const PAGES_IN_FLIGHT = POOL_SIZE * 2;
+
+export interface ComicPageShrinker {
+  shrink(blob: Blob, originalExt: string): Promise<ShrunkPage>;
+  close(): void;
+}
+
+interface PendingJob {
+  blob: Blob;
+  resolve: (shrunk: Blob | null) => void;
+}
+
+/**
+ * A pool of workers doing what shrinkComicPage does.
+ *
+ * Throughput is only half the reason (152 ms a page against 53). The other
+ * half is that decoding and encoding in process pins the main thread for the
+ * whole import, so Svelte never gets a frame and the import progress bar sits
+ * frozen — the loader phase was a flat 0% for its entire duration. Off-thread,
+ * the bar moves.
+ *
+ * Callers must close() it. A page whose worker dies is re-done in process, so
+ * a broken pool is slow rather than fatal.
+ */
+export function createComicPageShrinker(): ComicPageShrinker {
+  const idle: Worker[] = [];
+  const queue: PendingJob[] = [];
+  let alive = 0;
+  let closed = false;
+  let poolBroken = false;
+
+  function spawn(): Worker | undefined {
+    try {
+      const worker = new Worker(new URL('./shrink-comic-page.worker.ts', import.meta.url), {
+        type: 'module'
+      });
+
+      alive += 1;
+
+      return worker;
+    } catch {
+      // No worker support, or the bundle never shipped the chunk. Everything
+      // from here runs in process.
+      poolBroken = true;
+
+      return undefined;
+    }
+  }
+
+  function release(worker: Worker, healthy: boolean) {
+    worker.onmessage = null;
+    worker.onerror = null;
+
+    if (!healthy || closed) {
+      worker.terminate();
+      alive -= 1;
+      return;
+    }
+
+    const next = queue.shift();
+
+    if (next) {
+      run(worker, next);
+    } else {
+      idle.push(worker);
+    }
+  }
+
+  function run(worker: Worker, job: PendingJob) {
+    worker.onmessage = (event: MessageEvent<{ blob: Blob | null }>) => {
+      release(worker, true);
+      job.resolve(event.data.blob);
+    };
+
+    worker.onerror = () => {
+      release(worker, false);
+      // The page still has to come out somewhere.
+      encodeToScreenSize(job.blob).then(job.resolve, () => job.resolve(null));
+    };
+
+    worker.postMessage({ blob: job.blob });
+  }
+
+  function dispatch(job: PendingJob) {
+    const worker = idle.pop() ?? (alive < POOL_SIZE ? spawn() : undefined);
+
+    if (worker) {
+      run(worker, job);
+    } else if (poolBroken) {
+      encodeToScreenSize(job.blob).then(job.resolve, () => job.resolve(null));
+    } else {
+      queue.push(job);
+    }
+  }
+
+  return {
+    async shrink(blob, originalExt) {
+      if (closed || !canShrink()) return shrinkComicPage(blob, originalExt);
+
+      const shrunk = await new Promise<Blob | null>((resolve) => {
+        dispatch({ blob, resolve });
+      });
+
+      return shrunk ? { blob: shrunk, ext: OUTPUT_EXT } : { blob, ext: originalExt };
+    },
+    close() {
+      closed = true;
+      queue.length = 0;
+      idle.forEach((worker) => worker.terminate());
+      idle.length = 0;
+      alive = 0;
+    }
+  };
 }
