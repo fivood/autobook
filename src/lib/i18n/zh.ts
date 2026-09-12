@@ -470,7 +470,7 @@ export default {
   'settings.ocr.pdfLang.japan': '日本語',
   'settings.ocr.pdfLang.korean': '한국어',
   'settings.ocr.pdfLang.en': 'English',
-  'settings.ocr.pdfPrompt': '扫描版 PDF 自动提示 OCR',
+  'settings.ocr.pdfPrompt': '漫画 / 扫描版打开时提示 OCR 与翻译',
   'settings.ocr.pdfMemory': '「仅看原图」记忆',
   'settings.ocr.clearMemory': '清空（当前 {n} 本）',
   'settings.ocr.comicHeading': '漫画翻译',

@@ -102,8 +102,10 @@
 
   // What stays in the overflow menu: everything that navigates away from the
   // book or is reached once a session. Reading settings and 返回书库 used to
-  // live here too — they're first-class icons now, and the image gallery moved
-  // to the left group with the other in-book navigation.
+  // live here too — they're first-class icons now, the image gallery moved to
+  // the left group with the other in-book navigation, and the translation
+  // workbench became an icon of its own once comics stopped advertising it
+  // with a banner on open.
   $: {
     const items = [];
 
@@ -116,8 +118,6 @@
     if (hasText) {
       items.push(mergeEntries.JUMP_TO_POSITION);
     }
-
-    items.push(mergeEntries.TRANSLATE);
 
     menuItems = items;
   }
@@ -279,6 +279,16 @@
         <Fa icon={faExpand} />
       </div>
     {/if}
+    <div
+      tabindex="0"
+      role="button"
+      aria-label={$t('menu.translate.title')} title={$t('menu.translate.title')}
+      class={baseIconClasses}
+      on:click={() => dispatch('translateClick')}
+      on:keyup={activateOnKeyup}
+    >
+      <Fa icon={mergeEntries.TRANSLATE.icon} />
+    </div>
     <MergedHeaderIcon
       alwaysCollapse
       disableRouteNavigation
@@ -287,8 +297,6 @@
       on:action={({ detail }) => {
         if (detail === mergeEntries.STATISTICS.label) {
           dispatch('statisticsClick');
-        } else if (detail === mergeEntries.TRANSLATE.label) {
-          dispatch('translateClick');
         } else if (detail === mergeEntries.JUMP_TO_POSITION.label) {
           dispatch('jumpClick');
         } else if (detail === mergeEntries.DOMAIN_HINT.label) {

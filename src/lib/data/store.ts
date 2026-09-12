@@ -471,9 +471,19 @@ export const hideExternalReadHint$ = writableBooleanLocalStorageSubject()(
   false
 );
 
+/**
+ * Off by default: opening a comic or a scan used to be met by a banner
+ * proposing OCR / the translation workbench before the reader had seen a
+ * single page, on every such book. Both entry points are reachable on demand
+ * — the workbench has its own icon in the reader header — so the prompt is
+ * opt-in rather than the greeting.
+ *
+ * Anyone who had switched it on keeps it: the stored value only exists once
+ * it has been changed, so flipping the default here does not touch them.
+ */
 export const pdfOcrPromptEnabled$ = writableBooleanLocalStorageSubject()(
   'pdfOcrPromptEnabled',
-  true
+  false
 );
 
 export const pdfOcrSkippedBookIds$ = writableStringLocalStorageSubject()(

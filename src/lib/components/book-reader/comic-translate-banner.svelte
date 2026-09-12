@@ -3,6 +3,7 @@
   import Fa from 'svelte-fa';
   import { faScroll, faTimes } from '@fortawesome/free-solid-svg-icons';
   import { writableSubject } from '$lib/functions/svelte/store';
+  import { pdfOcrPromptEnabled$ } from '$lib/data/store';
   import { t } from '$lib/i18n';
 
   export let bookId: number;
@@ -45,7 +46,9 @@
   }
 </script>
 
-{#if !dismissed}
+<!-- Same switch as the scanned-PDF banner (settings > OCR): one control for
+     "should a comic/scan offer this on open", not one per format. -->
+{#if $pdfOcrPromptEnabled$ && !dismissed}
   <div class="banner">
     <Fa icon={faScroll} class="ico" />
     <div class="text">
