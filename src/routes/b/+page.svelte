@@ -2789,6 +2789,7 @@ ${$t('reader.ttsFailed.hint')}`
       hasText={!!bookCharCount}
       textEditable={!!($rawBookData$ && getEditableTextFormat($rawBookData$))}
       aiAvailable={$rawBookData$ ? hasIndexableText($rawBookData$) : true}
+      hasReadableText={$rawBookData$ ? hasIndexableText($rawBookData$) : true}
       hasCustomReadingPoint={!!(
         ($customReadingPointEnabled$ || isPaginated) &&
         ((isPaginated && customReadingPointRange) ||

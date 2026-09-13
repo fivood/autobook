@@ -106,7 +106,9 @@
       >
         <Fa icon={mergeTo.icon} />
       </div>
-      <div class="menu-list w-40 md:w-32" slot="content">
+      <!-- Sized to the longest entry, floor of the old fixed width: the
+           reader's overflow now carries labels like "Reset reading point". -->
+      <div class="menu-list min-w-32 w-max" slot="content">
         {#each actionItems as actionItem (actionItem.label)}
           <div
             tabindex="0"

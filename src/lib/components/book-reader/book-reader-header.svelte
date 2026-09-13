@@ -18,7 +18,6 @@
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
-  import Popover from '$lib/components/popover/popover.svelte';
   import {
     baseHeaderClasses,
     baseIconClasses,
@@ -44,6 +43,13 @@
    * drawer there just answers "can't spoil" to everything. Hidden entirely —
    * see has-indexable-text.ts. */
   export let aiAvailable = true;
+  /**
+   * The book has a text layer (see has-indexable-text.ts): false for comics
+   * and scans not yet OCR'd. Those books showed a highlights button with
+   * nothing that could be highlighted, and a 目录 that was just every page as
+   * 「第 N 页」 — the image gallery already shows the same pages, as pages.
+   */
+  export let hasReadableText = true;
   /** MD/TXT books expose the shared source editor. */
   export let textEditable = false;
   /** Current book's title. Shown as a centered label between the left
@@ -72,22 +78,68 @@
     bookManagerClick: void;
   }>();
 
-  // labelKey is the i18n key rendered via {$t(...)}; `action` is the
-  // untranslated event id dispatched to the reader page.
-  const customReadingPointMenuItems: {
-    labelKey: string;
-    action: any;
-  }[] = [
-    ...(hasCustomReadingPoint
-      ? [{ labelKey: 'reader.customReadingPoint.show', action: 'showCustomReadingPoint' }]
-      : []),
-    { labelKey: 'reader.customReadingPoint.set', action: 'setCustomReadingPoint' },
-    ...(hasCustomReadingPoint
-      ? [{ labelKey: 'reader.customReadingPoint.reset', action: 'resetCustomReadingPoint' }]
-      : [])
-  ];
+  /**
+   * Reader-only overflow entries, keyed by the event each one dispatches.
+   * `label` is the dispatch identity, as with mergeEntries (see there), so it
+   * stays an untranslated id; only labelKey / titleKey reach the screen.
+   */
+  const overflow = {
+    completeBook: {
+      routeId: '',
+      label: 'reader:completeBook',
+      labelKey: 'reader.finishBook',
+      icon: faFlag,
+      title: '',
+      titleKey: 'reader.finishBook'
+    },
+    editTextClick: {
+      routeId: '',
+      label: 'reader:editText',
+      labelKey: 'reader.editText',
+      icon: faPenToSquare,
+      title: '',
+      titleKey: 'reader.editText'
+    },
+    showCustomReadingPoint: {
+      routeId: '',
+      label: 'reader:showCustomReadingPoint',
+      labelKey: 'reader.customReadingPoint.show',
+      icon: faCrosshairs,
+      title: '',
+      titleKey: 'reader.customReadingPoint.show'
+    },
+    setCustomReadingPoint: {
+      routeId: '',
+      label: 'reader:setCustomReadingPoint',
+      labelKey: 'reader.customReadingPoint.set',
+      icon: faCrosshairs,
+      title: '',
+      titleKey: 'reader.customReadingPoint.set'
+    },
+    resetCustomReadingPoint: {
+      routeId: '',
+      label: 'reader:resetCustomReadingPoint',
+      labelKey: 'reader.customReadingPoint.reset',
+      icon: faCrosshairs,
+      title: '',
+      titleKey: 'reader.customReadingPoint.reset'
+    }
+  };
 
-  let customReadingPointMenuElm: Popover;
+  function dispatchOverflow(label: string) {
+    if (label === mergeEntries.STATISTICS.label) {
+      dispatch('statisticsClick');
+    } else if (label === mergeEntries.JUMP_TO_POSITION.label) {
+      dispatch('jumpClick');
+    } else if (label === mergeEntries.DOMAIN_HINT.label) {
+      dispatch('domainHintClick');
+    } else {
+      const event = (Object.keys(overflow) as (keyof typeof overflow)[]).find(
+        (key) => overflow[key].label === label
+      );
+      if (event) dispatch(event);
+    }
+  }
 
   let menuItems: {
     routeId: string;
@@ -100,49 +152,37 @@
 
   $: isOldUrl = browser && isOnOldUrl(window);
 
-  // What stays in the overflow menu: everything that navigates away from the
-  // book or is reached once a session. Reading settings and 返回书库 used to
-  // live here too — they're first-class icons now, the image gallery moved to
-  // the left group with the other in-book navigation, and the translation
-  // workbench became an icon of its own once comics stopped advertising it
-  // with a banner on open.
+  // The bar keeps what gets reached for mid-book; the overflow takes what is
+  // reached once a book or once a session. 完成本书 used to be a permanent
+  // icon and the reading point had a popover of its own, while this menu held
+  // only 统计 and 跳转. In-book actions come first, leaving the book last.
   $: {
     const items = [];
-
-    if (isOldUrl) {
-      items.push(mergeEntries.DOMAIN_HINT);
-    } else {
-      items.push(mergeEntries.STATISTICS);
-    }
 
     if (hasText) {
       items.push(mergeEntries.JUMP_TO_POSITION);
     }
 
-    menuItems = items;
-  }
+    if ($customReadingPointEnabled$ || $viewMode$ === ViewMode.Paginated) {
+      if (hasCustomReadingPoint) items.push(overflow.showCustomReadingPoint);
+      items.push(overflow.setCustomReadingPoint);
+      if (hasCustomReadingPoint) items.push(overflow.resetCustomReadingPoint);
+    }
 
-  function dispatchCustomReadingPointAction(action: any) {
-    dispatch(action);
-    customReadingPointMenuElm.toggleOpen();
+    if (textEditable) {
+      items.push(overflow.editTextClick);
+    }
+
+    items.push(overflow.completeBook);
+    items.push(isOldUrl ? mergeEntries.DOMAIN_HINT : mergeEntries.STATISTICS);
+
+    menuItems = items;
   }
 </script>
 
 <div class="flex justify-between items-center px-4 md:px-8 {baseHeaderClasses}">
   <div class="flex transform-gpu {nTranslateXHeaderFa}">
-    {#if textEditable}
-      <div
-        tabindex="0"
-        role="button"
-        aria-label={$t('reader.editText')} title={$t('reader.editText')}
-        class={baseIconClasses}
-        on:click={() => dispatch('editTextClick')}
-        on:keyup={activateOnKeyup}
-      >
-        <Fa icon={faPenToSquare} />
-      </div>
-    {/if}
-    {#if hasChapterData}
+    {#if hasChapterData && (hasReadableText || !$readerImageGalleryPictures$.length)}
       <div
         tabindex="0"
         role="button"
@@ -166,16 +206,18 @@
         <Fa icon={faImages} />
       </div>
     {/if}
-    <div
-      tabindex="0"
-      role="button"
-      aria-label={$t('reader.highlights')} title={$t('reader.highlights')}
-      class={baseIconClasses}
-      on:click={() => dispatch('highlightClick')}
-      on:keyup={activateOnKeyup}
-    >
-      <Fa icon={faHighlighter} />
-    </div>
+    {#if hasReadableText}
+      <div
+        tabindex="0"
+        role="button"
+        aria-label={$t('reader.highlights')} title={$t('reader.highlights')}
+        class={baseIconClasses}
+        on:click={() => dispatch('highlightClick')}
+        on:keyup={activateOnKeyup}
+      >
+        <Fa icon={faHighlighter} />
+      </div>
+    {/if}
     {#if aiAvailable}
       <div
         tabindex="0"
@@ -210,12 +252,14 @@
         <Fa icon={faRotateLeft} />
       </div>
     {/if}
-    {#if $viewMode$ === ViewMode.Continuous && !$isMobile$}
+    {#if $viewMode$ === ViewMode.Continuous && !$isMobile$ && hasReadableText}
       <div
         class="flex items-center px-4 text-xl xl:px-3 xl:text-lg"
         aria-label={$t('reader.autoScrollSpeed')} title={$t('reader.autoScrollSpeed')}
       >
-        {autoScrollMultiplier}x
+        <!-- Same unit as the typewriter pill; 「6x」 read as a multiplier of
+             something, and looked like a button besides. -->
+        {$t('typewriter.speedUnit', { n: autoScrollMultiplier })}
       </div>
     {/if}
   </div>
@@ -230,43 +274,6 @@
   {/if}
 
   <div class="flex transform-gpu {translateXHeaderFa}">
-    <div
-      tabindex="0"
-      role="button"
-      aria-label={$t('reader.finishBook')} title={$t('reader.finishBook')}
-      class={baseIconClasses}
-      on:click={() => dispatch('completeBook')}
-      on:keyup={activateOnKeyup}
-    >
-      <Fa icon={faFlag} />
-    </div>
-    {#if $customReadingPointEnabled$ || $viewMode$ === ViewMode.Paginated}
-      <div class="flex">
-        <Popover
-          placement="bottom"
-          fallbackPlacements={['bottom-end', 'bottom-start']}
-          yOffset={0}
-          bind:this={customReadingPointMenuElm}
-        >
-          <div slot="icon" aria-label={$t('reader.customReadingPointMenu')} title={$t('reader.customReadingPointMenu')} class={baseIconClasses}>
-            <Fa icon={faCrosshairs} />
-          </div>
-          <div class="menu-list w-40 md:w-32" slot="content">
-            {#each customReadingPointMenuItems as actionItem (actionItem.action)}
-              <div
-                tabindex="0"
-                role="button"
-                class="menu-item"
-                on:click={() => dispatchCustomReadingPointAction(actionItem.action)}
-                on:keyup={activateOnKeyup}
-              >
-                {$t(actionItem.labelKey)}
-              </div>
-            {/each}
-          </div>
-        </Popover>
-      </div>
-    {/if}
     {#if showFullscreenButton}
       <div
         tabindex="0"
@@ -294,20 +301,12 @@
       disableRouteNavigation
       items={menuItems}
       mergeTo={mergeEntries.MORE}
-      on:action={({ detail }) => {
-        if (detail === mergeEntries.STATISTICS.label) {
-          dispatch('statisticsClick');
-        } else if (detail === mergeEntries.JUMP_TO_POSITION.label) {
-          dispatch('jumpClick');
-        } else if (detail === mergeEntries.DOMAIN_HINT.label) {
-          dispatch('domainHintClick');
-        }
-      }}
+      on:action={({ detail }) => dispatchOverflow(detail)}
     />
     <div
       tabindex="0"
       role="button"
-      aria-label={$t('menu.settings.title')} title={$t('menu.settings.title')}
+      aria-label={$t('reader.readingSettings')} title={$t('reader.readingSettings')}
       class={baseIconClasses}
       on:click={() => dispatch('settingsClick')}
       on:keyup={activateOnKeyup}
