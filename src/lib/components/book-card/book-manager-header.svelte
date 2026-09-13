@@ -2,14 +2,6 @@
   import { browser } from '$app/environment';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
-  import { isTauri } from '$lib/data/env';
-  import {
-    checkForUpdate,
-    type UpdateInfo
-  } from '$lib/functions/updater/check-for-update';
-  import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
-  import MessageDialog from '$lib/components/message-dialog.svelte';
-  import { dialogManager } from '$lib/data/dialog-manager';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
   import Popover from '$lib/components/popover/popover.svelte';
   import {
@@ -39,7 +31,6 @@
     return BOOK_FORMAT_LABELS[fmt];
   }
   import { t, tImmediate } from '$lib/i18n';
-  import LocalePicker from '$lib/components/locale-picker/locale-picker.svelte';
 
   const BOOK_FORMAT_KEYS = Object.keys(BOOK_FORMAT_LABELS) as BookFormat[];
 
@@ -61,10 +52,9 @@
     faArrowDownShortWide,
     faArrowDownWideShort,
     faCircleXmark,
-    faFilter,
     faSortDown,
+    faSliders,
     faSortUp,
-    faTableCellsLarge,
     faTimes
   } from '@fortawesome/free-solid-svg-icons';
   import { createEventDispatcher } from 'svelte';
@@ -106,7 +96,6 @@
     easing: quintOut
   };
 
-  const importMenuItems = [mergeEntries.FILE_IMPORT];
 
   let fileImportElm: HTMLElement;
   let folderImportElm: HTMLElement;
@@ -119,13 +108,15 @@
   $: if (browser) {
     isOldUrl = isOnOldUrl(window);
     showLoadCount = new URLSearchParams(window.location.search).has('count');
-
-    importMenuItems.push(
-      ...($isMobile$
-        ? [mergeEntries.BACKUP_IMPORT]
-        : [mergeEntries.FOLDER_IMPORT, mergeEntries.BACKUP_IMPORT])
-    );
   }
+
+  // Declared, not pushed: this used to append to a shared array from inside a
+  // reactive block, so every re-run added the same entries again.
+  $: importMenuItems = [
+    mergeEntries.FILE_IMPORT,
+    ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
+    mergeEntries.BACKUP_IMPORT
+  ];
 
   $: sortMenuItems = [
     ...($storageSource$ === StorageKey.BROWSER
@@ -138,34 +129,6 @@
     { property: 'progress', labelKey: 'manager.sort.progress' },
     { property: 'lastBookmarkModified', labelKey: 'manager.sort.lastBookmark' }
   ];
-
-  async function manualCheckUpdate() {
-    let update: UpdateInfo | null = null;
-    try {
-      update = await checkForUpdate();
-    } catch (err: any) {
-      dialogManager.dialogs$.next([
-        {
-          component: MessageDialog,
-          props: { title: tImmediate('update.checkFailed'), message: err?.message ?? String(err) }
-        }
-      ]);
-      return;
-    }
-    if (update) {
-      dialogManager.dialogs$.next([{ component: UpdateDialog, props: { update } }]);
-    } else {
-      dialogManager.dialogs$.next([
-        {
-          component: MessageDialog,
-          props: {
-            title: tImmediate('update.upToDate.title'),
-            message: tImmediate('update.upToDate.body')
-          }
-        }
-      ]);
-    }
-  }
 
   function triggerInput(event: CustomEvent<string>) {
     switch (event.detail) {
@@ -403,8 +366,13 @@
               fallbackPlacements={['bottom-end', 'bottom-start']}
               yOffset={0}
             >
-              <div slot="icon" class={baseIconClasses} title={$t('manager.filter')}>
-                <Fa icon={faFilter} />
+              <!--
+                Filters and cover size in one 「显示」 panel: both are "how the
+                shelf looks", and cover size alone held a permanent icon for a
+                slider set once and forgotten.
+              -->
+              <div slot="icon" class={baseIconClasses} title={$t('manager.display')}>
+                <Fa icon={faSliders} />
                 {#if $libraryFilter$.formats.length || $libraryFilter$.completion !== 'all'}
                   <span class="filter-badge"></span>
                 {/if}
@@ -445,23 +413,8 @@
                     on:click={() => ($libraryFilter$ = { formats: [], completion: 'all' })}
                   >{$t('manager.filter.clearAll')}</button>
                 {/if}
-              </div>
-            </Popover>
-          </div>
-          <div
-            class="relative transform-gpu"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}
-          >
-            <Popover
-              placement="bottom"
-              fallbackPlacements={['bottom-end', 'bottom-start']}
-              yOffset={0}
-            >
-              <div slot="icon" class={baseIconClasses} title={$t('manager.cover.size')}>
-                <Fa icon={faTableCellsLarge} />
-              </div>
-              <div class="menu-panel w-56" slot="content">
+                <div class="my-3 h-px bg-current/20"></div>
+                <div class="menu-label">{$t('manager.cover.size')}</div>
                 <div class="menu-label mb-1">
                   {$t('manager.cover.minWidth', { n: $bookCoverMinWidth$ })}
                 </div>
@@ -494,13 +447,8 @@
               </div>
             </Popover>
           </div>
-          <div
-            class="relative transform-gpu"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}
-          >
-            <LocalePicker />
-          </div>
+          <!-- 界面语言 lives in 设置 → 外观, which already had it; the bar's
+               copy was a duplicate for a setting changed about once. -->
         {/if}
       </div>
 
@@ -511,9 +459,12 @@
             in:scale={inAnimationParams}
             out:scale={outAnimationParams}
           >
+            <!-- One 导入 dropdown: three near-identical file icons sat
+                 flush against the navigation icons. Drag-and-drop still imports. -->
             <MergedHeaderIcon
+              alwaysCollapse
               items={importMenuItems}
-              mergeTo={mergeEntries.FILE_IMPORT}
+              mergeTo={mergeEntries.IMPORT}
               on:action={triggerInput}
             />
           </div>
@@ -560,16 +511,12 @@
                       mergeEntries.STATISTICS,
                       mergeEntries.NOTEBOOK,
                       mergeEntries.TRANSLATE,
-                      mergeEntries.SETTINGS,
-                      mergeEntries.CHANGELOG
-                    ]),
-                ...(isTauri() ? [mergeEntries.CHECK_UPDATE] : [])
+                      mergeEntries.SETTINGS
+                    ])
               ]}
               on:action={({ detail }) => {
                 if (detail === mergeEntries.DOMAIN_HINT.label) {
                   dispatch('domainHintClick');
-                } else if (detail === mergeEntries.CHECK_UPDATE.label) {
-                  manualCheckUpdate();
                 }
               }}
             />

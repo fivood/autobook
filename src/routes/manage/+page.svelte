@@ -111,6 +111,7 @@
   import Fa from 'svelte-fa';
   import { fly } from 'svelte/transition';
   import { clickOutside } from '$lib/functions/use-click-outside';
+  import { keepInViewport } from '$lib/functions/use-keep-in-viewport';
   import { activateOnKeyup } from '$lib/functions/utils';
 
   const booksAreLoading$ = database.listLoading$.pipe(map((isLoading) => isLoading));
@@ -582,6 +583,8 @@
    * worst possible surprise next to 删除.
    */
   let contextMenu: { x: number; y: number } | null = null;
+  /** 加入分类 expanded in the right-click menu. */
+  let contextMenuFoldersOpen = false;
 
   function openContextMenu(id: BookCardId, x: number, y: number) {
     if (!selectedBookIds.has(id)) {
@@ -589,11 +592,9 @@
       selectedBookIds = new Set([id]);
       selectionAnchorId = id;
     }
-    // Keep the menu inside the window; 12rem wide, roughly 13rem tall.
-    contextMenu = {
-      x: Math.min(x, window.innerWidth - 200),
-      y: Math.min(y, window.innerHeight - 230)
-    };
+    contextMenuFoldersOpen = false;
+    // Kept inside the window by use:keepInViewport, from the menu's real size.
+    contextMenu = { x, y };
   }
 
   function runFromContextMenu(action: () => void) {
@@ -1561,6 +1562,7 @@
       class="menu-surface menu-list context-menu"
       style="left:{contextMenu.x}px;top:{contextMenu.y}px;"
       use:clickOutside={() => (contextMenu = null)}
+      use:keepInViewport
     >
       {#if selectedBookIds.size === 1}
         <div
@@ -1571,15 +1573,57 @@
           on:keyup={activateOnKeyup}
         >{$t('manager.context.open')}</div>
       {/if}
-      {#each $folders$ as folder (folder.id)}
+      <!--
+        Categories behind one expandable row rather than a row each: the menu
+        grew by one line per category. The rest mirrors the selection bar,
+        so right-click and multi-select offer the same actions.
+      -->
+      {#if $folders$.length}
         <div
           tabindex="0"
           role="button"
-          class="menu-item"
-          on:click={() => runFromContextMenu(() => addSelectedToFolder(folder.id))}
+          class="menu-item context-menu-submenu"
+          aria-expanded={contextMenuFoldersOpen}
+          on:click={() => (contextMenuFoldersOpen = !contextMenuFoldersOpen)}
           on:keyup={activateOnKeyup}
-        >+ {folder.name}</div>
-      {/each}
+        >
+          <span>{$t('manager.context.addToFolder')}</span>
+          <span aria-hidden="true">{contextMenuFoldersOpen ? '▾' : '▸'}</span>
+        </div>
+        {#if contextMenuFoldersOpen}
+          {#each $folders$ as folder (folder.id)}
+            <div
+              tabindex="0"
+              role="button"
+              class="menu-item context-menu-nested"
+              on:click={() => runFromContextMenu(() => addSelectedToFolder(folder.id))}
+              on:keyup={activateOnKeyup}
+            >{folder.name}</div>
+          {/each}
+        {/if}
+      {/if}
+      <div
+        tabindex="0"
+        role="button"
+        class="menu-item"
+        on:click={() => runFromContextMenu(onReplicateData)}
+        on:keyup={activateOnKeyup}
+      >{$t('manager.exportMenu')}</div>
+      <!-- Not storage-gated either; see the selection bar above. -->
+      <div
+        tabindex="0"
+        role="button"
+        class="menu-item"
+        on:click={() => runFromContextMenu(selectionToStatistics)}
+        on:keyup={activateOnKeyup}
+      >{$t('manager.action.stats')}</div>
+      <div
+        tabindex="0"
+        role="button"
+        class="menu-item"
+        on:click={() => runFromContextMenu(onDeleteStatistics)}
+        on:keyup={activateOnKeyup}
+      >{$t('manager.action.deleteStats')}</div>
       <div
         tabindex="0"
         role="button"
@@ -1591,14 +1635,6 @@
           ? $t('manager.action.unarchive')
           : $t('manager.action.archive')}
       </div>
-      <!-- Not storage-gated either; see the selection bar above. -->
-      <div
-        tabindex="0"
-        role="button"
-        class="menu-item"
-        on:click={() => runFromContextMenu(selectionToStatistics)}
-        on:keyup={activateOnKeyup}
-      >{$t('manager.action.stats')}</div>
       <div
         tabindex="0"
         role="button"
@@ -1775,6 +1811,16 @@
     position: fixed;
     z-index: 50;
     width: 12rem;
+  }
+
+  .context-menu-submenu {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .context-menu-nested {
+    padding-left: 1.75rem;
   }
 
   /* `.menu-item:hover` inverts to the menu foreground, which would paint the

@@ -40,7 +40,6 @@
     mergeEntries.NOTEBOOK,
     mergeEntries.TRANSLATE,
     mergeEntries.SETTINGS,
-    mergeEntries.CHANGELOG,
     mergeEntries.MANAGE
   ];
 </script>

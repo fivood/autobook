@@ -15,7 +15,6 @@ import {
   faBug,
   faChartLine,
   faClockRotateLeft,
-  faCloudArrowDown,
   faCog,
   faEllipsisVertical,
   faFileArrowUp,
@@ -136,13 +135,14 @@ export const mergeEntries = {
     title: '从备份导入',
     titleKey: 'menu.backupImport.title'
   },
-  CHECK_UPDATE: {
+  /** Trigger for the library's import dropdown; dispatches nothing itself. */
+  IMPORT: {
     routeId: '',
-    label: '检查更新',
-    labelKey: 'menu.checkUpdate.label',
-    icon: faCloudArrowDown,
-    title: '检查桌面端更新',
-    titleKey: 'menu.checkUpdate.title'
+    label: '导入',
+    labelKey: 'menu.import.label',
+    icon: faFileArrowUp,
+    title: '导入',
+    titleKey: 'menu.import.label'
   },
   /** Catch-all trigger for a collapsed icon group — the reader's overflow
    * menu, and the library / page headers below `lg`. Only ever used as a

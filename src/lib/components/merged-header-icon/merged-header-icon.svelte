@@ -46,11 +46,12 @@
   function handleActionMenuItem(target: string) {
     dispatch('action', target);
 
-    if (
-      !(target === mergeEntries.FILE_IMPORT.label || target === mergeEntries.FOLDER_IMPORT.label)
-    ) {
-      menuElm.toggleOpen();
-    }
+    // Closes for every entry. File and folder import used to be exempt — a
+    // carry-over from the upstream web app with no recorded reason; the file
+    // inputs live outside the popover, and backup import always closed and
+    // worked. With imports now one dropdown, the exemption left the menu
+    // hanging open behind the file picker.
+    menuElm.toggleOpen();
 
     if (!disableRouteNavigation) {
       const action = actionItems.find((item) => item.label === target);

@@ -37,6 +37,7 @@
   import SettingsModels from '$lib/components/settings/settings-models.svelte';
   import SettingsDataPaths from '$lib/components/settings/settings-data-paths.svelte';
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
+  import SettingsUpdates from '$lib/components/settings/settings-updates.svelte';
   import { inputClasses } from '$lib/css-classes';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
@@ -715,6 +716,7 @@
         <Ripple />
       </button>
     </SettingsItemGroup>
+    <SettingsUpdates />
   {:else}
     <SettingsSectionHeader title={$t('settings.section.statsBasics')} hint={$t('settings.section.statsBasicsHint')} />
     <SettingsItemGroup
