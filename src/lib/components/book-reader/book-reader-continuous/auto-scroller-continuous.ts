@@ -74,6 +74,10 @@ export class AutoScrollerContinuous implements AutoScroller {
   /** Per-character spans of `wrappedBlock`, in document order. */
   private wrappedChars: HTMLElement[] = [];
 
+  /** The text nodes those spans stand in for, kept to be put back verbatim.
+   *  See `unwrapBlock`. */
+  private wrappedOriginals: { node: Text; spans: HTMLElement[] }[] = [];
+
   private prepared = false;
 
   private contentEl: HTMLElement | undefined;
@@ -81,6 +85,28 @@ export class AutoScrollerContinuous implements AutoScroller {
   /** Where the voice stopped, waiting for the next start. See
    *  `revealFromPositionLater`. */
   private pendingReveal: { node: Node; offset: number } | null = null;
+
+  /** Set between asking the host for more content and that content arriving.
+   *  While it is set the old, fully revealed section is still in the DOM, and
+   *  a tick that looked at it would ask for yet another section. */
+  private awaitingContent = false;
+
+  /** The next content to arrive is one this class walked into itself, so it
+   *  starts at its first character. See `markContentChanged`. */
+  private startAtTop = false;
+
+  /**
+   * The frontier reached the end of the content. Return true if the host has
+   * started loading more (the typewriter then waits for `markContentChanged`
+   * and carries on), false if this really is the end.
+   *
+   * Continuous mode leaves it unset: its content is the whole book. Paginated
+   * mode renders one section at a time, so "the end" is usually just the end
+   * of a chapter — without this the typewriter switched itself off there, and
+   * pressing play again reached the same end on its first tick and switched
+   * straight back off, which looked like play doing nothing at all.
+   */
+  onContentEnd?: () => boolean;
 
   /**
    * Paginated mode lays the whole section out in columns and shows one page at
@@ -115,6 +141,8 @@ export class AutoScrollerContinuous implements AutoScroller {
         tap((v) => {
           this.wasAutoScrollerEnabled$.next(v);
           setPlaybackMode(v ? 'typewriter' : 'manual');
+          // A section that never arrives must not leave the next start frozen.
+          if (!v) this.awaitingContent = false;
         })
       ),
       this.multiplierSubject
@@ -154,6 +182,12 @@ export class AutoScrollerContinuous implements AutoScroller {
   /** Force a re-walk on next start. Call this when book HTML is re-rendered. */
   markContentChanged() {
     this.teardown();
+    // A section the typewriter advanced into by itself has nothing on it the
+    // reader already saw. Starting at its first character is also the only
+    // start that doesn't depend on measuring the layout, which at this moment
+    // races the page manager's scroll back to the section's first page.
+    this.startAtTop = this.awaitingContent;
+    this.awaitingContent = false;
     this.prepared = false;
     this.blocks = [];
     this.totalChars = 0;
@@ -169,7 +203,13 @@ export class AutoScrollerContinuous implements AutoScroller {
       return;
     }
     this.indexBlocks();
-    this.revealAlreadyScrolled();
+    if (this.startAtTop) {
+      this.revealedIndex = 0;
+      this.applyReveal();
+    } else {
+      this.revealAlreadyScrolled();
+    }
+    this.startAtTop = false;
     this.prepared = true;
   }
 
@@ -358,40 +398,58 @@ export class AutoScrollerContinuous implements AutoScroller {
     }
 
     const chars: HTMLElement[] = [];
+    const originals: { node: Text; spans: HTMLElement[] }[] = [];
     for (const node of textNodes) {
       const text = node.textContent || '';
       if (!text) continue;
       const frag = this.doc.createDocumentFragment();
+      const spans: HTMLElement[] = [];
       for (const ch of text) {
         const span = this.doc.createElement('span');
         span.className = `${CHAR_CLASS} ${HIDDEN_CLASS}`;
         span.textContent = ch;
-        chars.push(span);
+        spans.push(span);
         frag.appendChild(span);
       }
+      chars.push(...spans);
+      originals.push({ node, spans });
       node.parentNode?.replaceChild(frag, node);
     }
 
     this.wrappedBlock = index;
     this.wrappedChars = chars;
+    this.wrappedOriginals = originals;
   }
 
-  /** Collapse the per-character spans back into plain text nodes. */
+  /**
+   * Swap the per-character spans back for the text nodes they replaced.
+   *
+   * The *same* node objects, not new ones with the same text. The reader's
+   * position calculator takes references to a section's text nodes when it
+   * loads and measures them with `Range.selectNode`, which throws on a node
+   * that isn't in the tree. Rebuilding the text left every paragraph the
+   * typewriter had already passed permanently detached from that calculator,
+   * so its next re-measure threw — inside a requestAnimationFrame, where in
+   * paginated mode the same callback is what takes down the section-loading
+   * overlay. Carrying on into the next chapter hit that about three times in
+   * four and left the book behind a spinner.
+   *
+   * Restoring the originals also leaves the tree exactly as it started, so
+   * there is no fragmentation to `normalize()` away (which would itself merge
+   * away nodes the calculator is holding).
+   */
   private unwrapBlock() {
     if (this.wrappedBlock < 0) return;
-    const block = this.blocks[this.wrappedBlock];
+    const originals = this.wrappedOriginals;
     this.wrappedBlock = -1;
     this.wrappedChars = [];
-    if (!block) return;
+    this.wrappedOriginals = [];
 
-    const spans = Array.from(block.el.querySelectorAll<HTMLElement>(`.${CHAR_CLASS}`));
-    for (const span of spans) {
-      span.replaceWith(this.doc.createTextNode(span.textContent || ''));
+    for (const { node, spans } of originals) {
+      const first = spans[0];
+      first?.parentNode?.insertBefore(node, first);
+      for (const span of spans) span.remove();
     }
-    // Merge the resulting run of single-char text nodes back into one, so
-    // repeated wrap/unwrap cycles don't leave the tree progressively more
-    // fragmented than it started.
-    block.el.normalize();
   }
 
   /**
@@ -480,7 +538,20 @@ export class AutoScrollerContinuous implements AutoScroller {
   }
 
   private revealNext() {
+    if (this.awaitingContent) return;
+
+    // Content was swapped under a running typewriter (a section change). The
+    // start-up path only prepares on toggle, so pick the new content up here.
+    if (!this.prepared) {
+      this.ensurePrepared();
+      if (!this.prepared) return;
+    }
+
     if (this.revealedIndex >= this.totalChars) {
+      if (this.onContentEnd?.()) {
+        this.awaitingContent = true;
+        return;
+      }
       this.off();
       return;
     }

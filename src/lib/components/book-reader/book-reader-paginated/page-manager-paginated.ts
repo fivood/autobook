@@ -188,13 +188,6 @@ export class PageManagerPaginated implements PageManager {
 
     const step = viewportSize + this.pageGap;
     const pageIndex = Math.max(0, Math.floor(targetScrollPos / step));
-    // A horizontal flipPage may have left a CSS `transform: translateX(...)`
-    // on the content element — scrollTo alone wouldn't undo that, so the
-    // page would scroll behind a still-translated layer.
-    if (this.translateX) {
-      this.contentEl.style.removeProperty('transform');
-      this.translateX = 0;
-    }
     this.scrollTo(pageIndex * step, false);
   }
 
@@ -235,6 +228,18 @@ export class PageManagerPaginated implements PageManager {
   }
 
   private scrollToPos(pos: number, isUser: boolean) {
+    // A page is reached either by scrolling or, for a last page that doesn't
+    // fill a whole spread, by translating the content — never both. Scrolling
+    // without dropping a translate left over from that last page shows the
+    // destination shifted by it: advancing from a chapter's short final page
+    // (the voice's auto-flip, and the typewriter carrying on into the next
+    // section) landed the new section two spreads in, on a page nothing was
+    // reading. Every scroll goes through here, so this is the one place that
+    // can't be bypassed.
+    if (this.translateX) {
+      this.contentEl.style.removeProperty('transform');
+      this.translateX = 0;
+    }
     this.virtualScrollPos$.next(pos);
     this.scrollEl.scrollTo({ [this.verticalMode ? 'top' : 'left']: pos });
     this.pageChange$.next(isUser);

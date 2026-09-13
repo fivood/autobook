@@ -72,6 +72,13 @@ export function getNodeBoundingRect(document: Document, node: Node): DOMRect {
   if (node.nodeType === Node.ELEMENT_NODE) {
     return (node as Element).getBoundingClientRect();
   }
+  // The paragraph the typewriter is typing right now has had its text nodes
+  // swapped for per-character spans, so a node held from before is out of the
+  // tree and `selectNode` would throw. An empty rect is an answer the caller
+  // already handles (a zero-size paragraph takes the previous one's position),
+  // and it is off by at most that one paragraph until the typewriter moves on
+  // and puts the node back.
+  if (!node.parentNode) return new DOMRect();
   const range = document.createRange();
   range.selectNode(node);
   return range.getBoundingClientRect();

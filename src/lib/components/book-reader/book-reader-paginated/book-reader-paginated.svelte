@@ -238,6 +238,9 @@
         ttsIndexToCalculatorIndex(contentEl, ttsIndex) + sectionStartCharCount
       );
     };
+    // The typewriter's content is one section here, not the book — the same
+    // advance the voice's auto-flip uses carries it into the next one.
+    autoScrollerConcrete.onContentEnd = () => concretePageManager?.advanceToNextSection() ?? false;
     autoScroller = autoScrollerConcrete;
 
     autoReaderConcrete.wasReaderEnabled$.subscribe((enabled) => {
