@@ -1504,26 +1504,33 @@
         <Fa icon={faCloudArrowUp} />
         {$t('manager.exportMenu')}
       </button>
-      {#if $storageSource$ === StorageKey.BROWSER}
-        <button
-          type="button"
-          class="selection-action"
-          title={$t('manager.viewStatistics')}
-          on:click={selectionToStatistics}
-        >
-          <Fa icon={faChartLine} />
-          {$t('manager.action.stats')}
-        </button>
-        <button
-          type="button"
-          class="selection-action"
-          title={$t('manager.deleteStatistics')}
-          on:click={onDeleteStatistics}
-        >
-          <Fa icon={faCalendarXmark} />
-          {$t('manager.action.deleteStats')}
-        </button>
-      {/if}
+      <!--
+        Not gated on the storage source. Both actions work on reading records by
+        title, and reading records live in the local database whichever source
+        holds the books. The browser-only condition came across from the
+        upstream web app, where the library sat in IndexedDB by default; on the
+        desktop app the default is tauri-fs, so these two buttons (and the same
+        entry in the right-click menu) were never shown to anyone. The reader's
+        own 统计 entry filters by title the same way and never had the gate.
+      -->
+      <button
+        type="button"
+        class="selection-action"
+        title={$t('manager.viewStatistics')}
+        on:click={selectionToStatistics}
+      >
+        <Fa icon={faChartLine} />
+        {$t('manager.action.stats')}
+      </button>
+      <button
+        type="button"
+        class="selection-action"
+        title={$t('manager.deleteStatistics')}
+        on:click={onDeleteStatistics}
+      >
+        <Fa icon={faCalendarXmark} />
+        {$t('manager.action.deleteStats')}
+      </button>
       <button
         type="button"
         class="selection-action"
@@ -1584,15 +1591,14 @@
           ? $t('manager.action.unarchive')
           : $t('manager.action.archive')}
       </div>
-      {#if $storageSource$ === StorageKey.BROWSER}
-        <div
-          tabindex="0"
-          role="button"
-          class="menu-item"
-          on:click={() => runFromContextMenu(selectionToStatistics)}
-          on:keyup={activateOnKeyup}
-        >{$t('manager.action.stats')}</div>
-      {/if}
+      <!-- Not storage-gated either; see the selection bar above. -->
+      <div
+        tabindex="0"
+        role="button"
+        class="menu-item"
+        on:click={() => runFromContextMenu(selectionToStatistics)}
+        on:keyup={activateOnKeyup}
+      >{$t('manager.action.stats')}</div>
       <div
         tabindex="0"
         role="button"

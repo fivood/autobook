@@ -30,6 +30,8 @@ export default {
   'manager.storage.browser': '浏览器',
   'manager.storage.tauriFs': '本地文件',
   'manager.sort.order': '排序方式',
+  'manager.sort.asc': '按{label}升序',
+  'manager.sort.desc': '按{label}降序',
   'manager.sort.addedTime': '添加时间',
   'manager.sort.title': '书名',
   'manager.sort.characters': '字数',

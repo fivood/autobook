@@ -29,6 +29,8 @@ export default {
   'manager.storage.browser': 'ブラウザ',
   'manager.storage.tauriFs': 'ローカルファイル',
   'manager.sort.order': '並び替え',
+  'manager.sort.asc': '{label}の昇順',
+  'manager.sort.desc': '{label}の降順',
   'manager.sort.addedTime': '追加順',
   'manager.sort.title': 'タイトル',
   'manager.sort.characters': '文字数',

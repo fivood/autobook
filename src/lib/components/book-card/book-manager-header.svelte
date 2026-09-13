@@ -350,16 +350,23 @@
                     class="menu-sort-item cursor-default"
                     class:menu-sort-item-active={isCurrentSort}
                   >
+                    <!--
+                      These two used a no-op keyup, so the popover opened from
+                      the keyboard but nothing inside it could be picked — and
+                      as icon-only buttons they announced with no name at all.
+                    -->
                     <div
                       tabindex="0"
                       role="button"
                       class="menu-icon-button self-center justify-self-start"
                       class:text-danger={isCurrentSortAsc}
                       class:hover-danger={!isCurrentSortAsc}
+                      title={$t('manager.sort.asc', { label: $t(sortMenuItem.labelKey) })}
+                      aria-label={$t('manager.sort.asc', { label: $t(sortMenuItem.labelKey) })}
                       on:click={() => {
                         changeSortOptions(sortMenuItem.property, SortDirection.ASC);
                       }}
-                      on:keyup={() => {}}
+                      on:keyup={activateOnKeyup}
                     >
                       <Fa icon={faSortUp} class="px-4" />
                     </div>
@@ -372,10 +379,12 @@
                       class="menu-icon-button justify-self-end hover-danger"
                       class:text-danger={isCurrentSort && !isCurrentSortAsc}
                       class:hover-danger={!isCurrentSort || isCurrentSortAsc}
+                      title={$t('manager.sort.desc', { label: $t(sortMenuItem.labelKey) })}
+                      aria-label={$t('manager.sort.desc', { label: $t(sortMenuItem.labelKey) })}
                       on:click={() => {
                         changeSortOptions(sortMenuItem.property, SortDirection.DESC);
                       }}
-                      on:keyup={() => {}}
+                      on:keyup={activateOnKeyup}
                     >
                       <Fa icon={faSortDown} class="mt-1 px-4" />
                     </div>

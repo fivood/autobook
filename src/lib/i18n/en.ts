@@ -24,6 +24,8 @@ export default {
   'manager.storage.browser': 'Browser',
   'manager.storage.tauriFs': 'Local files',
   'manager.sort.order': 'Sort by',
+  'manager.sort.asc': '{label}, ascending',
+  'manager.sort.desc': '{label}, descending',
   'manager.sort.addedTime': 'Added',
   'manager.sort.title': 'Title',
   'manager.sort.characters': 'Characters',
