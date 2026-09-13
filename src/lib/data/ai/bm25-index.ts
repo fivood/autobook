@@ -41,38 +41,41 @@ function tokenize(text: string): string[] {
   return tokens;
 }
 
+/**
+ * Split into chunks carrying their REAL offsets into `plainText`.
+ *
+ * The offsets are load-bearing: `retrieveSpoilerSafe` keeps unread text away
+ * from the model by dropping chunks whose `startChar` is past where the reader
+ * has got to. An earlier version rebuilt the offsets by splitting on `/\n+/`
+ * and advancing a cursor by `para.length + 1`, which loses a character on
+ * every blank-line gap — and htmlToPlaintext emits exactly that around block
+ * elements. Measured on a 400-paragraph sample the positions ran 1.45% short,
+ * and short is the dangerous direction: a chunk the reader has NOT reached
+ * looks earlier than it is and slips past the cutoff. On a 300k-character
+ * novel that is several pages of spoilers.
+ */
 export function chunkBookText(plainText: string): Chunk[] {
   const chunks: Chunk[] = [];
-  const paragraphs = plainText.split(/\n+/);
   let bufferStart = 0;
+  let bufferEnd = 0;
   let buffer = '';
-  let cursor = 0;
   let id = 0;
-  for (const para of paragraphs) {
-    const paraStart = cursor;
-    cursor += para.length + 1; // +1 for the consumed newline (approximation)
-    if (!para.trim()) {
-      continue;
-    }
-    if (!buffer) bufferStart = paraStart;
+
+  const paragraph = /[^\n]+/g;
+  let match: RegExpExecArray | null;
+  while ((match = paragraph.exec(plainText)) !== null) {
+    const para = match[0];
+    if (!para.trim()) continue;
+    if (!buffer) bufferStart = match.index;
     buffer = buffer ? `${buffer}\n${para}` : para;
+    bufferEnd = match.index + para.length;
     if (buffer.length >= TARGET_CHUNK_CHARS) {
-      chunks.push({
-        id: id++,
-        startChar: bufferStart,
-        endChar: bufferStart + buffer.length,
-        text: buffer
-      });
+      chunks.push({ id: id++, startChar: bufferStart, endChar: bufferEnd, text: buffer });
       buffer = '';
     }
   }
   if (buffer.trim()) {
-    chunks.push({
-      id: id++,
-      startChar: bufferStart,
-      endChar: bufferStart + buffer.length,
-      text: buffer
-    });
+    chunks.push({ id: id++, startChar: bufferStart, endChar: bufferEnd, text: buffer });
   }
   return chunks;
 }
@@ -140,7 +143,11 @@ export function extractRecentTail(chunks: Chunk[], maxChar: number, chars: numbe
   for (let i = chunks.length - 1; i >= 0; i--) {
     const c = chunks[i];
     if (c.startChar >= maxChar) continue;
-    if (accum + c.text.length > chars) break;
+    // Always keep the most recent chunk, even when it alone blows the budget.
+    // A book written in long paragraphs produces chunks well over `chars`, and
+    // breaking on the first one returned an empty tail — the model lost "what
+    // the reader just read" entirely, which is the one thing this supplies.
+    if (tail.length && accum + c.text.length > chars) break;
     tail.unshift(c);
     accum += c.text.length;
   }

@@ -2,6 +2,7 @@
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { buttonClasses } from '$lib/css-classes';
+  import { t } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 
   export let dialogHeader: string;
@@ -27,11 +28,11 @@
   </svelte:fragment>
   <div class="flex grow justify-between" slot="footer">
     <button class={buttonClasses} class:invisible={!showCancel} on:click={() => closeDialog(true)}>
-      取消
+      {$t('dialog.cancel')}
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog()}>
-      确认
+      {$t('dialog.confirm')}
       <Ripple />
     </button>
   </div>

@@ -119,6 +119,14 @@
         ({ dateString: $lastStatisticsEndDate$ } = advanceDateDays(referenceDate, -1));
         break;
       }
+      case StatisticsRangeTemplate.ALL: {
+        // 「全部」= 从 2000-01-01 到今天。选一个显著早于任何真实数据的起点，
+        // 让过滤器实际上不筛掉任何东西。用户 IDB 里有更早的数据可以走
+        // 自定义范围。
+        $lastStatisticsStartDate$ = '2000-01-01';
+        $lastStatisticsEndDate$ = getDateString(referenceDate);
+        break;
+      }
       default:
         break;
     }
@@ -133,7 +141,8 @@
 
 {#if showStatisticsSettings}
   <div
-    class="writing-horizontal-tb fixed top-0 right-0 z-[60] flex h-full w-full max-w-xl flex-col justify-between bg-gray-700 text-white"
+    class="writing-horizontal-tb fixed top-0 right-0 z-[60] flex h-full w-full max-w-xl flex-col justify-between border-l border-current/10"
+    style="color:var(--font-color);background:var(--background-color);"
     in:fly|local={{ x: 100, duration: 100, easing: quintInOut }}
     use:clickOutside={() => {
       if (!$statisticsActionInProgress$) {

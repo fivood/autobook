@@ -6,6 +6,7 @@
   import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons';
   import { pagePath } from '$lib/data/env';
   import { ocrJob$, clearOcrJob } from '$lib/functions/file-loaders/pdf/ocr-job-manager';
+  import { t } from '$lib/i18n';
 
   // Reading searchParams during prerender is not allowed, and ocrJob$ is
   // always null on the server (module state hasn't been touched yet). Gate
@@ -29,21 +30,21 @@
 </script>
 
 {#if visible && $ocrJob$}
-  <button type="button" class="mini" on:click={openBook} title="点击跳到对应书">
+  <button type="button" class="mini" on:click={openBook} title={$t('ocrMini.jumpToBook')}>
     <Fa icon={faMagnifyingGlass} />
     {#if $ocrJob$.status === 'running'}
       <span class="label">OCR · {$ocrJob$.bookTitle}</span>
       <span class="pct">{$ocrJob$.progress.page} / {$ocrJob$.progress.total || '?'}</span>
     {:else if $ocrJob$.status === 'finished'}
-      <span class="label">OCR 完成 · {$ocrJob$.bookTitle}</span>
-      <span class="pct done">应用</span>
+      <span class="label">{$t('ocrMini.finished', { title: $ocrJob$.bookTitle })}</span>
+      <span class="pct done">{$t('ocrMini.apply')}</span>
     {:else}
-      <span class="label">OCR 失败 · {$ocrJob$.bookTitle}</span>
+      <span class="label">{$t('ocrMini.failed', { title: $ocrJob$.bookTitle })}</span>
       <button
         type="button"
         class="x"
         on:click|stopPropagation={dismissFinished}
-        title="清除"
+        title={$t('ocrMini.clear')}
       >×</button>
     {/if}
   </button>

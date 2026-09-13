@@ -15,6 +15,7 @@ const nativeConsole: Record<LoggingLevel, Console['log']> = {
   [LoggingLevel.ERROR]: console.error,
   [LoggingLevel.WARN]: console.warn,
   [LoggingLevel.INFO]: console.info,
+  // eslint-disable-next-line no-console -- logger abstraction: DEBUG maps to console.debug
   [LoggingLevel.DEBUG]: console.debug
 };
 

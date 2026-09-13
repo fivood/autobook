@@ -41,10 +41,15 @@ export class BrowserStorageHandler extends BaseStorageHandler {
 
       try {
         const db = await database.db;
-        const data = await db.getAll('data');
+        // Iterate with a cursor rather than getAll('data') so a large library
+        // doesn't materialize every book's elementHtml + blobs at once. The
+        // card list only needs lightweight scalar fields, and a single book
+        // can carry tens of MB of HTML/images — getAll holds them all resident.
+        const tx = db.transaction('data');
+        let cursor = await tx.store.openCursor();
 
-        for (let index = 0, { length } = data; index < length; index += 1) {
-          const book = data[index];
+        while (cursor) {
+          const book = cursor.value;
 
           this.addBookCard(book.title, {
             id: book.id,
@@ -55,8 +60,11 @@ export class BrowserStorageHandler extends BaseStorageHandler {
             ),
             lastBookModified: book.lastBookModified || 0,
             lastBookOpen: book.lastBookOpen || 0,
-            isPlaceholder: !book.elementHtml
+            isPlaceholder: !book.elementHtml,
+            originalFormat: book.originalFormat
           });
+
+          cursor = await cursor.continue();
         }
 
         this.dataListFetched = true;
@@ -295,7 +303,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     );
   }
 
-  async getBook() {
+  async getBook(_onProgress?: (done: number, total: number) => void) {
     const book = this.currentContext.id
       ? await database.getData(this.currentContext.id)
       : await database.getDataByTitle(this.currentContext.title);
@@ -397,7 +405,8 @@ export class BrowserStorageHandler extends BaseStorageHandler {
         ),
         lastBookModified: storedBookData.lastBookModified || 0,
         lastBookOpen: storedBookData.lastBookOpen || 0,
-        isPlaceholder: !storedBookData.elementHtml
+        isPlaceholder: !storedBookData.elementHtml,
+        originalFormat: storedBookData.originalFormat
       });
     }
 
@@ -524,11 +533,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     BaseStorageHandler.reportProgress();
   }
 
-  async deleteBookData(
-    booksToDelete: string[],
-    cancelSignal: AbortSignal,
-    keepLocalStatistics: boolean
-  ) {
+  async deleteBookData(booksToDelete: string[], cancelSignal: AbortSignal) {
     const ids: number[] = [];
     const idToTitle = new Map<number, string>();
 
@@ -542,7 +547,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     }
 
     const { error, deleted } = await database
-      .deleteData(ids, idToTitle, cancelSignal, keepLocalStatistics)
+      .deleteData(ids, idToTitle, cancelSignal)
       .catch((catchedError) => ({ error: catchedError.message, deleted: [] }));
 
     for (let index = 0, { length } = deleted; index < length; index += 1) {

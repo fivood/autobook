@@ -5,51 +5,107 @@
   font-family: var(--font-family-serif, 'Noto Sans SC', 'Noto Serif JP', serif);
 }
 
-/* Markdown-specific styling */
-.book-content .md-section {
-  h1, h2, h3, h4, h5, h6 {
-    font-weight: 600;
-    margin: 1.5em 0 0.5em;
-    line-height: 1.3;
-  }
-  h1 { font-size: 1.8em; }
-  h2 { font-size: 1.5em; }
-  h3 { font-size: 1.25em; }
-  pre.md-code {
-    background: rgba(0, 0, 0, 0.55);
-    color: #eaeaea;
-    padding: 0.85em 1em;
-    border-radius: 4px;
-    overflow-x: auto;
-    font-size: 0.85em;
-    line-height: 1.5;
-    margin: 0.8em 0;
-  }
-  code:not([class*='language-']):not(.hljs) {
-    background: rgba(0, 0, 0, 0.08);
-    padding: 0.1em 0.35em;
-    border-radius: 3px;
-    font-size: 0.9em;
-  }
-  blockquote {
-    border-left: 3px solid currentColor;
-    padding-left: 1em;
-    margin: 0.8em 0;
-    opacity: 0.75;
-  }
-  table {
-    border-collapse: collapse;
-    margin: 0.8em 0;
-    th, td {
-      border: 1px solid currentColor;
-      padding: 0.35em 0.7em;
-    }
-  }
-  ul, ol { padding-left: 1.5em; }
-  hr { border: 0; border-top: 1px solid currentColor; opacity: 0.3; margin: 1.5em 0; }
-  .katex-display { overflow-x: auto; overflow-y: hidden; }
-  .math-error { color: #d05050; }
+// PDF / OCR page shell + transparent text overlay. These rules are global
+// (rather than embedded in each book's `styleSheet`) so they apply to
+// books imported before v1.11 too — older books don't have the rules
+// inside their per-book stylesheet, but their elementHtml DOES carry
+// pdf-page-shell / pdf-text-layer once OCR runs in v1.13+. Without the
+// global rules, the text layer would render as opaque black text (no
+// `color: transparent`) at source-pixel coordinates (no `scale()`), which
+// is exactly the chaos a user saw on a pre-1.11 import.
+:global(.pdf-page-shell) {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
 }
+:global(.pdf-page-shell > img.pdf-page-img) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+:global(.pdf-text-layer) {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  transform: scale(var(--pdf-scale-factor, 1));
+  pointer-events: none;
+  line-height: 1;
+  font-family: serif;
+  opacity: 1;
+}
+:global(.pdf-text-layer > span) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  transform-origin: 0 0;
+  pointer-events: auto;
+  cursor: text;
+  user-select: text;
+}
+:global(.pdf-text-layer > span::selection) {
+  background: rgba(0, 110, 255, 0.32);
+  color: transparent;
+}
+
+/* Markdown-specific styling. The rendered book HTML is inserted dynamically,
+ * so these descendants must remain global instead of receiving Svelte's
+ * component scope attribute. */
+:global(.book-content .md-section h1),
+:global(.book-content .md-section h2),
+:global(.book-content .md-section h3),
+:global(.book-content .md-section h4),
+:global(.book-content .md-section h5),
+:global(.book-content .md-section h6) {
+  font-weight: 600;
+  margin: 1.5em 0 0.5em;
+  line-height: 1.3;
+}
+:global(.book-content .md-section h1) { font-size: 1.8em; }
+:global(.book-content .md-section h2) { font-size: 1.5em; }
+:global(.book-content .md-section h3) { font-size: 1.25em; }
+:global(.book-content .md-section pre.md-code) {
+  background: rgba(0, 0, 0, 0.55);
+  color: #eaeaea;
+  padding: 0.85em 1em;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.5;
+  margin: 0.8em 0;
+}
+:global(.book-content .md-section code:not([class*='language-']):not(.hljs)) {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+:global(.book-content .md-section blockquote) {
+  border-left: 3px solid currentColor;
+  padding-left: 1em;
+  margin: 0.8em 0;
+  opacity: 0.75;
+}
+:global(.book-content .md-section table) {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+}
+:global(.book-content .md-section table th),
+:global(.book-content .md-section table td) {
+  border: 1px solid currentColor;
+  padding: 0.35em 0.7em;
+}
+:global(.book-content .md-section ul),
+:global(.book-content .md-section ol) { padding-left: 1.5em; }
+:global(.book-content .md-section hr) {
+  border: 0;
+  border-top: 1px solid currentColor;
+  opacity: 0.3;
+  margin: 1.5em 0;
+}
+:global(.book-content .md-section .katex-display) { overflow-x: auto; overflow-y: hidden; }
+:global(.book-content .md-section .math-error) { color: #d05050; }
 
 .book-content {
   :global(.ttu-book-html-wrapper.ttu-no-text),
@@ -86,6 +142,16 @@
   :global(.ttu-img-parent) {
     display: flex;
     justify-content: center;
+  }
+
+  // Undo Tailwind preflight's `img { display: block }` for images that are
+  // part of a line of text — the note markers some EPUBs use. Left as block
+  // they take a line to themselves and push the rest of the sentence down.
+  // Tagged in format-book-data-html.ts, where the surrounding markup is still
+  // available to tell a marker from an illustration.
+  :global(img.ttu-inline-img) {
+    display: inline;
+    vertical-align: baseline;
   }
 
   &:not(.ttu-apply-important) {
@@ -133,12 +199,29 @@
   &.ttu-apply-important {
     font-family: var(--font-family-serif, 'Noto Sans SC', 'Noto Serif JP', serif) !important;
 
-    :global(*) {
+    // Cover only text-bearing descendants. The previous universal `*` rule
+    // bled into <img> / <svg> / <picture> / <source>, which Chromium can
+    // hit edge cases on when EPUB inline styles contradict the
+    // !important font reset (manifests as images failing to render).
+    :global(*:not(img):not(svg):not(picture):not(source):not(video):not(canvas)) {
       font-family: inherit !important;
     }
 
+    // text-indent on <p> nudges any inline content (including images)
+    // to the right. EPUB illustrations are often wrapped in <p>; force
+    // the indent to 0 on paragraphs that ONLY hold an image so the
+    // image stays centered/aligned with its expected position.
     :global(p) {
       text-indent: var(--book-content-text-intendation, 0rem) !important;
+    }
+    // Image-only paragraphs: cancel text-indent so EPUB illustrations
+    // stay centered with their expected layout instead of being shifted
+    // by the user's per-paragraph indent.
+    :global(p:has(> img):not(:has(> :not(img)))) {
+      text-indent: 0 !important;
+    }
+    :global(p:has(> picture):not(:has(> :not(picture)))) {
+      text-indent: 0 !important;
     }
 
     &.ttu-apply-font-weight {
