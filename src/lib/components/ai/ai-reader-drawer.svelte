@@ -33,6 +33,10 @@
   export let elementHtml: string;
   export let exploredCharCount: number;
   export let bookCharCount: number;
+  /** A passage to start the question box with — the highlight toolbar's
+   *  「问 AI」. Applied when it changes, so it also reaches a drawer that is
+   *  already open; anything else the reader typed is theirs and left alone. */
+  export let initialInput = '';
 
   interface UiMessage {
     role: 'user' | 'assistant';
@@ -42,6 +46,11 @@
 
   let messages: UiMessage[] = [];
   let input = '';
+  let appliedInput = '';
+  $: if (initialInput && initialInput !== appliedInput) {
+    appliedInput = initialInput;
+    input = initialInput;
+  }
   let streaming = false;
   let abortCtrl: AbortController | undefined;
   let logEl: HTMLDivElement;

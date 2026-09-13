@@ -10,6 +10,8 @@
   export let visible = false;
   export let mode: 'create' | 'edit' = 'create';
   export let hasMemo = false;
+  /** Same condition as the reader header's AI button. */
+  export let aiAvailable = false;
 
   const dispatch = createEventDispatcher<{
     color: HighlightSlot;
@@ -17,6 +19,8 @@
     editMemo: void;
     lookup: void;
     startHere: void;
+    copy: void;
+    askAi: void;
     delete: void;
     close: void;
   }>();
@@ -59,6 +63,15 @@
         ><HighlightSlotSwatch slot={c.id} class="h-6 w-6 text-[0.7rem]" /></button>
       {/each}
       <span class="menu-divider" />
+      <!--
+        Right-clicking a selection opens this toolbar instead of the system menu,
+        so without this the one thing a right-click on text is for was gone.
+      -->
+      <button
+        type="button"
+        class="menu-item menu-item-inline"
+        on:click={() => dispatch('copy')}
+      >{$t('highlight.copy')}</button>
       <button
         type="button"
         class="menu-item menu-item-inline"
@@ -71,6 +84,14 @@
         title={$t('highlight.dict.tooltip')}
         on:click={() => dispatch('lookup')}
       >{$t('highlight.dict.short')}</button>
+      {#if aiAvailable}
+        <button
+          type="button"
+          class="menu-item menu-item-inline"
+          title={$t('highlight.askAi.tooltip')}
+          on:click={() => dispatch('askAi')}
+        >{$t('highlight.askAi.short')}</button>
+      {/if}
       <button
         type="button"
         class="menu-item menu-item-inline"
@@ -87,6 +108,19 @@
         ><HighlightSlotSwatch slot={c.id} class="h-6 w-6 text-[0.7rem]" /></button>
       {/each}
       <span class="menu-divider" />
+      <button
+        type="button"
+        class="menu-item menu-item-inline"
+        on:click={() => dispatch('copy')}
+      >{$t('highlight.copy')}</button>
+      {#if aiAvailable}
+        <button
+          type="button"
+          class="menu-item menu-item-inline"
+          title={$t('highlight.askAi.tooltip')}
+          on:click={() => dispatch('askAi')}
+        >{$t('highlight.askAi.short')}</button>
+      {/if}
       <button
         type="button"
         class="menu-item menu-item-inline"

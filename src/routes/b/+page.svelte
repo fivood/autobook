@@ -391,6 +391,7 @@
   let hlMemoSelectedText = '';
   let hlMemoTags: string[] = [];
   let aiDrawerOpen = false;
+  let aiInitialInput = '';
   let settingsDrawerOpen = false;
   /** Set when a comic translation job with renderable output is found — the
    * overlay shows it, so the "open translation workbench" banner would be
@@ -1975,6 +1976,74 @@ ${$t('reader.ttsFailed.hint')}`
     hlMenuVisible = false;
   }
 
+  /** The text the toolbar is acting on: the pending selection when creating,
+   *  the stored highlight's own text when it was opened on an existing one. */
+  function hlMenuText() {
+    if (hlMenuMode === 'create') return hlPendingRange?.toString() ?? '';
+    return hlEditTarget?.text ?? '';
+  }
+
+  async function handleHlCopy() {
+    const text = hlMenuText();
+    hlMenuVisible = false;
+    hlEditTarget = undefined;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error: any) {
+      // The async Clipboard API refuses whenever the document isn't the focused
+      // one ("Document is not focused") — measured on this WebView. The old
+      // synchronous copy command has no such condition, so it is the fallback,
+      // and only a failure of both is worth telling the reader about.
+      if (!copyViaCommand(text)) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: { title: tImmediate('highlight.copyFailed'), message: error?.message ?? String(error) }
+          }
+        ]);
+      }
+    }
+  }
+
+  function copyViaCommand(text: string) {
+    const selection = window.getSelection();
+    const kept = selection && selection.rangeCount ? selection.getRangeAt(0) : undefined;
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } catch {
+      // Unsupported command: reported to the caller as not copied.
+    }
+    area.remove();
+    // Selecting the textarea took the reader's own selection away.
+    if (kept && selection) {
+      selection.removeAllRanges();
+      selection.addRange(kept);
+    }
+    return copied;
+  }
+
+  async function handleHlAskAi() {
+    const text = hlMenuText().trim();
+    hlMenuVisible = false;
+    hlEditTarget = undefined;
+    if (!text) return;
+    pauseTracker();
+    showHeader = false;
+    // Quoted and left open-ended: what to ask about it is the reader's call.
+    aiInitialInput = `「${text}」\n`;
+    await loadAiDrawer();
+    aiDrawerOpen = true;
+  }
+
   function handleHlLookup() {
     if (!hlPendingRange) {
       hlMenuVisible = false;
@@ -2947,7 +3016,11 @@ ${$t('reader.ttsFailed.hint')}`
     elementHtml={$rawBookData$.elementHtml}
     {exploredCharCount}
     {bookCharCount}
-    on:close={() => (aiDrawerOpen = false)}
+    initialInput={aiInitialInput}
+    on:close={() => {
+      aiDrawerOpen = false;
+      aiInitialInput = '';
+    }}
   />
 {/if}
 
@@ -2986,11 +3059,14 @@ ${$t('reader.ttsFailed.hint')}`
   visible={hlMenuVisible}
   mode={hlMenuMode}
   hasMemo={hlEditTarget?.memo ? true : false}
+  aiAvailable={$rawBookData$ ? hasIndexableText($rawBookData$) : false}
   on:color={({ detail }) => handleHlColor(detail)}
   on:memo={handleHlMemoRequest}
   on:editMemo={handleHlEditMemoRequest}
   on:lookup={handleHlLookup}
   on:startHere={handleHlStartHere}
+  on:copy={handleHlCopy}
+  on:askAi={handleHlAskAi}
   on:delete={handleHlDelete}
   on:close={() => { hlMenuVisible = false; hlEditTarget = undefined; }}
 />

@@ -112,6 +112,18 @@ export class AutoReaderContinuous implements AutoReader {
   /** Languages already reported through `onVoiceMissing`, so it fires once. */
   private warnedMissingVoiceFor = new Set<string>();
 
+  /**
+   * The book's language when nothing installed speaks it, otherwise null.
+   *
+   * Kept rather than reported on the spot. Voice selection runs the moment a
+   * book sets its language, so reporting here put a dialog about read-aloud
+   * voices in front of everyone opening an English book — including the many
+   * who were never going to press play. That is the same unasked-for prompt
+   * the OCR / translation banners were. `on()` reports it instead, the first
+   * time speech is actually requested.
+   */
+  private voiceMissingFor: string | null = null;
+
   /** Called when no installed voice speaks the book's language. */
   onVoiceMissing?: (lang: string) => void;
 
@@ -119,6 +131,7 @@ export class AutoReaderContinuous implements AutoReader {
     if (!this.synth) return;
     const voices = this.synth.getVoices();
     if (!voices.length) return;
+    this.voiceMissingFor = null;
 
     // A voice the user picked for this language wins over everything below,
     // and is checked *before* the "already matches lang" shortcut — otherwise
@@ -167,11 +180,15 @@ export class AutoReaderContinuous implements AutoReader {
     // carries `lang`, so the platform reads it with whatever voice it has —
     // a Chinese voice on an English book pronounces the words about right and
     // every number in Chinese, which reads as a bug in the app rather than a
-    // missing voice pack. Say so once per language instead.
-    if (!this.warnedMissingVoiceFor.has(this._lang)) {
-      this.warnedMissingVoiceFor.add(this._lang);
-      this.onVoiceMissing?.(this._lang);
-    }
+    // missing voice pack. Worth saying — when someone presses play.
+    this.voiceMissingFor = this._lang;
+  }
+
+  private reportMissingVoiceOnce() {
+    const lang = this.voiceMissingFor;
+    if (!lang || this.warnedMissingVoiceFor.has(lang)) return;
+    this.warnedMissingVoiceFor.add(lang);
+    this.onVoiceMissing?.(lang);
   }
 
   prepare() {
@@ -235,6 +252,7 @@ export class AutoReaderContinuous implements AutoReader {
     if (!this.synth) return;
     if (!this.sentences.length) this.prepare();
     if (!this.sentences.length) return;
+    this.reportMissingVoiceOnce();
     this.enabled$.next(true);
     this.speakNext();
   }
