@@ -9,7 +9,9 @@
    * theme by id; built-ins are saved as a same-id override in customThemes.
    */
   import Ripple from '$lib/components/ripple.svelte';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import SettingsCustomThemeInput from '$lib/components/settings/settings-custom-theme-input.svelte';
+  import { dialogManager } from '$lib/data/dialog-manager';
   import { customThemes$, theme$ } from '$lib/data/store';
   import { availableThemes, type CustomThemeValue, type ThemeOption } from '$lib/data/theme-option';
   import { createEventDispatcher, onMount } from 'svelte';
@@ -127,15 +129,26 @@
 
   function handleDelete() {
     if (!isCustom) return;
-    if (!confirm(`确认删除主题「${themeId}」？`)) return;
-    const next = { ...$customThemes$ };
-    delete next[themeId];
-    $customThemes$ = next;
-    dispatch('deleted', themeId);
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: '删除主题',
+          dialogMessage: `确认删除主题「${themeId}」？`,
+          resolver: (wasCanceled: boolean) => {
+            if (wasCanceled) return;
+            const next = { ...$customThemes$ };
+            delete next[themeId];
+            $customThemes$ = next;
+            dispatch('deleted', themeId);
+          }
+        }
+      }
+    ]);
   }
 </script>
 
-<div class="mt-2 rounded-lg border border-gray-400/40 p-4 bg-black/5">
+<div class="mt-2 rounded-lg border border-current/20 p-4 bg-soft-active">
   <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
     <div class="text-sm font-medium">
       正在编辑：<span class="font-mono">{themeId}</span>
@@ -145,7 +158,7 @@
     </div>
     <div class="flex items-center gap-2">
       <button
-        class="flex justify-center items-center rounded-md border-2 border-gray-400/60 p-2 text-base"
+        class="settings-btn"
         style={themeStyle}
         title="预览"
       >
@@ -224,7 +237,8 @@
   <div class="mt-4 flex flex-wrap justify-end gap-2">
     {#if isCustom}
       <button
-        class="rounded-md border-2 border-red-400 px-3 py-1 text-sm text-red-600"
+        class="settings-btn"
+        style="border-color:var(--danger-color);color:var(--danger-color);"
         on:click={handleDelete}
       >
         删除
@@ -232,7 +246,7 @@
       </button>
     {:else}
       <button
-        class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+        class="settings-btn"
         title="还原为内置主题的初始颜色"
         on:click={handleReset}
       >
@@ -241,14 +255,14 @@
       </button>
     {/if}
     <button
-      class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+      class="settings-btn"
       on:click={() => dispatch('close')}
     >
       关闭
       <Ripple />
     </button>
     <button
-      class="rounded-md border-2 px-3 py-1 text-sm"
+      class="settings-btn"
       style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
       on:click={handleSave}
     >

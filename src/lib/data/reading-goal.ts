@@ -82,7 +82,6 @@ export function getReadingGoalWindow(
     ({ dateString: readingGoalStart } = advanceDateDays(todayDate, 0));
     ({ dateString: readingGoalEnd } = advanceDateDays(todayDate, 6));
   } else {
-    // eslint-disable-next-line prefer-const
     let { referenceDate: readingGoalStartDate, dateString: readingGoalStartReference } =
       advanceDateDays(getDate(readingGoal.goalStartDate), 0);
 

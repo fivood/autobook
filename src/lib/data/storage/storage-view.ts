@@ -20,21 +20,6 @@ export interface StorageIconElement extends StorageIcon {
   source: StorageKey;
 }
 
-export function isStorageSourceAvailable(
-  storageSource: StorageKey,
-  storageSourceManager: string,
-  window: Window
-) {
-  switch (storageSource) {
-    case StorageKey.BROWSER:
-      return true;
-    case StorageKey.TAURI_FS:
-      return isTauri();
-    default:
-      return false;
-  }
-}
-
 export function getStorageIconData(storageSource: StorageKey): StorageIcon {
   switch (storageSource) {
     case StorageKey.BACKUP:
@@ -60,6 +45,6 @@ export const storageSource$ = writableStringLocalStorageSubject<StorageKey>()(
   isTauri() ? StorageKey.TAURI_FS : StorageKey.BROWSER
 );
 
-export const storageIcon$ = writableSubject<StorageIcon>(getStorageIconData(StorageKey.BROWSER));
+const storageIcon$ = writableSubject<StorageIcon>(getStorageIconData(StorageKey.BROWSER));
 
 storageSource$.subscribe((storageSource) => storageIcon$.next(getStorageIconData(storageSource)));

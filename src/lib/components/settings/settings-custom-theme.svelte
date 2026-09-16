@@ -3,7 +3,6 @@
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsCustomThemeInput from '$lib/components/settings/settings-custom-theme-input.svelte';
-  import { buttonClasses } from '$lib/css-classes';
   import { customThemes$, theme$ } from '$lib/data/store';
   import { availableThemes, type CustomThemeValue, type ThemeOption } from '$lib/data/theme-option';
   import { createEventDispatcher, onMount } from 'svelte';
@@ -208,7 +207,7 @@
         {/each}
       </select>
       <button
-        class="m-1 rounded-md border-2 p-2 text-lg transition-colors"
+        class="settings-btn m-1"
         style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
         on:click={handleCopyTheme}
       >
@@ -289,7 +288,7 @@
         bind:this={themeNameElm}
       />
       <button
-        class="flex justify-center items-center rounded-md border-2 border-gray-400 p-2 text-lg"
+        class="settings-btn"
         style={themeStyle}
       >
         中字
@@ -300,14 +299,14 @@
   </div>
   <div class="mt-2 flex grow justify-between" slot="footer">
     <button
-      class="m-1 rounded-md border-2 border-gray-400 bg-white p-2 text-lg text-black transition-colors"
+      class="settings-btn m-1"
       on:click={() => dispatch('close')}
     >
       取消
       <Ripple />
     </button>
     <button
-      class="m-1 rounded-md border-2 p-2 text-lg transition-colors"
+      class="settings-btn m-1"
       style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
       on:click={handleSave}
     >

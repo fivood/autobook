@@ -11,13 +11,18 @@
  */
 
 import { BehaviorSubject, type Observable } from 'rxjs';
+import { readerVoiceUri$ } from '$lib/data/store';
+import { langSlotOf, voiceForLang } from '$lib/data/tts/voice-by-lang';
 import {
   computeGlobalCharIndex,
   extractText,
-  seekParagraphsToExplored,
+  seekSentencesToExplored,
   selectionToCharIndex,
-  splitSentences
+  splitSentencesDetailed,
+  trackSelectionIn,
+  type Sentence
 } from './auto-reader-shared';
+import { domPositionForCharIndex } from './char-index-locator';
 
 export interface AutoReader {
   wasReaderEnabled$: BehaviorSubject<boolean>;
@@ -34,7 +39,7 @@ export class AutoReaderContinuous implements AutoReader {
 
   private utterance: SpeechSynthesisUtterance | null = null;
 
-  private paragraphs: string[] = [];
+  private sentences: Sentence[] = [];
 
   private paraIndex = 0;
 
@@ -50,6 +55,8 @@ export class AutoReaderContinuous implements AutoReader {
 
   onBoundary?: (charIndex: number) => void;
 
+  onError?: (message: string) => void;
+
   onEnd?: () => void;
 
   constructor(destroy$: Observable<void>) {
@@ -58,7 +65,16 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   setContentEl(el: HTMLElement | undefined) {
+    // Idempotent: re-running with the same element node (which the
+    // continuous reader's $:{} block does on every prop change, including
+    // multiplier ticks from the speed buttons) would otherwise reset()
+    // the engine — which calls off() and emits a spurious
+    // wasReaderEnabled=false. The +page.svelte subscriber then runs
+    // autoScroller.revealAll(), the typewriter hits end-of-content, and
+    // playback dies.
+    if (this.contentEl === el) return;
     this.contentEl = el;
+    trackSelectionIn(el);
     this.reset();
   }
 
@@ -84,6 +100,7 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   set lang(v: string) {
+    if (v === this._lang) return;
     this._lang = v;
     this.autoSelectVoice();
   }
@@ -92,10 +109,41 @@ export class AutoReaderContinuous implements AutoReader {
     return this._lang;
   }
 
+  /** Languages already reported through `onVoiceMissing`, so it fires once. */
+  private warnedMissingVoiceFor = new Set<string>();
+
+  /**
+   * The book's language when nothing installed speaks it, otherwise null.
+   *
+   * Kept rather than reported on the spot. Voice selection runs the moment a
+   * book sets its language, so reporting here put a dialog about read-aloud
+   * voices in front of everyone opening an English book — including the many
+   * who were never going to press play. That is the same unasked-for prompt
+   * the OCR / translation banners were. `on()` reports it instead, the first
+   * time speech is actually requested.
+   */
+  private voiceMissingFor: string | null = null;
+
+  /** Called when no installed voice speaks the book's language. */
+  onVoiceMissing?: (lang: string) => void;
+
   autoSelectVoice() {
     if (!this.synth) return;
     const voices = this.synth.getVoices();
     if (!voices.length) return;
+    this.voiceMissingFor = null;
+
+    // A voice the user picked for this language wins over everything below,
+    // and is checked *before* the "already matches lang" shortcut — otherwise
+    // switching the zh slot would never take effect while a zh voice is loaded.
+    const saved = voiceForLang('web', langSlotOf(this._lang), readerVoiceUri$.getValue());
+    if (saved) {
+      const chosen = voices.find((v) => v.voiceURI === saved);
+      if (chosen) {
+        this._voice = chosen;
+        return;
+      }
+    }
 
     // If current voice already matches lang, keep it
     if (this._voice && this._voice.lang.startsWith(this._lang)) return;
@@ -127,12 +175,25 @@ export class AutoReaderContinuous implements AutoReader {
         return;
       }
     }
+
+    // Nothing on this machine speaks the book's language. The utterance still
+    // carries `lang`, so the platform reads it with whatever voice it has —
+    // a Chinese voice on an English book pronounces the words about right and
+    // every number in Chinese, which reads as a bug in the app rather than a
+    // missing voice pack. Worth saying — when someone presses play.
+    this.voiceMissingFor = this._lang;
+  }
+
+  private reportMissingVoiceOnce() {
+    const lang = this.voiceMissingFor;
+    if (!lang || this.warnedMissingVoiceFor.has(lang)) return;
+    this.warnedMissingVoiceFor.add(lang);
+    this.onVoiceMissing?.(lang);
   }
 
   prepare() {
     if (!this.contentEl) return;
-    const text = extractText(this.contentEl);
-    this.paragraphs = splitSentences(text);
+    this.sentences = splitSentencesDetailed(extractText(this.contentEl));
     this.paraIndex = 0;
     this.charOffset = 0;
   }
@@ -142,16 +203,34 @@ export class AutoReaderContinuous implements AutoReader {
   }
 
   setPosition(para: number, offset: number) {
-    if (!this.paragraphs.length) return;
-    this.paraIndex = Math.min(Math.max(0, para), this.paragraphs.length - 1);
-    this.charOffset = Math.min(Math.max(0, offset), this.paragraphs[this.paraIndex].length);
+    if (!this.sentences.length) return;
+    this.paraIndex = Math.min(Math.max(0, para), this.sentences.length - 1);
+    this.charOffset = Math.min(Math.max(0, offset), this.sentences[this.paraIndex].text.length);
   }
 
-  seekToExplored(exploredCharCount: number) {
-    const pos = seekParagraphsToExplored(this.paragraphs, exploredCharCount);
-    this.paraIndex = pos.paraIndex;
-    this.charOffset = pos.charOffset;
+  getCurrentSentence(): { globalStart: number; globalEnd: number; text: string } | null {
+    const sentence = this.sentences[this.paraIndex];
+    if (!sentence) return null;
+    return { globalStart: sentence.start, globalEnd: sentence.end, text: sentence.text };
   }
+
+  seekToExplored(exploredCharCount: number, snapToSentenceStart = false) {
+    const pos = seekSentencesToExplored(this.sentences, exploredCharCount, snapToSentenceStart);
+    this.paraIndex = pos.index;
+    this.charOffset = pos.offset;
+  }
+
+  /**
+   * Start of the current sentence as a DOM position inside this reader's own
+   * content. The typewriter measures characters differently, so it is handed a
+   * position and resolves it with its own walk rather than a translated index.
+   */
+  currentSentencePosition(): { node: Node; offset: number } | null {
+    const sentence = this.getCurrentSentence();
+    if (!sentence || !this.contentEl) return null;
+    return domPositionForCharIndex(this.contentEl, sentence.globalStart);
+  }
+
 
   seekToSelection(): boolean {
     if (!this.contentEl) return false;
@@ -171,8 +250,9 @@ export class AutoReaderContinuous implements AutoReader {
 
   on() {
     if (!this.synth) return;
-    if (!this.paragraphs.length) this.prepare();
-    if (!this.paragraphs.length) return;
+    if (!this.sentences.length) this.prepare();
+    if (!this.sentences.length) return;
+    this.reportMissingVoiceOnce();
     this.enabled$.next(true);
     this.speakNext();
   }
@@ -209,20 +289,33 @@ export class AutoReaderContinuous implements AutoReader {
 
   private reset() {
     this.off();
-    this.paragraphs = [];
+    this.sentences = [];
     this.paraIndex = 0;
     this.charOffset = 0;
   }
 
   private speakNext() {
     if (!this.enabled$.getValue() || !this.synth) return;
-    if (this.paraIndex >= this.paragraphs.length) {
+    if (this.paraIndex >= this.sentences.length) {
       this.off();
       this.onEnd?.();
       return;
     }
 
-    const text = this.paragraphs[this.paraIndex].slice(this.charOffset);
+    const text = this.sentences[this.paraIndex].text.slice(this.charOffset);
+    // Skip empty / whitespace-only slices and roll forward. This triggers
+    // when the cursor-start strategy lands the position at the end of a
+    // paragraph — without this guard Web Speech rejects the empty
+    // utterance with `invalid-argument`, which the error handler used to
+    // treat as fatal and stop the whole session ("only one paragraph
+    // reads then nothing"). SAPI / custom / Kokoro engines already do
+    // this skip explicitly.
+    if (!text || !text.trim()) {
+      this.paraIndex += 1;
+      this.charOffset = 0;
+      queueMicrotask(() => this.speakNext());
+      return;
+    }
     const utt = new SpeechSynthesisUtterance(text);
     utt.rate = this._rate;
     utt.lang = this._lang;
@@ -234,7 +327,7 @@ export class AutoReaderContinuous implements AutoReader {
     // tracking works even on platforms (Win10 + old OneCore voices) where
     // SpeechSynthesisUtterance.onboundary never fires word-level events.
     const paraStartGlobalIndex = computeGlobalCharIndex(
-      this.paragraphs,
+      this.sentences,
       this.paraIndex,
       paraStartOffset
     );
@@ -246,7 +339,7 @@ export class AutoReaderContinuous implements AutoReader {
       if (ev.name === 'word' || ev.name === 'sentence') {
         const localIndex = paraStartOffset + ev.charIndex;
         this.charOffset = localIndex;
-        const globalIndex = computeGlobalCharIndex(this.paragraphs, this.paraIndex, localIndex);
+        const globalIndex = computeGlobalCharIndex(this.sentences, this.paraIndex, localIndex);
         this.onBoundary?.(globalIndex);
       }
     };
@@ -261,8 +354,23 @@ export class AutoReaderContinuous implements AutoReader {
       if (ev.error === 'canceled' || ev.error === 'interrupted') {
         return;
       }
-      // eslint-disable-next-line no-console
+      // Recoverable errors: skip this paragraph and try the next one
+      // instead of killing the whole session. invalid-argument is the
+      // common one we hit on empty / whitespace-only chunks after the
+      // user restarts TTS with the cursor near a paragraph boundary.
+      if (
+        ev.error === 'invalid-argument' ||
+        ev.error === 'text-too-long' ||
+        ev.error === 'audio-busy'
+      ) {
+        console.warn('[auto-reader] speech recoverable error, skipping paragraph:', ev.error);
+        this.paraIndex += 1;
+        this.charOffset = 0;
+        queueMicrotask(() => this.speakNext());
+        return;
+      }
       console.warn('[auto-reader] speech error:', ev.error);
+      this.onError?.(`Web Speech: ${ev.error}`);
       this.off();
     };
 
