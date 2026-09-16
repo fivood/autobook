@@ -19,6 +19,9 @@ export interface LoadedText {
    * text carries their positions as sentinels (see parse-text.ts). */
   images?: Map<string, Blob>;
   notes?: Map<string, string>;
+  /** Set when the book's saved-position key comes from a different text than
+   * `text` (Markdown — see load-md.ts): hash `parseText(identityText)`. */
+  identityText?: string;
 }
 
 export type LoadedFile = LoadedText | { kind: 'pdf'; format: 'pdf'; pdf: ParsedPdf };
@@ -78,7 +81,7 @@ export async function loadFile(
     };
   }
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
-    return { kind: 'text', format: 'md', title: stem, text: await loadMd(file) };
+    return { kind: 'text', format: 'md', title: stem, ...(await loadMd(file)) };
   }
   return { kind: 'text', format: 'txt', title: stem, text: await extractTxt(file) };
 }

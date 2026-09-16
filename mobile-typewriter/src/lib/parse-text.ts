@@ -16,6 +16,14 @@
 // therefore ride along on the next segment that has text, matching the
 // desktop typewriter, where an image contributes 0 to `textContent.length`
 // and never becomes a reveal frontier.
+//
+// ## Markdown formatting
+//
+// Markdown adds two more kinds of mark, same rules: a *block* mark at the
+// start of a line (heading level, quote, list item, code line, table row,
+// rule) and *style* ranges inside it (bold, italic, code, strike, link, table
+// column rule). Neither adds a character to the text, so the typewriter types
+// exactly the words and the formatting is paint on top.
 
 
 /** Sentinels the EPUB loader embeds. Private-use area, so they can never
@@ -25,8 +33,14 @@ export const MARK_IMG = '';
 export const MARK_END = '';
 export const MARK_NOTE = '';
 export const MARK_SEP = '';
+/** Markdown: `MARK_BLOCK kind MARK_END` at line start; `MARK_STYLE kind
+ * MARK_END` opens a style range, `MARK_STYLE_END` closes the innermost one. */
+export const MARK_BLOCK = '\uE004';
+export const MARK_STYLE = '\uE005';
+export const MARK_STYLE_END = '\uE006';
 
-const MARK_RE = /([^]*)|([^]*)([^]*)/g;
+const SENTINEL_RE = /[\uE000\uE002\uE004\uE005\uE006]/g;
+const ANY_SENTINEL_RE = /[\uE000\uE002\uE004\uE005\uE006]/;
 
 export interface NoteMark {
   /** Offset into the owning segment's `text` where the marker sits. */
@@ -37,43 +51,123 @@ export interface NoteMark {
   n: string;
 }
 
+export type StyleKind = 'b' | 'i' | 's' | 'code' | 'a' | 'sep';
+
+export interface StyleRange {
+  kind: StyleKind;
+  /** Offsets into the owning segment's `text`, end exclusive. */
+  from: number;
+  to: number;
+  /** Link target, `a` only (already vetted by the loader). */
+  href?: string;
+}
+
 export interface Marks {
   /** Asset keys into the loader's image map, rendered above the text. */
   images: string[];
   notes: NoteMark[];
+  /** Markdown block kind for the whole line: `h1`…`h6`, `quote`,
+   * `ul:depth`, `ol:depth:number`, `li:depth` (list continuation),
+   * `code[:t|e|te]` (first / last line of the fence), `thead`, `row`, `hr`. */
+  block?: string;
+  styles?: StyleRange[];
+  /** A Markdown rule sat on the (text-less) line before this one. */
+  ruleBefore?: boolean;
 }
 
 /** Pull the sentinels out of one line, returning clean text plus the marks
- * with offsets into that clean text. */
+ * with offsets into that clean text. A mark missing its terminator is left
+ * in the text as-is, as the old pattern match did. */
 export function decodeMarks(line: string): { text: string; marks?: Marks } {
-  if (!line.includes(MARK_IMG) && !line.includes(MARK_NOTE)) return { text: line };
+  if (!ANY_SENTINEL_RE.test(line)) return { text: line };
   const images: string[] = [];
   const notes: NoteMark[] = [];
+  const styles: StyleRange[] = [];
+  const open: Omit<StyleRange, 'to'>[] = [];
+  let block: string | undefined;
   let out = '';
-  let last = 0;
-  let m: RegExpExecArray | null;
-  MARK_RE.lastIndex = 0;
-  while ((m = MARK_RE.exec(line))) {
-    out += line.slice(last, m.index);
-    last = m.index + m[0].length;
-    if (m[1] !== undefined) images.push(m[1]);
-    else notes.push({ at: out.length, id: m[3], n: m[2] });
+  let i = 0;
+  const closeStyle = (o: Omit<StyleRange, 'to'>) => {
+    if (out.length > o.from) styles.push({ ...o, to: out.length });
+  };
+
+  while (i < line.length) {
+    SENTINEL_RE.lastIndex = i;
+    const m = SENTINEL_RE.exec(line);
+    if (!m) {
+      out += line.slice(i);
+      break;
+    }
+    out += line.slice(i, m.index);
+    const at = m.index;
+    const mark = line[at];
+
+    if (mark === MARK_STYLE_END) {
+      const o = open.pop();
+      if (o) closeStyle(o);
+      i = at + 1;
+      continue;
+    }
+
+    const end = line.indexOf(MARK_END, at + 1);
+    if (mark === MARK_NOTE) {
+      const sep = line.indexOf(MARK_SEP, at + 1);
+      const noteEnd = sep < 0 ? -1 : line.indexOf(MARK_END, sep + 1);
+      if (noteEnd < 0 || (end >= 0 && end < sep)) {
+        out += mark;
+        i = at + 1;
+        continue;
+      }
+      notes.push({ at: out.length, id: line.slice(sep + 1, noteEnd), n: line.slice(at + 1, sep) });
+      i = noteEnd + 1;
+      continue;
+    }
+    if (end < 0) {
+      out += line.slice(at);
+      break;
+    }
+    const value = line.slice(at + 1, end);
+    if (mark === MARK_IMG) images.push(value);
+    else if (mark === MARK_BLOCK) block = value;
+    else if (value.startsWith('a:')) open.push({ kind: 'a', href: value.slice(2), from: out.length });
+    else open.push({ kind: value as StyleKind, from: out.length });
+    i = end + 1;
   }
-  out += line.slice(last);
+  // A style still open at the end of the line (a hard break inside bold, say)
+  // stops here; the next line starts plain.
+  while (open.length) closeStyle(open.pop()!);
+
+  const any = images.length || notes.length || styles.length || block !== undefined;
   return {
     text: out,
-    marks: images.length || notes.length ? { images, notes } : undefined
+    marks: any
+      ? {
+          images,
+          notes,
+          ...(block !== undefined ? { block } : {}),
+          ...(styles.length ? { styles: styles.sort((a, b) => a.from - b.from) } : {})
+        }
+      : undefined
   };
 }
 
-/** Trim a decoded line, shifting note offsets by the whitespace dropped off
- * the front so they still point at the right character. */
+/** Trim a decoded line, shifting note and style offsets by the whitespace
+ * dropped off the front so they still point at the right character. Code
+ * lines keep their indentation — it is the code's structure — and a blank
+ * one keeps a single space, since an empty line would vanish as a spacer. */
 function trimDecoded(text: string, marks?: Marks): string {
+  if (marks?.block?.split(':')[0] === 'code') return text.trimEnd() || ' ';
   const lead = text.length - text.trimStart().length;
   const trimmed = text.trim();
   if (marks) {
-    for (const note of marks.notes) {
-      note.at = Math.max(0, Math.min(trimmed.length, note.at - lead));
+    const clamp = (n: number) => Math.max(0, Math.min(trimmed.length, n - lead));
+    for (const note of marks.notes) note.at = clamp(note.at);
+    if (marks.styles) {
+      for (const r of marks.styles) {
+        r.from = clamp(r.from);
+        r.to = clamp(r.to);
+      }
+      marks.styles = marks.styles.filter((r) => r.to > r.from);
     }
   }
   return trimmed;
@@ -118,6 +212,12 @@ export interface Segment {
   images?: string[];
   /** Footnote markers positioned inside `text`. */
   notes?: NoteMark[];
+  /** Markdown block kind, see `Marks.block`. */
+  block?: string;
+  /** Markdown inline styles over `text`. */
+  styles?: StyleRange[];
+  /** Draw a Markdown rule above this segment. */
+  ruleBefore?: boolean;
 }
 
 export interface ParsedBook {
@@ -159,22 +259,37 @@ export function parseText(raw: string): ParsedBook {
   // here and attach to the next line that does have text — see the header note
   // on why they must not become segments of their own.
   let pendingImages: string[] = [];
+  // Same for a Markdown rule: a line of its own with no text.
+  let pendingRule = false;
 
   for (const raw of lines) {
     const decoded = decodeMarks(raw);
+    const block = decoded.marks?.block;
     const trimmed = trimDecoded(decoded.text, decoded.marks);
     if (!trimmed) {
-      if (decoded.marks?.images.length) pendingImages.push(...decoded.marks.images);
+      if (block === 'hr') pendingRule = true;
+      else if (decoded.marks?.images.length) pendingImages.push(...decoded.marks.images);
       else current.paragraphs.push({ text: '' });
       continue;
     }
-    if (pendingImages.length) {
-      const carried = pendingImages;
-      pendingImages = [];
-      if (decoded.marks) decoded.marks.images = [...carried, ...decoded.marks.images];
-      else decoded.marks = { images: carried, notes: [] };
+    if (pendingImages.length || pendingRule) {
+      decoded.marks ??= { images: [], notes: [] };
+      if (pendingImages.length) {
+        decoded.marks.images = [...pendingImages, ...decoded.marks.images];
+        pendingImages = [];
+      }
+      if (pendingRule) {
+        decoded.marks.ruleBefore = true;
+        pendingRule = false;
+      }
     }
-    if (isChapterHeading(trimmed)) {
+    // A Markdown `#`/`##` heading is a chapter whatever its words; `###` and
+    // below stay inside the chapter as sub-headings. Other Markdown blocks
+    // (list items, quotes, code) never open one, even when their text looks
+    // like 「一」 or 「1」 — plain lines keep the text-book heuristics.
+    const headingLevel = block && /^h[1-6]$/.test(block) ? Number(block[1]) : 0;
+    const opensChapter = headingLevel ? headingLevel <= 2 : !block && isChapterHeading(trimmed);
+    if (opensChapter) {
       open(trimmed);
       current.titleMarks = decoded.marks;
       continue;
@@ -248,10 +363,15 @@ export function parseText(raw: string): ParsedBook {
   };
 }
 
-function markFields(marks?: Marks): { images?: string[]; notes?: NoteMark[] } {
+function markFields(
+  marks?: Marks
+): Pick<Segment, 'images' | 'notes' | 'block' | 'styles' | 'ruleBefore'> {
   if (!marks) return {};
   return {
     ...(marks.images.length ? { images: marks.images } : {}),
-    ...(marks.notes.length ? { notes: marks.notes } : {})
+    ...(marks.notes.length ? { notes: marks.notes } : {}),
+    ...(marks.block ? { block: marks.block } : {}),
+    ...(marks.styles?.length ? { styles: marks.styles } : {}),
+    ...(marks.ruleBefore ? { ruleBefore: true } : {})
   };
 }

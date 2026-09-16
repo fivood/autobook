@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "postinstall": "node scripts/copy-pdfjs-assets.js",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "esbuild scripts/check-md.ts --bundle --platform=node --format=esm --log-level=warning --tsconfig-raw={} --outfile=node_modules/.cache/check-md.mjs && node node_modules/.cache/check-md.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "3.0.10",
@@ -32,6 +33,7 @@
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
     "@zip.js/zip.js": "^2.8.26",
+    "marked": "^18.0.5",
     "pdfjs-dist": "^6.1.200",
     "svelte-fa": "^4.0.4"
   }

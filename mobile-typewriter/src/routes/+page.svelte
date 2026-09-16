@@ -13,7 +13,7 @@
   } from '$lib/stats';
   import type { RemoteState } from '$lib/sync-client';
   import SyncSettings from '$lib/sync-settings.svelte';
-  import SegmentBody from '$lib/segment-body.svelte';
+  import SegmentBlock from '$lib/segment-block.svelte';
   import { createTypewriter, type TypewriterEngine } from '$lib/typewriter';
   import {
     acquireWakeLock,
@@ -464,6 +464,14 @@
     playing = false;
   }
 
+  /** The key a text book's place and cached file are saved under. */
+  function textBookHash(loaded: LoadedText, parsed?: ParsedBook): Promise<string> {
+    if (loaded.identityText !== undefined) {
+      return hashContent(parseText(loaded.identityText).flatText);
+    }
+    return hashContent((parsed ?? parseText(loaded.text)).flatText);
+  }
+
   async function loadBook(name: string, loaded: LoadedText) {
     closeAnyBook();
     const parsed = parseText(loaded.text);
@@ -472,9 +480,14 @@
       return;
     }
     title = name;
+    // The cache-miss resume path comes here without ingestFile().
+    pendingFormat = loaded.format;
     book = parsed;
     total = parsed.totalChars;
-    bookHash = await hashContent(parsed.flatText);
+    bookHash = await textBookHash(loaded, parsed);
+    // ponytail: a Markdown place saved before formatting was rendered counts
+    // characters of the old plain conversion, so it lands a little off (about
+    // one character per wrapped line) on the first open, then saves anew.
     const saved = getPosition(bookHash);
     revealed = saved?.revealed && saved.revealed < total ? saved.revealed : 0;
     chapterIdx = 0;
@@ -796,7 +809,7 @@
             }
             await openPdf(loaded.pdf);
           } else {
-            const h = await hashContent(parseText(loaded.text).flatText);
+            const h = await textBookHash(loaded);
             if (h !== item.hash) {
               error = tImmediate('ingest.hashMismatch');
               return;
@@ -1008,27 +1021,15 @@
       >
         <div class="page">
           {#each book.segments as seg (seg.startChar)}
-            {#if seg.type === 'h2'}
-              <h2 class="ch-title" data-seg-start={seg.startChar}>
-                <SegmentBody
-                  {seg}
-                  cut={seg.text.length}
-                  pendingEnd={seg.text.length}
-                  {imageUrls}
-                  onNote={showNote}
-                />
-              </h2>
-            {:else}
-              <p class="ch-para" data-seg-start={seg.startChar}>
-                <SegmentBody
-                  {seg}
-                  cut={seg.text.length}
-                  pendingEnd={seg.text.length}
-                  {imageUrls}
-                  onNote={showNote}
-                />
-              </p>
-            {/if}
+            <SegmentBlock
+              {seg}
+              cut={seg.text.length}
+              pendingEnd={seg.text.length}
+              {imageUrls}
+              onNote={showNote}
+              anchor
+              markdown={pendingFormat === 'md'}
+            />
           {/each}
         </div>
       </div>
@@ -1041,31 +1042,16 @@
       >
         <div class="page">
           {#each visibleSegments as v (v.seg.startChar)}
-            {#if v.seg.type === 'h2'}
-              <h2 class="ch-title">
-                <SegmentBody
-                  seg={v.seg}
-                  cut={v.cut}
-                  pendingEnd={v.pendingEnd}
-                  hasCursor={v.hasCursor}
-                  cursorOn={playing}
-                  {imageUrls}
-                  onNote={showNote}
-                />
-              </h2>
-            {:else}
-              <p class="ch-para">
-                <SegmentBody
-                  seg={v.seg}
-                  cut={v.cut}
-                  pendingEnd={v.pendingEnd}
-                  hasCursor={v.hasCursor}
-                  cursorOn={playing}
-                  {imageUrls}
-                  onNote={showNote}
-                />
-              </p>
-            {/if}
+            <SegmentBlock
+              seg={v.seg}
+              cut={v.cut}
+              pendingEnd={v.pendingEnd}
+              hasCursor={v.hasCursor}
+              cursorOn={playing}
+              {imageUrls}
+              onNote={showNote}
+              markdown={pendingFormat === 'md'}
+            />
           {/each}
         </div>
       </div>
@@ -1657,25 +1643,9 @@
     margin: 0 auto;
     word-break: break-word;
   }
-  .ch-title {
-    margin: 2.2em 0 1em;
-    font-size: 1.35em;
-    font-weight: 600;
-    line-height: 1.4;
-    text-align: center;
-    letter-spacing: 0.05em;
-  }
-  .ch-title:first-child {
-    margin-top: 0.5em;
-  }
-  .ch-para {
-    margin: 0 0 1em;
-    text-indent: 2em;
-    white-space: pre-wrap;
-  }
-  /* The reveal split, caret and footnote markers live in SegmentBody, and
-     so do their styles — Svelte scoping stops this file's rules from
-     reaching into a child component. */
+  /* Segment blocks (titles, paragraphs, Markdown) and everything inside them
+     are styled in SegmentBlock / SegmentBody — Svelte scoping stops this
+     file's rules from reaching into a child component. */
 
   .note-overlay {
     position: fixed;
