@@ -150,6 +150,7 @@
   import PdfPageContextMenu from '$lib/components/book-reader/pdf-page-context-menu.svelte';
   import KeyboardShortcutsHelp from '$lib/components/book-reader/keyboard-shortcuts-help.svelte';
   import BookImageZoom from '$lib/components/book-reader/book-image-zoom.svelte';
+  import WrFootnotePopup from '$lib/components/book-reader/wr-footnote-popup.svelte';
   import ComicTranslateBanner from '$lib/components/book-reader/comic-translate-banner.svelte';
   import ComicOverlay from '$lib/components/book-reader/comic-overlay.svelte';
   import { isScannedPdf } from '$lib/functions/file-loaders/pdf/pdf-ocr-runner';
@@ -2771,6 +2772,7 @@ ${$t('reader.ttsFailed.hint')}`
 {#if imageZoomMode}
   <BookImageZoom />
 {/if}
+<WrFootnotePopup />
 {#if $rawBookData$ && /data-pdf-page=/.test($rawBookData$.elementHtml || '')}
   <PdfPageContextMenu book={$rawBookData$} />
 {/if}

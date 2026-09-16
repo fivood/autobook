@@ -154,6 +154,33 @@
     vertical-align: baseline;
   }
 
+  // WeRead (微信读书) exports mark a note with an empty span carrying the text
+  // in `data-wr-footernote`. The book's own CSS draws it as a fixed 19px black
+  // disc that ignores the theme and the font size. Redrawn here; nesting under
+  // the scoped `.book-content` out-ranks the book's `.book-content span.…`
+  // rules. Its hover box is replaced by wr-footnote-popup.svelte, which says
+  // why a CSS box can't work here.
+  :global(span.reader_footer_note) {
+    width: 1.1em;
+    height: 1.1em;
+    margin: 0 0.15em;
+    vertical-align: -0.15em;
+    text-indent: 0;
+    background: color-mix(in srgb, currentColor 65%, transparent);
+  }
+  :global(span.reader_footer_note::before) {
+    content: '注';
+    display: block;
+    font-size: 0.66em;
+    // 1.1em box ÷ 0.66em glyph: centres the glyph vertically.
+    line-height: 1.667em;
+    text-align: center;
+    color: var(--background-color);
+  }
+  :global(span.reader_footer_note:hover::after) {
+    content: none;
+  }
+
   &:not(.ttu-apply-important) {
     :global(p) {
       text-indent: var(--book-content-text-intendation, 0rem);
