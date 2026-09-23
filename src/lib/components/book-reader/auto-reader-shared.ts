@@ -76,6 +76,9 @@ function isSentencePeriod(text: string, i: number): boolean {
   return true;
 }
 
+/** Something a voice can say: a letter or a digit in any script. */
+const SPEAKABLE = /[\p{L}\p{N}]/u;
+
 /** Trim `text[from, to)` and emit it, splitting further if over the cap. */
 function emit(out: Sentence[], text: string, from: number, to: number, maxLength: number) {
   const raw = text.slice(from, to);
@@ -85,8 +88,17 @@ function emit(out: Sentence[], text: string, from: number, to: number, maxLength
 
   const base = from + lead;
 
+  // A unit of bare punctuation is dropped: nothing to say, and Edge TTS answers
+  // it with no audio at all, which the reader reports as a failed read. Books
+  // produce these wherever a note marker sits between a sentence and its
+  // closing quotes — 「倾向。<sup>[3]</sup> ’”」 flattens to 「倾向。\n[3]\n ’”」,
+  // and the newline terminal strands 「’”」 as a unit of its own.
+  const push = (s: Sentence) => {
+    if (SPEAKABLE.test(s.text)) out.push(s);
+  };
+
   if (trimmed.length <= maxLength) {
-    out.push({ text: trimmed, start: base, end: base + trimmed.length });
+    push({ text: trimmed, start: base, end: base + trimmed.length });
     return;
   }
 
@@ -107,7 +119,7 @@ function emit(out: Sentence[], text: string, from: number, to: number, maxLength
     const piece = trimmed.slice(cursor, cut).trim();
     if (piece) {
       const pieceLead = trimmed.slice(cursor, cut).length - trimmed.slice(cursor, cut).trimStart().length;
-      out.push({
+      push({
         text: piece,
         start: base + cursor + pieceLead,
         end: base + cursor + pieceLead + piece.length
@@ -119,7 +131,7 @@ function emit(out: Sentence[], text: string, from: number, to: number, maxLength
   const tail = tailRaw.trim();
   if (tail) {
     const tailLead = tailRaw.length - tailRaw.trimStart().length;
-    out.push({
+    push({
       text: tail,
       start: base + cursor + tailLead,
       end: base + cursor + tailLead + tail.length
@@ -188,21 +200,71 @@ export function splitSentencesDetailed(
  * the same book returned a different string (and therefore different char
  * indices) depending on whether the typewriter had run yet.
  */
-export function extractText(root: HTMLElement): string {
+export function extractText(root: HTMLElement, { speech = false } = {}): string {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   const parts: string[] = [];
+  const markerCache = new Map<Element, boolean>();
   let node: Node | null = walker.nextNode();
   while (node) {
     const parent = node.parentElement;
     if (parent) {
       const tag = parent.tagName;
       if (tag !== 'SCRIPT' && tag !== 'STYLE') {
-        parts.push(node.textContent || '');
+        const text = node.textContent || '';
+        parts.push(
+          speech && insideNoteMarker(parent, root, markerCache) ? ' '.repeat(text.length) : text
+        );
       }
     }
     node = walker.nextNode();
   }
   return parts.join('');
+}
+
+// ---- note markers --------------------------------------------------------
+//
+// `extractText(root, { speech: true })` is what the voice reads: the same
+// string, same length — every offset elsewhere is in extractText() space —
+// with the text of footnote markers blanked to spaces, so 「倾向。[3]」 is read
+// as 「倾向。」 and a marker on a line of its own becomes whitespace the
+// splitter drops.
+
+/** A linked marker's text: 3, [3], ［注3］, (12), 注, *, †. */
+const LINKED_MARKER = /^[[［(（〔【]?(?:注|註|note)?\d{0,4}[*＊†‡]*[\]］)）〕】]?$/i;
+/** An unlinked superscript only counts when bracketed or labelled 注: a bare
+ *  <sup>2</sup> is far more often an exponent (10², m²) than a note. */
+const SUP_MARKER = /^(?:[[［〔【](?:注|註)?\d{1,4}[\]］〕】]|(?:注|註)\d{0,4})$/;
+
+export function isNoteMarker(el: Element): boolean {
+  const text = (el.textContent || '').replace(/\s+/g, '');
+  if (!text) return false;
+  if (el.tagName === 'A') {
+    const noteref =
+      /noteref/i.test(el.getAttribute('epub:type') || '') ||
+      el.getAttribute('role') === 'doc-noteref' ||
+      (el.getAttribute('href') || '').includes('#');
+    return noteref && /[\d注註*＊†‡]/i.test(text) && LINKED_MARKER.test(text);
+  }
+  return el.tagName === 'SUP' && SUP_MARKER.test(text);
+}
+
+function insideNoteMarker(el: Element, root: Element, cache: Map<Element, boolean>): boolean {
+  const seen: Element[] = [];
+  let hit = false;
+  for (let cur: Element | null = el; cur && cur !== root; cur = cur.parentElement) {
+    const known = cache.get(cur);
+    if (known !== undefined) {
+      hit = known;
+      break;
+    }
+    seen.push(cur);
+    if (isNoteMarker(cur)) {
+      hit = true;
+      break;
+    }
+  }
+  for (const s of seen) cache.set(s, hit);
+  return hit;
 }
 
 export function computeGlobalCharIndex(

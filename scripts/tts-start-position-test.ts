@@ -22,7 +22,9 @@ import {
   applyStartPosition,
   rememberPlaybackHandoff,
   seekSentencesToExplored,
+  isNoteMarker,
   selectionToCharIndex,
+  splitSentencesDetailed,
   takePlaybackHandoff,
   trackSelectionIn
 } from '../src/lib/components/book-reader/auto-reader-shared.ts';
@@ -223,4 +225,47 @@ test('snapping changes nothing when the index is already a sentence start', () =
 
 test('snapping past the end still reports the end', () => {
   assert.deepEqual(seekSentencesToExplored(sentences, 99, true), { index: 2, offset: 0 });
+});
+
+// --- sentence splitting -----------------------------------------------------
+
+test('punctuation stranded by a note marker is not sent as a sentence', () => {
+  // 《平面国》: 「…倾向。<sup>[3]</sup> ’”<sup>[4]</sup>」 as extractText
+  // flattens it. The lone 「’”」 made Edge TTS return no audio and the whole
+  // read-through stop with 「未收到任何音频」.
+  const text = '‘人类的天性有一个共同的倾向。\n[3]\n\n ’”\n[4]\n\n我认为';
+  const units = splitSentencesDetailed(text);
+  assert.deepEqual(
+    units.map((u) => u.text),
+    ['‘人类的天性有一个共同的倾向。', '[3]', '[4]', '我认为']
+  );
+  for (const u of units) assert.equal(text.slice(u.start, u.end), u.text);
+});
+
+test('a unit is kept when it has any letter or digit, in any script', () => {
+  const units = splitSentencesDetailed('……\n——！\n3。\nΩ.\n');
+  assert.deepEqual(units.map((u) => u.text), ['3。', 'Ω.']);
+});
+
+// --- note markers are not read aloud -----------------------------------------
+
+const el = (tagName: string, text: string, attrs: Record<string, string> = {}) =>
+  ({ tagName, textContent: text, getAttribute: (k: string) => attrs[k] ?? null }) as unknown as Element;
+
+test('footnote markers are recognised', () => {
+  // 《平面国》's markup, after import rewrote the href to a bare fragment.
+  assert.ok(isNoteMarker(el('A', '[3]', { href: '#footnote_3', 'epub:type': 'noteref' })));
+  assert.ok(isNoteMarker(el('A', '12', { href: '#n12' })));
+  assert.ok(isNoteMarker(el('A', '［注3］', { href: '#n3' })));
+  assert.ok(isNoteMarker(el('A', '*', { href: '#fn' })));
+  assert.ok(isNoteMarker(el('SUP', ' [4] ')));
+  assert.ok(isNoteMarker(el('SUP', '注1')));
+});
+
+test('exponents, links and words are still read', () => {
+  assert.ok(!isNoteMarker(el('SUP', '2'))); // 10², m²
+  assert.ok(!isNoteMarker(el('A', '第三章', { href: '#ch3' })));
+  assert.ok(!isNoteMarker(el('A', '3', { href: 'https://example.com/3' })));
+  assert.ok(!isNoteMarker(el('A', '[3]'))); // not a link at all
+  assert.ok(!isNoteMarker(el('SPAN', '[3]')));
 });

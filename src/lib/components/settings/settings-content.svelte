@@ -62,6 +62,7 @@
     type ThemeOption
   } from '$lib/data/theme-option';
   import { t, tImmediate, locale$, LOCALES } from '$lib/i18n';
+  import { windowAlwaysOnTop$ } from '$lib/data/store';
   import { secondsToMinutes } from '$lib/functions/statistic-util';
   import {
     ReplicationSaveBehavior,
@@ -475,6 +476,16 @@
         <ButtonToggleGroup options={optionsForLocale} bind:selectedOptionId={$locale$} />
       </SettingsItemGroup>
     </div>
+    {#if isTauri()}
+      <div class="lg:col-span-3">
+        <SettingsItemGroup
+          title={$t('settings.item.alwaysOnTop')}
+          tooltip={$t('settings.tip.alwaysOnTop')}
+        >
+          <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$windowAlwaysOnTop$} />
+        </SettingsItemGroup>
+      </div>
+    {/if}
     <div class="lg:col-span-3">
       <SettingsItemGroup title={$t('settings.section.theme')}>
         <ButtonToggleGroup

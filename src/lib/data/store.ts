@@ -207,6 +207,10 @@ export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
 /** Absolute paths queued from file-association / CLI launch (desktop only). */
 export const pendingLaunchFiles$ = writableSubject<string[]>([]);
 
+/** Keep the app window above other windows (desktop only). Remembered across
+ * restarts; applied by window-always-on-top.ts. */
+export const windowAlwaysOnTop$ = writableBooleanLocalStorageSubject()('windowAlwaysOnTop', false);
+
 /** Tray + window menu request to toggle TTS (emitted by both global shortcut and tray). */
 export const ttsToggleRequest$ = writableSubject<number>(0);
 

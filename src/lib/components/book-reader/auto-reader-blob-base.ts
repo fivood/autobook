@@ -201,7 +201,7 @@ export abstract class BlobAutoReader implements AutoReader {
 
   prepare() {
     if (!this.contentEl) return;
-    this.sentences = splitSentencesDetailed(extractText(this.contentEl));
+    this.sentences = splitSentencesDetailed(extractText(this.contentEl, { speech: true }));
     this.index = 0;
     this.offset = 0;
     this.clearPrefetch();

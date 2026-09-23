@@ -193,7 +193,7 @@ export class AutoReaderContinuous implements AutoReader {
 
   prepare() {
     if (!this.contentEl) return;
-    this.sentences = splitSentencesDetailed(extractText(this.contentEl));
+    this.sentences = splitSentencesDetailed(extractText(this.contentEl, { speech: true }));
     this.paraIndex = 0;
     this.charOffset = 0;
   }

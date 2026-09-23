@@ -39,7 +39,9 @@
 
   const dispatch = createEventDispatcher<{ action: string }>();
 
-  const actionItems = items.filter((item) => item.routeId !== $page.route.id);
+  // Reactive: callers change their list while the menu is mounted (the
+  // reader's reading-point and pin-window entries follow their settings).
+  $: actionItems = items.filter((item) => item.routeId !== $page.route.id);
 
   let menuElm: Popover;
 
@@ -62,8 +64,9 @@
     }
   }
 
-  if (!alwaysCollapse && actionItems.length === 1 && actionItems[0].routeId) {
-    leavePageLink = actionItems[0].routeId;
+  const initialItems = items.filter((item) => item.routeId !== $page.route.id);
+  if (!alwaysCollapse && initialItems.length === 1 && initialItems[0].routeId) {
+    leavePageLink = initialItems[0].routeId;
   }
 </script>
 

@@ -7,6 +7,7 @@
     faCrosshairs,
     faExpand,
     faFlag,
+    faThumbtack,
     faHighlighter,
     faImages,
     faList,
@@ -24,7 +25,8 @@
     nTranslateXHeaderFa,
     translateXHeaderFa
   } from '$lib/css-classes';
-  import { customReadingPointEnabled$, viewMode$ } from '$lib/data/store';
+  import { isTauri } from '$lib/data/env';
+  import { customReadingPointEnabled$, viewMode$, windowAlwaysOnTop$ } from '$lib/data/store';
   import { ViewMode } from '$lib/data/view-mode';
   import { activateOnKeyup, isMobile$, isOnOldUrl } from '$lib/functions/utils';
   import { createEventDispatcher } from 'svelte';
@@ -126,6 +128,27 @@
     }
   };
 
+  // Two faces of one toggle, handled here rather than dispatched: the menu has
+  // no checked state, so the label says what choosing it will do.
+  const pin = {
+    pinWindow: {
+      routeId: '',
+      label: 'reader:pinWindow',
+      labelKey: 'reader.alwaysOnTop.on',
+      icon: faThumbtack,
+      title: '',
+      titleKey: 'reader.alwaysOnTop.on'
+    },
+    unpinWindow: {
+      routeId: '',
+      label: 'reader:unpinWindow',
+      labelKey: 'reader.alwaysOnTop.off',
+      icon: faThumbtack,
+      title: '',
+      titleKey: 'reader.alwaysOnTop.off'
+    }
+  };
+
   function dispatchOverflow(label: string) {
     if (label === mergeEntries.STATISTICS.label) {
       dispatch('statisticsClick');
@@ -133,6 +156,8 @@
       dispatch('jumpClick');
     } else if (label === mergeEntries.DOMAIN_HINT.label) {
       dispatch('domainHintClick');
+    } else if (label === pin.pinWindow.label || label === pin.unpinWindow.label) {
+      $windowAlwaysOnTop$ = label === pin.pinWindow.label;
     } else {
       const event = (Object.keys(overflow) as (keyof typeof overflow)[]).find(
         (key) => overflow[key].label === label
@@ -171,6 +196,10 @@
 
     if (textEditable) {
       items.push(overflow.editTextClick);
+    }
+
+    if (isTauri()) {
+      items.push($windowAlwaysOnTop$ ? pin.unpinWindow : pin.pinWindow);
     }
 
     items.push(overflow.completeBook);

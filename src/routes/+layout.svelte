@@ -10,6 +10,7 @@
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { installOcrFetchTracker } from '$lib/data/models-registry';
   import { checkForUpdate } from '$lib/functions/updater/check-for-update';
+  import { syncAlwaysOnTop } from '$lib/functions/window-always-on-top';
   import { goto } from '$app/navigation';
   import {
     customThemes$,
@@ -192,6 +193,8 @@
       startSyncLoop();
     }
     if (!isTauri()) return;
+
+    syncAlwaysOnTop();
 
     // Books opened via file association / CLI: queue paths and land on the
     // manager, which performs the actual import.
