@@ -3,6 +3,7 @@
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import type { StorageIconElement } from '$lib/data/storage/storage-view';
   import { onMount } from 'svelte';
+  import { t } from '$lib/i18n';
 
   export let icons: StorageIconElement[];
   export let target: StorageKey;
@@ -15,7 +16,7 @@
   });
 </script>
 
-<h2 class="mb-4 text-xl font-medium">导出目标</h2>
+<h2 class="mb-4 text-xl font-medium">{$t('bookExport.targetHeading')}</h2>
 <div class="mb-4 grid grid-cols-2 gap-8">
   {#each icons as icon (icon.source)}
     <BookExportIcon
@@ -28,11 +29,11 @@
     />
   {/each}
 </div>
-<h2 class="mb-2 text-xl font-medium">导出内容</h2>
+<h2 class="mb-2 text-xl font-medium">{$t('bookExport.contentHeading')}</h2>
 <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
   <div class="mr-4">
     <input type="checkbox" id="bookdata" name="data" value="data" bind:group={dataToReplicate} />
-    <label for="bookdata">书籍数据</label>
+    <label for="bookdata">{$t('bookExport.content.bookData')}</label>
   </div>
   <div>
     <input
@@ -42,7 +43,7 @@
       value="bookmark"
       bind:group={dataToReplicate}
     />
-    <label for="bookprogress">书签</label>
+    <label for="bookprogress">{$t('bookExport.content.bookmarks')}</label>
   </div>
   <div>
     <input
@@ -52,7 +53,7 @@
       value="statistic"
       bind:group={dataToReplicate}
     />
-    <label for="bookstatistic">统计</label>
+    <label for="bookstatistic">{$t('bookExport.content.statistics')}</label>
   </div>
   <div>
     <input
@@ -62,7 +63,7 @@
       value="audioBook"
       bind:group={dataToReplicate}
     />
-    <label for="audioBook">有声书</label>
+    <label for="audioBook">{$t('bookExport.content.audioBooks')}</label>
   </div>
   <div>
     <input
@@ -72,7 +73,7 @@
       value="subtitle"
       bind:group={dataToReplicate}
     />
-    <label for="subtitle">字幕</label>
+    <label for="subtitle">{$t('bookExport.content.subtitles')}</label>
   </div>
   <div>
     <input
@@ -82,6 +83,6 @@
       value="highlight"
       bind:group={dataToReplicate}
     />
-    <label for="highlight">高亮笔记</label>
+    <label for="highlight">{$t('bookExport.content.highlights')}</label>
   </div>
 </div>

@@ -18,14 +18,17 @@ pub async fn synthesize(
   headers: &HashMap<String, String>,
   body_template: &str,
   audio_path: Option<&str>,
+  proxy_url: Option<&str>,
   text: &str,
 ) -> Result<Vec<u8>, String> {
   let body = body_template.replace("{text}", &json_escape(text));
 
-  let client = reqwest::Client::builder()
-    .timeout(Duration::from_secs(60))
-    .build()
-    .map_err(|e| e.to_string())?;
+  let mut client_builder = reqwest::Client::builder().timeout(Duration::from_secs(60));
+  if let Some(proxy_url) = proxy_url.map(str::trim).filter(|s| !s.is_empty()) {
+    let proxy = reqwest::Proxy::all(proxy_url).map_err(|e| format!("代理格式错误: {e}"))?;
+    client_builder = client_builder.proxy(proxy);
+  }
+  let client = client_builder.build().map_err(|e| e.to_string())?;
 
   let method_upper = method.trim().to_uppercase();
   let mut req = match method_upper.as_str() {
@@ -55,9 +58,18 @@ pub async fn synthesize(
 
   let path = audio_path.map(str::trim).filter(|s| !s.is_empty());
 
-  // If the user told us where to find base64 audio inside the JSON body, walk
-  // the path and decode. Otherwise expect raw audio bytes and reject JSON.
-  if let Some(path) = path {
+  // If the user told us where to find audio inside the JSON body, walk the
+  // path. Two flavours:
+  //   * `<path>` — value is base64 audio; decode and return
+  //   * `url:<path>` — value is a URL; GET that URL and return its bytes
+  // The URL form covers services like Alibaba DashScope Qwen-TTS which
+  // wrap their response audio behind a signed OSS link.
+  if let Some(raw_path) = path {
+    let (is_url, path) = if let Some(rest) = raw_path.strip_prefix("url:") {
+      (true, rest.trim())
+    } else {
+      (false, raw_path)
+    };
     let json: serde_json::Value =
       serde_json::from_slice(&bytes).map_err(|e| format!("JSON 解析失败: {e}"))?;
     let target = navigate_json(&json, path).ok_or_else(|| {
@@ -66,12 +78,28 @@ pub async fn synthesize(
         truncate_for_error(&json.to_string(), 500)
       )
     })?;
-    let b64 = target
+    let s = target
       .as_str()
       .ok_or_else(|| format!("路径 '{path}' 不是字符串"))?;
+    if is_url {
+      let audio_resp = client
+        .get(s)
+        .send()
+        .await
+        .map_err(|e| format!("拉取音频 URL 失败: {e}"))?;
+      let audio_status = audio_resp.status();
+      let audio_bytes = audio_resp
+        .bytes()
+        .await
+        .map_err(|e| format!("读取音频 URL 字节失败: {e}"))?;
+      if !audio_status.is_success() {
+        return Err(format!("音频 URL HTTP {audio_status}"));
+      }
+      return Ok(audio_bytes.to_vec());
+    }
     use base64::Engine;
     let decoded = base64::engine::general_purpose::STANDARD
-      .decode(b64)
+      .decode(s)
       .map_err(|e| format!("base64 解码失败: {e}"))?;
     return Ok(decoded);
   }

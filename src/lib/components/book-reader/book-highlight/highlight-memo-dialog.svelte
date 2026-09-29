@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
+  import { t } from '$lib/i18n';
 
   export let memo = '';
   export let selectedText = '';
@@ -53,7 +54,7 @@
     style="background:var(--background-color,#fff);color:var(--font-color,#333);"
   >
     {#if selectedText}
-      <p class="mb-3 rounded bg-black/5 px-3 py-2 text-sm italic line-clamp-3">
+      <p class="mb-3 rounded bg-soft-active px-3 py-2 text-sm italic line-clamp-3">
         "{selectedText.slice(0, 200)}{selectedText.length > 200 ? '…' : ''}"
       </p>
     {/if}
@@ -62,14 +63,14 @@
       bind:value
       class="w-full rounded border border-current/20 bg-transparent p-2 text-sm"
       style="min-height:6rem;resize:vertical;"
-      placeholder="写点备注…"
+      placeholder={$t('highlight.memo.placeholder')}
       on:keydown={handleKeydown}
     />
     <input
       type="text"
       bind:value={tagsInput}
       class="mt-2 w-full rounded border border-current/20 bg-transparent px-2 py-1.5 text-sm"
-      placeholder="标签，空格或逗号分隔（如 写作 叙事 结构）"
+      placeholder={$t('highlight.memo.tagsPlaceholder')}
       on:keydown={handleKeydown}
     />
     <div class="mt-3 flex justify-end gap-2">
@@ -77,13 +78,13 @@
         type="button"
         class="rounded px-4 py-1.5 text-sm opacity-70 hover:opacity-100"
         on:click={() => dispatch('cancel')}
-      >取消</button>
+      >{$t('dialog.cancel')}</button>
       <button
         type="button"
         class="rounded px-4 py-1.5 text-sm font-medium"
-        style="background:rgba(95,126,123,0.9);color:#f0efe6;"
+        style="background:var(--menu-background);color:var(--menu-foreground);"
         on:click={commit}
-      >保存 (Ctrl+Enter)</button>
+      >{$t('highlight.memo.save')}</button>
     </div>
   </div>
 </div>

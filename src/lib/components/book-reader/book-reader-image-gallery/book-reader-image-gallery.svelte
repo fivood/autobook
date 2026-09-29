@@ -186,7 +186,7 @@
       <div class="flex flex-1">
         <button
           title="上一张"
-          class="mx-4 text-5xl hover:text-red-500"
+          class="mx-4 text-5xl hover-danger"
           class:invisible={!selectedImageIndex}
           on:click={previousImage}
         >
@@ -207,7 +207,7 @@
         </div>
         <button
           title="下一张"
-          class="mx-4 text-5xl hover:text-red-500"
+          class="mx-4 text-5xl hover-danger"
           class:invisible={selectedImageIndex === $readerImageGalleryPictures$.length - 1}
           on:click={nextImage}
         >

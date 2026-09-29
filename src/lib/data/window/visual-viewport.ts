@@ -10,4 +10,5 @@ export const visualViewport: VisualViewport =
     : ({
         addEventListener: () => 0,
         removeEventListener: () => 0
+        // SSR/no-window stub — VisualViewport is browser-only; partial mock suffices for non-DOM envs.
       } as any);

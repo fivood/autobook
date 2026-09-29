@@ -2,13 +2,14 @@
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { buttonClasses, inputClasses } from '$lib/css-classes';
+  import { t } from '$lib/i18n';
   import { createEventDispatcher, tick } from 'svelte';
 
   export let dialogHeader: string;
   export let placeholder = '';
   export let initialValue = '';
-  export let confirmLabel = '确认';
-  export let cancelLabel = '取消';
+  export let confirmLabel: string | undefined = undefined;
+  export let cancelLabel: string | undefined = undefined;
   export let resolver: (value: string | undefined) => void;
 
   let value = initialValue;
@@ -41,11 +42,11 @@
   </div>
   <div class="flex grow justify-between" slot="footer">
     <button class={buttonClasses} on:click={() => close(undefined)}>
-      {cancelLabel}
+      {cancelLabel ?? $t('dialog.cancel')}
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => close(value.trim() || undefined)}>
-      {confirmLabel}
+      {confirmLabel ?? $t('dialog.confirm')}
       <Ripple />
     </button>
   </div>

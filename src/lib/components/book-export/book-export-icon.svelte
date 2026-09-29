@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { activateOnKeyup } from '$lib/functions/utils';
+
   export let selected: boolean;
   export let disabled: boolean;
   export let d: string;
@@ -16,7 +18,7 @@
   class:cursor-not-allowed={disabled}
   class:hover:border-transparent={disabled}
   on:click
-  on:keyup
+  on:keyup={activateOnKeyup}
 >
   <svg
     class="inline-block h-8 w-8 md:h-14 md:w-14 lg:h-20 lg:w-20"

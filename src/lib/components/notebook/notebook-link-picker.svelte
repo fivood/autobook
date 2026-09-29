@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, tick } from 'svelte';
   import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
 
   export let source: BooksDbHighlight;
@@ -8,6 +8,9 @@
   const dispatch = createEventDispatcher<{ pick: number; cancel: void }>();
 
   let query = '';
+  let inputEl: HTMLInputElement | undefined;
+
+  tick().then(() => inputEl?.focus());
 
   $: filtered = candidates
     .filter((c) => c.id !== source.id && !(source.linkedIds || []).includes(c.id))
@@ -45,9 +48,13 @@
     <input
       type="search"
       bind:value={query}
+      bind:this={inputEl}
       placeholder="搜索原文 / 备注 / 书名"
       class="mb-2 w-full rounded border border-current/20 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-current/40"
-      autofocus
+      on:keydown={(ev) => {
+        if (ev.key === 'Escape') dispatch('cancel');
+        else if (ev.key === 'Enter' && filtered[0]) dispatch('pick', filtered[0].id);
+      }}
     />
     <div class="flex-1 overflow-y-auto">
       {#if !filtered.length}
@@ -56,7 +63,7 @@
       {#each filtered as c (c.id)}
         <button
           type="button"
-          class="mb-1 w-full rounded px-3 py-2 text-left text-sm hover:bg-black/5"
+          class="mb-1 w-full rounded px-3 py-2 text-left text-sm hover-soft"
           on:click={() => dispatch('pick', c.id)}
         >
           <p class="line-clamp-2 break-all">{preview(c)}</p>

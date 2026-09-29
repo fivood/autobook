@@ -2,7 +2,7 @@
   import { inputClasses } from '$lib/css-classes';
   import { reservedFontNames } from '$lib/data/fonts';
   import { userFonts$ } from '$lib/data/store';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
 
@@ -108,7 +108,7 @@
       }
     }}
   />
-  <div class:invisible={currentError === 'no error'} class="my-2 text-red-500">{currentError}</div>
+  <div class:invisible={currentError === 'no error'} class="my-2 text-danger">{currentError}</div>
   <div class="flex items-center just justify-between">
     <label class={`${inputClasses} w-40 text-center py-2 hover:opacity-25 mr-2`}>
       <input
@@ -131,7 +131,7 @@
           addFont();
         }
       }}
-      on:keyup={dummyFn}
+      on:keyup={activateOnKeyup}
     >
       <Fa class="text-xl mx-2" icon={faFloppyDisk} />
     </div>

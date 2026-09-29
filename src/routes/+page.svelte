@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n';
   import { goto } from '$app/navigation';
   import { pagePath } from '$lib/data/env';
   import { database } from '$lib/data/store';
@@ -13,7 +14,7 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('首页')}</title>
+  <title>{formatPageTitle($t('pageTitle.home'))}</title>
 </svelte:head>
 
 <div use:observe={autoNavigate$} />

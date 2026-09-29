@@ -5,11 +5,12 @@
  */
 
 import type BooksDb from './versions/books-db';
+import { LEGACY_SLOT_OF_COLOR } from '$lib/data/highlight-color';
 import { openDB } from 'idb';
 import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 
 export function createBooksDb(name = 'books') {
-  return openDB<BooksDb>(name, 9, {
+  return openDB<BooksDb>(name, 14, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
       switch (oldVersion) {
         case 0: {
@@ -77,37 +78,82 @@ export function createBooksDb(name = 'books') {
           freshBookFolderStore.createIndex('bookId', 'bookId');
           freshBookFolderStore.createIndex('folderId', 'folderId');
 
+          // v10: reading sessions.
+          const freshSessionStore = oldDb.createObjectStore('session', {
+            keyPath: 'id',
+            autoIncrement: true
+          });
+          freshSessionStore.createIndex('dateKey', 'dateKey');
+          freshSessionStore.createIndex('title', 'title');
+          freshSessionStore.createIndex('startTs', 'startTs');
+
+          // v11: manual book metadata (author / translator / publisher /
+          // cover) — one row per title, shared across the daily statistic
+          // rows of the same title.
+          const freshManualBookStore = oldDb.createObjectStore('manualBook', {
+            keyPath: 'title'
+          });
+          freshManualBookStore.createIndex('author', 'author');
+          freshManualBookStore.createIndex('updatedAt', 'updatedAt');
+
+          // v12: bibliographic metadata parsed out of imported files.
+          const freshBookMetadataStore = oldDb.createObjectStore('bookMetadata', {
+            keyPath: 'title'
+          });
+          freshBookMetadataStore.createIndex('author', 'author');
+
+          // v14: archived books — put away, not deleted.
+          const freshArchivedStore = oldDb.createObjectStore('archived', {
+            keyPath: 'title'
+          });
+          freshArchivedStore.createIndex('archivedAt', 'archivedAt');
+
           break;
         }
         case 2: {
-          await upgradeBooksDbFromV2(oldDb, oldVersion, newVersion, transaction);
-          break;
+          // The v1→v2 migration only applies to databases still on the old
+          // keyvaluepairs (localforage) layout. A db already at v2 has
+          // data/bookmark/lastItem and must not re-run it (the stores exist).
+          // `keyvaluepairs` isn't part of the current BooksDb type, so the
+          // cast widens the typed name list for this one legacy lookup.
+          if ((oldDb.objectStoreNames as unknown as string[]).includes('keyvaluepairs')) {
+            await upgradeBooksDbFromV2(oldDb, oldVersion, newVersion, transaction);
+          }
+          // Fall through to build any stores added after v2.
         }
         case 3: {
-          oldDb.createObjectStore('storageSource', {
-            keyPath: 'name'
-          });
-          break;
+          if (!oldDb.objectStoreNames.contains('storageSource')) {
+            oldDb.createObjectStore('storageSource', {
+              keyPath: 'name'
+            });
+          }
+          // Fall through to v4 → v5 upgrade.
         }
         case 4: {
-          const statisticsStore = oldDb.createObjectStore('statistic', {
-            keyPath: ['title', 'dateKey']
-          });
+          if (!oldDb.objectStoreNames.contains('statistic')) {
+            const statisticsStore = oldDb.createObjectStore('statistic', {
+              keyPath: ['title', 'dateKey']
+            });
 
-          statisticsStore.createIndex('dateKey', 'dateKey');
-          statisticsStore.createIndex('completedBook', ['completedBook', 'title']);
+            statisticsStore.createIndex('dateKey', 'dateKey');
+            statisticsStore.createIndex('completedBook', ['completedBook', 'title']);
+          }
 
-          const readingGoalsStore = oldDb.createObjectStore('readingGoal', {
-            keyPath: 'goalStartDate'
-          });
+          if (!oldDb.objectStoreNames.contains('readingGoal')) {
+            const readingGoalsStore = oldDb.createObjectStore('readingGoal', {
+              keyPath: 'goalStartDate'
+            });
 
-          readingGoalsStore.createIndex('goalEndDate', 'goalEndDate');
+            readingGoalsStore.createIndex('goalEndDate', 'goalEndDate');
+          }
 
-          oldDb.createObjectStore('lastModified', {
-            keyPath: ['title', 'dataType']
-          });
+          if (!oldDb.objectStoreNames.contains('lastModified')) {
+            oldDb.createObjectStore('lastModified', {
+              keyPath: ['title', 'dataType']
+            });
+          }
 
-          break;
+          // Fall through to v5 → v6 upgrade.
         }
         case 5: {
           if (!oldDb.objectStoreNames.contains('audioBook')) {
@@ -124,7 +170,6 @@ export function createBooksDb(name = 'books') {
 
           // Fall through to v6 → v7 upgrade.
         }
-        // eslint-disable-next-line no-fallthrough
         case 6: {
           if (!oldDb.objectStoreNames.contains('folder')) {
             const folderStore = oldDb.createObjectStore('folder', {
@@ -144,7 +189,6 @@ export function createBooksDb(name = 'books') {
 
           // Fall through to v7 → v8 upgrade.
         }
-        // eslint-disable-next-line no-fallthrough
         case 7: {
           if (!oldDb.objectStoreNames.contains('highlight')) {
             const highlightStore = oldDb.createObjectStore('highlight', {
@@ -156,7 +200,6 @@ export function createBooksDb(name = 'books') {
           }
           // Fall through to v8 → v9 upgrade.
         }
-        // eslint-disable-next-line no-fallthrough
         case 8: {
           if (!oldDb.objectStoreNames.contains('highlightFolder')) {
             const highlightFolderStore = oldDb.createObjectStore('highlightFolder', {
@@ -164,6 +207,60 @@ export function createBooksDb(name = 'books') {
               autoIncrement: true
             });
             highlightFolderStore.createIndex('sortOrder', 'sortOrder');
+          }
+          // fall through to v9 → v10 upgrade.
+        }
+        case 9: {
+          if (!oldDb.objectStoreNames.contains('session')) {
+            const sessionStore = oldDb.createObjectStore('session', {
+              keyPath: 'id',
+              autoIncrement: true
+            });
+            sessionStore.createIndex('dateKey', 'dateKey');
+            sessionStore.createIndex('title', 'title');
+            sessionStore.createIndex('startTs', 'startTs');
+          }
+          // fall through to v10 → v11 upgrade.
+        }
+        case 10: {
+          if (!oldDb.objectStoreNames.contains('manualBook')) {
+            const manualBookStore = oldDb.createObjectStore('manualBook', {
+              keyPath: 'title'
+            });
+            manualBookStore.createIndex('author', 'author');
+            manualBookStore.createIndex('updatedAt', 'updatedAt');
+          }
+          // fall through to v11 → v12 upgrade.
+        }
+        case 11: {
+          if (!oldDb.objectStoreNames.contains('bookMetadata')) {
+            const bookMetadataStore = oldDb.createObjectStore('bookMetadata', {
+              keyPath: 'title'
+            });
+            bookMetadataStore.createIndex('author', 'author');
+          }
+          // Fall through to v12 -> v13 upgrade.
+        }
+        case 12: {
+          // Highlight colours became slot ids. The palette is user-configurable
+          // now, so a stored 'yellow' would be a lie as soon as slot 1 is
+          // recoloured. Rewrite in place -- the id is the identity, appearance
+          // is a theme concern.
+          const highlightStore = transaction.objectStore('highlight');
+          for (const row of await highlightStore.getAll()) {
+            const slot = LEGACY_SLOT_OF_COLOR[row.color as string];
+            if (slot) {
+              await highlightStore.put({ ...row, color: slot });
+            }
+          }
+          // Fall through to v13 → v14 upgrade.
+        }
+        case 13: {
+          if (!oldDb.objectStoreNames.contains('archived')) {
+            const archivedStore = oldDb.createObjectStore('archived', {
+              keyPath: 'title'
+            });
+            archivedStore.createIndex('archivedAt', 'archivedAt');
           }
           break;
         }

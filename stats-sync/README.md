@@ -30,8 +30,12 @@ GET  /health                       → { ok: true }
 GET  /sync?token=<32hex>           → 完整状态 JSON
 POST /sync?token=<32hex>           Body: { books: { [title]: { [date]: { clients } } } }
                                    → 合并后的完整状态
+POST /report                       Body: { type: 'error' | 'install' | 'update' | 'import', message: string, ... }
+                                   → { ok: true, id: <uuid> }
 OPTIONS *                          → CORS 预检
 ```
+
+`/report` 接收 AutoBook 桌面端匿名错误报告（最大 64 KB），`type` 限定为 `error/install/update/import` 之一。数据存入 KV，key 前缀 `report:`，可在 Cloudflare Dashboard 或 `wrangler kv:key list --prefix report:` 查看。
 
 CORS：`*` 开放（统计数据非隐私敏感，且 token 即认证）。
 

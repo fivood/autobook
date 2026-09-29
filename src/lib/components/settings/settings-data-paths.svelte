@@ -1,17 +1,30 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Fa from 'svelte-fa';
-  import { faFolderOpen, faTrash, faRotateRight } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faFolderOpen,
+    faTrash,
+    faRotateRight,
+    faPen,
+    faArrowRotateLeft
+  } from '@fortawesome/free-solid-svg-icons';
   import { isTauri } from '$lib/data/env';
+  import { dialogManager } from '$lib/data/dialog-manager';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
+  import { fsRoot$, vaultSyncRoot$, vaultSyncLastError$ } from '$lib/data/store';
+  import { pickUserDir } from '$lib/functions/pick-user-dir';
+  import { t, tImmediate } from '$lib/i18n';
 
   interface DataPaths {
     webviewRoot: string;
     localStorageDirs: string[];
     indexeddbDirs: string[];
     indexeddbBytes: number;
-    documentsRoot: string;
-    documentsBytes: number;
-    documentsExists: boolean;
+    fsRoot: string;
+    fsRootBytes: number;
+    fsRootExists: boolean;
+    defaultFsRoot: string;
+    isDefaultFsRoot: boolean;
   }
 
   let paths: DataPaths | undefined;
@@ -26,9 +39,9 @@
     }
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      paths = (await invoke('get_data_paths')) as DataPaths;
+      paths = (await invoke('get_data_paths', { fsRoot: $fsRoot$ })) as DataPaths;
     } catch (err: any) {
-      message = `读取路径失败：${err?.message || err}`;
+      message = tImmediate('dataPaths.readFail', { err: err?.message || err });
     } finally {
       loading = false;
     }
@@ -39,10 +52,10 @@
   async function copyPath(p: string) {
     try {
       await navigator.clipboard.writeText(p);
-      message = '已复制到剪贴板';
+      message = tImmediate('dataPaths.copied');
       setTimeout(() => (message = ''), 1500);
     } catch (err: any) {
-      message = `复制失败：${err?.message || err}`;
+      message = tImmediate('dataPaths.copyFail', { err: err?.message || err });
     }
   }
 
@@ -53,33 +66,142 @@
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('open_data_folder', { path: p });
     } catch (err: any) {
-      message = `打开失败：${err?.message || err}`;
+      message = tImmediate('dataPaths.openFail', { err: err?.message || err });
     } finally {
       busy = false;
     }
   }
 
-  async function clearAll() {
-    if (
-      !confirm(
-        '⚠ 即将清除全部本地数据：\n\n' +
-          '• 所有书籍内容\n' +
-          '• 所有高亮 / 笔记本 / 标签 / 文件夹\n' +
-          '• 阅读统计 / 阅读时长 / 完成记录\n' +
-          '• 所有 UI 设置 / 主题 / 同步 token / API key\n\n' +
-          '此操作不可恢复。Documents/AutoBook 文件夹里同步过的副本不会被删，但 IndexedDB 主存储会彻底清空。继续？'
-      )
-    )
-      return;
-    if (!confirm('再确认一次：真的要清空吗？')) return;
+  /** Notes folder mirrored into the library. Read-only on our side, so this
+   * only needs the same directory grant the picker already hands out. */
+  async function pickVaultRoot() {
+    if (!isTauri()) return;
     busy = true;
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('schedule_full_reset');
+      const picked = await pickUserDir({ defaultPath: $vaultSyncRoot$ || undefined });
+      if (picked) vaultSyncRoot$.next(picked);
     } catch (err: any) {
-      message = `清除失败：${err?.message || err}`;
+      message = tImmediate('dataPaths.pickFail', { err: err?.message || err });
+    } finally {
       busy = false;
     }
+  }
+
+  async function pickFsRoot() {
+    if (!isTauri() || !paths) return;
+    busy = true;
+    try {
+      const picked = await pickUserDir({ defaultPath: paths.fsRoot });
+      if (!picked) return;
+      const nextRoot = picked;
+      if (nextRoot === paths.fsRoot) return;
+      await applyFsRoot(nextRoot, paths.fsRoot, paths.fsRootExists);
+    } catch (err: any) {
+      message = tImmediate('dataPaths.pickFail', { err: err?.message || err });
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function applyFsRoot(nextRoot: string, prevRoot: string, prevExists: boolean) {
+    // Two decoupled steps: (1) switch where new data is written, (2) optional
+    // one-shot migration of the old folder. Switching happens first and always
+    // succeeds; a failed migration leaves the root switched with an error toast.
+    const oldHasData = prevExists && !(await isDirEmpty(prevRoot));
+    let wantMove = false;
+
+    if (oldHasData) {
+      wantMove = await new Promise<boolean>((resolver) => {
+        dialogManager.dialogs$.next([
+          {
+            component: ConfirmDialog,
+            props: {
+              dialogHeader: tImmediate('dataPaths.migrate.title'),
+              dialogMessage: tImmediate('dataPaths.migrate.body', {
+                from: prevRoot,
+                to: nextRoot
+              }),
+              contentStyles: 'white-space: pre-line;',
+              disableCloseOnClick: true,
+              resolver: (wasCanceled: boolean) => resolver(!wasCanceled)
+            },
+            disableCloseOnClick: true
+          }
+        ]);
+      });
+    }
+
+    if (wantMove) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('move_directory', { from: prevRoot, to: nextRoot });
+      } catch (err: any) {
+        // Report the failure but continue: the user picked a new folder, we
+        // owe them the switch even if the data-move step didn't work.
+        message = tImmediate('dataPaths.migrateFail', { err: err?.message || err });
+      }
+    }
+
+    $fsRoot$ = nextRoot;
+    await load();
+  }
+
+  async function isDirEmpty(path: string): Promise<boolean> {
+    if (!isTauri()) return true;
+    try {
+      const { readDir } = await import('@tauri-apps/plugin-fs');
+      const entries = await readDir(path);
+      return entries.length === 0;
+    } catch {
+      // If we can't read it, treat as empty — nothing meaningful to migrate.
+      return true;
+    }
+  }
+
+  async function restoreDefault() {
+    if (!paths) return;
+    const defaultRoot = paths.defaultFsRoot;
+    if (paths.isDefaultFsRoot) return;
+    await applyFsRoot('', paths.fsRoot, paths.fsRootExists);
+    // Refresh reads the effective default; nothing else to do.
+    void defaultRoot;
+  }
+
+  function clearAll() {
+    const header = tImmediate('dataPaths.clearAll');
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: header,
+          dialogMessage: tImmediate('dataPaths.clearConfirm'),
+          contentStyles: 'white-space: pre-line;',
+          resolver: (wasCanceled: boolean) => {
+            if (wasCanceled) return;
+            dialogManager.dialogs$.next([
+              {
+                component: ConfirmDialog,
+                props: {
+                  dialogHeader: header,
+                  dialogMessage: tImmediate('dataPaths.clearConfirmAgain'),
+                  resolver: async (wasCanceledAgain: boolean) => {
+                    if (wasCanceledAgain) return;
+                    busy = true;
+                    try {
+                      const { invoke } = await import('@tauri-apps/api/core');
+                      await invoke('schedule_full_reset');
+                    } catch (err: any) {
+                      message = tImmediate('dataPaths.clearFail', { err: err?.message || err });
+                      busy = false;
+                    }
+                  }
+                }
+              }
+            ]);
+          }
+        }
+      }
+    ]);
   }
 
   function formatBytes(b: number): string {
@@ -92,130 +214,199 @@
 </script>
 
 {#if !isTauri()}
-  <p class="opacity-70 text-sm">桌面端可用。</p>
+  <p class="opacity-70 text-sm">{$t('dataPaths.desktopOnly')}</p>
 {:else if loading}
-  <p class="opacity-70 text-sm">读取中…</p>
+  <p class="opacity-70 text-sm">{$t('dataPaths.loading')}</p>
 {:else if paths}
-  <div class="space-y-3 text-sm">
-    <div class="row">
-      <div class="label">书库 + 高亮 + 笔记本 + 统计（IndexedDB）</div>
-      <div class="meta">{formatBytes(paths.indexeddbBytes)} · {paths.indexeddbDirs.length} 个 webview profile</div>
-      {#each paths.indexeddbDirs as p (p)}
-        <div class="path-row">
-          <code class="path">{p}</code>
-          <button class="btn" on:click={() => copyPath(p)} title="复制路径">复制</button>
-          <button class="btn" on:click={() => openInExplorer(p)} disabled={busy}><Fa icon={faFolderOpen} size="xs" /></button>
+  <div class="text-sm">
+    <div class="grid">
+      <div class="row fs-row">
+        <div class="label">{$t('dataPaths.section.fs.label')}</div>
+        <div class="meta">
+          {paths.isDefaultFsRoot
+            ? $t('dataPaths.section.fs.metaDefault', {
+                status: paths.fsRootExists
+                  ? formatBytes(paths.fsRootBytes)
+                  : $t('dataPaths.section.fs.notCreated')
+              })
+            : $t('dataPaths.section.fs.metaCustom', {
+                status: paths.fsRootExists
+                  ? formatBytes(paths.fsRootBytes)
+                  : $t('dataPaths.section.fs.notCreated')
+              })}
         </div>
-      {/each}
-      <p class="hint">主存储。受 WebView2 管理，无法直接搬迁；可以用 Settings → Data → 跨设备同步 + 「立刻推送」备份阅读时长，或对单本书用「FS 同步」存到 Documents/AutoBook</p>
-    </div>
-
-    <div class="row">
-      <div class="label">UI 设置 / token / API key（localStorage）</div>
-      {#each paths.localStorageDirs as p (p)}
         <div class="path-row">
-          <code class="path">{p}</code>
-          <button class="btn" on:click={() => copyPath(p)} title="复制路径">复制</button>
-          <button class="btn" on:click={() => openInExplorer(p)} disabled={busy}><Fa icon={faFolderOpen} size="xs" /></button>
+          <code class="path" title={paths.fsRoot}>{paths.fsRoot}</code>
+          <button class="settings-btn settings-btn-icon" on:click={() => paths && copyPath(paths.fsRoot)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
+          <button class="settings-btn settings-btn-icon" on:click={() => paths && openInExplorer(paths.fsRoot)} disabled={busy} title={$t('dataPaths.openInExplorer')}>
+            <Fa icon={faFolderOpen} size="xs" />
+          </button>
         </div>
-      {/each}
-      <p class="hint">用「数据 → 重置 UI 设置」可单独清除这部分，不影响书库</p>
-    </div>
+        <div class="fs-actions">
+          <button class="settings-btn" on:click={pickFsRoot} disabled={busy}>
+            <Fa icon={faPen} size="xs" /> {$t('dataPaths.section.fs.change')}
+          </button>
+          {#if !paths.isDefaultFsRoot}
+            <button class="settings-btn" on:click={restoreDefault} disabled={busy}>
+              <Fa icon={faArrowRotateLeft} size="xs" /> {$t('dataPaths.section.fs.restoreDefault')}
+            </button>
+          {/if}
+        </div>
+        <p class="hint">{$t('dataPaths.section.fs.hint')}</p>
+      </div>
 
-    <div class="row">
-      <div class="label">本地 FS 同步副本（Documents/AutoBook/）</div>
-      <div class="meta">
-        {paths.documentsExists ? formatBytes(paths.documentsBytes) : '（目录还未创建）'}
+      <div class="row">
+        <div class="label">{$t('vaultSync.label')}</div>
+        {#if $vaultSyncRoot$}
+          <div class="path-row">
+            <code class="path" title={$vaultSyncRoot$}>{$vaultSyncRoot$}</code>
+            <button
+              class="settings-btn settings-btn-icon"
+              on:click={() => openInExplorer($vaultSyncRoot$)}
+              disabled={busy}
+              title={$t('dataPaths.openInExplorer')}
+            >
+              <Fa icon={faFolderOpen} size="xs" />
+            </button>
+          </div>
+        {/if}
+        <div class="fs-actions">
+          <button class="settings-btn" on:click={pickVaultRoot} disabled={busy}>
+            <Fa icon={faPen} size="xs" />
+            {$vaultSyncRoot$ ? $t('vaultSync.change') : $t('vaultSync.choose')}
+          </button>
+          {#if $vaultSyncRoot$}
+            <button class="settings-btn" on:click={() => vaultSyncRoot$.next('')} disabled={busy}>
+              <Fa icon={faArrowRotateLeft} size="xs" /> {$t('vaultSync.disable')}
+            </button>
+          {/if}
+        </div>
+        <p class="hint">{$t('vaultSync.hint')}</p>
+        <!-- This sync only ever runs automatically (nothing calls it with
+             manual=true), so a failure has nowhere else to appear. Same
+             treatment as the reading-time sync above: state it here, quietly. -->
+        {#if $vaultSyncLastError$}
+          <p class="hint" style="color:var(--danger-color);">
+            {$t('vaultSync.autoFailed', { detail: $vaultSyncLastError$ })}
+          </p>
+        {/if}
       </div>
-      <div class="path-row">
-        <code class="path">{paths?.documentsRoot}</code>
-        <button class="btn" on:click={() => paths && copyPath(paths.documentsRoot)} title="复制路径">复制</button>
-        <button class="btn" on:click={() => paths && openInExplorer(paths.documentsRoot)} disabled={busy}>
-          <Fa icon={faFolderOpen} size="xs" /> 在资源管理器打开
-        </button>
+
+      <div class="row">
+        <div class="label">{$t('dataPaths.section.library.label')}</div>
+        <div class="meta">{$t('dataPaths.meta.idb', { size: formatBytes(paths.indexeddbBytes), n: paths.indexeddbDirs.length })}</div>
+        {#each paths.indexeddbDirs as p (p)}
+          <div class="path-row">
+            <code class="path" title={p}>{p}</code>
+            <button class="settings-btn settings-btn-icon" on:click={() => copyPath(p)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
+            <button class="settings-btn settings-btn-icon" on:click={() => openInExplorer(p)} disabled={busy} title={$t('dataPaths.openInExplorer')}><Fa icon={faFolderOpen} size="xs" /></button>
+          </div>
+        {/each}
+        <p class="hint">{$t('dataPaths.section.library.hint')}</p>
       </div>
-      <p class="hint">仅当你在「Data → 存储源」里启用了「本地 FS 同步」才会写到这里。默认书库在 IndexedDB 不会自动同步到这</p>
+
+      <div class="row">
+        <div class="label">{$t('dataPaths.section.ui.label')}</div>
+        <div class="meta">{$t('dataPaths.meta.localStorage')}</div>
+        {#each paths.localStorageDirs as p (p)}
+          <div class="path-row">
+            <code class="path" title={p}>{p}</code>
+            <button class="settings-btn settings-btn-icon" on:click={() => copyPath(p)} title={$t('dataPaths.copyPath')}>{$t('dataPaths.copy')}</button>
+            <button class="settings-btn settings-btn-icon" on:click={() => openInExplorer(p)} disabled={busy} title={$t('dataPaths.openInExplorer')}><Fa icon={faFolderOpen} size="xs" /></button>
+          </div>
+        {/each}
+        <p class="hint">{$t('dataPaths.section.ui.hint')}</p>
+      </div>
     </div>
 
     <div class="actions">
-      <button class="btn" on:click={load} disabled={busy} title="重新读取大小">
-        <Fa icon={faRotateRight} size="xs" /> 刷新
+      <button class="settings-btn" on:click={load} disabled={busy} title={$t('dataPaths.refreshTooltip')}>
+        <Fa icon={faRotateRight} size="xs" /> {$t('dataPaths.refresh')}
       </button>
-      <button class="btn danger" on:click={clearAll} disabled={busy}>
-        <Fa icon={faTrash} size="xs" /> 清除全部本地数据并重启
+      <button class="settings-btn settings-btn-danger" on:click={clearAll} disabled={busy}>
+        <Fa icon={faTrash} size="xs" /> {$t('dataPaths.clearAll')}
       </button>
+      {#if message}
+        <span class="message">{message}</span>
+      {/if}
     </div>
-
-    {#if message}
-      <p class="hint">{message}</p>
-    {/if}
   </div>
 {/if}
 
 <style>
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  @media (min-width: 1024px) {
+    .grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .fs-row {
+      grid-column: 1 / -1;
+    }
+  }
   .row {
-    padding: 0.6rem 0.8rem;
+    display: flex;
+    flex-direction: column;
+    padding: 0.65rem 0.8rem;
     border: 1px solid var(--fg-dim, currentColor);
     border-radius: 0.5rem;
     background: rgba(127, 127, 127, 0.05);
+    min-width: 0;
   }
   .label {
     font-weight: 600;
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.15rem;
   }
   .meta {
-    font-size: 0.72rem;
-    opacity: 0.7;
-    margin-bottom: 0.4rem;
+    font-size: 0.8125rem;
+    opacity: 0.65;
+    margin-bottom: 0.45rem;
   }
   .path-row {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    margin-top: 0.3rem;
+    gap: 0.3rem;
+    margin-top: 0.25rem;
     min-width: 0;
   }
   .path {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    direction: rtl;
+    text-align: left;
     font-family: ui-monospace, monospace;
-    font-size: 0.72rem;
+    font-size: 0.8125rem;
     padding: 0.25rem 0.4rem;
     background: rgba(127, 127, 127, 0.12);
     border-radius: 0.3rem;
   }
-  .btn {
-    flex: 0 0 auto;
-    padding: 0.3rem 0.6rem;
-    border: 1px solid var(--fg-dim, currentColor);
-    border-radius: 0.3rem;
-    background: transparent;
-    color: inherit;
-    font-size: 0.75rem;
-    cursor: pointer;
-  }
-  .btn:hover:not(:disabled) {
-    background: rgba(127, 127, 127, 0.1);
-  }
-  .btn.danger {
-    color: #c64a4a;
-    border-color: #c64a4a;
-  }
-  .btn.danger:hover:not(:disabled) {
-    background: rgba(198, 74, 74, 0.1);
+  .fs-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
   }
   .actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 0.5rem;
-    margin-top: 0.5rem;
+    margin-top: 0.85rem;
+  }
+  .message {
+    font-size: 0.8125rem;
+    opacity: 0.7;
   }
   .hint {
-    font-size: 0.72rem;
-    opacity: 0.65;
-    margin: 0.3rem 0 0;
+    font-size: 0.8125rem;
+    opacity: 0.6;
+    margin: 0.45rem 0 0;
     line-height: 1.5;
   }
 </style>

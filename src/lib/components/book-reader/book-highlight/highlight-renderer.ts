@@ -1,12 +1,7 @@
 import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
+import { normalizeHighlightSlot } from '$lib/data/highlight-color';
 
 const HL_ATTR = 'data-hl-id';
-const HL_CLASS_MAP: Record<string, string> = {
-  yellow: 'hl-yellow',
-  blue: 'hl-blue',
-  green: 'hl-green',
-  pink: 'hl-pink'
-};
 
 function textNodesUnder(root: Node): Text[] {
   const result: Text[] = [];
@@ -42,7 +37,7 @@ export function rangeToOffsets(
   return { start, end };
 }
 
-export function clearHighlightMarks(container: HTMLElement): void {
+function clearHighlightMarks(container: HTMLElement): void {
   const marks = container.querySelectorAll<HTMLElement>(`mark[${HL_ATTR}]`);
   marks.forEach((mark) => {
     const parent = mark.parentNode!;
@@ -54,7 +49,7 @@ export function clearHighlightMarks(container: HTMLElement): void {
   container.normalize();
 }
 
-export function applyHighlightsToDOM(
+function applyHighlightsToDOM(
   container: HTMLElement,
   highlights: BooksDbHighlight[]
 ): void {
@@ -69,6 +64,7 @@ export function applyHighlightsToDOM(
     hlEnd: number;
     hlId: number;
     color: string;
+    hasMemo: boolean;
   }
 
   const ops: WrapOp[] = [];
@@ -84,7 +80,7 @@ export function applyHighlightsToDOM(
       if (hl.endOffset > offset) {
         const hlStart = Math.max(0, hl.startOffset - offset);
         const hlEnd = Math.min(len, hl.endOffset - offset);
-        ops.push({ node, hlStart, hlEnd, hlId: hl.id, color: hl.color });
+        ops.push({ node, hlStart, hlEnd, hlId: hl.id, color: hl.color, hasMemo: !!hl.memo?.trim() });
       }
       if (hl.endOffset <= nodeEnd) {
         hlIdx++;
@@ -98,8 +94,8 @@ export function applyHighlightsToDOM(
   }
 
   for (let i = ops.length - 1; i >= 0; i--) {
-    const { node, hlStart, hlEnd, hlId, color } = ops[i];
-    const cls = HL_CLASS_MAP[color] || HL_CLASS_MAP.yellow;
+    const { node, hlStart, hlEnd, hlId, color, hasMemo } = ops[i];
+    const cls = `hl-${normalizeHighlightSlot(color)}`;
 
     let target: Text = node;
     if (hlEnd < (node.textContent?.length || 0)) {
@@ -112,6 +108,10 @@ export function applyHighlightsToDOM(
     const mark = document.createElement('mark');
     mark.className = cls;
     mark.setAttribute(HL_ATTR, String(hlId));
+    // Lets the stylesheet mark annotated passages and the reader decide
+    // whether hovering should surface a memo card, without re-querying the
+    // store for every mouse move.
+    if (hasMemo) mark.setAttribute('data-hl-memo', '');
     target.parentNode!.insertBefore(mark, target);
     mark.appendChild(target);
   }

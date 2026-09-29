@@ -14,6 +14,7 @@ export function isTauri(): boolean {
   return (
     '__TAURI_INTERNALS__' in window ||
     '__TAURI__' in window ||
+    // isTauri is the Tauri 1.x global; Tauri 2 uses __TAURI_INTERNALS__ above.
     !!(window as any).isTauri
   );
 }

@@ -4,8 +4,12 @@
  * All rights reserved.
  */
 
+import type { BookCardId } from '$lib/data/book-id';
+
 export interface BookCardProps {
-  id: number;
+  /** Library-grid id. Equals the IDB `data.id` only under browser storage —
+   * see book-id.ts. */
+  id: BookCardId;
   imagePath: string | Blob;
   title: string;
   characters: number;
@@ -14,4 +18,8 @@ export interface BookCardProps {
   progress: number;
   lastBookmarkModified: number;
   isPlaceholder: boolean;
+  /** Original file format from import time (epub/mobi/pdf/…). May be
+   * undefined for books imported before 1.20.2 — the detail popover
+   * falls back to detecting from the title's extension. */
+  originalFormat?: string;
 }

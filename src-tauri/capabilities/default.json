@@ -7,6 +7,7 @@
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-set-always-on-top",
     "fs:default",
     "updater:default",
     "process:default",
@@ -26,8 +27,7 @@
       "allow": [
         { "path": "$DOCUMENT/AutoBook" },
         { "path": "$DOCUMENT/AutoBook/**" },
-        { "path": "$DOCUMENT/AutoBook/*" },
-        { "path": "**" }
+        { "path": "$DOCUMENT/AutoBook/*" }
       ]
     }
   ]

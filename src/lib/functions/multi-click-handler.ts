@@ -4,7 +4,8 @@
  * All rights reserved.
  */
 
-import { Subscription, debounceTime, fromEvent, merge, tap } from 'rxjs';
+import { debounceTime, fromEvent, merge, tap } from 'rxjs';
+import type { Subscription } from 'rxjs';
 
 export function multiClickHandler(node: Node, handler: { (): void }[]) {
   const [singleClickListener, doubleClickListener] = handler;
