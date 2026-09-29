@@ -13,6 +13,8 @@ mod custom_tts;
 mod edge_tts;
 mod kf8_indx;
 mod kf8_parser;
+mod kindle;
+mod koreader;
 mod mobi_parser;
 mod proxy;
 mod winrt_tts;
@@ -645,6 +647,8 @@ pub fn run() {
       default_fs_root,
       pick_user_dir,
       move_directory,
+      kindle::find_kindle_books,
+      koreader::read_koreader,
       mobi_parser::parse_mobi,
       calibre_converter::check_calibre,
       calibre_converter::convert_with_calibre

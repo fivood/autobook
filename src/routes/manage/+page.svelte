@@ -80,6 +80,9 @@
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
   import { submitReport } from '$lib/functions/report-error';
+  import { importFromKindle, scanKindle } from '$lib/functions/kindle-import';
+  import { importFromKoreader } from '$lib/functions/koreader-import';
+  import RandomQuoteCard from '$lib/components/book-card/random-quote-card.svelte';
   import {
     importBackup,
     importData,
@@ -98,6 +101,7 @@
   import {
     combineLatest,
     defer,
+    firstValueFrom,
     map,
     Observable,
     share,
@@ -266,6 +270,19 @@
     if (!q) return cards;
     return cards.filter((c) => c.title.toLowerCase().includes(q));
   })();
+  /** Never-opened books the random-quote card may draw from. The size floor
+   * (stored count, every code point) keeps out comics — whose count is their
+   * page labels — and scratch files, before anything gets unpacked. */
+  $: quoteCandidates = ($bookCards$ || [])
+    .filter(
+      (c) =>
+        !c.progress &&
+        !c.lastBookOpen &&
+        !c.isPlaceholder &&
+        c.characters >= 20000 &&
+        !$archivedTitles$.has(c.title)
+    )
+    .map((c) => ({ id: c.id, title: c.title }));
   let cancelToken = new AbortController();
   let cancelSignal = cancelToken.signal;
   let cancelTooltip = '';
@@ -463,7 +480,13 @@
     return sortDiff;
   }
 
-  async function onBookClick(bookId: BookCardId, shiftKey = false, toggleKey = false) {
+  /** `openAtPos`: reader character count to open at instead of the bookmark. */
+  async function onBookClick(
+    bookId: BookCardId,
+    shiftKey = false,
+    toggleKey = false,
+    openAtPos?: number
+  ) {
     if (!operationAllowed()) {
       return;
     }
@@ -556,7 +579,7 @@
       }
 
       openingBook = false;
-      openBook(idToOpen);
+      openBook(idToOpen, openAtPos);
       return;
     }
 
@@ -648,17 +671,17 @@
     return !replicationToProgress && connectivityPass;
   }
 
-  function openBook(bookId: number) {
+  function openBook(bookId: number, pos?: number) {
     if (!bookId) {
       return;
     }
 
     database.putLastItem(bookId);
-    gotoBook(bookId);
+    gotoBook(bookId, pos);
   }
 
-  async function gotoBook(id: number) {
-    await goto(`${pagePath}/b?id=${id}`);
+  async function gotoBook(id: number, pos?: number) {
+    await goto(`${pagePath}/b?id=${id}${pos == null ? '' : `&pos=${pos}`}`);
   }
 
   /**
@@ -888,9 +911,14 @@
     if (folder) await addBooksToFolder([cardId], folder.id);
   }
 
-  async function onFilesChange(fileList: FileList | File[]) {
+  /** `reportErrors: false` hands failures back instead of opening a dialog —
+   * for callers that import in several runs and report once at the end. */
+  async function onFilesChange(
+    fileList: FileList | File[],
+    reportErrors = true
+  ): Promise<{ imported: ImportedBook[]; error: string }> {
     if (!operationAllowed()) {
-      return;
+      return { imported: [], error: '' };
     }
 
     cancelTooltip = tImmediate('manager.cancelImport');
@@ -913,7 +941,7 @@
         '文件必须是 EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3 / PDF / CBZ / CBR / CB7 / CBT，或包含这些格式的 ZIP',
         ''
       );
-      return;
+      return { imported: [], error: '' };
     }
 
     const result = await importData(
@@ -948,7 +976,7 @@
           () => undefined
         );
       }
-      showError(errorTitle, error, '书籍导入期间发生错误');
+      if (reportErrors) showError(errorTitle, error, '书籍导入期间发生错误');
     } else {
       // Large-file hint: a big comic/scanned-PDF imported into the browser
       // (IndexedDB) store bloats it and slows every book-list refresh. When a
@@ -961,6 +989,8 @@
         );
       }
     }
+
+    return result;
   }
 
   $: if (browser && $pendingLaunchFiles$.length) {
@@ -983,6 +1013,84 @@
       await onFilesChange(files);
     } catch (err: any) {
       showError('书籍导入失败', err.message, '打开文件时发生错误');
+    }
+  }
+
+  async function onKindleImport() {
+    const title = tImmediate('manager.kindle.errorTitle');
+    try {
+      const scan = await scanKindle();
+      if (!scan) {
+        showError(title, tImmediate('manager.kindle.notFound'), '');
+        return;
+      }
+      const result = await importFromKindle(
+        scan,
+        new Set(($bookCards$ || []).map((card) => card.title)),
+        (files) => onFilesChange(files, false),
+        () => cancelSignal.aborted
+      );
+      // KOReader stats + highlights piggyback on the same "insert Kindle"
+      // gesture. The book list is re-read from the handler rather than taken
+      // from `$bookCards$`: that store trails the import by a refresh, and the
+      // books just pulled off the Kindle are exactly the ones KOReader has
+      // records for.
+      let koLine = '';
+      let fallbackNote = '';
+      if (!scan.koreader) {
+        fallbackNote = tImmediate(
+          scan.jailbroken ? 'manager.kindle.noKoreader' : 'manager.kindle.notJailbroken'
+        );
+      } else {
+        const cards = await firstValueFrom(database.dataList$);
+        const ko = await importFromKoreader(scan.root, cards, $storageSource$).catch(
+          (err: any) => {
+            result.errors.push(String(err?.message ?? err));
+            return undefined;
+          }
+        );
+        if (ko === null) {
+          fallbackNote = tImmediate('manager.kindle.koreaderUnused');
+        } else if (ko) {
+          if (ko.days + ko.highlights + ko.progress) {
+            koLine = tImmediate('manager.kindle.koreader', {
+              days: ko.days,
+              hl: ko.highlights,
+              pr: ko.progress
+            });
+          }
+          // Not an error: KOReader simply read something that never came
+          // into the library. Worth knowing, not worth a failure dialog.
+          if (ko.skipped.length) {
+            fallbackNote = tImmediate('manager.kindle.koreaderSkipped', {
+              list: ko.skipped.join('、')
+            });
+          }
+        }
+      }
+
+      const base = result.pending
+        ? tImmediate('manager.kindle.done', { n: result.imported })
+        : tImmediate('manager.kindle.upToDate', { n: scan.books.length });
+      if (result.errors.length) {
+        showError(title, result.errors.join('\n'), '');
+      } else if (fallbackNote) {
+        // A toast is gone in under two seconds — too short to read why only
+        // the books came across.
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title,
+              message: [koLine ? `${base}；${koLine}` : base, fallbackNote].join('\n\n')
+            }
+          }
+        ]);
+      } else {
+        flashToast(koLine ? `${base}；${koLine}` : base);
+      }
+    } catch (err: any) {
+      showError(title, err?.message ?? String(err), '');
     }
   }
 
@@ -1452,6 +1560,7 @@
       }
     }}
     on:importBackup={(ev) => onImportBackup(ev.detail)}
+    on:kindleImport={onKindleImport}
   />
 </div>
 
@@ -1692,6 +1801,13 @@
         {/if}
       {/if}
     </div>
+  {/if}
+  {#if $activeFolderFilter$ === 'all' && !selectMode}
+    <RandomQuoteCard
+      candidates={quoteCandidates}
+      storageSource={$storageSource$}
+      on:open={(ev) => onBookClick(ev.detail.id, false, false, ev.detail.pos)}
+    />
   {/if}
   <div class="mb-3 flex items-center gap-2">
     <div class="relative flex-1 max-w-md">

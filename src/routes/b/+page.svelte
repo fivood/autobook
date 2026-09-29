@@ -592,9 +592,31 @@
     reduceToEmptyString()
   );
 
+  // `/b?pos=N` (the library's random-quote card) opens at character N instead
+  // of the saved bookmark. It only stands in for the bookmark during the
+  // initial scroll; whatever gets saved afterwards (auto-bookmark, manual) is
+  // the real reading position as usual. Dropped from the URL once read so a
+  // reload resumes from the saved bookmark.
+  let pendingOpenPos = browser
+    ? Number(new URL(window.location.href).searchParams.get('pos') ?? NaN)
+    : NaN;
+
   const initBookmarkData$ = rawBookData$.pipe(
     tap((rawBookData) => {
       if (!rawBookData) return;
+      if (Number.isFinite(pendingOpenPos) && pendingOpenPos >= 0) {
+        bookmarkData = Promise.resolve({
+          dataId: rawBookData.id,
+          exploredCharCount: pendingOpenPos,
+          progress: 0,
+          lastBookmarkModified: 0
+        });
+        pendingOpenPos = NaN;
+        const url = new URL(window.location.href);
+        url.searchParams.delete('pos');
+        window.history.replaceState({}, '', url.toString());
+        return;
+      }
       bookmarkData = database.getBookmark(rawBookData.id);
     }),
     reduceToEmptyString()

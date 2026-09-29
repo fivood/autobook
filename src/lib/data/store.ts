@@ -755,6 +755,12 @@ export const lastExportedTarget$ = writableStringLocalStorageSubject<StorageKey>
   StorageKey.BACKUP
 );
 
+/** Kindle `documents/…` paths already imported (see kindle-import.ts). */
+export const kindleImportedPaths$ = writableArrayLocalStorageSubject<string>()(
+  'kindleImportedPaths',
+  []
+);
+
 export const lastExportedTypes$ = writableArrayLocalStorageSubject<StorageDataType>()(
   'lastExportedTypes',
   [StorageDataType.PROGRESS, StorageDataType.STATISTICS]

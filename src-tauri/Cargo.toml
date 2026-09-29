@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.51.2"
+version = "1.52.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -44,6 +44,9 @@ tokio = { version = "1", features = ["sync", "rt", "time", "macros", "process", 
 reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
 base64 = "0.22"
 mobi = "0.8"
+# koreader.rs reads KOReader's statistics.sqlite3 off the Kindle. Bundled so
+# no system SQLite is needed on Windows.
+rusqlite = { version = "0.32", features = ["bundled"] }
 encoding_rs = "0.8.35"
 # edge_tts: WSS to speech.platform.bing.com + SHA-256 Sec-MS-GEC token +
 # UUID for ConnectionId/X-RequestId. rustls-tls-webpki-roots keeps the TLS

@@ -25,6 +25,7 @@ import {
   faImages,
   faLightbulb,
   faScroll,
+  faTabletScreenButton,
   faTriangleExclamation
 } from '@fortawesome/free-solid-svg-icons';
 
@@ -134,6 +135,14 @@ export const mergeEntries = {
     icon: faFileZipper,
     title: '从备份导入',
     titleKey: 'menu.backupImport.title'
+  },
+  KINDLE_IMPORT: {
+    routeId: '',
+    label: '从 Kindle 导入',
+    labelKey: 'menu.kindleImport.label',
+    icon: faTabletScreenButton,
+    title: '导入 USB 连接的 Kindle 上还没导入过的书',
+    titleKey: 'menu.kindleImport.title'
   },
   /** Trigger for the library's import dropdown; dispatches nothing itself. */
   IMPORT: {

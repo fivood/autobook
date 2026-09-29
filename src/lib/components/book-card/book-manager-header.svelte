@@ -11,6 +11,7 @@
     pHeaderFa,
     translateXHeaderFa
   } from '$lib/css-classes';
+  import { isTauri } from '$lib/data/env';
   import { SortDirection } from '$lib/data/sort-types';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
@@ -80,6 +81,7 @@
     backToBookClick: void;
     filesChange: FileList;
     importBackup: File;
+    kindleImport: void;
     cancelReplication: void;
   }>();
 
@@ -115,6 +117,7 @@
   $: importMenuItems = [
     mergeEntries.FILE_IMPORT,
     ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
+    ...(isTauri() ? [mergeEntries.KINDLE_IMPORT] : []),
     mergeEntries.BACKUP_IMPORT
   ];
 
@@ -138,6 +141,10 @@
 
       case mergeEntries.BACKUP_IMPORT.label:
         backupImportElm.click();
+        break;
+
+      case mergeEntries.KINDLE_IMPORT.label:
+        dispatch('kindleImport');
         break;
 
       default:
