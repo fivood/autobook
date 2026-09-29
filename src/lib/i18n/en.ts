@@ -105,6 +105,7 @@ export default {
   'manager.kindle.notFound': 'No Kindle found. Connect it over USB and make sure its drive shows up in This PC.',
   'manager.kindle.done': 'Imported {n} books from Kindle',
   'manager.kindle.upToDate': 'All {n} books on the Kindle are already in the library',
+  'manager.kindle.alreadyIn': ' ({n} already in the library under the same title, skipped)',
   'manager.kindle.koreader': 'KOReader: {days} reading days / {hl} highlights / {pr} progress marks',
   'manager.kindle.koreaderSkipped': 'These books were read in KOReader but are not in the library, so their reading records were not imported: {list}',
   'manager.kindle.notJailbroken': 'This Kindle is not jailbroken, so only the books were imported. Reading time, progress and highlights need a jailbreak plus KOReader; books read in KOReader then sync on the next import.',

@@ -113,6 +113,7 @@ export default {
   'manager.kindle.notFound': '没有找到 Kindle。请用 USB 连接，并确认「此电脑」里出现了 Kindle 盘符。',
   'manager.kindle.done': '已从 Kindle 导入 {n} 本',
   'manager.kindle.upToDate': 'Kindle 上的 {n} 本书都已在书库里',
+  'manager.kindle.alreadyIn': '（{n} 本书库里已有同名的书，跳过了）',
   'manager.kindle.koreader': 'KOReader：{days} 天阅读记录 / {hl} 条高亮 / {pr} 本进度',
   'manager.kindle.koreaderSkipped': '以下书在 KOReader 里读过，但不在书库里，它们的阅读记录没有导入：{list}',
   'manager.kindle.notJailbroken': '这台 Kindle 没有越狱，所以只导入了书。阅读时长、进度和高亮要越狱并安装 KOReader，之后在 KOReader 里读的书，插上电脑再导入一次就会同步过来。',

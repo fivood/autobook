@@ -63,11 +63,14 @@ export async function importData(
   targetHandler: BaseStorageHandler,
   files: File[],
   cancelSignal: AbortSignal,
-  fileCountData?: Record<string, number>
+  fileCountData?: Record<string, number>,
+  skipTitles?: ReadonlySet<string>
 ) {
   // Paired with the source File so the caller can map an import back to the
   // folder it came from. `dataIds` was collected here and never read.
   const imported: ImportedBook[] = [];
+  /** Files left out because `skipTitles` already had their title. */
+  const skipped: File[] = [];
   const tasks: Promise<void>[] = [];
   const lastBookModified = new Date().getTime();
   const progressBase = 3; // load -> save -> cover;
@@ -202,6 +205,18 @@ export async function importData(
 
           currentTitle = bookContent.title;
 
+          // Saving under a title the library already has does not add a second
+          // card: the book is keyed by title, so it overwrites the existing one's
+          // content — and every bookmark and highlight offset into it then points
+          // at different text. Only the Kindle import asks for this, since the same
+          // book comes back there as an epub under a different file name.
+          if (skipTitles?.has(bookContent.title.trim())) {
+            skipped.push(file);
+            checkCancelAndProgress(cancelSignal, true, true);
+            checkCancelAndProgress(cancelSignal, true, true);
+            return;
+          }
+
           // Side channel off the loader — must not reach saveBook, which
           // persists whatever it is handed (IDB row for browser storage, a
           // JSON file on disk for tauri-fs).
@@ -271,7 +286,7 @@ export async function importData(
     shown.push(`…还有 ${failures.length - shown.length} 个文件失败`);
   }
 
-  return { error: shown.join('\n'), imported };
+  return { error: shown.join('\n'), imported, skipped };
 }
 
 export async function importBackup(

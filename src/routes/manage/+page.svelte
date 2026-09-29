@@ -915,10 +915,11 @@
    * for callers that import in several runs and report once at the end. */
   async function onFilesChange(
     fileList: FileList | File[],
-    reportErrors = true
-  ): Promise<{ imported: ImportedBook[]; error: string }> {
+    reportErrors = true,
+    skipTitles?: ReadonlySet<string>
+  ): Promise<{ imported: ImportedBook[]; skipped: File[]; error: string }> {
     if (!operationAllowed()) {
-      return { imported: [], error: '' };
+      return { imported: [], skipped: [], error: '' };
     }
 
     cancelTooltip = tImmediate('manager.cancelImport');
@@ -941,7 +942,7 @@
         '文件必须是 EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3 / PDF / CBZ / CBR / CB7 / CBT，或包含这些格式的 ZIP',
         ''
       );
-      return { imported: [], error: '' };
+      return { imported: [], skipped: [], error: '' };
     }
 
     const result = await importData(
@@ -958,8 +959,9 @@
       ),
       files,
       cancelSignal,
-      $fileCountData$
-    ).catch((catchedError) => ({ error: catchedError.message as string, imported: [] }));
+      $fileCountData$,
+      skipTitles
+    ).catch((catchedError) => ({ error: catchedError.message as string, imported: [], skipped: [] }));
 
     const error = result.error;
 
@@ -1027,7 +1029,7 @@
       const result = await importFromKindle(
         scan,
         new Set(($bookCards$ || []).map((card) => card.title)),
-        (files) => onFilesChange(files, false),
+        (files, titles) => onFilesChange(files, false, titles),
         () => cancelSignal.aborted
       );
       // KOReader stats + highlights piggyback on the same "insert Kindle"
@@ -1069,9 +1071,13 @@
         }
       }
 
-      const base = result.pending
-        ? tImmediate('manager.kindle.done', { n: result.imported })
-        : tImmediate('manager.kindle.upToDate', { n: scan.books.length });
+      const base =
+        (result.pending
+          ? tImmediate('manager.kindle.done', { n: result.imported })
+          : tImmediate('manager.kindle.upToDate', { n: scan.books.length })) +
+        (result.alreadyInLibrary
+          ? tImmediate('manager.kindle.alreadyIn', { n: result.alreadyInLibrary })
+          : '');
       if (result.errors.length) {
         showError(title, result.errors.join('\n'), '');
       } else if (fallbackNote) {

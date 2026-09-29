@@ -110,6 +110,7 @@ export default {
   'manager.kindle.notFound': 'Kindle が見つかりません。USB で接続し、「PC」に Kindle のドライブが表示されているか確認してください。',
   'manager.kindle.done': 'Kindle から {n} 冊読み込みました',
   'manager.kindle.upToDate': 'Kindle の {n} 冊はすべて書庫にあります',
+  'manager.kindle.alreadyIn': '（書庫に同じ題名の本がある {n} 冊はスキップしました）',
   'manager.kindle.koreader': 'KOReader：{days} 日分の記録 / ハイライト {hl} 件 / 進捗 {pr} 冊',
   'manager.kindle.koreaderSkipped': '次の本は KOReader で読まれましたが書庫にないため、読書記録は読み込まれませんでした：{list}',
   'manager.kindle.notJailbroken': 'この Kindle は脱獄されていないため、本だけを読み込みました。読書時間・進捗・ハイライトには脱獄と KOReader が必要です。KOReader で読んだ本は、次回の読み込みで同期されます。',
