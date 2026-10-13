@@ -111,6 +111,23 @@ export function createLocalTranslationProvider(): OllamaProvider {
   return new OllamaProvider({ baseUrl: localTranslationBaseUrl() });
 }
 
+const TRANSLATION_SCHEMA = {
+  type: 'object',
+  properties: {
+    translations: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { id: { type: 'string' }, text: { type: 'string' } },
+        required: ['id', 'text'],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ['translations'],
+  additionalProperties: false
+};
+
 /**
  * Anthropic Messages API as a TranslationProvider. Same prompt structure as
  * OllamaProvider / OpenAICompatibleProvider — the three are interchangeable
@@ -132,7 +149,7 @@ class AnthropicTranslationProvider implements TranslationProvider {
       const res = await fetch(`${this.baseUrl}/v1/messages`, {
         method: 'POST',
         headers: this.requestHeaders(),
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
+        body: JSON.stringify({ model: cloudTranslationModel(), max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
         signal
       });
       if (res.status === 401) return { ok: false, message: 'API key invalid' };
@@ -150,7 +167,6 @@ class AnthropicTranslationProvider implements TranslationProvider {
     if (!request.segments.length) return [];
     const systemPrompt = [
       `Translate from ${request.sourceLanguage} to ${request.targetLanguage}.`,
-      'Return JSON only in the form {"translations":[{"id":"segment id","text":"translated text"}]}',
       'Preserve placeholders, numbers, punctuation, and line breaks.',
       'Do not add explanations or omit a segment.',
       `Approved glossary:\n${buildGlossaryPrompt(request.glossary)}`,
@@ -164,6 +180,10 @@ class AnthropicTranslationProvider implements TranslationProvider {
         model: request.model,
         max_tokens: 8192,
         system: systemPrompt,
+        // Schema-enforced by the API, so the prompt no longer has to ask for
+        // JSON. parseTranslationJson stays as the reader — it is harmless on
+        // well-formed output.
+        output_config: { format: { type: 'json_schema', schema: TRANSLATION_SCHEMA } },
         messages: [{
           role: 'user',
           content: JSON.stringify(request.segments.map((s) => ({ id: s.id, text: s.source })))
