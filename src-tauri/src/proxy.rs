@@ -3,7 +3,7 @@
 //! `reqwest` (custom HTTP TTS) handles proxies on its own, but
 //! `tokio_tungstenite::connect_async` reads **no** proxy configuration at all
 //! — it opens a bare TCP socket. On networks where the target is blocked
-//! (mainland China reaches `speech.platform.bing.com` only through a proxy)
+//! (mainland China reaches Edge TTS's host only through a proxy)
 //! that surfaces as `tls handshake eof`: the TCP connect succeeds, then the
 //! TLS ClientHello gets reset mid-handshake. Custom HTTP TTS working while
 //! Edge TTS fails on the same machine is the signature of this bug.

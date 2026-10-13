@@ -1,5 +1,5 @@
 //! Microsoft Edge's browser-integrated text-to-speech, over its unofficial
-//! consumer WSS endpoint at `speech.platform.bing.com`. Same protocol Edge's
+//! consumer WSS endpoint at `api.msedgeservices.com`. Same protocol Edge's
 //! own "Read Aloud" feature uses. Free, no account, hundreds of neural
 //! voices — Chinese (Xiaoxiao / Yunxi / Yunyang etc.) and Japanese
 //! (Nanami / Keita) both first-class.
@@ -27,8 +27,14 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::protocol::Message;
 
 const TRUSTED_CLIENT_TOKEN: &str = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-const WSS_URL_BASE: &str =
-    "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1";
+// Since 2026-10 the old host, speech.platform.bing.com, refuses the synthesis
+// handshake with 403 — first in Europe and elsewhere, everywhere from
+// 10-12. Edge 155 synthesizes through this host, which still takes the old
+// token, passed as `Ocp-Apim-Subscription-Key` (rany2/edge-tts#490, #491).
+// Edge itself has moved to a new token format ("2-" versions); if this host
+// starts insisting on it, see rany2/edge-tts#492.
+const WSS_HOST: &str = "api.msedgeservices.com";
+const WSS_PATH: &str = "/tts/cognitiveservices/websocket/v1";
 // Kept in lockstep with rany2/edge-tts's `SEC_MS_GEC_VERSION` so the server
 // treats us as the same well-known client. Bump when they bump.
 const SEC_MS_GEC_VERSION: &str = "1-143.0.3650.75";
@@ -138,7 +144,10 @@ fn is_transient(err: &str) -> bool {
     // Lowercase literals so the comparison is a plain `contains`. Note the
     // rustls mid-stream wording is "closed connection", not "connection
     // closed" — matching only the latter silently skipped the retry.
-    const MARKERS: [&str; 10] = [
+    // 429: api.msedgeservices.com rate-limits bursts — 1 in 10 back-to-back
+    // requests on first measurement — and the next attempt goes through.
+    const MARKERS: [&str; 11] = [
+        "429 too many requests",
         "handshake eof",
         "unexpectedeof",
         "unexpected eof",
@@ -165,6 +174,9 @@ mod transient_tests {
             "edge-tts recv: IO error: peer closed connection without sending TLS close_notify"
         ));
         assert!(is_transient("os error 10054"));
+        assert!(is_transient(
+            "edge-tts connect (经代理 http://127.0.0.1:7897): HTTP error: 429 Too Many Requests"
+        ));
     }
 
     #[test]
@@ -233,7 +245,7 @@ async fn synthesize_once(
     let request_id = uuid::Uuid::new_v4().simple().to_string();
     let token = sec_ms_gec_token();
     let url = format!(
-        "{WSS_URL_BASE}?TrustedClientToken={TRUSTED_CLIENT_TOKEN}\
+        "wss://{WSS_HOST}{WSS_PATH}?Ocp-Apim-Subscription-Key={TRUSTED_CLIENT_TOKEN}\
          &ConnectionId={connection_id}\
          &Sec-MS-GEC={token}\
          &Sec-MS-GEC-Version={SEC_MS_GEC_VERSION}"
@@ -289,7 +301,7 @@ async fn synthesize_once(
     let proxy = crate::proxy::resolve(proxy_url);
     let (mut ws, _) = match &proxy {
         Some(p) => {
-            let tcp = crate::proxy::connect_tunnel(p, "speech.platform.bing.com", 443).await?;
+            let tcp = crate::proxy::connect_tunnel(p, WSS_HOST, 443).await?;
             tokio::time::timeout(
                 CONNECT_TIMEOUT,
                 tokio_tungstenite::client_async_tls_with_config(req, tcp, None, None),
@@ -300,16 +312,17 @@ async fn synthesize_once(
                     // The tunnel opened but died during TLS, so the local
                     // client is fine and the failure is past it. By far the
                     // most common cause is not a dead node but the proxy's own
-                    // routing: mainstream Clash rulesets match bing.com into a
-                    // "Microsoft" group whose default pick is DIRECT, so the
-                    // request gets dialed straight out again and blocked.
+                    // routing: mainstream Clash rulesets match Microsoft's
+                    // domains into a "Microsoft" group whose default pick is
+                    // DIRECT, so the request gets dialed straight out again
+                    // and blocked.
                     format!(
                         "edge-tts connect (经代理 {p}): {e}\n\
                          代理已接受 CONNECT 但链路随即断开。最常见的原因不是节点故障，\
-                         而是代理软件把该域名判给了直连：主流 Clash 规则集会把 bing.com \
+                         而是代理软件把该域名判给了直连：主流 Clash 规则集会把微软的域名\
                          归到「Ⓜ️ Microsoft」分组，而该分组默认选中「全球直连」，于是请求又被直接发出去。\n\
                          修法：在代理软件里把该分组改选为可用节点，或单独加一条规则 —— \
-                         DOMAIN-SUFFIX,speech.platform.bing.com,<你的节点分组>（只放行朗读，\
+                         DOMAIN-SUFFIX,{WSS_HOST},<你的节点分组>（只放行朗读，\
                          Windows Update / Office 仍走直连）。"
                     )
                 })?
@@ -320,7 +333,7 @@ async fn synthesize_once(
             .map_err(|e| {
             format!(
                 "edge-tts connect: {e}\n\
-                 直连 speech.platform.bing.com 失败。若在中国大陆，该域名通常需要代理才能访问 —— \
+                 直连 {WSS_HOST} 失败。若在中国大陆，该域名通常需要代理才能访问 —— \
                  请在「设置 → 阅读 → Edge TTS」里填写代理地址（如 http://127.0.0.1:7897）。"
             )
         })?,

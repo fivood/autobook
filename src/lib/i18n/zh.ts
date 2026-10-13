@@ -202,7 +202,7 @@ export default {
   'reader.voiceMissing.title': '没有可用的语音',
   'reader.voiceMissing.body': '系统里没有安装 {lang} 的语音，朗读会用现有的其它语音代替——最明显的表现是数字会按那个语言的读法念出来。\n\n换用「Edge TTS」引擎可以直接获得各语言的在线语音，无需安装；或者在 Windows 设置 → 时间和语言 → 语言 里为该语言添加语音包。',
   'reader.ttsFailed.title': '朗读失败',
-  'reader.ttsFailed.hint': '可在阅读页顶栏的设置里换个朗读引擎或音色；Edge TTS 报连接类错误多半是代理没走到 speech.platform.bing.com。',
+  'reader.ttsFailed.hint': '可在阅读页顶栏的设置里换个朗读引擎或音色；Edge TTS 报连接类错误多半是代理没走到 api.msedgeservices.com。',
   'reader.ai': 'AI 助手',
   'reader.settingsDrawer': '朗读设置（不离开本书）',
   'comicOverlay.translations': '段译文',

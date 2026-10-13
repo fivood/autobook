@@ -805,7 +805,7 @@
   <div class="lg:col-span-3">
     <SettingsItemGroup
       title="Edge TTS 语音（微软免费）"
-      tooltip="走微软 Edge 浏览器内置「大声朗读」使用的免费 WSS 端点。中文晓晓/云扬质量对标 Azure Neural TTS，需能连 speech.platform.bing.com。"
+      tooltip="走微软 Edge 浏览器内置「大声朗读」使用的免费 WSS 端点。中文晓晓/云扬质量对标 Azure Neural TTS，需能连 api.msedgeservices.com。"
     >
       <div class="space-y-2 text-sm">
         <div class="flex items-center gap-2 flex-wrap">
@@ -856,14 +856,14 @@
           />
         </div>
         <p class="text-xs opacity-60">
-          国内需代理才能连 speech.platform.bing.com。留空会自动读取系统代理；报
+          国内需代理才能连 api.msedgeservices.com。留空会自动读取系统代理；报
           <code>tls handshake eof</code> 时在此手填，如 <code>http://127.0.0.1:7897</code>。
         </p>
         <p class="text-xs opacity-60">
-          <strong>已配好代理仍失败</strong>，多半是代理软件内部把该域名判给了直连：主流 Clash 规则集会把
-          <code>bing.com</code> 归到「Ⓜ️ Microsoft」分组，而该分组默认选中「全球直连」。
+          <strong>已配好代理仍失败</strong>，多半是代理软件内部把该域名判给了直连：主流 Clash 规则集会把微软的域名
+          归到「Ⓜ️ Microsoft」分组，而该分组默认选中「全球直连」。
           把该分组改选为可用节点，或单独加一条
-          <code>DOMAIN-SUFFIX,speech.platform.bing.com,&lt;你的节点分组&gt;</code>
+          <code>DOMAIN-SUFFIX,api.msedgeservices.com,&lt;你的节点分组&gt;</code>
           —— 后者只放行朗读，Windows Update / Office 仍走直连。
         </p>
       </div>
