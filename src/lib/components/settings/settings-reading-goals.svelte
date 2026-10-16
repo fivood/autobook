@@ -4,7 +4,6 @@
     faChevronLeft,
     faChevronRight,
     faEdit,
-    faRotate,
     faSave,
     faTrash
   } from '@fortawesome/free-solid-svg-icons';
@@ -12,38 +11,24 @@
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import SettingsReadingGoalsMerge from '$lib/components/settings/settings-reading-goals-merge.svelte';
-  import SettingsSyncDialog from '$lib/components/settings/settings-sync-dialog.svelte';
   import { buttonClasses } from '$lib/css-classes';
-  import type {
-    BooksDbReadingGoal,
-    BooksDbStorageSource
-  } from '$lib/data/database/books-db/versions/books-db';
-  import { dialogManager, type SyncSelection } from '$lib/data/dialog-manager';
+  import type { BooksDbReadingGoal } from '$lib/data/database/books-db/versions/books-db';
+  import { dialogManager } from '$lib/data/dialog-manager';
   import {
     getCurrentReadingGoal,
     getDateRangeLabel,
     type ReadingGoal,
     type ReadingGoalSaveResult
   } from '$lib/data/reading-goal';
-  import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
-  import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import {
-    cacheStorageData$,
     database,
-    isOnline$,
     readingGoal$,
-    readingGoalsMergeMode$,
-    replicationSaveBehavior$,
-    startDayHoursForTracker$,
-    statisticsMergeMode$
+    startDayHoursForTracker$
   } from '$lib/data/store';
-  import { replicateData } from '$lib/functions/replication/replicator';
   import { pluralize } from '$lib/functions/utils';
   import { getDateKey, secondsToMinutes } from '$lib/functions/statistic-util';
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
-
-  export let storageSources: BooksDbStorageSource[] = [];
 
   const dispatch = createEventDispatcher<{
     spinner: boolean;
@@ -70,8 +55,6 @@
   let sortedReadingGoals: BooksDbReadingGoal[] = [];
   let historyIndex = 0;
   const itemsPerPage = 1;
-
-  $: availableSources = storageSources;
 
   $: saveDisabled = !!((currentTimeGoal || currentCharacterGoal) && !currentReadingGoalStartDate);
 
@@ -199,74 +182,6 @@
       await updateReadingGoalsData().catch(() => {
         // no-op
       });
-    }
-  }
-
-  async function syncReadingGoals() {
-    const [source, target] = await new Promise<SyncSelection[]>((resolver) => {
-      dialogManager.dialogs$.next([
-        {
-          component: SettingsSyncDialog,
-          props: {
-            settingsSyncHeader: '同步阅读目标',
-            storageSources: availableSources,
-            resolver
-          },
-          disableCloseOnClick: true
-        }
-      ]);
-    });
-
-    if (!source || !target) {
-      return;
-    }
-
-    dispatch('spinner', true);
-
-    try {
-      const error = await replicateData(
-        getStorageHandler(
-          window,
-          source.type,
-          source.id,
-          target.type === StorageKey.BROWSER,
-          $cacheStorageData$,
-          $replicationSaveBehavior$,
-          $statisticsMergeMode$,
-          $readingGoalsMergeMode$
-        ),
-        getStorageHandler(
-          window,
-          target.type,
-          target.id,
-          target.type === StorageKey.BROWSER,
-          $cacheStorageData$,
-          $replicationSaveBehavior$,
-          $statisticsMergeMode$,
-          $readingGoalsMergeMode$
-        ),
-        false,
-        [],
-        [StorageDataType.READING_GOALS]
-      );
-
-      if (error) {
-        throw new Error(error);
-      }
-
-      await updateReadingGoalsData();
-    } catch ({ message }: any) {
-      dialogManager.dialogs$.next([
-        {
-          component: MessageDialog,
-          props: {
-            title: '错误',
-            message: `同步阅读目标出错: ${message}`
-          }
-        }
-      ]);
-    } finally {
-      dispatch('spinner', false);
     }
   }
 
@@ -400,12 +315,6 @@
         </div>
       </button>
     {:else}
-      <button class={buttonClasses} on:click={syncReadingGoals}>
-        <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">同步</span>
-          <Fa icon={faRotate} />
-        </div>
-      </button>
       <button class={buttonClasses} on:click={() => (isInEditMode = true)}>
         <div class="flex items-center justify-center hover:opacity-50">
           <span class="mr-2">编辑</span>

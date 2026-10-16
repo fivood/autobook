@@ -4,11 +4,318 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Shared menu language. Keep all popovers, context menus and compact action
+ * panels on the same type scale and border treatment. Individual menus should
+ * only need to provide width/layout and their own semantic active state. */
+@layer components {
+  .menu-surface {
+    background: var(--menu-background);
+    color: var(--menu-foreground);
+    border: 1px solid color-mix(in srgb, var(--menu-foreground) 24%, transparent);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+    font-size: 0.9375rem;
+    font-weight: 400;
+    line-height: 1.35;
+    overflow: hidden;
+  }
+
+  .menu-surface.rounded-full {
+    border-radius: 9999px;
+  }
+
+  .menu-list,
+  .menu-panel {
+    padding: 0.35rem;
+  }
+
+  .menu-item {
+    display: flex;
+    width: 100%;
+    min-height: 2.5rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 0.875rem;
+    border: 0;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: inherit;
+    font-size: 0.9375rem;
+    font-weight: 400;
+    line-height: 1.25;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .menu-item:hover,
+  .menu-item:focus-visible,
+  .menu-item-active {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+    outline: none;
+  }
+
+  .menu-item-inline {
+    width: auto;
+    min-height: 2.25rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .menu-icon-button {
+    display: inline-flex;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .menu-icon-button:hover,
+  .menu-icon-button:focus-visible {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+    outline: none;
+  }
+
+  .menu-label {
+    padding: 0.35rem 0.5rem 0.25rem;
+    color: color-mix(in srgb, var(--menu-foreground) 68%, transparent);
+    font-size: 0.8125rem;
+    line-height: 1.3;
+  }
+
+  .menu-choice {
+    min-height: 2.125rem;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--menu-foreground) 28%, transparent);
+    border-radius: 0.375rem;
+    background: transparent;
+    color: inherit;
+    font-size: 0.875rem;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  }
+
+  .menu-choice:hover,
+  .menu-choice:focus-visible,
+  .menu-choice-active {
+    border-color: var(--menu-foreground);
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+    outline: none;
+  }
+
+  .menu-item-danger {
+    color: var(--danger-color);
+  }
+
+  .menu-item-danger:hover,
+  .menu-item-danger:focus-visible {
+    background: color-mix(in srgb, var(--danger-color) 16%, transparent);
+    color: var(--danger-color);
+    outline: none;
+  }
+
+  .menu-sort-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: 2.5rem;
+    align-items: center;
+    border-radius: 0.375rem;
+    font-size: 0.9375rem;
+    line-height: 1.25;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .menu-sort-item:hover,
+  .menu-sort-item:focus-within,
+  .menu-sort-item-active {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+  }
+
+  .menu-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem;
+  }
+
+  .menu-divider {
+    width: 1px;
+    height: 1.5rem;
+    background: color-mix(in srgb, currentColor 28%, transparent);
+  }
+}
+
 /* Markdown rendering: KaTeX for math + highlight.js for code blocks. Imported
  * here so the loaded HTML inside the reader picks them up; .md-* / .hljs /
  * .katex selectors all resolve against this global sheet. */
 @import 'katex/dist/katex.min.css';
 @import 'highlight.js/styles/github.css';
+
+/* ---------------------------------------------------------------------------
+   Settings type scale + button language.
+
+   The settings page grew in two eras. The upstream panels never set a size and
+   inherited the 16px root; everything added later reached for text-xs / text-sm
+   and settings-data-paths even carried its own 0.68/0.7/0.72/0.75rem set — so
+   12px labels ended up sitting next to 16px ones, with eight different button
+   spellings between them.
+
+   Rather than tag 150+ call sites, the scale is declared once here and the two
+   Tailwind steps are re-pointed inside the scope: writing `text-xs` in a
+   settings panel should mean "the settings hint size", not literally 12px.
+   Sizes match the menu language above — .menu-choice is 0.875rem, .menu-label
+   0.8125rem — so settings and popovers finally read as one system.
+
+   Scope class goes on the settings page wrapper and the reader's settings
+   drawer, the only two hosts of these panels.
+   --------------------------------------------------------------------------- */
+.settings-scope {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.settings-scope .text-xs {
+  font-size: 0.8125rem;
+}
+.settings-scope .text-sm {
+  font-size: 0.875rem;
+}
+/* Inputs inherit the scale instead of the root size. */
+.settings-scope .settings-input {
+  font-size: inherit;
+}
+
+/* The one settings button. Same pill vocabulary as .settings-input but
+   transparent until hovered, so a row of actions doesn't read as a row of
+   filled fields. Explicit font-size rather than inherit: it is also used from
+   the statistics panel, which sits outside .settings-scope. */
+.settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  flex: 0 0 auto;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  font-size: 0.875rem;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+.settings-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+.settings-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+/* Icon-only: square off the horizontal padding so it reads as a glyph, not a
+   very short label. */
+.settings-btn-icon {
+  padding: 0.3rem 0.45rem;
+}
+.settings-btn-danger {
+  color: var(--danger-color, #c64a4a);
+  border-color: color-mix(in srgb, var(--danger-color, #c64a4a) 55%, transparent);
+}
+.settings-btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger-color, #c64a4a) 12%, transparent);
+  border-color: var(--danger-color, #c64a4a);
+}
+
+/* Settings inputs: soft filled pill instead of the underline that competes
+   with our section divider lines. Background-tinted currentColor so the field
+   reads as a UI element, not a horizontal rule. */
+.settings-input {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.375rem;
+  padding: 0.35rem 0.6rem;
+  color: inherit;
+  outline: none;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+/* Native <option> popup on Windows (WebView2 / Chromium) can't inherit
+   font/background from the themed <select>, so every select in the app
+   would otherwise need its own inline `style="color:#000"` on each option.
+   Centralize it here — dark text on white matches the OS-drawn popup and
+   works on every theme. Applies to every <option> in the app, not just
+   .settings-input. */
+option {
+  color: #111;
+  background: #fff;
+}
+/* Library search box reuses the same pill look so the manage page sits in
+   the same visual language as settings / stats. */
+.library-search {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  color: inherit;
+  outline: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+  font-size: 0.85rem;
+}
+.library-search:focus {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+.library-search::placeholder {
+  opacity: 0.55;
+}
+
+/* CSS Custom Highlight API target: TTS-driven sentence-current marker.
+   Painted via window.Highlight + CSS.highlights.set('tts-sentence', ...);
+   See tts-highlight.ts.
+
+   Deliberately NOT a coloured fill. It used to be rgba(255,220,90,.42), which
+   is within a hair of highlight slot 1 (rgba(255,235,59,.5)) — with the book's
+   own highlights on screen you could not tell "the sentence being read right
+   now" from "something I marked last week". Hue cannot fix that: the four
+   slots span yellow/blue/green/pink and users can set custom colours, so any
+   hue is a possible collision, and in the invert palette the slots are filled
+   with the page's own foreground colour.
+
+   So the distinction is structural, not chromatic: a neutral tint derived from
+   the text colour, plus a wavy underline. No highlight slot uses wavy in any
+   palette (invert uses solid / dotted / thin), and the marker is transient
+   anyway — it should read as "active", not as "annotated".
+
+   Only background-color, color, text-decoration, text-shadow and
+   -webkit-text-stroke are honoured inside ::highlight(), which is why this is
+   done with a decoration rather than a border. */
+::highlight(tts-sentence) {
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--link-color, currentColor);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.settings-input:hover {
+  border-color: color-mix(in srgb, currentColor 32%, transparent);
+}
+.settings-input:focus {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+/* Strip Webkit's spinner-cell separator on number inputs that otherwise reads
+   as another short horizontal stripe inside the field. */
+.settings-input::-webkit-inner-spin-button,
+.settings-input::-webkit-outer-spin-button {
+  opacity: 0.5;
+}
 
 .md-section {
   line-height: 1.7;
@@ -61,6 +368,10 @@
   --muted-color: #c3c1af;
   --menu-background: #2b5a69;
   --menu-foreground: #f0efe6;
+  /* Semantic red for destructive actions — kept theme-agnostic (no menu
+     variant) because every built-in menu palette so far is dark; when a
+     light-menu theme lands, override via .bg-menu context. */
+  --danger-color: #d95555;
   scrollbar-color: #5f7e7b #f0efe6;
 }
 
@@ -68,11 +379,49 @@
   overflow-clip-margin: unset;
 }
 
-mark.hl-yellow { background: rgba(255, 235, 59, 0.5); }
-mark.hl-blue { background: rgba(100, 181, 246, 0.5); }
-mark.hl-green { background: rgba(129, 199, 132, 0.5); }
-mark.hl-pink { background: rgba(244, 143, 177, 0.5); }
-mark[data-hl-id] { cursor: pointer; border-radius: 2px; }
+/* Highlight text-mark treatment. Every value here is a per-slot custom
+   property mirrored onto :root by +layout.svelte from
+   `highlightSlotStyles()` — the palette is user-configurable, so nothing
+   about how a slot looks may be decided in this file.
+
+   The fallbacks are the historic hue palette, used only for the frame before
+   the layout mounts.
+
+   Note the ordering: `mark[data-hl-id]` below has the same specificity as
+   `mark.hl-N` (element + one selector each), so a `border-bottom` *shorthand*
+   there would silently reset the colour set here. It previously did, which is
+   why the dark themes rendered a 2px transparent underline — i.e. none at all.
+   Longhands only, and the shared rule stays free of border properties. */
+mark[data-hl-id] {
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+@each $slot, $fallback in (1: (255, 235, 59), 2: (100, 181, 246), 3: (129, 199, 132), 4: (244, 143, 177)) {
+  mark.hl-#{$slot} {
+    background: rgba(var(--hl-#{$slot}-rgb, #{$fallback}), var(--hl-#{$slot}-alpha, 0.5));
+    /* Carries the slot at full strength without sitting behind the glyphs, so
+       it costs nothing in contrast. */
+    border-bottom-width: var(--hl-#{$slot}-bw, 0);
+    border-bottom-style: var(--hl-#{$slot}-bs, solid);
+    border-bottom-color: rgb(var(--hl-#{$slot}-rgb, #{$fallback}));
+    /* `inherit` for every slot except an opaque fill, which needs its text
+       flipped to the page colour to stay readable. */
+    color: var(--hl-#{$slot}-ink, inherit);
+  }
+}
+
+mark[data-hl-memo]::after {
+  content: '';
+  display: inline-block;
+  width: 0.34em;
+  height: 0.34em;
+  margin-left: 0.15em;
+  vertical-align: super;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
 
 ::selection {
   background-color: var(--selection-background, #5f7e7b);
@@ -83,6 +432,12 @@ a,
 a:link,
 a:visited {
   color: var(--link-color, #2b5a69);
+}
+
+input[type='range'] {
+  // Recolor the native track/thumb to the current theme's accent (falls back
+  // to the sage-green palette when a theme doesn't set --accent-color).
+  accent-color: var(--accent-color, #5f7e7b);
 }
 
 @layer base {
@@ -107,6 +462,14 @@ a:visited {
     visibility: hidden;
   }
 
+  /* typewriter: whole paragraph not yet reached. Hiding at block level is
+     what lets the reveal skip per-character wrapping for everything except
+     the one paragraph the frontier is inside — visibility (not display)
+     so the page height, and therefore the scrollbar, never moves. */
+  .tw-block-hidden {
+    visibility: hidden;
+  }
+
   .bg-menu {
     background-color: var(--menu-background);
   }
@@ -123,6 +486,53 @@ a:visited {
   }
   .hover-menu-inverted:hover {
     background-color: var(--menu-foreground);
+    color: var(--menu-background);
+  }
+  /* Theme-agnostic soft hover for buttons on page-color surfaces
+     (dialogs, drawers, sidebars). Mixes against currentColor so the
+     highlight is always visible whether font-color is dark on light or
+     light on dark. Replaces hard-coded hover:bg-black/5 which vanishes
+     on dark themes. */
+  .hover-soft:hover {
+    background-color: color-mix(in srgb, currentColor 10%, transparent);
+  }
+  .hover-soft-strong:hover {
+    background-color: color-mix(in srgb, currentColor 16%, transparent);
+  }
+  /* Danger affordances on page-color surfaces. Use these instead of
+   * Tailwind's text-red-* so the destructive hue follows the theme's
+   * --danger-color (and thus theme swaps) rather than a fixed palette. */
+  .text-danger {
+    color: var(--danger-color);
+  }
+  .hover-danger:hover {
+    color: var(--danger-color);
+  }
+  .border-danger {
+    border-color: var(--danger-color);
+  }
+  /* Selected/active row on page-color surfaces. Same idiom as hover-soft
+     but slightly stronger so it reads through a hover. */
+  .bg-soft-active {
+    background-color: color-mix(in srgb, currentColor 10%, transparent);
+  }
+  /* A sub-view tab in a page's top bar (statistics, settings, ...). Lives
+     here rather than in each header's <style> block: the copies in
+     statistics-header and settings-header were byte-identical and carried a
+     comment explaining they had to stay that way, which is what a shared
+     class is for. Selected inverts to the menu foreground — the same
+     language the dropdown menus use, so the bar and a menu opened next to it
+     don't read as two different apps. */
+  .chrome-tab {
+    background: transparent;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+  .chrome-tab.is-active {
+    background: var(--menu-foreground);
+    color: var(--menu-background);
+  }
+  .chrome-tab.is-inactive:hover {
+    background: var(--menu-foreground);
     color: var(--menu-background);
   }
 }

@@ -17,7 +17,9 @@ export function getFormattedElementHtmlz(data: HtmlzContent, document: Document)
     .forEach(([key]) => {
       html = html.replaceAll(key, buildDummyBookImage(key));
     });
-  const result = document.createElement('div');
+  // Inert document, for the same reason as generateEpubHtml: parsing untrusted
+  // markup into the live one fires `onerror` & co. before any sanitizer runs.
+  const result = document.implementation.createHTMLDocument('').createElement('div');
   result.innerHTML = html;
 
   clearAllBadImageRef(result);

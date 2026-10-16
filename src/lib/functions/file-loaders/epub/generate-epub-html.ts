@@ -17,7 +17,6 @@ import path from 'path-browserify';
 
 export const prependValue = 'ttu-';
 
-// eslint-disable-next-line no-control-regex
 const controlCharactersRegex = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/gim;
 const htmlHexEntitiesRegex = /&#x([0-9A-Fa-f]+);/gim;
 const htmlDecEntitiesRegex = /&#(\d+);/gim;
@@ -53,6 +52,12 @@ export default function generateEpubHtml(
   document: Document,
   contentsDirectory: string
 ) {
+  // Book markup is untrusted, and every chapter goes through `innerHTML` below.
+  // In the live document that arms it on the spot — an `<img onerror>` fires at
+  // import, before the render-time sanitizer (format-book-data-html) ever sees
+  // it. A document with no browsing context loads no images and runs no
+  // handlers; callers only read `textContent` / `innerHTML` off the result.
+  document = document.implementation.createHTMLDocument('');
   const fallbackData = new Map<string, string>();
   const importHTMLFixMode = importHTMLFixMode$.getValue();
   const restrictImportFixToAnchor = restrictImportFixToAnchor$.getValue();
@@ -97,6 +102,19 @@ export default function generateEpubHtml(
     }
     return acc;
   }, []);
+
+  // Pre-build a single alternation regex for blob path → dummy URL so the
+  // per-section rewrite below is one pass instead of one replaceAll per blob
+  // (chapters × images full-walks, quadratic on image-heavy books).
+  const blobRelativeToKey = new Map<string, string>();
+  for (const blobLocation of blobLocations) {
+    blobRelativeToKey.set(relative(contentsDirectory, blobLocation), blobLocation);
+  }
+  // Longest path first so a more specific `ab.jpg` matches before `a.jpg`.
+  const blobRelativePaths = [...blobRelativeToKey.keys()].sort((a, b) => b.length - a.length);
+  const blobRelativeRe = blobRelativePaths.length
+    ? new RegExp(blobRelativePaths.map(reEscape).join('|'), 'g')
+    : null;
 
   const parser = new DOMParser();
   const spineItemRef = isOPFType(contents)
@@ -236,12 +254,12 @@ export default function generateEpubHtml(
 
     let innerHtml = body.innerHTML || '';
 
-    blobLocations.forEach((blobLocation) => {
-      innerHtml = innerHtml.replaceAll(
-        relative(contentsDirectory, blobLocation),
-        buildDummyBookImage(blobLocation)
-      );
-    });
+    if (blobRelativeRe) {
+      innerHtml = innerHtml.replace(blobRelativeRe, (match) => {
+        const key = blobRelativeToKey.get(match);
+        return key ? buildDummyBookImage(key) : match;
+      });
+    }
 
     const childBodyDiv = document.createElement('div');
     childBodyDiv.className = `ttu-book-body-wrapper ${bodyClass}`;
@@ -264,9 +282,21 @@ export default function generateEpubHtml(
 
     currentCharCount += elementCharCount;
 
-    if (!elementCharCount) {
+    // Image-only sections (fixed-layout / scanned EPUBs): strip the
+    // page-margin via .ttu-no-text and tag their <img> / SVG <image> as
+    // .book-page-image so BookImageZoom's `--book-image-scale` CSS var
+    // applies (same rail the PDF/CBZ readers use). Detected by "no text
+    // content but at least one image node" — a truly empty page (0 text,
+    // 0 images) still gets .ttu-no-text like before.
+    const hasText = !!childBodyDiv.textContent?.replace(/\s/g, '').length;
+    const pageImages = childBodyDiv.querySelectorAll('img, image');
+
+    if (!hasText) {
       childHtmlDiv.classList.add('ttu-no-text');
       childBodyDiv.classList.add('ttu-no-text');
+      if (pageImages.length) {
+        pageImages.forEach((img) => img.classList.add('book-page-image'));
+      }
     }
 
     const mainChapterIndex = mainChapters.findIndex((chapter) =>
@@ -334,6 +364,12 @@ function flattenAnchorHref(el: HTMLElement) {
     if (!oldHref) return;
     tag.setAttribute('href', `#${oldHref.replace(/.+#/, '')}`);
   });
+}
+
+// Escape regex metacharacters in a literal path string. Book blob keys/paths
+// can contain periods, hyphens, brackets.
+function reEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

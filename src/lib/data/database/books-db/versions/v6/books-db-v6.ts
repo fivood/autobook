@@ -45,6 +45,30 @@ interface BooksDbV6BookData {
   lastBookOpen: number;
   storageSource?: string;
   htmlBackup?: string;
+  /** Original/current source for editable plain-text formats. Optional so
+   * existing rows remain valid without a database migration. */
+  sourceText?: string;
+  /** Immutable import-time source captured on the first edit, used by the
+   * editor's "restore original" action. */
+  sourceTextOriginal?: string;
+  /** Path of the file this book mirrors, relative to the vault sync root.
+   * Present only on books that came from vault sync — it is what makes the
+   * book identifiable across scans, since two notes in different folders can
+   * easily share a filename (and therefore a title). Absent on normally
+   * imported books, which sync never touches. */
+  sourcePath?: string;
+  /** Original file extension at import time (epub/mobi/pdf/txt/…). Added
+   * 1.20.2 as an optional field — old rows have undefined, back-compat via
+   * IDB schemalessness (no migration needed). Used by the hover popover
+   * and the book-card corner chip to show the true source format even
+   * after the title has been stripped of its filename extension. */
+  originalFormat?: string;
+  /** Per-book OCR recognition language override. Undefined = fall back to the
+   * global default (pdfOcrLang$ for scanned PDFs, translateOcrLang$ for comic
+   * translation). Added as an optional field like originalFormat — IDB is
+   * schemaless, so old rows need no migration. Written from the OCR banners'
+   * language selector so a Japanese scan never re-prompts in Chinese. */
+  ocrLang?: string;
 }
 
 interface BooksDbV6BookmarkData {
@@ -84,6 +108,19 @@ interface BooksDbV6Statistic {
   /** Total sections in the book at the time the tracker last ran. Used by the
    * statistics UI to render "X / Y pages". */
   sectionsTotal?: number;
+  /**
+   * The share of `readingTime` / `charactersRead` that came from playback,
+   * split by engine. Optional: rows written before this existed simply have
+   * none, and the statistics UI treats a missing value as "unknown", not zero.
+   *
+   * Characters here are what the engine actually delivered — spoken sentences,
+   * revealed characters — not the scroll-position delta the totals use, which
+   * under playback can even run negative (see playback-progress.ts).
+   */
+  ttsSeconds?: number;
+  ttsCharacters?: number;
+  typewriterSeconds?: number;
+  typewriterCharacters?: number;
 }
 
 interface BooksDbV6ReadingGoal extends ReadingGoal {

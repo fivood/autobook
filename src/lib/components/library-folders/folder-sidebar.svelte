@@ -1,11 +1,19 @@
 <script lang="ts">
-  import { faFolder, faFolderOpen, faPlus, faPencil, faTrash } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faBoxArchive,
+    faFolder,
+    faFolderOpen,
+    faPlus,
+    faPencil,
+    faTrash
+  } from '@fortawesome/free-solid-svg-icons';
   import { dialogManager } from '$lib/data/dialog-manager';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import TextInputDialog from '$lib/components/text-input-dialog.svelte';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
   import { createEventDispatcher } from 'svelte';
+  import { tick } from 'svelte';
   import {
     folders$,
     bookFolders$,
@@ -15,21 +23,82 @@
     deleteFolder,
     addBooksToFolder
   } from '$lib/data/library-folders';
+  import { ARCHIVED_FILTER } from '$lib/data/library-archive';
+  import { asBookCardId, type BookCardId } from '$lib/data/book-id';
+  import { t, tImmediate } from '$lib/i18n';
 
-  /** Total book count in the library — shown next to "全部书籍". */
+  /** Books visible in the library — archived ones excluded, so the number
+   * next to 全部书籍 matches what the grid actually shows. */
   export let totalBookCount: number;
+
+  /** How many books are put away. The row stays hidden while this is 0 so an
+   * unused feature does not take up a permanent slot in the sidebar. */
+  export let archivedCount = 0;
+
+  /** Card ids of archived books, so 未分类 does not count what it cannot show. */
+  export let archivedBookIds: Set<number> = new Set();
+
+  /**
+   * Card ids currently on the shelf. Counts are taken against this, not
+   * against the whole `bookFolder` table: assignments outlive their books
+   * (a book removed outside the library UI, or belonging to the other storage
+   * source — there are two id spaces, see CLAUDE.md), and counting rows
+   * instead of books made 未分类 read low while a folder advertised books it
+   * could not show. Reproduced with two rows pointing at ids that do not
+   * exist: five uncategorized books were reported as three.
+   */
+  export let shelfBookIds: Set<number> = new Set();
 
   const dispatch = createEventDispatcher<{ booksAddedToFolder: { folderId: number; count: number } }>();
 
   let dragOverFolderId: number | string | null = null;
   let renamingId: number | null = null;
   let renameDraft = '';
+  let renameInput: HTMLInputElement | undefined;
 
-  function countForFolder(folderId: number): number {
-    return $bookFolders$.filter((bf) => bf.folderId === folderId).length;
+  $: if (renamingId !== null && renameInput) {
+    tick().then(() => renameInput?.focus());
   }
 
-  $: assignedBookIds = new Set($bookFolders$.map((bf) => bf.bookId));
+  /**
+   * Derived, not a function called from the template. Svelte tracks the
+   * variables in a template *expression*, not the ones a called function
+   * happens to read — so a `countForFolder(folder.id)` call rendered once and then
+   * kept whatever it said, which after adding the shelf filter meant every
+   * folder showed 0 (the card list resolves after the first paint).
+   */
+  $: folderCounts = $bookFolders$.reduce((acc, bf) => {
+    if (!shelfBookIds.has(bf.bookId)) return acc;
+    acc.set(bf.folderId, (acc.get(bf.folderId) || 0) + 1);
+    return acc;
+  }, new Map<number, number>());
+
+  /**
+   * Hand-made categories above, directory-mirrored ones below. A vault with a
+   * deep tree produces a lot of folders, and mixed into one list they bury the
+   * handful the user actually created. The local group is hidden entirely
+   * until something has been folder-imported.
+   */
+  $: folderGroups = [
+    {
+      key: 'reader',
+      label: $t('folders.groupHeader'),
+      items: $folders$.filter((f) => f.source !== 'local'),
+      canCreate: true
+    },
+    {
+      key: 'local',
+      label: $t('folders.groupLocal'),
+      items: $folders$.filter((f) => f.source === 'local'),
+      canCreate: false
+    }
+  ];
+
+  $: assignedBookIds = new Set(
+    $bookFolders$
+      .filter((bf) => shelfBookIds.has(bf.bookId) && !archivedBookIds.has(bf.bookId))
+      .map((bf) => bf.bookId)
+  );
   $: uncategorizedCount = Math.max(0, totalBookCount - assignedBookIds.size);
 
   function onCreateFolder() {
@@ -37,7 +106,7 @@
       {
         component: TextInputDialog,
         props: {
-          dialogHeader: '新建分类',
+          dialogHeader: tImmediate('folders.dialog.new'),
           placeholder: '',
           resolver: async (name: string | undefined) => {
             if (!name) return;
@@ -67,8 +136,8 @@
       {
         component: ConfirmDialog,
         props: {
-          dialogHeader: '删除文件夹',
-          dialogMessage: `删除"${name}"？只移除分类，里面的书不会被删。`,
+          dialogHeader: tImmediate('folders.dialog.delete'),
+          dialogMessage: tImmediate('folders.dialog.deleteConfirm', { name }),
           resolver: async (wasCanceled: boolean) => {
             if (!wasCanceled) await deleteFolder(id);
           }
@@ -77,13 +146,17 @@
     ]);
   }
 
-  function readDraggedBookIds(ev: DragEvent): number[] {
+  function readDraggedBookIds(ev: DragEvent): BookCardId[] {
     if (!ev.dataTransfer) return [];
     try {
       const raw = ev.dataTransfer.getData('application/x-autobook-book-ids');
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.filter((n) => typeof n === 'number') : [];
+      // The payload is written from card ids, so tagging on the way back in
+      // is the audited crossing for drag-and-drop.
+      return Array.isArray(parsed)
+        ? parsed.filter((n) => typeof n === 'number').map(asBookCardId)
+        : [];
     } catch {
       return [];
     }
@@ -107,55 +180,73 @@
 </script>
 
 <aside
-  class="flex w-52 shrink-0 flex-col gap-1 border-r-2 border-gray-400/60 py-3 pr-2 pl-3 text-sm"
-  style="background: rgba(127, 127, 127, 0.08); min-height: calc(100vh - 4rem);"
+  class="flex w-52 shrink-0 flex-col gap-1 border-r-2 border-current/20 bg-current/5 py-3 pr-2 pl-3 text-sm"
+  style="min-height: calc(100vh - 4rem);"
 >
-  <div class="px-3 pb-1 text-xs uppercase tracking-wide opacity-60">书库</div>
+  <div class="px-3 pb-1 text-xs uppercase tracking-wide opacity-60">{$t('folders.section')}</div>
 
   <button
     type="button"
-    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover:bg-gray-400/20"
-    class:bg-gray-400={'all' === $activeFolderFilter$}
-    class:bg-opacity-30={'all' === $activeFolderFilter$}
+    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover-soft"
+    class:bg-soft-active={'all' === $activeFolderFilter$}
     on:click={() => activeFolderFilter$.next('all')}
   >
-    <span>全部书籍</span>
+    <span>{$t('folders.allBooks')}</span>
     <span class="opacity-60">{totalBookCount}</span>
   </button>
 
   <button
     type="button"
-    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover:bg-gray-400/20"
-    class:bg-gray-400={'uncategorized' === $activeFolderFilter$}
-    class:bg-opacity-30={'uncategorized' === $activeFolderFilter$}
+    class="flex items-center justify-between rounded px-3 py-1.5 text-left hover-soft"
+    class:bg-soft-active={'uncategorized' === $activeFolderFilter$}
     on:click={() => activeFolderFilter$.next('uncategorized')}
   >
-    <span>未分类</span>
+    <span>{$t('folders.uncategorized')}</span>
     <span class="opacity-60">{uncategorizedCount}</span>
   </button>
 
-  <div class="mt-3 flex items-center justify-between px-3 pb-1 text-xs uppercase tracking-wide opacity-60">
-    <span>分类</span>
+  {#if archivedCount > 0 || $activeFolderFilter$ === ARCHIVED_FILTER}
     <button
       type="button"
-      title="新建文件夹"
-      class="rounded p-1 hover:bg-gray-400/20"
-      on:click={onCreateFolder}
+      class="flex items-center justify-between rounded px-3 py-1.5 text-left hover-soft"
+      class:bg-soft-active={ARCHIVED_FILTER === $activeFolderFilter$}
+      on:click={() => activeFolderFilter$.next(ARCHIVED_FILTER)}
     >
-      <Fa icon={faPlus} />
+      <span class="flex items-center gap-2">
+        <Fa icon={faBoxArchive} />
+        {$t('folders.archived')}
+      </span>
+      <span class="opacity-60">{archivedCount}</span>
     </button>
-  </div>
+  {/if}
 
   <div class="flex-1 overflow-y-auto pr-1">
-    {#each $folders$ as folder (folder.id)}
+    {#each folderGroups as group (group.key)}
+      {#if group.items.length || group.canCreate}
+        <div
+          class="mt-3 flex items-center justify-between px-3 pb-1 text-xs uppercase tracking-wide opacity-60"
+        >
+          <span>{group.label}</span>
+          {#if group.canCreate}
+            <button
+              type="button"
+              title={$t('folders.new')}
+              class="rounded p-1 hover-soft"
+              on:click={onCreateFolder}
+            >
+              <Fa icon={faPlus} />
+            </button>
+          {/if}
+        </div>
+      {/if}
+    {#each group.items as folder (folder.id)}
       {@const active = $activeFolderFilter$ === String(folder.id)}
       {@const dragOver = dragOverFolderId === folder.id}
       <div
         class="group flex items-center gap-1 rounded px-2 py-1.5 transition-colors"
-        class:bg-gray-400={active}
-        class:bg-opacity-30={active}
+        class:bg-soft-active={active}
         class:ring-2={dragOver}
-        class:ring-blue-400={dragOver}
+        class:ring-current={dragOver}
         on:dragover={(ev) => onDragOverFolder(ev, folder.id)}
         on:dragleave={() => (dragOverFolderId = null)}
         on:drop={(ev) => onDropToFolder(ev, folder.id)}
@@ -165,15 +256,15 @@
         <Fa icon={active ? faFolderOpen : faFolder} class="opacity-70 shrink-0" />
         {#if renamingId === folder.id}
           <input
-            class="min-w-0 flex-1 rounded border border-gray-400/50 bg-background-color px-1 py-0.5 text-sm"
+            class="min-w-0 flex-1 rounded border border-current/30 bg-background-color px-1 py-0.5 text-sm"
             bind:value={renameDraft}
             on:keydown={(ev) => {
               if (ev.key === 'Enter') commitRename();
               if (ev.key === 'Escape') (renamingId = null);
             }}
             on:blur={commitRename}
-            on:keyup={dummyFn}
-            autofocus
+            on:keyup={activateOnKeyup}
+            bind:this={renameInput}
           />
         {:else}
           <button
@@ -184,27 +275,28 @@
             {folder.name}
           </button>
         {/if}
-        <span class="text-xs opacity-60">{countForFolder(folder.id)}</span>
+        <span class="text-xs opacity-60">{(folderCounts.get(folder.id) || 0)}</span>
         <button
           type="button"
-          title="重命名"
-          class="opacity-0 group-hover:opacity-60 hover:opacity-100 px-1"
+          title={$t('folders.rename')}
+          class="pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-60 hover:opacity-100 px-1"
           on:click|stopPropagation={() => startRename(folder.id, folder.name)}
         >
           <Fa icon={faPencil} />
         </button>
         <button
           type="button"
-          title="删除"
-          class="opacity-0 group-hover:opacity-60 hover:opacity-100 px-1"
+          title={$t('folders.delete')}
+          class="pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-60 hover:opacity-100 px-1"
           on:click|stopPropagation={() => confirmDelete(folder.id, folder.name)}
         >
           <Fa icon={faTrash} />
         </button>
       </div>
     {/each}
-    {#if !$folders$.length}
-      <div class="px-3 pt-2 text-xs opacity-50">还没有分类，点 + 新建</div>
-    {/if}
+      {#if group.canCreate && !group.items.length}
+        <div class="px-3 pt-2 text-xs opacity-50">{$t('folders.empty')}</div>
+      {/if}
+    {/each}
   </div>
 </aside>
