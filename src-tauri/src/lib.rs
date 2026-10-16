@@ -71,9 +71,14 @@ fn allow_paths(app: &tauri::AppHandle, paths: &[String]) {
 
 /// Roots the user pointed us at themselves — custom library folder, Obsidian
 /// vault, dictionary folder. The static fs scope only covers
-/// `Documents/AutoBook`, and the grant the dialog plugin adds when a folder is
-/// picked dies with the process, so the choices are remembered here and
-/// re-granted on the next launch.
+/// `Documents/AutoBook` (plus the app-data dirs `fs:default` reads), and the
+/// grant the dialog plugin adds when a folder is picked dies with the process,
+/// so the choices are remembered here and re-granted on the next launch.
+///
+/// Keep it that way in `capabilities/default.json`: list individual
+/// `fs:allow-<command>` permissions, never the `fs:allow-document-*` sets.
+/// Those bundle `scope-document-recursive`, which quietly adds all of
+/// `$DOCUMENT/**` back on top of the narrow scope.
 ///
 /// Rust owns this list deliberately. An "allow this path" command callable
 /// from the webview would hand any injected script the whole disk back for the
