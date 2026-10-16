@@ -423,10 +423,21 @@ export async function runOcrOnPage(
  * it started, silently reverting any of that. Only the four fields the run
  * actually produces come from the result; every other field belongs to the
  * current row.
+ *
+ * Except where the current row has nothing: a folder-library (Tauri FS) book
+ * keeps only a stub in IDB — `blobs: {}`, empty styleSheet / elementHtml, no
+ * cover — and its content lives in the bookdata zip, i.e. in the snapshot.
+ * Letting those placeholders win wrote the stub's `blobs: {}` back to IDB and
+ * to the zip, deleting every page image of the scan. Empty values are never a
+ * user's edit, so they fall back to the snapshot.
  */
 export function mergeOcrResult<T extends Record<string, any>>(current: T, produced: T): T {
+  const isEmpty = (v: unknown) =>
+    v == null || v === '' || (typeof v === 'object' && !(v instanceof Blob) && !Object.keys(v).length);
+  const set = Object.entries(current).filter(([, v]) => !isEmpty(v));
   return {
-    ...current,
+    ...produced,
+    ...Object.fromEntries(set),
     elementHtml: produced.elementHtml,
     characters: produced.characters,
     sections: produced.sections,

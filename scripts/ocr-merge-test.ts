@@ -8,8 +8,12 @@ import assert from 'node:assert/strict';
  * it captured at start, reverting them.
  */
 function mergeOcrResult<T extends Record<string, any>>(current: T, produced: T): T {
+  const isEmpty = (v: unknown) =>
+    v == null || v === '' || (typeof v === 'object' && !(v instanceof Blob) && !Object.keys(v).length);
+  const set = Object.entries(current).filter(([, v]) => !isEmpty(v));
   return {
-    ...current,
+    ...produced,
+    ...Object.fromEntries(set),
     elementHtml: produced.elementHtml,
     characters: produced.characters,
     sections: produced.sections,
@@ -65,4 +69,38 @@ test('unrelated fields touched during the run survive too', () => {
 test('with no concurrent change the result is the plain OCR output', () => {
   const merged = mergeOcrResult(atJobStart, produced);
   assert.deepEqual(merged, produced);
+});
+
+test('a folder-library stub row does not wipe the page images', () => {
+  // Tauri FS books keep only a stub in IDB; the content is in the bookdata zip.
+  const page = new Blob(['jpg']);
+  const snapshot = {
+    ...atJobStart,
+    styleSheet: '.pdf-page-img{}',
+    language: 'zh',
+    coverImage: page,
+    blobs: { 'pdf-page-1.jpg': page }
+  };
+  const stub = {
+    id: 7,
+    title: 'scan.pdf',
+    ocrLang: 'japan',
+    styleSheet: '',
+    elementHtml: '',
+    blobs: {},
+    coverImage: '',
+    characters: 0,
+    sections: [],
+    lastBookModified: 0,
+    lastBookOpen: 1000,
+    storageSource: 'TauriFS'
+  };
+  const merged = mergeOcrResult(stub, { ...snapshot, ...produced, blobs: snapshot.blobs });
+  assert.equal(merged.blobs['pdf-page-1.jpg'], page, 'page images must survive');
+  assert.equal(merged.styleSheet, snapshot.styleSheet);
+  assert.equal(merged.language, 'zh');
+  assert.equal(merged.coverImage, page);
+  assert.equal(merged.elementHtml, produced.elementHtml);
+  assert.equal(merged.ocrLang, 'japan', 'the stub still carries mid-run edits');
+  assert.equal(merged.storageSource, 'TauriFS');
 });
