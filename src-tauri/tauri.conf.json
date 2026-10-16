@@ -17,7 +17,7 @@
         "height": 860,
         "resizable": true,
         "fullscreen": false,
-        "additionalBrowserArgs": "--disk-cache-size=1",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disk-cache-size=1 --force-color-profile=srgb",
         "dragDropEnabled": false
       }
     ],

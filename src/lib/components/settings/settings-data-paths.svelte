@@ -134,7 +134,10 @@
     if (wantMove) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('move_directory', { from: prevRoot, to: nextRoot });
+        // '' in the store means "default", but as a path it is the process's
+        // working directory: restoring the default used to copy the library
+        // there and then delete the original.
+        await invoke('move_directory', { from: prevRoot, to: nextRoot || paths?.defaultFsRoot });
       } catch (err: any) {
         // Report the failure but continue: the user picked a new folder, we
         // owe them the switch even if the data-move step didn't work.

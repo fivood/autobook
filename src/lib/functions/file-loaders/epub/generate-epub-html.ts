@@ -52,6 +52,12 @@ export default function generateEpubHtml(
   document: Document,
   contentsDirectory: string
 ) {
+  // Book markup is untrusted, and every chapter goes through `innerHTML` below.
+  // In the live document that arms it on the spot — an `<img onerror>` fires at
+  // import, before the render-time sanitizer (format-book-data-html) ever sees
+  // it. A document with no browsing context loads no images and runs no
+  // handlers; callers only read `textContent` / `innerHTML` off the result.
+  document = document.implementation.createHTMLDocument('');
   const fallbackData = new Map<string, string>();
   const importHTMLFixMode = importHTMLFixMode$.getValue();
   const restrictImportFixToAnchor = restrictImportFixToAnchor$.getValue();

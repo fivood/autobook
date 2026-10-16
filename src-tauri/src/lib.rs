@@ -386,6 +386,47 @@ fn canonical_ish(p: &std::path::Path) -> std::path::PathBuf {
   }
 }
 
+/// Folders `move_directory` / `open_data_folder` will touch: the default
+/// library and the roots the user picked in a native dialog
+/// (`allowed-roots.json`), plus — with `webview_dirs` — the IndexedDB / Local
+/// Storage dirs Settings → Data offers to open.
+///
+/// Those two commands work with std::fs and explorer, outside the fs-plugin
+/// scope, so without a check one injected `invoke` could move any folder on
+/// the disk (say, into Startup) or hand explorer a file to launch.
+fn granted_roots(webview_dirs: bool) -> Vec<std::path::PathBuf> {
+  let mut roots = vec![default_documents_root_path()];
+  roots.extend(read_allowed_roots().into_iter().map(std::path::PathBuf::from));
+  if webview_dirs {
+    roots.extend(webview_local_storage_dirs());
+    roots.extend(webview_indexeddb_dirs());
+  }
+  roots
+}
+
+/// The path must BE one of the roots, not merely sit under one. Every
+/// legitimate caller passes a root verbatim, and allowing descendants would let
+/// a script craft one inside the library — a folder it can swap for an .exe
+/// between our `is_dir()` and explorer's, or a name with commas explorer
+/// splits into extra arguments. Purely lexical on purpose: canonicalizing an
+/// attacker-chosen `\\host\share` would already make Windows connect to it
+/// (and offer an NTLM hash) before we got to say no.
+fn is_granted_root(p: &str, roots: &[std::path::PathBuf]) -> bool {
+  fn norm(s: &str) -> String {
+    // ASCII only: Unicode folding is looser than NTFS's (K == U+212A KELVIN
+    // SIGN here, distinct names on disk), which would let a sibling pass.
+    s.replace('/', "\\").trim_end_matches('\\').to_ascii_lowercase()
+  }
+  let target = norm(p);
+  // `C:` alone is drive-relative (that drive's cwd) yet normalizes like `C:\`.
+  std::path::Path::new(p).is_absolute()
+    && !target.is_empty()
+    && roots
+      .iter()
+      .filter(|r| r.is_absolute())
+      .any(|r| norm(&r.to_string_lossy()) == target)
+}
+
 /// Move a directory to a new location. Tries a plain rename first (instant,
 /// same volume); on cross-volume rename failure it falls back to recursive
 /// copy + remove. `to` may be an empty existing directory — that's the normal
@@ -393,6 +434,16 @@ fn canonical_ish(p: &std::path::Path) -> std::path::PathBuf {
 /// Refuses to clobber a target that already contains files.
 #[tauri::command]
 fn move_directory(from: String, to: String) -> Result<(), String> {
+  let roots = granted_roots(false);
+  for p in [&from, &to] {
+    if !is_granted_root(p, &roots) {
+      return Err(format!("不是已授权的书库文件夹: {p}"));
+    }
+  }
+  move_directory_impl(from, to)
+}
+
+fn move_directory_impl(from: String, to: String) -> Result<(), String> {
   let from_path = std::path::PathBuf::from(&from);
   let to_path = std::path::PathBuf::from(&to);
   if !from_path.exists() {
@@ -459,8 +510,15 @@ fn copy_dir_recursive(from: &std::path::Path, to: &std::path::Path) -> std::io::
 #[tauri::command]
 fn open_data_folder(path: String) -> Result<(), String> {
   let p = std::path::PathBuf::from(&path);
+  if !is_granted_root(&path, &granted_roots(true)) {
+    return Err(format!("不是已授权的文件夹: {path}"));
+  }
   if !p.exists() {
     std::fs::create_dir_all(&p).map_err(|e| e.to_string())?;
+  }
+  // Explorer handed a file runs it with its default handler.
+  if !p.is_dir() {
+    return Err(format!("不是文件夹: {path}"));
   }
   // Spawn explorer.exe; on non-Windows builds this command is irrelevant.
   #[cfg(target_os = "windows")]
@@ -562,7 +620,7 @@ mod move_directory_tests {
     let dst = src.join("newfolder");
     std::fs::create_dir_all(&dst).unwrap();
 
-    let err = move_directory(
+    let err = move_directory_impl(
       src.to_string_lossy().into_owned(),
       dst.to_string_lossy().into_owned(),
     )
@@ -583,7 +641,7 @@ mod move_directory_tests {
     std::fs::write(src.join("book.epub"), b"x").unwrap();
     let dst = root.join("ebooks");
 
-    move_directory(
+    move_directory_impl(
       src.to_string_lossy().into_owned(),
       dst.to_string_lossy().into_owned(),
     )
@@ -604,13 +662,38 @@ mod move_directory_tests {
     std::fs::write(src.join("book.epub"), b"x").unwrap();
     let alias = root.join("other").join("..").join("lib");
 
-    move_directory(
+    move_directory_impl(
       src.to_string_lossy().into_owned(),
       alias.to_string_lossy().into_owned(),
     )
     .unwrap();
     assert!(src.join("book.epub").exists());
     let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// move_directory / open_data_folder are reachable from the webview: only a
+  /// root itself passes, however it is spelled — never a path inside or above
+  /// one, a UNC path, or a relative root.
+  #[test]
+  fn only_exact_granted_roots_pass() {
+    let roots = vec![
+      std::path::PathBuf::from(r"C:\Users\u\Documents\AutoBook"),
+      std::path::PathBuf::from(r"E:\e"),
+      std::path::PathBuf::from("relative"),
+    ];
+    assert!(is_granted_root(r"C:\Users\u\Documents\AutoBook", &roots));
+    assert!(is_granted_root("c:/users/u/documents/autobook/", &roots));
+    assert!(is_granted_root(r"E:\e", &roots));
+    assert!(!is_granted_root(r"C:\Users\u\Documents\AutoBook\x.cmd", &roots));
+    assert!(!is_granted_root(r"C:\Users\u\Documents\AutoBook\..\..", &roots));
+    assert!(!is_granted_root(r"C:\Users\u\Documents", &roots));
+    assert!(!is_granted_root(r"\\host\share", &roots));
+    assert!(!is_granted_root("relative", &roots));
+    assert!(!is_granted_root("", &roots));
+    assert!(!is_granted_root("C:\\Users\\u\\Documents\\AutoBoo\u{212A}", &roots));
+    let drive = vec![std::path::PathBuf::from(r"D:\")];
+    assert!(is_granted_root(r"D:\", &drive));
+    assert!(!is_granted_root("D:", &drive));
   }
 }
 
