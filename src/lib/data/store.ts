@@ -206,6 +206,8 @@ export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
 
 /** Absolute paths queued from file-association / CLI launch (desktop only). */
 export const pendingLaunchFiles$ = writableSubject<string[]>([]);
+/** A Markdown file opened from Explorer, edited in place at /edit rather than imported. */
+export const editFilePath$ = writableSubject<string>('');
 
 /** Keep the app window above other windows (desktop only). Remembered across
  * restarts; applied by window-always-on-top.ts. */

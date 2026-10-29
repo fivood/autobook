@@ -4,6 +4,7 @@
   import { t } from '$lib/i18n';
   import { getFormattedElementMd } from '$lib/functions/file-loaders/md/generate-md-html';
   import type { EditableTextFormat } from '$lib/functions/file-loaders/text-source';
+  import { enterEdit, indentEdit, wrapEdit, type TextEdit } from './markdown-keys';
 
   type EditorView = 'edit' | 'split' | 'preview';
   interface OutlineItem {
@@ -19,6 +20,8 @@
   export let initialView: EditorView = 'edit';
   export let minHeight = '20rem';
   export let outlineInitiallyOpen = false;
+  /** Take the parent's full height instead of growing from `minHeight`. */
+  export let fill = false;
 
   const dispatch = createEventDispatcher<{
     change: { value: string };
@@ -74,12 +77,43 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    // Mid-composition keys belong to the IME: Enter there commits the
+    // candidate, it is not a newline to continue a list with.
+    if (event.isComposing || !textareaEl) return;
+    const mod = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    const { selectionStart: s, selectionEnd: e } = textareaEl;
+    let edit: TextEdit | null = null;
+
     if (event.key === 'Escape') {
       dispatch('escape');
-    } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      return;
+    } else if (mod && (key === 's' || event.key === 'Enter')) {
       event.preventDefault();
       dispatch('saveShortcut');
+      return;
+    } else if (event.key === 'Tab' && !mod && !event.altKey) {
+      // Swallow Tab even when there is nothing to outdent: letting it through
+      // moves focus out of the editor, which is never what Tab means here.
+      event.preventDefault();
+      edit = indentEdit(value, s, e, event.shiftKey);
+    } else if (format !== 'markdown') {
+      return;
+    } else if (event.key === 'Enter' && !mod && !event.shiftKey && !event.altKey) {
+      edit = enterEdit(value, s, e);
+    } else if (mod && !event.shiftKey && !event.altKey && (key === 'b' || key === 'i')) {
+      edit = wrapEdit(value, s, e, key === 'b' ? '**' : '*');
     }
+
+    if (!edit) return;
+    event.preventDefault();
+    textareaEl.setSelectionRange(edit.start, edit.end);
+    // insertText keeps Ctrl+Z working; assigning `value` would reset the
+    // textarea's undo history. It fires `input`, so bind:value and the preview
+    // update through the normal path.
+    if (edit.insert) document.execCommand('insertText', false, edit.insert);
+    else document.execCommand('delete');
+    textareaEl.setSelectionRange(edit.selStart, edit.selEnd);
   }
 
   async function jumpToHeading(item: OutlineItem) {
@@ -127,7 +161,7 @@
   }
 </script>
 
-<div class="text-source-editor overflow-hidden rounded-lg border border-current/20">
+<div class="text-source-editor overflow-hidden rounded-lg border border-current/20" class:fill>
   {#if format === 'markdown'}
     <div class="flex flex-wrap items-center justify-between gap-2 border-b border-current/15 p-2">
       <div class="menu-toolbar p-0">
@@ -165,7 +199,7 @@
 
   <div class="editor-layout" class:outline-open={format === 'markdown' && outlineOpen}>
     {#if format === 'markdown' && outlineOpen}
-      <aside class="outline-panel overflow-y-auto border-r border-current/15 p-2" style:min-height={minHeight}>
+      <aside class="outline-panel overflow-y-auto border-r border-current/15 p-2" style:min-height={fill ? null : minHeight}>
         {#if outline.length}
           {#each outline as item (item.offset)}
             <button
@@ -188,7 +222,7 @@
           bind:this={textareaEl}
           bind:value
           class="source-area min-w-0 resize-none bg-transparent p-3 font-mono text-sm leading-relaxed outline-none"
-          style:min-height={minHeight}
+          style:min-height={fill ? null : minHeight}
           {placeholder}
           spellcheck="true"
           on:input={handleInput}
@@ -201,8 +235,8 @@
           bind:this={previewEl}
           class="text-editor-preview min-w-0 overflow-y-auto p-4 text-sm"
           class:split-divider={viewMode === 'split'}
-          style:min-height={minHeight}
-          style:max-height={`calc(${minHeight} + 12rem)`}
+          style:min-height={fill ? null : minHeight}
+          style:max-height={fill ? null : `calc(${minHeight} + 12rem)`}
         >
           {#if previewError}
             <p class="text-danger">{previewError}</p>
@@ -236,6 +270,23 @@
   .source-area {
     width: 100%;
   }
+  .fill {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .fill .editor-layout {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .fill .content-layout {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .fill .source-area,
+  .fill .text-editor-preview {
+    height: 100%;
+  }
   .split-divider {
     border-left: 1px solid color-mix(in srgb, currentColor 15%, transparent);
   }
@@ -256,6 +307,9 @@
   :global(.text-editor-preview p) { margin: 0.5em 0; line-height: 1.65; }
   :global(.text-editor-preview ul),
   :global(.text-editor-preview ol) { margin: 0.5em 0; padding-left: 1.5em; }
+  /* Tailwind's preflight strips markers; a preview of a list needs them. */
+  :global(.text-editor-preview ul) { list-style: disc; }
+  :global(.text-editor-preview ol) { list-style: decimal; }
   :global(.text-editor-preview li) { margin: 0.2em 0; }
   :global(.text-editor-preview code:not(.hljs)) {
     border-radius: 0.2rem;

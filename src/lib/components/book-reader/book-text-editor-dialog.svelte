@@ -58,11 +58,11 @@
   }
 </script>
 
-<!-- svelte-ignore a11y-click-events-have-key-events -->
-<!-- svelte-ignore a11y-no-static-element-interactions -->
-<div class="fixed inset-0 z-[95] flex items-center justify-center bg-black/50 p-3" on:click|self={close}>
+<!-- Full-screen, and no click-the-backdrop-to-close: a stray click beside a
+     small dialog kept interrupting editing. Close / Esc still confirm. -->
+<div class="fixed inset-0 z-[95] flex">
   <div
-    class="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg shadow-2xl"
+    class="flex h-full w-full flex-col overflow-hidden"
     style="background:var(--background-color,#fff);color:var(--font-color,#333);"
     role="dialog"
     aria-modal="true"
@@ -87,12 +87,12 @@
     {/if}
     <div class="mx-4 mt-3 text-xs opacity-60">{$t('bookEditor.positionWarning')}</div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto p-4">
+    <div class="min-h-0 flex-1 p-4">
       <TextSourceEditor
         bind:this={editor}
         bind:value
         {format}
-        minHeight="28rem"
+        fill
         outlineInitiallyOpen={format === 'markdown'}
         placeholder={$t(format === 'markdown' ? 'bookEditor.markdownPlaceholder' : 'bookEditor.textPlaceholder')}
         on:saveShortcut={save}

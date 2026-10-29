@@ -14,6 +14,7 @@
   import { goto } from '$app/navigation';
   import {
     customThemes$,
+    editFilePath$,
     highlightCustomColors$,
     highlightPalette$,
     highlightSlotStyles$,
@@ -204,8 +205,20 @@
 
       const queueLaunchFiles = (paths: string[]) => {
         if (!paths?.length) return;
-        pendingLaunchFiles$.next([...pendingLaunchFiles$.getValue(), ...paths]);
-        goto(`${pagePath}/manage`);
+        // Markdown opened from Explorer is a scratch file to edit, not a book
+        // to keep: it opens in the editor and is never imported. Books in the
+        // same batch still queue, and import next time /manage mounts.
+        // ponytail: one editor, so only the first .md of a batch opens.
+        const isMd = (p: string) => /\.(md|markdown)$/i.test(p);
+        const books = paths.filter((p) => !isMd(p));
+        const md = paths.find(isMd);
+        if (books.length) pendingLaunchFiles$.next([...pendingLaunchFiles$.getValue(), ...books]);
+        if (md) {
+          editFilePath$.next(md);
+          goto(`${pagePath}/edit`);
+        } else {
+          goto(`${pagePath}/manage`);
+        }
       };
 
       queueLaunchFiles(await invoke<string[]>('take_launch_files'));
