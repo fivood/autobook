@@ -110,5 +110,16 @@ export async function connect({ port = DEFAULT_PORT, timeoutMs = 0 } = {}) {
     return res.data;
   }
 
-  return { evaluate, evaluateThroughNavigation, waitFor, screenshot, close: () => ws.close() };
+  /**
+   * A real left click at viewport coordinates. Synthetic `click()` / dispatched
+   * MouseEvents don't move the selection, so anything that depends on where
+   * the caret lands needs the input pipeline.
+   */
+  async function click(x, y) {
+    const at = { x, y, button: 'left', clickCount: 1 };
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...at });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...at });
+  }
+
+  return { evaluate, evaluateThroughNavigation, waitFor, screenshot, click, close: () => ws.close() };
 }

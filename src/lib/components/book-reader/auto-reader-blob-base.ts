@@ -37,12 +37,10 @@ import {
   computeGlobalCharIndex,
   extractText,
   seekSentencesToExplored,
-  selectionToCharIndex,
   splitSentencesDetailed,
   trackSelectionIn,
   type Sentence
 } from './auto-reader-shared';
-import { domPositionForCharIndex } from './char-index-locator';
 import { calculatorIndexToTtsIndex } from './tts-calculator-index';
 
 /** An <audio> that has already reached `canplaythrough` — `play()` on it is
@@ -208,10 +206,6 @@ export abstract class BlobAutoReader implements AutoReader {
     this.clearPrefetch();
   }
 
-  getPosition() {
-    return { para: this.index, offset: this.offset };
-  }
-
   setPosition(para: number, offset: number) {
     if (!this.sentences.length) return;
     this.index = Math.min(Math.max(0, para), this.sentences.length - 1);
@@ -225,30 +219,11 @@ export abstract class BlobAutoReader implements AutoReader {
     return { globalStart: sentence.start, globalEnd: sentence.end, text: sentence.text };
   }
 
-  /**
-   * Start of the current sentence as a DOM position inside this reader's own
-   * content. The typewriter measures characters differently, so it is handed a
-   * position and resolves it with its own walk rather than a translated index.
-   */
-  currentSentencePosition(): { node: Node; offset: number } | null {
-    const sentence = this.getCurrentSentence();
-    if (!sentence || !this.contentEl) return null;
-    return domPositionForCharIndex(this.contentEl, sentence.globalStart);
-  }
-
   seekToExplored(exploredCharCount: number, snapToSentenceStart = false) {
     const pos = seekSentencesToExplored(this.sentences, exploredCharCount, snapToSentenceStart);
     this.index = pos.index;
     this.offset = pos.offset;
     this.clearPrefetch();
-  }
-
-  seekToSelection(): boolean {
-    if (!this.contentEl) return false;
-    const charIdx = selectionToCharIndex(this.contentEl);
-    if (charIdx == null) return false;
-    this.seekToExplored(charIdx);
-    return true;
   }
 
   seekToCalculatorIndex(calcIndex: number) {

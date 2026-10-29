@@ -1062,6 +1062,145 @@ async function typewriterTakesOverFromVoice(bookId) {
   return `朗读停在 ${out.spoken}，打字机从同一段接上，速度胶囊归打字机`;
 }
 
+/** The paragraph the typewriter's frontier is in: the first one holding hidden text. */
+const FRONTIER_PARAGRAPH = `(() => {
+  const p = [...document.querySelectorAll('.book-content p')]
+    .find((x) => x.classList.contains('tw-block-hidden') || x.querySelector('.tw-hidden'));
+  return p ? p.textContent.slice(0, 6) : null;
+})()`;
+
+/** Press play on the voice and report the first paragraph it speaks. */
+const speakAndReport = (press) => `(() => {
+  ${press};
+  return new Promise((done) => {
+    let tries = 0;
+    const poll = setInterval(() => {
+      const spoken = ${SPOKEN_PARAGRAPH};
+      if (!spoken && ++tries < 32) return;
+      clearInterval(poll);
+      document.querySelector('[title^="暂停朗读"]')?.click();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      done(spoken);
+    }, 250);
+  });
+})()`;
+
+const PRESS_VOICE = `document.querySelector('[title^="开始朗读"]').click()`;
+const PRESS_TYPEWRITER = `document.querySelector('[title^="开始打字机"]').click()`;
+const PAUSE_TYPEWRITER = `document.querySelector('[title^="暂停打字机"]')?.click()`;
+const key = (code, k) =>
+  `window.dispatchEvent(new KeyboardEvent('keydown', { code: '${code}', key: '${k}', bubbles: true }))`;
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Regression, found 2026-10-29: pausing the typewriter and then jumping — a
+ * bookmark, the TOC, a chapter key — landed on a blank page, because
+ * everything past the frontier stays hidden while paused. Pressing play there
+ * then started both engines back at the old frontier, off screen: the voice
+ * from the frontier it had been handed, the typewriter typing where nobody
+ * was looking.
+ */
+async function jumpAfterTypewriterPause(bookId) {
+  await scrollModeVoiceFromScratch(bookId);
+  await session.evaluate(scrollToParagraph(60));
+  await session.evaluate(`(() => { ${key('KeyB', 'b')}; return 1; })()`);
+  await pause(500);
+  await session.evaluate(scrollToParagraph(5));
+  await session.evaluate(`(() => { ${PRESS_TYPEWRITER}; return 1; })()`);
+  await pause(2000);
+  const frontier = await session.evaluate(`(() => { ${PAUSE_TYPEWRITER}; return ${FRONTIER_PARAGRAPH}; })()`);
+  await session.evaluate(`(() => { ${key('KeyR', 'r')}; return 1; })()`);
+  await pause(1000);
+
+  const landed = await session.evaluate(`(() => {
+    const p = [...document.querySelectorAll('.book-content p')]
+      .find((x) => x.textContent.startsWith('第60段'));
+    const top = [...document.querySelectorAll('.book-content p')]
+      .find((x) => x.getBoundingClientRect().bottom > 0);
+    return {
+      top: top ? top.textContent.slice(0, 6) : null,
+      hidden: p.classList.contains('tw-block-hidden') || !!p.querySelector('.tw-hidden')
+    };
+  })()`);
+  if (Math.abs(paragraphNumber(landed.top) - 60) > 1) {
+    throw new Error(`setup: the bookmark jump landed on ${landed.top}`);
+  }
+  if (landed.hidden) throw new Error('jumped past the paused typewriter onto a blank page');
+
+  const spoken = await session.evaluate(speakAndReport(PRESS_VOICE));
+  if (Math.abs(paragraphNumber(spoken) - 60) > 1) {
+    throw new Error(`after the jump the voice started at ${spoken} (typewriter had paused at ${frontier})`);
+  }
+  return `打字机停在 ${frontier}，跳到第60段正文可见，朗读从 ${spoken} 开始`;
+}
+
+/**
+ * Regression, found 2026-10-29: pressing the voice while the typewriter was
+ * still running started it at the top of the screen, not at the frontier —
+ * the typewriter was only stopped after the voice had picked its start, so
+ * only "pause first, then switch" carried the sentence over.
+ */
+async function voiceTakesOverFromTypewriter(bookId) {
+  await scrollModeVoiceFromScratch(bookId);
+  await session.evaluate(scrollToParagraph(30));
+  await session.evaluate(`(() => { ${PRESS_TYPEWRITER}; return 1; })()`);
+  await pause(2500);
+  const out = await session.evaluate(`(() => {
+    const frontier = ${FRONTIER_PARAGRAPH};
+    return ${speakAndReport(PRESS_VOICE)}.then((spoken) => ({ frontier, spoken }));
+  })()`);
+  if (!out.spoken) throw new Error('the voice never started');
+  if (paragraphNumber(out.spoken) !== paragraphNumber(out.frontier)) {
+    throw new Error(`typewriter was at ${out.frontier}, the voice started at ${out.spoken}`);
+  }
+  return `打字机在 ${out.frontier}，直接点朗读从同一段开始`;
+}
+
+/**
+ * Regression, found 2026-10-29 while fixing the start position: closing or
+ * reloading the reader overwrote the saved stop point with the first sentence
+ * of the book (the engine's replayed `false` read as a stop), so the next
+ * session never resumed. Started from a caret clicked into the text, which the
+ * typewriter ignored until the two engines shared one start rule.
+ *
+ * The caret is placed with a real click: synthetic events don't move the
+ * selection.
+ */
+async function caretStartSurvivesReload(bookId) {
+  await scrollModeVoiceFromScratch(bookId);
+  await session.evaluate(scrollToParagraph(60));
+  const at = await session.evaluate(`(() => {
+    const p = [...document.querySelectorAll('.book-content p')]
+      .find((x) => x.textContent.startsWith('第66段'));
+    const r = p.getBoundingClientRect();
+    return { x: Math.round(r.left + 60), y: Math.round(r.top + r.height / 2) };
+  })()`);
+  await session.click(at.x, at.y);
+  await pause(400);
+  const typed = await session.evaluate(`(() => {
+    const caret = (getSelection() || {}).type;
+    ${PRESS_TYPEWRITER};
+    return { caret, frontier: ${FRONTIER_PARAGRAPH} };
+  })()`);
+  if (paragraphNumber(typed.frontier) !== 66) {
+    throw new Error(`caret in 第66段 (${typed.caret}), the typewriter started at ${typed.frontier}`);
+  }
+  await pause(1000);
+  const stopped = await session.evaluate(`(() => { ${PAUSE_TYPEWRITER}; return ${FRONTIER_PARAGRAPH}; })()`);
+
+  await goto(
+    `/b?id=${bookId}`,
+    `!!document.querySelector('[title^="开始朗读"]') && document.querySelectorAll('.book-content p').length > 70`
+  );
+  await pause(1000);
+  await session.evaluate(scrollToParagraph(60));
+  const spoken = await session.evaluate(speakAndReport(`${key('KeyV', 'v')}`));
+  if (paragraphNumber(spoken) !== paragraphNumber(stopped)) {
+    throw new Error(`stopped at ${stopped} before the reload, the voice started at ${spoken}`);
+  }
+  return `光标点在第66段：打字机从那段打，停在 ${stopped}；重开后朗读从 ${spoken} 接上`;
+}
+
 // ----------------------------------------------------------------- run ----
 
 console.log('AutoBook smoke suite (real Tauri window via CDP)\n');
@@ -1107,6 +1246,15 @@ try {
   );
   await scenario('打字机接管：朗读中开打字机会停掉朗读、接着那句打', () =>
     typewriterTakesOverFromVoice(bookId)
+  );
+  await scenario('朗读接管：打字机在跑时直接点朗读，从前沿那段开始', () =>
+    voiceTakesOverFromTypewriter(bookId)
+  );
+  await scenario('跳转：打字机暂停后跳走不留空白页，播放从新位置开始', () =>
+    jumpAfterTypewriterPause(bookId)
+  );
+  await scenario('续读：光标起点 → 停下 → 重开书后从停下那段接上', () =>
+    caretStartSurvivesReload(bookId)
   );
 } catch (err) {
   fail('suite setup', err.message);

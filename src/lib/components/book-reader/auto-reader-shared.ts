@@ -7,6 +7,9 @@
  */
 
 import type { AutoReader } from './types';
+// With the extension: scripts/tts-start-position-test.ts loads this module
+// under plain node.
+import { domPositionForCharIndex } from './char-index-locator.ts';
 
 /**
  * One TTS unit. `text` is trimmed (engines choke on whitespace-only input),
@@ -349,35 +352,18 @@ function rememberSelection() {
 }
 
 /**
- * Where the typewriter stopped revealing, as a char index into
- * `extractText(trackedRoot)`.
- *
- * The two playback engines are mutually exclusive, so pausing one is usually a
- * prelude to starting the other, and the reader expects to carry on from the
- * same sentence rather than from wherever the scroll position happens to be.
- * The typewriter hands over a DOM position because its own character space is
- * a different one — it concatenates block `textContent`, which drops any text
- * that is not inside a block element — and translating between the two
- * numerically is exactly the mistake `revealFrom`'s comment warns about. A DOM
- * position costs each side only the walk it already owns.
- *
- * Consumed on read, like the selection memory and for the same reason: a
- * frontier from twenty minutes ago must not hijack a play the reader started
- * somewhere else entirely.
+ * A DOM position inside the tracked content as an extractText() index, and
+ * back. How the typewriter's frontier joins the playback cursor: its own
+ * character space concatenates block `textContent`, which drops any text not
+ * inside a block element, so the numbers do not translate. A DOM position
+ * costs each side only the walk it already owns.
  */
-let handoffIndex: number | null = null;
-
-/** Called when the typewriter pauses. */
-export function rememberPlaybackHandoff(node: Node, offset: number) {
-  if (!trackedRoot) return;
-  handoffIndex = domPositionToCharIndex(trackedRoot, node, offset);
+export function indexOfPosition(node: Node, offset: number): number | null {
+  return trackedRoot ? domPositionToCharIndex(trackedRoot, node, offset) : null;
 }
 
-/** Called by `applyStartPosition`; leaves the memory empty. */
-export function takePlaybackHandoff(): number | null {
-  const index = handoffIndex;
-  handoffIndex = null;
-  return index;
+export function positionOfIndex(index: number): { node: Text; offset: number } | null {
+  return trackedRoot ? domPositionForCharIndex(trackedRoot, index) : null;
 }
 
 /** Point the selection memory at this reader's content. Called from
@@ -385,7 +371,6 @@ export function takePlaybackHandoff(): number | null {
 export function trackSelectionIn(root: HTMLElement | undefined) {
   trackedRoot = root;
   rememberedIndex = null;
-  handoffIndex = null;
   if (root && typeof document !== 'undefined' && !listeningForSelection) {
     listeningForSelection = true;
     document.addEventListener('selectionchange', rememberSelection);
@@ -393,59 +378,99 @@ export function trackSelectionIn(root: HTMLElement | undefined) {
 }
 
 /**
- * Convenience: read the current document selection's start position and map
- * it to a char index inside `root`. Falls back to the last selection the
- * tracker saw — once — when nothing is selected any more.
+ * Where the last selection or caret inside `root` started — once.
+ *
+ * Read from the memory even while the selection is still live: the tracker
+ * already saw it. Consumed, and the live selection dropped with it: a caret
+ * stays put after play, so pause → play kept jumping back to it instead of
+ * resuming. Dropping it also stops the typewriter's wrap / unwrap, which
+ * moves a caret sitting in the block it rewrites, from re-arming the memory
+ * with a position the reader never picked.
  */
 export function selectionToCharIndex(root: HTMLElement): number | null {
-  const sel = typeof window === 'undefined' ? null : window.getSelection();
-  if (sel && sel.rangeCount) {
-    const range = sel.getRangeAt(0);
-    if (root.contains(range.startContainer)) {
-      return domPositionToCharIndex(root, range.startContainer, range.startOffset);
-    }
-  }
   if (root !== trackedRoot) return null;
-  // Consumed on read: a selection made and forgotten ten pages ago must not
-  // hijack the *next* play, which falls back to the resume position as before.
   const index = rememberedIndex;
   rememberedIndex = null;
+  const sel = typeof window === 'undefined' ? null : window.getSelection();
+  if (index != null && sel?.rangeCount && root.contains(sel.getRangeAt(0).startContainer)) {
+    sel.removeAllRanges();
+  }
   return index;
 }
 
 /**
- * Put the reader where `strategy` says playback should begin. `prepare()`
- * must already have run — every branch needs the sentence list.
+ * Is the character at `index` inside the visible part of the content?
  *
- * Shared because two places start playback: the FAB and the tray / global
- * shortcut handler in /b. The latter used to jump straight to the resume
- * position, so the start strategy silently did not apply to it.
+ * Clipping ancestors count, not just the window: paginated mode scrolls the
+ * section inside its own box, and the neighbouring page sits beside it.
+ */
+export function isIndexOnScreen(index: number): boolean {
+  if (!trackedRoot) return false;
+  const pos = domPositionForCharIndex(trackedRoot, index);
+  if (!pos) return false;
+  const range = document.createRange();
+  range.setStart(pos.node, pos.offset);
+  range.setEnd(pos.node, Math.min(pos.node.length, pos.offset + 1));
+  const rect = range.getBoundingClientRect();
+  let top = 0;
+  let left = 0;
+  let bottom = window.innerHeight;
+  let right = window.innerWidth;
+  for (let el: HTMLElement | null = trackedRoot; el && el !== document.body; el = el.parentElement) {
+    if (getComputedStyle(el).overflow === 'visible') continue;
+    const box = el.getBoundingClientRect();
+    top = Math.max(top, box.top);
+    left = Math.max(left, box.left);
+    bottom = Math.min(bottom, box.bottom);
+    right = Math.min(right, box.right);
+  }
+  return rect.bottom > top && rect.top < bottom && rect.right > left && rect.left < right;
+}
+
+/**
+ * The one rule both engines start by. Returns an extractText() index, or null
+ * for "from the screen" — which each engine reads its own way (the voice from
+ * the first sentence on screen, the typewriter keeping the screen and typing
+ * on below it).
+ *
+ * 1. A selection or caret the reader made — exactly there, whatever the
+ *    strategy: it is the one start they pointed at.
+ * 2. Where playback last stopped (`cursor`, either engine), while it is still
+ *    on screen. Off screen means the reader scrolled or jumped away, and a
+ *    stop point from back there must not drag them back. 'resume' skips the
+ *    screen check.
+ * 3. Otherwise null.
+ *
+ * The cursor snaps to its sentence start: the reader saw half that sentence
+ * go by, and a voice starting mid-clause sounds broken.
+ */
+export function resolvePlaybackStart(
+  strategy: string,
+  cursor: number | undefined,
+  onScreen: (index: number) => boolean = isIndexOnScreen
+): { index: number; snap: boolean } | null {
+  const picked = trackedRoot ? selectionToCharIndex(trackedRoot) : null;
+  if (picked != null) return { index: picked, snap: false };
+  if (cursor != null && (strategy === 'resume' || onScreen(cursor))) {
+    return { index: cursor, snap: true };
+  }
+  return null;
+}
+
+/**
+ * Put the voice where playback should begin. `prepare()` must already have
+ * run — every branch needs the sentence list.
  */
 export function applyStartPosition(
-  reader: Pick<
-    AutoReader,
-    'seekToSelection' | 'setPosition' | 'seekToExplored' | 'seekToCalculatorIndex'
-  >,
+  reader: Pick<AutoReader, 'seekToExplored' | 'seekToCalculatorIndex'>,
   strategy: string,
-  resumePosition: { para: number; offset: number } | undefined,
+  cursor: number | undefined,
   /** `exploredCharCount`, section-local — calculator space, not extractText. */
-  seekCharCount: number
+  seekCharCount: number,
+  onScreen?: (index: number) => boolean
 ) {
-  if (strategy === 'selection' && reader.seekToSelection()) return;
-  if (strategy === 'section-start') {
-    reader.setPosition(0, 0);
-    return;
-  }
-  // A frontier the typewriter just handed over beats the saved resume
-  // position: the resume position is where the *voice* last stopped, which the
-  // reveal has since moved past. Snapped to the sentence start — the reader saw
-  // half of that sentence go by, and a voice starting mid-clause sounds broken.
-  const handoff = takePlaybackHandoff();
-  if (handoff != null) {
-    reader.seekToExplored(handoff, true);
-    return;
-  }
-  if (resumePosition) reader.setPosition(resumePosition.para, resumePosition.offset);
+  const start = resolvePlaybackStart(strategy, cursor, onScreen);
+  if (start) reader.seekToExplored(start.index, start.snap);
   else reader.seekToCalculatorIndex(seekCharCount);
 }
 

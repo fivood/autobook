@@ -16,18 +16,14 @@ export interface AutoScroller {
    * the two are mutually exclusive, and the reader has to be able to read
    * ahead and scroll while the voice runs. */
   revealAll: () => void;
-  /** Move the reveal frontier to the start of the block containing `el`,
-   * i.e. "type from here". Optional: only the continuous typewriter has a
-   * frontier to move. */
-  revealFrom?: (el: HTMLElement) => void;
   /** Where the reveal frontier currently sits, as a DOM position — what the
-   * voice needs to start speaking the same sentence. Optional for the same
-   * reason as `revealFrom`. */
+   * voice needs to start speaking the same sentence. */
   frontierPosition?: () => { node: Node; offset: number } | null;
-  /** Type from this DOM position the next time playback starts. Deferred
-   * rather than applied immediately because the voice hands it over while the
-   * typewriter is stopped, and starting it is a separate gesture. */
+  /** Type from this DOM position when the start now under way resolves it. */
   revealFromPositionLater?: (node: Node, offset: number) => void;
+  /** Show everything and forget the frontier; the next start re-walks from
+   * the screen. */
+  markContentChanged?: () => void;
 }
 
 export interface AutoReader {
@@ -40,22 +36,15 @@ export interface AutoReader {
   /** `snapToSentenceStart` rewinds to the beginning of the sentence the count
    * lands inside, for handing playback over from the typewriter. */
   seekToExplored: (count: number, snapToSentenceStart?: boolean) => void;
-  /** Take the current document selection start (if it falls inside this
-   * reader's content) and seek to it. Returns true if a seek happened. */
-  seekToSelection: () => boolean;
   /** Seek to a position the reader's position calculator reports
    * (`exploredCharCount`, section-local), snapped to its sentence start. That
    * count strips punctuation and whitespace, so it is NOT a `seekToExplored`
    * index — see tts-calculator-index.ts. */
   seekToCalculatorIndex: (calcIndex: number) => void;
-  getPosition: () => { para: number; offset: number };
   setPosition: (para: number, offset: number) => void;
   /** Globally indexed character range of the sentence currently being
    * spoken — used by TtsHighlighter to paint a CSS Custom Highlight. */
   getCurrentSentence?: () => { globalStart: number; globalEnd: number; text: string } | null;
-  /** Start of the current sentence as a DOM position inside this reader's own
-   * content — what the typewriter needs to type from the same place. */
-  currentSentencePosition?: () => { node: Node; offset: number } | null;
   onBoundary?: (charIndex: number) => void;
   onEnd?: () => void;
   /** Fatal-for-this-session failure the reader should be told about: the

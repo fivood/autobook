@@ -50,7 +50,9 @@
   } from 'rxjs';
   import {
     applyStartPosition,
-    rememberPlaybackHandoff
+    indexOfPosition,
+    positionOfIndex,
+    resolvePlaybackStart
   } from '$lib/components/book-reader/auto-reader-shared';
   import { TtsHighlighter } from '$lib/components/book-reader/tts-highlight';
   import { quintInOut } from 'svelte/easing';
@@ -829,15 +831,23 @@
 
   $: scheduleHighlightRender($hlStore$);
 
-  $: if ($highlightSidebarOpen$) {
+  /**
+   * Stop playback for something that may move the reader elsewhere.
+   *
+   * A paused typewriter keeps everything past its frontier hidden, so landing
+   * past it showed a blank page. The stop still records the cursor first, so
+   * closing the TOC without going anywhere resumes exactly as before — the
+   * start rule re-hides from the cursor while it is on screen.
+   */
+  function stopPlaybackForJump() {
     autoScroller?.off();
     autoReader?.off();
+    autoScroller?.markContentChanged?.();
   }
 
-  $: if ($tocIsOpen$) {
-    autoScroller?.off();
-    autoReader?.off();
-  }
+  $: if ($highlightSidebarOpen$) stopPlaybackForJump();
+
+  $: if ($tocIsOpen$) stopPlaybackForJump();
 
   // Throttle the explored-char PAGE_CHANGE dispatch. exploredCharCount is
   // bumped per-character during typewriter/scroll, and a synchronous
@@ -895,7 +905,6 @@
   // --- TTS position memory ---
   let currentSectionIndex = 0;
   let sectionStartCharCount = 0;
-  let lastTtsSaveTime = 0;
   const ttsHighlighter = new TtsHighlighter();
 
   /**
@@ -941,34 +950,34 @@
 
   $: ttsSeekCharCount = Math.max(0, exploredCharCount - sectionStartCharCount);
 
-  $: ttsResumePosition = (() => {
+  /**
+   * Where playback last stopped — the voice's sentence or the typewriter's
+   * frontier — as an extractText() index into the reader's content. Both
+   * engines start from it while it is still on screen (resolvePlaybackStart).
+   *
+   * Persisted per book, so a reopened book carries on from the same sentence.
+   * The view mode is part of it: continuous indexes the whole book, paginated
+   * one section. A function, not a `$:`, because a stop and the start right
+   * after it run in the same tick.
+   */
+  function playbackCursor(): number | undefined {
     const id = getBookIdSync();
-    if (!id) return undefined;
-    const saved = $ttsPositions$[String(id)];
-    if (!saved) return undefined;
-    if (saved.section !== currentSectionIndex) return undefined;
-    // Only resume when the visible position is where the user left off —
-    // an intentional jump elsewhere should start TTS from the new spot.
-    if (Math.abs(saved.explored - exploredCharCount) > 30) return undefined;
-    return { para: saved.para, offset: saved.offset };
-  })();
+    const saved = id ? $ttsPositions$[String(id)] : undefined;
+    if (!saved || typeof saved.index !== 'number') return undefined;
+    if (saved.section !== currentSectionIndex || saved.paginated !== isPaginated) return undefined;
+    return saved.index;
+  }
 
-  function persistTtsPosition() {
+  function rememberPlaybackCursor(index: number | null | undefined) {
     const id = getBookIdSync();
-    if (!id || !autoReader) return;
-    const { para, offset } = autoReader.getPosition();
+    if (!id || index == null) return;
     $ttsPositions$ = {
       ...$ttsPositions$,
-      [String(id)]: {
-        section: currentSectionIndex,
-        para,
-        offset,
-        explored: exploredCharCount
-      }
+      [String(id)]: { section: currentSectionIndex, index, paginated: isPaginated }
     };
   }
 
-  function clearTtsPosition() {
+  function forgetPlaybackCursor() {
     const id = getBookIdSync();
     if (!id) return;
     const next = { ...$ttsPositions$ };
@@ -980,23 +989,23 @@
   /** When >=0, TTS hit a section end and we're waiting for currentSectionIndex
    * to reach this value before re-preparing + resuming reading. */
   let ttsAwaitingSection = -1;
+  /** Chapter the voice finished a section in — paginated 章止 stops at the
+   *  section boundary that opens a new one. */
+  let ttsChapterAtSectionEnd = -1;
 
   /**
-   * Playback handover between the typewriter and the voice.
+   * Playback handover between the typewriter and the voice, through the one
+   * playback cursor: each engine records where it stopped, and either one
+   * starts from there while it is on screen.
    *
-   * The two are mutually exclusive, so pausing one is nearly always a prelude
-   * to starting the other, and the reader expects to carry on from the same
-   * sentence — not from the scroll position, which is where both used to
-   * start. Each engine records where it stopped when it stops; the other
-   * consumes it when it next starts.
-   *
-   * Only a genuine pause counts. Starting the voice turns the typewriter off
-   * as a side effect (and runs revealAll() first, so its frontier is at the
-   * end of the section by then) — recording that would hand the wrong position
-   * to whichever engine started next. Hence the `!other.isRunning` guards, and
-   * the latches: both subjects are BehaviorSubjects that replay their current
-   * value to a new subscriber, so without one the initial `false` reads as a
-   * pause that never happened.
+   * Only a genuine stop counts. Starting the voice turns the typewriter off as
+   * a side effect (and runs revealAll() first, so its frontier is at the end
+   * of the section by then) — recording that would point the cursor at the
+   * wrong place. Hence the `!other.isRunning` guard, and the latches: both
+   * subjects are BehaviorSubjects that replay their current value to a new
+   * subscriber, so without one the initial `false` reads as a stop that never
+   * happened — which is how a reload used to overwrite the saved position
+   * with the first sentence of the book.
    */
   let ttsWasOn = false;
   let scrollerWasOn = false;
@@ -1012,13 +1021,20 @@
       if (started) {
         // Exclusive in this direction too. Only starting the voice used to stop
         // the typewriter, so pressing play on the typewriter mid-sentence left
-        // the voice reading text the typewriter had just hidden. Runs before
-        // the typewriter resolves its start, so the handover lands this time.
-        if (autoReader?.wasReaderEnabled$.getValue()) {
-          const position = autoReader.currentSentencePosition?.();
-          if (position) scroller.revealFromPositionLater?.(position.node, position.offset);
-          autoReader.off();
-        }
+        // the voice reading text the typewriter had just hidden. Its stop
+        // records the sentence as the cursor.
+        if (autoReader?.wasReaderEnabled$.getValue()) autoReader.off();
+        // Every start passes through here, FAB or Space, and before the
+        // typewriter resolves its own start — so this is where it gets the
+        // same start rule as the voice. Exact index, no sentence snap: the
+        // frontier it stopped at is a character, and re-typing half a sentence
+        // is not a resume.
+        const start = resolvePlaybackStart($ttsStartStrategy$, playbackCursor());
+        const position = start && positionOfIndex(start.index);
+        if (position) scroller.revealFromPositionLater?.(position.node, position.offset);
+        // From the screen: drop whatever an earlier run left hidden, so the
+        // typewriter re-walks from what the reader is looking at.
+        else scroller.markContentChanged?.();
         // Here rather than in the FAB, so Space claims the shared speed-pill
         // slot back too; it left the voice's rate pill under the typewriter.
         ttsArmed$.next(false);
@@ -1026,7 +1042,7 @@
       }
       if (!paused || autoReader?.wasReaderEnabled$.getValue()) return;
       const position = scroller.frontierPosition?.();
-      if (position) rememberPlaybackHandoff(position.node, position.offset);
+      if (position) rememberPlaybackCursor(indexOfPosition(position.node, position.offset));
     });
   }
 
@@ -1073,10 +1089,6 @@
           if (sentence) followSpokenSentence(sentence.globalStart);
         }
       }
-      const now = Date.now();
-      if (now - lastTtsSaveTime < 2000) return;
-      lastTtsSaveTime = now;
-      persistTtsPosition();
     };
     // Four call sites in BlobAutoReader report failures through onError and
     // nobody was listening, so every one of them ended the same way: the
@@ -1117,7 +1129,7 @@ ${$t('reader.ttsFailed.hint')}`
     };
     autoReader.onEnd = () => {
       if (!$ttsAutoAdvanceSection$) {
-        clearTtsPosition();
+        forgetPlaybackCursor();
         return;
       }
       const sectionAtEnd = currentSectionIndex;
@@ -1125,16 +1137,18 @@ ${$t('reader.ttsFailed.hint')}`
       // Svelte stores.
       setTimeout(() => {
         if (!pageManager || typeof pageManager.advanceToNextSection !== 'function') {
-          clearTtsPosition();
+          forgetPlaybackCursor();
           return;
         }
         // Must call as a method so `this` binds — otherwise the inner
         // `this.nextSection(...)` throws.
+        const chapterAtEnd = $sectionData$?.length ? getChapterData($sectionData$)[1] : -1;
         const advanced = pageManager.advanceToNextSection();
         if (advanced) {
           ttsAwaitingSection = sectionAtEnd + 1;
+          ttsChapterAtSectionEnd = chapterAtEnd;
         } else {
-          clearTtsPosition();
+          forgetPlaybackCursor();
         }
       }, 0);
     };
@@ -1152,16 +1166,11 @@ ${$t('reader.ttsFailed.hint')}`
       } else {
         ttsHighlighter.clear();
       }
-      const ttsPaused = ttsWasOn && !enabled;
+      const ttsStopped = ttsWasOn && !enabled;
       ttsWasOn = enabled;
-      // Paginated mode has no typewriter at all, so there is nothing to hand
-      // over to — and resolving the sentence costs a walk of the whole section.
-      if (ttsPaused && autoScroller && !autoScroller.wasAutoScrollerEnabled$.getValue()) {
-        const position = autoReader?.currentSentencePosition?.();
-        if (position) autoScroller.revealFromPositionLater?.(position.node, position.offset);
-      }
-      // Pausing saves the precise spot (throttled boundary saves lag ~2s).
-      if (!enabled && ttsWiredReader === autoReader) persistTtsPosition();
+      // Null past the last sentence, so finishing the book records nothing
+      // and onEnd's forget stands.
+      if (ttsStopped) rememberPlaybackCursor(autoReader?.getCurrentSentence?.()?.globalStart);
     });
   }
 
@@ -1220,6 +1229,13 @@ ${$t('reader.ttsFailed.hint')}`
     // Defer so DOM/innerHTML updates from the new section land before
     // extractText() runs.
     setTimeout(() => {
+      if (
+        $autoScrollStopAtChapter$ &&
+        $sectionData$?.length &&
+        getChapterData($sectionData$)[1] !== ttsChapterAtSectionEnd
+      ) {
+        return;
+      }
       autoReader?.prepare();
       autoReader?.setPosition(0, 0);
       autoReader?.on();
@@ -1297,13 +1313,15 @@ ${$t('reader.ttsFailed.hint')}`
   let lastChapterIndexForAutoStop = -1;
   $: if ($sectionData$?.length && autoScroller) {
     const [, chapterIndex] = getChapterData($sectionData$);
+    // 章止 holds for the voice too — in scroll mode its follow-scroll is what
+    // carries the view across the chapter line.
     if (
       lastChapterIndexForAutoStop !== -1 &&
       chapterIndex !== lastChapterIndexForAutoStop &&
-      $autoScrollStopAtChapter$ &&
-      autoScroller.wasAutoScrollerEnabled$.getValue()
+      $autoScrollStopAtChapter$
     ) {
-      autoScroller.off();
+      if (autoScroller.wasAutoScrollerEnabled$.getValue()) autoScroller.off();
+      if (autoReader?.wasReaderEnabled$.getValue()) autoReader.off();
     }
     lastChapterIndexForAutoStop = chapterIndex;
   }
@@ -1381,14 +1399,19 @@ ${$t('reader.ttsFailed.hint')}`
     };
   });
 
-  /** Every keyboard route to the voice — tray, global shortcut, the in-reader
-   *  V key. V used to call toggle() directly, skipping the start position, so
-   *  on a freshly opened book it read from the first sentence of the book. */
+  /** Every route to the voice — its button, tray, global shortcut, V. V used
+   *  to call toggle() directly, skipping the start position, so on a freshly
+   *  opened book it read from the first sentence of the book. */
   function toggleTts() {
     if (!autoReader) return;
     if (!autoReader.wasReaderEnabled$.getValue()) {
+      // Straight from a running typewriter: its stop records the frontier, so
+      // the voice carries on from that sentence. Starting the voice used to
+      // stop the typewriter only afterwards, and the voice began at the top
+      // of the screen instead.
+      autoScroller?.off();
       autoReader.prepare();
-      applyStartPosition(autoReader, $ttsStartStrategy$, ttsResumePosition, ttsSeekCharCount);
+      applyStartPosition(autoReader, $ttsStartStrategy$, playbackCursor(), ttsSeekCharCount);
     }
     autoReader.toggle();
   }
@@ -1510,6 +1533,7 @@ ${$t('reader.ttsFailed.hint')}`
     }
 
     restartTrackerAfterCharacterChangeOrTime(1000);
+    stopPlaybackForJump();
 
     const target = Math.min(total, Math.max(1, Math.round((percent / 100) * total)));
 
@@ -2152,24 +2176,17 @@ ${$t('reader.ttsFailed.hint')}`
   function handleHlStartHere() {
     hlMenuVisible = false;
 
+    // Both engines take the selection as their start, so this is a restart
+    // of whichever is playing — the voice when neither is. A running voice
+    // has to be restarted anyway: it reads its position only when it queues
+    // the next utterance, so a bare seek would finish the current one first.
     if (autoScroller?.wasAutoScrollerEnabled$.getValue()) {
-      const el = hlPendingRange?.startContainer?.parentElement;
-      if (el) {
-        autoScroller.revealFrom?.(el);
-        return;
-      }
+      autoScroller.off();
+      autoScroller.toggle();
+      return;
     }
-
-    if (!autoReader) return;
-    // A running voice has to be stopped and restarted: the position is only
-    // read when the next utterance is queued, so a bare seek would finish the
-    // sentence in progress first.
-    if (autoReader.wasReaderEnabled$.getValue()) autoReader.off();
-    autoReader.prepare();
-    // seekToSelection() takes the live selection, or — once clicking this item
-    // has dropped it — the position the tracker remembered for it.
-    autoReader.seekToSelection();
-    autoReader.on();
+    autoReader?.off();
+    toggleTts();
   }
 
   function handleHlEditMemoRequest() {
@@ -2267,6 +2284,8 @@ ${$t('reader.ttsFailed.hint')}`
     const data = await bookmarkData;
     if (!data || !bookmarkManager) return;
 
+    stopPlaybackForJump();
+
     if (data.exploredCharCount !== exploredCharCount) {
       pauseTracker(true);
     }
@@ -2322,6 +2341,7 @@ ${$t('reader.ttsFailed.hint')}`
       pauseTracker(true);
     }
 
+    stopPlaybackForJump();
     nextChapter$.next(nextChapter.reference);
   }
 
@@ -2539,8 +2559,7 @@ ${$t('reader.ttsFailed.hint')}`
       return;
     }
 
-    autoScroller?.off();
-    autoReader?.off();
+    stopPlaybackForJump();
 
     if ($pauseTrackerOnCustomPointChange$) {
       pauseTracker();
@@ -2785,7 +2804,7 @@ ${$t('reader.ttsFailed.hint')}`
   <AutoScrollFab {autoScroller} {autoReader} />
 {/if}
 {#if !showSpinner}
-  <AutoReaderFab {autoReader} seekCharCount={ttsSeekCharCount} resumePosition={ttsResumePosition} />
+  <AutoReaderFab {autoReader} toggle={toggleTts} />
 {/if}
 <div
   class="fixed inset-x-0 top-0 z-10 h-12 w-full"

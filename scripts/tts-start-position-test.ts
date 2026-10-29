@@ -1,17 +1,16 @@
 /**
- * Where TTS starts when the user presses play.
- *
- * Two things are guarded here, both of them the "选择一段文字高亮再点朗读"
- * report: playback started at the resume position instead of at the passage
- * the user had just selected.
+ * Where playback starts when the user presses play — the voice and the
+ * typewriter share one rule (`resolvePlaybackStart`).
  *
  * 1. The selection memory. Applying a highlight calls removeAllRanges(), so
  *    the live selection is already gone by the time the play button is hit —
- *    `selectionToCharIndex` has to fall back to the last position the tracker
- *    saw, and must consume it so a long-stale selection can't hijack the next
- *    play.
- * 2. `applyStartPosition`, which both play paths (FAB + tray / global
- *    shortcut) now share. The shortcut path used to ignore the strategy.
+ *    the start has to come from the last position the tracker saw. It is
+ *    consumed, and a live selection or caret is dropped with it, so a caret
+ *    left in place doesn't pull every later play back to it.
+ * 2. The order: a selection or caret, then where playback stopped while it is
+ *    still on screen, then the screen itself — which the voice reaches in the
+ *    position calculator's space, not extractText's (that mix-up started the
+ *    voice paragraphs before the screen).
  *
  * Run via `npm test`.
  */
@@ -20,12 +19,11 @@ import test from 'node:test';
 
 import {
   applyStartPosition,
-  rememberPlaybackHandoff,
+  indexOfPosition,
   seekSentencesToExplored,
   isNoteMarker,
   selectionToCharIndex,
   splitSentencesDetailed,
-  takePlaybackHandoff,
   trackSelectionIn
 } from '../src/lib/components/book-reader/auto-reader-shared.ts';
 
@@ -38,8 +36,14 @@ const nodes = [
   { nodeType: 3, textContent: '世界です', parentElement: { tagName: 'P' } }
 ];
 
+type FakeSelection = {
+  rangeCount: number;
+  getRangeAt?: () => unknown;
+  removeAllRanges?: () => void;
+};
+
 let onSelectionChange: (() => void) | undefined;
-let selection: { rangeCount: number; getRangeAt?: () => unknown } = { rangeCount: 0 };
+let selection: FakeSelection = { rangeCount: 0 };
 
 const root = { contains: (n: unknown) => nodes.includes(n as never) } as unknown as HTMLElement;
 const otherRoot = { contains: () => true } as unknown as HTMLElement;
@@ -56,11 +60,14 @@ const otherRoot = { contains: () => true } as unknown as HTMLElement;
 };
 (globalThis as any).window = { getSelection: () => selection };
 
-/** Selection starting `offset` chars into node `n`, as the browser reports it. */
+/** Selection (or caret) starting `offset` chars into node `n`. */
 function selectAt(n: number, offset: number) {
   selection = {
     rangeCount: 1,
-    getRangeAt: () => ({ startContainer: nodes[n], startOffset: offset })
+    getRangeAt: () => ({ startContainer: nodes[n], startOffset: offset }),
+    removeAllRanges: () => {
+      selection = { rangeCount: 0 };
+    }
   };
   onSelectionChange?.();
 }
@@ -86,7 +93,15 @@ test('highlighting clears the selection, the index survives — once', () => {
   wipeSelection();
 
   assert.equal(selectionToCharIndex(root), 7, 'the passage the user highlighted');
-  assert.equal(selectionToCharIndex(root), null, 'consumed: next play resumes as before');
+  assert.equal(selectionToCharIndex(root), null, 'consumed');
+});
+
+test('a caret starts play once; pause → play resumes instead of jumping back', () => {
+  trackSelectionIn(root);
+  selectAt(1, 2);
+  assert.equal(selectionToCharIndex(root), 7);
+  assert.equal(selection.rangeCount, 0, 'the caret is dropped with it');
+  assert.equal(selectionToCharIndex(root), null);
 });
 
 test('the memory belongs to the tracked content only', () => {
@@ -104,109 +119,85 @@ test('a new section drops the memory', () => {
   assert.equal(selectionToCharIndex(root), null);
 });
 
-// --- start strategy ---------------------------------------------------------
+// --- start rule -------------------------------------------------------------
 
-function fakeReader(seekWorks: boolean) {
+function fakeReader() {
   const calls: string[] = [];
   return {
     calls,
-    seekToSelection: () => {
-      calls.push('selection');
-      return seekWorks;
-    },
-    setPosition: (para: number, offset: number) => calls.push(`position:${para},${offset}`),
     seekToExplored: (count: number, snap?: boolean) =>
       calls.push(`explored:${count}${snap ? ':snap' : ''}`),
     seekToCalculatorIndex: (count: number) => calls.push(`calc:${count}`)
   };
 }
 
-const resume = { para: 4, offset: 6 };
+const onScreen = () => true;
+const offScreen = () => false;
 
-test('selection wins when there is one', () => {
-  const reader = fakeReader(true);
-  applyStartPosition(reader, 'selection', resume, 99);
-  assert.deepEqual(reader.calls, ['selection']);
+test('a selection or caret wins, exactly where it is', () => {
+  trackSelectionIn(root);
+  selectAt(1, 2);
+  const reader = fakeReader();
+  applyStartPosition(reader, 'selection', 3, 99, onScreen);
+  assert.deepEqual(reader.calls, ['explored:7']);
 });
 
-test('selection falls back to the resume position', () => {
-  const reader = fakeReader(false);
-  applyStartPosition(reader, 'selection', resume, 99);
-  assert.deepEqual(reader.calls, ['selection', 'position:4,6']);
+test('otherwise where playback stopped, snapped to its sentence, while on screen', () => {
+  trackSelectionIn(root);
+  const reader = fakeReader();
+  applyStartPosition(reader, 'selection', 3, 99, onScreen);
+  assert.deepEqual(reader.calls, ['explored:3:snap']);
 });
 
-test('no resume position yet: seek to how far the book was explored', () => {
-  const reader = fakeReader(false);
-  applyStartPosition(reader, 'selection', undefined, 99);
-  // Calculator space, not an extractText index: feeding it to seekToExplored
-  // started the voice paragraphs before the screen.
-  assert.deepEqual(reader.calls, ['selection', 'calc:99']);
+test('a stop point the reader scrolled or jumped away from does not drag them back', () => {
+  trackSelectionIn(root);
+  const reader = fakeReader();
+  applyStartPosition(reader, 'selection', 3, 99, offScreen);
+  assert.deepEqual(reader.calls, ['calc:99']);
 });
 
-test('the other strategies never touch the selection', () => {
-  const sectionStart = fakeReader(true);
-  applyStartPosition(sectionStart, 'section-start', resume, 99);
-  assert.deepEqual(sectionStart.calls, ['position:0,0']);
-
-  const resumeOnly = fakeReader(true);
-  applyStartPosition(resumeOnly, 'resume', resume, 99);
-  assert.deepEqual(resumeOnly.calls, ['position:4,6']);
+test('nothing at all: the screen, in the calculator space it was measured in', () => {
+  trackSelectionIn(root);
+  const reader = fakeReader();
+  applyStartPosition(reader, 'selection', undefined, 99, onScreen);
+  // Not an extractText index: feeding it to seekToExplored started the voice
+  // paragraphs before the screen.
+  assert.deepEqual(reader.calls, ['calc:99']);
 });
 
-// --- playback handover ------------------------------------------------------
+test("'resume' goes back to the stop point even off screen — a selection still wins", () => {
+  trackSelectionIn(root);
+  const offScreenStop = fakeReader();
+  applyStartPosition(offScreenStop, 'resume', 3, 99, offScreen);
+  assert.deepEqual(offScreenStop.calls, ['explored:3:snap']);
+
+  selectAt(1, 2);
+  const picked = fakeReader();
+  applyStartPosition(picked, 'resume', 3, 99, offScreen);
+  assert.deepEqual(picked.calls, ['explored:7']);
+});
+
+test("a stored 'section-start' (option removed) reads as the default", () => {
+  trackSelectionIn(root);
+  const reader = fakeReader();
+  applyStartPosition(reader, 'section-start', 3, 99, onScreen);
+  assert.deepEqual(reader.calls, ['explored:3:snap']);
+});
+
+// --- playback cursor --------------------------------------------------------
 //
-// The typewriter and the voice are mutually exclusive, so pausing one is
-// nearly always a prelude to starting the other. The frontier travels as a DOM
-// position (the two engines count characters differently) and is turned into
-// an index here, against the same content the selection memory tracks.
+// The typewriter's frontier joins the cursor as a DOM position (the two
+// engines count characters differently) and becomes an index here, against
+// the same content the selection memory tracks.
 
-test('a paused typewriter hands its frontier to the next play', () => {
+test("the typewriter's frontier becomes an index into the voice's text", () => {
   trackSelectionIn(root);
-  rememberPlaybackHandoff(nodes[1], 2); // 5 chars of node 0, then 2 into node 1
-  const reader = fakeReader(false);
-  applyStartPosition(reader, 'selection', resume, 99);
-  assert.deepEqual(
-    reader.calls,
-    ['selection', 'explored:7:snap'],
-    'beats the saved resume position, and rewinds to the sentence start'
-  );
+  assert.equal(indexOfPosition(nodes[1] as unknown as Node, 2), 7);
 });
 
-test('the handover is consumed, like the selection memory', () => {
-  trackSelectionIn(root);
-  rememberPlaybackHandoff(nodes[1], 2);
-  applyStartPosition(fakeReader(false), 'selection', resume, 99);
-
-  const second = fakeReader(false);
-  applyStartPosition(second, 'selection', resume, 99);
-  assert.deepEqual(second.calls, ['selection', 'position:4,6'], 'back to the normal order');
-});
-
-test('an explicit start point still wins over a handover', () => {
-  trackSelectionIn(root);
-  rememberPlaybackHandoff(nodes[1], 2);
-  const selected = fakeReader(true);
-  applyStartPosition(selected, 'selection', resume, 99);
-  assert.deepEqual(selected.calls, ['selection'], 'the passage the reader picked');
-
-  trackSelectionIn(root);
-  rememberPlaybackHandoff(nodes[1], 2);
-  const sectionStart = fakeReader(false);
-  applyStartPosition(sectionStart, 'section-start', resume, 99);
-  assert.deepEqual(sectionStart.calls, ['position:0,0'], 'the strategy the reader chose');
-});
-
-test('a new section drops the handover', () => {
-  trackSelectionIn(root);
-  rememberPlaybackHandoff(nodes[1], 2);
-  trackSelectionIn(root);
-  assert.equal(takePlaybackHandoff(), null);
-});
-
-test('a handover from outside the tracked content is ignored', () => {
+test('a position outside any tracked content has no index', () => {
   trackSelectionIn(undefined);
-  rememberPlaybackHandoff(nodes[1], 2);
-  assert.equal(takePlaybackHandoff(), null);
+  assert.equal(indexOfPosition(nodes[1] as unknown as Node, 2), null);
 });
 
 // --- sentence snapping ------------------------------------------------------

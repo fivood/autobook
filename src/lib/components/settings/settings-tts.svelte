@@ -676,7 +676,6 @@
   >
     <option value="selection">{$t('settings.value.ttsStart.selection')}</option>
     <option value="resume">{$t('settings.value.ttsStart.resume')}</option>
-    <option value="section-start">{$t('settings.value.ttsStart.sectionStart')}</option>
   </select>
 </SettingsItemGroup>
 

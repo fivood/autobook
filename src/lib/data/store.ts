@@ -216,9 +216,11 @@ export const windowAlwaysOnTop$ = writableBooleanLocalStorageSubject()('windowAl
 /** Tray + window menu request to toggle TTS (emitted by both global shortcut and tray). */
 export const ttsToggleRequest$ = writableSubject<number>(0);
 
-/** Where to start when the user presses play. 'selection' = current
- * cursor/selection (falls back to resume); 'resume' = saved position only;
- * 'visible' = whatever the viewport shows. */
+/** How both engines pick where play starts — see `resolvePlaybackStart`.
+ * 'selection': a selection or caret, else where playback stopped while it is
+ * on screen, else the screen. 'resume': the same, but the stop point wins
+ * even off screen. A stored 'section-start' (removed: in scroll mode it meant
+ * the start of the book) reads as 'selection'. */
 export const ttsStartStrategy$ = writableStringLocalStorageSubject()(
   'ttsStartStrategy',
   'selection'
@@ -286,11 +288,13 @@ export const ttsCustomPresetStates$ = writableObjectLocalStorageSubject<
   Record<string, TtsCustomPresetState>
 >()('ttsCustomPresetStates', {});
 
+/** Where playback last stopped in a book — see `playbackCursor` in /b. Entries
+ *  from before it (para / offset / explored, no `index`) are ignored. */
 export interface TtsPosition {
   section: number;
-  para: number;
-  offset: number;
-  explored: number;
+  /** extractText() offset into the reader's content. */
+  index: number;
+  paginated: boolean;
 }
 
 export const ttsPositions$ = writableObjectLocalStorageSubject<Record<string, TtsPosition>>()(

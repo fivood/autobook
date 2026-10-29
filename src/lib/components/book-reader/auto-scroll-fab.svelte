@@ -43,6 +43,9 @@
    *  armed flag, not just on "currently speaking". */
   $: ttsBusy = ttsActive || $ttsArmed$;
 
+  /** 章止 stops the voice too, so its toggle shows while either one plays. */
+  $: playing = enabled || ttsActive;
+
   function nudge() {
     recentlyMoved = true;
     if (idleTimer) clearTimeout(idleTimer);
@@ -105,10 +108,10 @@
         : $t('typewriter.chapterStop.tooltipOff')}
       on:click={toggleStopAtChapter}
       class="menu-surface flex h-9 items-center gap-1 rounded-full px-3 text-sm backdrop-blur transition-all duration-150"
-      class:opacity-0={!enabled}
-      class:pointer-events-none={!enabled}
-      class:group-hover:opacity-100={!enabled}
-      class:group-hover:pointer-events-auto={!enabled}
+      class:opacity-0={!playing}
+      class:pointer-events-none={!playing}
+      class:group-hover:opacity-100={!playing}
+      class:group-hover:pointer-events-auto={!playing}
     >
       <Fa icon={$autoScrollStopAtChapter$ ? faRotateRight : faForward} />
       <span>{$autoScrollStopAtChapter$ ? $t('typewriter.chapterStop.on') : $t('typewriter.chapterStop.off')}</span>

@@ -17,12 +17,10 @@ import {
   computeGlobalCharIndex,
   extractText,
   seekSentencesToExplored,
-  selectionToCharIndex,
   splitSentencesDetailed,
   trackSelectionIn,
   type Sentence
 } from './auto-reader-shared';
-import { domPositionForCharIndex } from './char-index-locator';
 import { calculatorIndexToTtsIndex } from './tts-calculator-index';
 
 export interface AutoReader {
@@ -199,10 +197,6 @@ export class AutoReaderContinuous implements AutoReader {
     this.charOffset = 0;
   }
 
-  getPosition() {
-    return { para: this.paraIndex, offset: this.charOffset };
-  }
-
   setPosition(para: number, offset: number) {
     if (!this.sentences.length) return;
     this.paraIndex = Math.min(Math.max(0, para), this.sentences.length - 1);
@@ -219,26 +213,6 @@ export class AutoReaderContinuous implements AutoReader {
     const pos = seekSentencesToExplored(this.sentences, exploredCharCount, snapToSentenceStart);
     this.paraIndex = pos.index;
     this.charOffset = pos.offset;
-  }
-
-  /**
-   * Start of the current sentence as a DOM position inside this reader's own
-   * content. The typewriter measures characters differently, so it is handed a
-   * position and resolves it with its own walk rather than a translated index.
-   */
-  currentSentencePosition(): { node: Node; offset: number } | null {
-    const sentence = this.getCurrentSentence();
-    if (!sentence || !this.contentEl) return null;
-    return domPositionForCharIndex(this.contentEl, sentence.globalStart);
-  }
-
-
-  seekToSelection(): boolean {
-    if (!this.contentEl) return false;
-    const charIdx = selectionToCharIndex(this.contentEl);
-    if (charIdx == null) return false;
-    this.seekToExplored(charIdx);
-    return true;
   }
 
   seekToCalculatorIndex(calcIndex: number) {

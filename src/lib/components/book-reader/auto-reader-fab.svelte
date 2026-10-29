@@ -2,17 +2,15 @@
   import Fa from 'svelte-fa';
   import { faVolumeHigh, faVolumeXmark, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import type { AutoReader } from '$lib/components/book-reader/types';
-  import { applyStartPosition } from '$lib/components/book-reader/auto-reader-shared';
-  import { readerRate$, ttsArmed$, ttsStartStrategy$, ttsVoiceByLang$ } from '$lib/data/store';
+  import { readerRate$, ttsArmed$, ttsVoiceByLang$ } from '$lib/data/store';
   import { onDestroy, onMount } from 'svelte';
   import type { Subscription } from 'rxjs';
   import { t } from '$lib/i18n';
 
   export let autoReader: AutoReader | undefined;
-  /** Section-relative char count to seek to when no resume position applies. */
-  export let seekCharCount = 0;
-  /** Saved in-section position to resume from (wins over seekCharCount). */
-  export let resumePosition: { para: number; offset: number } | undefined = undefined;
+  /** /b's start / stop, shared with V and the tray so all of them start from
+   *  the same place. */
+  export let toggle: () => void;
 
   let enabled = false;
   let sub: Subscription | undefined;
@@ -57,18 +55,6 @@
     sub?.unsubscribe();
     ttsArmed$.next(false);
   });
-
-  function toggle() {
-    if (!enabled && autoReader) {
-      autoReader.prepare();
-      // The reader knows its own contentEl, so let it figure out where the
-      // selection maps to. /b's outer .book-content wrapper has different
-      // text-node ordering than the inner container the reader extracts from,
-      // which is why the FAB's old DOM walk gave the wrong char index.
-      applyStartPosition(autoReader, $ttsStartStrategy$, resumePosition, seekCharCount);
-    }
-    autoReader?.toggle();
-  }
 
   function setRate(next: number) {
     // 0.1 steps accumulate float dust (0.7000000000000001) — round back.

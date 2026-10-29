@@ -244,28 +244,11 @@ export class AutoScrollerContinuous implements AutoScroller {
   }
 
   /**
-   * Restart the reveal at the block holding `el` — the "start here" action's
-   * typewriter half.
+   * Type from this DOM position when the start now under way resolves it —
+   * the host's start rule picks it (a selection, or where playback stopped).
    *
-   * Takes the element rather than a char offset on purpose: the blocks carry
-   * element references, so matching one costs nothing, while a char offset
-   * would have to be translated out of the selection's counting rules into
-   * this one (see tts-calculator-index.ts for how that goes). Paragraph
-   * granularity is all a reveal frontier can show anyway.
-   */
-  revealFrom(el: HTMLElement) {
-    const block = this.blocks.find((b) => b.el === el || b.el.contains(el));
-    if (!block) return;
-    this.revealedIndex = block.start;
-    this.applyReveal();
-  }
-
-  /**
-   * Type from this DOM position the next time playback starts.
-   *
-   * Deferred rather than applied immediately: the voice hands it over when it
-   * pauses, and TTS turning on already ran `revealAll()`, so applying it now
-   * would re-hide the text the reader was left free to scroll through.
+   * Applied in the start rather than here because a first start reveals
+   * everything already scrolled past, which would overwrite it.
    */
   revealFromPositionLater(node: Node, offset: number) {
     this.pendingReveal = { node, offset };
@@ -304,8 +287,8 @@ export class AutoScrollerContinuous implements AutoScroller {
    * A position, not this class's `revealedIndex`: that index counts block
    * `textContent`, which skips any text not inside a block element, while the
    * reader counts every text node. Handing over the number would mean
-   * translating between the two counting rules, which is the mistake
-   * `revealFrom` exists to avoid.
+   * translating between the two counting rules (tts-calculator-index.ts shows
+   * how that goes).
    */
   frontierPosition(): { node: Node; offset: number } | null {
     if (!this.blocks.length) return null;
