@@ -137,6 +137,7 @@
     enableVerticalFontKerning$,
     enableFontVPAL$,
     verticalTextOrientation$,
+    ttsArmed$,
     ttsAutoAdvanceSection$,
     ttsPositions$,
     ttsStartStrategy$,
@@ -1005,8 +1006,24 @@
     scrollerWiredHandoff = autoScroller;
     const scroller = autoScroller;
     scroller.wasAutoScrollerEnabled$.subscribe((on) => {
+      const started = !scrollerWasOn && on;
       const paused = scrollerWasOn && !on;
       scrollerWasOn = on;
+      if (started) {
+        // Exclusive in this direction too. Only starting the voice used to stop
+        // the typewriter, so pressing play on the typewriter mid-sentence left
+        // the voice reading text the typewriter had just hidden. Runs before
+        // the typewriter resolves its start, so the handover lands this time.
+        if (autoReader?.wasReaderEnabled$.getValue()) {
+          const position = autoReader.currentSentencePosition?.();
+          if (position) scroller.revealFromPositionLater?.(position.node, position.offset);
+          autoReader.off();
+        }
+        // Here rather than in the FAB, so Space claims the shared speed-pill
+        // slot back too; it left the voice's rate pill under the typewriter.
+        ttsArmed$.next(false);
+        return;
+      }
       if (!paused || autoReader?.wasReaderEnabled$.getValue()) return;
       const position = scroller.frontierPosition?.();
       if (position) rememberPlaybackHandoff(position.node, position.offset);
@@ -1364,16 +1381,24 @@ ${$t('reader.ttsFailed.hint')}`
     };
   });
 
-  // Tray menu / global shortcut request TTS toggle. Works in both view modes
-  // (continuous + paginated) since AutoReaderContinuous is wired in both.
-  let lastTtsToggleAt = 0;
-  $: if (browser && $ttsToggleRequest$ > lastTtsToggleAt && autoReader) {
-    lastTtsToggleAt = $ttsToggleRequest$;
+  /** Every keyboard route to the voice — tray, global shortcut, the in-reader
+   *  V key. V used to call toggle() directly, skipping the start position, so
+   *  on a freshly opened book it read from the first sentence of the book. */
+  function toggleTts() {
+    if (!autoReader) return;
     if (!autoReader.wasReaderEnabled$.getValue()) {
       autoReader.prepare();
       applyStartPosition(autoReader, $ttsStartStrategy$, ttsResumePosition, ttsSeekCharCount);
     }
     autoReader.toggle();
+  }
+
+  // Tray menu / global shortcut request TTS toggle. Works in both view modes
+  // (continuous + paginated) since AutoReaderContinuous is wired in both.
+  let lastTtsToggleAt = 0;
+  $: if (browser && $ttsToggleRequest$ > lastTtsToggleAt && autoReader) {
+    lastTtsToggleAt = $ttsToggleRequest$;
+    toggleTts();
   }
 
   function handleAction({ detail }: any) {
@@ -1899,7 +1924,7 @@ ${$t('reader.ttsFailed.hint')}`
       scrollToBookmark,
       (x) => multiplier$.next(multiplier$.getValue() + x),
       autoScroller,
-      autoReader,
+      toggleTts,
       pageManager,
       $verticalMode$,
       changeChapter,

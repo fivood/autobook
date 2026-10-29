@@ -43,6 +43,7 @@ import {
   type Sentence
 } from './auto-reader-shared';
 import { domPositionForCharIndex } from './char-index-locator';
+import { calculatorIndexToTtsIndex } from './tts-calculator-index';
 
 /** An <audio> that has already reached `canplaythrough` — `play()` on it is
  *  immediate, with no decode step left to pay for. */
@@ -248,6 +249,11 @@ export abstract class BlobAutoReader implements AutoReader {
     if (charIdx == null) return false;
     this.seekToExplored(charIdx);
     return true;
+  }
+
+  seekToCalculatorIndex(calcIndex: number) {
+    if (!this.contentEl) return;
+    this.seekToExplored(calculatorIndexToTtsIndex(this.contentEl, calcIndex), true);
   }
 
   toggle() {

@@ -82,3 +82,63 @@ export function ttsIndexToCalculatorIndex(root: HTMLElement, ttsIndex: number): 
 
   return calc;
 }
+
+const COUNTED_CHAR =
+  /[0-9A-Z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]/iu;
+
+/**
+ * The other direction: the `extractText(root)` offset of the first character
+ * the calculator has not counted yet — where a reader at `calcIndex` picks up.
+ *
+ * Play used to seek straight to `exploredCharCount` as if it were an
+ * extractText() offset. Every stripped space and punctuation mark before the
+ * position moved the start earlier — 177 characters by paragraph 60 of the
+ * smoke-test book, proportionally more deeper into a real one — and it could
+ * land on a lone 「。」, which the blob engines then failed to play.
+ */
+export function calculatorIndexToTtsIndex(root: HTMLElement, calcIndex: number): number {
+  const counted = new Set<Node>(getParagraphNodes(root));
+  const walker = document.createTreeWalker(
+    root,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+    null
+  );
+
+  let ttsSeen = 0;
+  let calc = 0;
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      if (counted.has(node) && isNodeGaiji(node)) {
+        if (calc >= calcIndex) return ttsSeen;
+        calc += getCharacterCount(node);
+      }
+    } else {
+      const parent = node.parentElement;
+      const tag = parent?.tagName;
+      if (parent && tag !== 'SCRIPT' && tag !== 'STYLE') {
+        const text = node.textContent || '';
+        if (counted.has(node)) {
+          const length = countedLength(text);
+          // Only the node holding the target needs a per-character walk.
+          if (calc + length > calcIndex) {
+            let offset = 0;
+            for (const ch of text) {
+              if (COUNTED_CHAR.test(ch)) {
+                if (calc >= calcIndex) return ttsSeen + offset;
+                calc += 1;
+              }
+              offset += ch.length;
+            }
+          } else {
+            calc += length;
+          }
+        }
+        ttsSeen += text.length;
+      }
+    }
+    node = walker.nextNode();
+  }
+
+  return ttsSeen;
+}

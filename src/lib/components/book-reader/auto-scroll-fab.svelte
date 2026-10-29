@@ -63,9 +63,8 @@
   });
 
   function toggle() {
-    // Starting the typewriter claims the shared speed-pill slot back from a
-    // paused reader.
-    if (!enabled) ttsArmed$.next(false);
+    // Starting claims the shared speed-pill slot back from a paused reader —
+    // done by /b on every start, not only this button's.
     autoScroller?.toggle();
   }
 

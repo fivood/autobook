@@ -422,9 +422,13 @@ export function selectionToCharIndex(root: HTMLElement): number | null {
  * position, so the start strategy silently did not apply to it.
  */
 export function applyStartPosition(
-  reader: Pick<AutoReader, 'seekToSelection' | 'setPosition' | 'seekToExplored'>,
+  reader: Pick<
+    AutoReader,
+    'seekToSelection' | 'setPosition' | 'seekToExplored' | 'seekToCalculatorIndex'
+  >,
   strategy: string,
   resumePosition: { para: number; offset: number } | undefined,
+  /** `exploredCharCount`, section-local — calculator space, not extractText. */
   seekCharCount: number
 ) {
   if (strategy === 'selection' && reader.seekToSelection()) return;
@@ -442,7 +446,7 @@ export function applyStartPosition(
     return;
   }
   if (resumePosition) reader.setPosition(resumePosition.para, resumePosition.offset);
-  else reader.seekToExplored(seekCharCount);
+  else reader.seekToCalculatorIndex(seekCharCount);
 }
 
 /**

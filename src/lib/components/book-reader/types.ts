@@ -43,6 +43,11 @@ export interface AutoReader {
   /** Take the current document selection start (if it falls inside this
    * reader's content) and seek to it. Returns true if a seek happened. */
   seekToSelection: () => boolean;
+  /** Seek to a position the reader's position calculator reports
+   * (`exploredCharCount`, section-local), snapped to its sentence start. That
+   * count strips punctuation and whitespace, so it is NOT a `seekToExplored`
+   * index — see tts-calculator-index.ts. */
+  seekToCalculatorIndex: (calcIndex: number) => void;
   getPosition: () => { para: number; offset: number };
   setPosition: (para: number, offset: number) => void;
   /** Globally indexed character range of the sentence currently being

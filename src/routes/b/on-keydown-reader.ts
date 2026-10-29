@@ -8,7 +8,7 @@ import {
   ReaderImageGalleryAvailableKeybind,
   type ReaderImageGalleryKeybindMap
 } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
-import type { AutoScroller, AutoReader, PageManager } from '$lib/components/book-reader/types';
+import type { AutoScroller, PageManager } from '$lib/components/book-reader/types';
 import {
   BookReaderAvailableKeybind,
   type BookReaderKeybindMap
@@ -25,7 +25,7 @@ export function onKeydownReader(
   scrollToBookmark: () => void,
   multiplierOffsetFn: (offset: number) => void,
   autoScroller: AutoScroller | undefined,
-  autoReader: AutoReader | undefined,
+  toggleTts: () => void,
   pageManager: PageManager | undefined,
   isVertical: boolean,
   changeChapter: (offset: number) => void,
@@ -54,9 +54,7 @@ export function onKeydownReader(
       multiplierOffsetFn(-1);
       return true;
     case BookReaderAvailableKeybind.AUTO_READER_TOGGLE:
-      // 1.11.1: TTS is wired in BOTH modes now. In continuous it drives the
-      // typewriter reveal pace so the on-screen text matches the voice.
-      autoReader?.toggle();
+      toggleTts();
       return true;
     case BookReaderAvailableKeybind.NEXT_PAGE:
       pageManager?.nextPage();

@@ -116,7 +116,8 @@ function fakeReader(seekWorks: boolean) {
     },
     setPosition: (para: number, offset: number) => calls.push(`position:${para},${offset}`),
     seekToExplored: (count: number, snap?: boolean) =>
-      calls.push(`explored:${count}${snap ? ':snap' : ''}`)
+      calls.push(`explored:${count}${snap ? ':snap' : ''}`),
+    seekToCalculatorIndex: (count: number) => calls.push(`calc:${count}`)
   };
 }
 
@@ -137,7 +138,9 @@ test('selection falls back to the resume position', () => {
 test('no resume position yet: seek to how far the book was explored', () => {
   const reader = fakeReader(false);
   applyStartPosition(reader, 'selection', undefined, 99);
-  assert.deepEqual(reader.calls, ['selection', 'explored:99']);
+  // Calculator space, not an extractText index: feeding it to seekToExplored
+  // started the voice paragraphs before the screen.
+  assert.deepEqual(reader.calls, ['selection', 'calc:99']);
 });
 
 test('the other strategies never touch the selection', () => {

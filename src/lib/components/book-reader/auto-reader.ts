@@ -23,6 +23,7 @@ import {
   type Sentence
 } from './auto-reader-shared';
 import { domPositionForCharIndex } from './char-index-locator';
+import { calculatorIndexToTtsIndex } from './tts-calculator-index';
 
 export interface AutoReader {
   wasReaderEnabled$: BehaviorSubject<boolean>;
@@ -238,6 +239,11 @@ export class AutoReaderContinuous implements AutoReader {
     if (charIdx == null) return false;
     this.seekToExplored(charIdx);
     return true;
+  }
+
+  seekToCalculatorIndex(calcIndex: number) {
+    if (!this.contentEl) return;
+    this.seekToExplored(calculatorIndexToTtsIndex(this.contentEl, calcIndex), true);
   }
 
   toggle() {

@@ -92,6 +92,7 @@ async function snapshotSettings() {
       'lastStorageSource',
       'ttsEngine',
       'ttsStartStrategy',
+      'ttsPositions',
       'statisticsEnabled',
       'activeFolderFilter'
     ];
@@ -750,7 +751,7 @@ async function ttsFollowResolvesParagraphStarts(bookId) {
 async function ttsCalculatorIndexAgrees() {
   const out = await session.evaluate(`(async () => {
     const { extractText } = await import('/src/lib/components/book-reader/auto-reader-shared.ts');
-    const { ttsIndexToCalculatorIndex } = await import(
+    const { ttsIndexToCalculatorIndex, calculatorIndexToTtsIndex } = await import(
       '/src/lib/components/book-reader/tts-calculator-index.ts'
     );
     const { getCharacterCount } = await import('/src/lib/functions/get-character-count.ts');
@@ -777,6 +778,16 @@ async function ttsCalculatorIndexAgrees() {
       const calc = getParagraphNodes(host).reduce((a, n) => a + getCharacterCount(n), 0);
       const text = extractText(host);
       drifts[name] = ttsIndexToCalculatorIndex(host, text.length) - calc;
+      // The way back, used for where play starts: every calculator position
+      // must land ON the next counted character — not merely after the last
+      // one, which sits before its trailing 「。」 and snaps to the wrong
+      // sentence.
+      for (let k = 0; k < calc && !drifts[name]; k++) {
+        const i = calculatorIndexToTtsIndex(host, k);
+        if (ttsIndexToCalculatorIndex(host, i) !== k || ttsIndexToCalculatorIndex(host, i + 1) !== k + 1) {
+          drifts[name] = 'back@' + k;
+        }
+      }
       host.remove();
     }
     return drifts;
@@ -887,6 +898,170 @@ async function inlineImagesDoNotBreakTheLine(bookId) {
   return `${Object.keys(out.markers).length} marker shapes stay on one line, illustrations stay block`;
 }
 
+/** Scroll mode, SAPI, nothing selected, no saved voice position for the book. */
+async function scrollModeVoiceFromScratch(bookId) {
+  await session.evaluate(js`(() => {
+    localStorage.setItem('viewMode', 'continuous');
+    localStorage.setItem('ttsEngine', 'sapi');
+    localStorage.setItem('ttsStartStrategy', 'selection');
+    const saved = JSON.parse(localStorage.getItem('ttsPositions') || '{}');
+    delete saved[${String(bookId)}];
+    localStorage.setItem('ttsPositions', JSON.stringify(saved));
+    return 1;
+  })()`);
+  await goto(
+    `/b?id=${bookId}`,
+    `!!document.querySelector('[title^="开始朗读"]') && document.querySelectorAll('.book-content p').length > 70`
+  );
+  // The reader restores the bookmark after it renders; a scroll made before
+  // that is undone, and play then rightly starts at the top.
+  await new Promise((r) => setTimeout(r, 1000));
+}
+
+/** Put paragraph `n` at the top of the screen, let the position catch up,
+ *  and report which paragraph is actually there. */
+const scrollToParagraph = (n) => `(() => {
+  const p = [...document.querySelectorAll('.book-content p')]
+    .find((x) => x.textContent.startsWith('第${n}段'));
+  p.scrollIntoView({ block: 'start' });
+  return new Promise((done) => setTimeout(() => {
+    const top = [...document.querySelectorAll('.book-content p')]
+      .find((x) => x.getBoundingClientRect().bottom > 0);
+    done(top ? top.textContent.slice(0, 6) : null);
+  }, 800));
+})()`;
+
+/** Paragraph of the sentence being spoken, as the 「第N段。」 it opens with. */
+const SPOKEN_PARAGRAPH = `(() => {
+  const hl = CSS.highlights && CSS.highlights.get('tts-sentence');
+  if (!hl) return null;
+  for (const r of hl) {
+    const el = r.startContainer.nodeType === 3 ? r.startContainer.parentElement : r.startContainer;
+    const p = el && el.closest('p');
+    return p ? p.textContent.slice(0, 6) : null;
+  }
+  return null;
+})()`;
+
+const paragraphNumber = (text) => Number((/第(\d+)段/.exec(text || '') || [])[1] || 0);
+
+/**
+ * Regression, found 2026-10-29 while mapping where playback starts in scroll
+ * mode: with nothing selected, play started well before the screen — and the
+ * V key started at the first sentence of the book.
+ *
+ * The play button seeked to `exploredCharCount` as if it were an
+ * extractText() offset; the calculator strips punctuation and whitespace, so
+ * at paragraph 60 that landed 177 characters early, on a lone 「。」 that SAPI
+ * failed to play (「朗读失败」). V called toggle() directly and skipped the
+ * start position altogether. Both presses are checked: they are separate
+ * routes into the same start.
+ */
+async function voiceStartsOnScreen(bookId) {
+  const target = 60;
+  const got = {};
+  for (const [label, press] of [
+    ['播放键', `document.querySelector('[title^="开始朗读"]').click()`],
+    ['V 键', `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV', key: 'v', bubbles: true }))`]
+  ]) {
+    await scrollModeVoiceFromScratch(bookId);
+    const top = await session.evaluate(scrollToParagraph(target));
+    if (paragraphNumber(top) !== target) {
+      throw new Error(`setup: wanted 第${target}段 at the top, the screen shows ${top}`);
+    }
+    const out = await session.evaluate(`(() => {
+      ${press};
+      return new Promise((done) => {
+        let tries = 0;
+        const poll = setInterval(() => {
+          const spoken = ${SPOKEN_PARAGRAPH};
+          const failed = [...document.querySelectorAll('[role=dialog], dialog')]
+            .map((d) => d.innerText).find((t) => t.includes('朗读失败'));
+          if (spoken || failed || ++tries > 32) {
+            clearInterval(poll);
+            document.querySelector('[title^="暂停朗读"]')?.click();
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+            done({ spoken, failed: failed ? failed.slice(0, 80) : null });
+          }
+        }, 250);
+      });
+    })()`);
+    if (out.failed) throw new Error(`${label}: ${out.failed}`);
+    if (!out.spoken) throw new Error(`${label}: the voice never started`);
+    got[label] = paragraphNumber(out.spoken);
+  }
+  // ±1: which paragraph sits exactly at the top edge is a layout detail.
+  const wrong = Object.entries(got).filter(([, at]) => Math.abs(at - target) > 1);
+  if (wrong.length) {
+    throw new Error(
+      `screen starts at 第${target}段, ${wrong.map(([k, at]) => `${k} started at 第${at}段`).join(', ')}`
+    );
+  }
+  return Object.entries(got).map(([k, at]) => `${k}从第${at}段起读`).join('，');
+}
+
+/**
+ * Regression, found 2026-10-29: starting the typewriter while the voice was
+ * reading left both running — the voice carried on through text the
+ * typewriter had just hidden. Starting it with Space after any use of the
+ * voice also left the voice's rate pill in the slot under the typewriter's
+ * button, so − / + changed the speaking rate instead of the typing speed.
+ *
+ * Read and pressed in one synchronous evaluate: the typewriter resolves its
+ * start position inside the keydown, so the frontier can be compared with
+ * the sentence that was being spoken at that exact moment.
+ */
+async function typewriterTakesOverFromVoice(bookId) {
+  await scrollModeVoiceFromScratch(bookId);
+  await session.evaluate(scrollToParagraph(30));
+  const out = await session.evaluate(`(() => {
+    document.querySelector('[title^="开始朗读"]').click();
+    return new Promise((done) => {
+      let tries = 0;
+      const poll = setInterval(() => {
+        const spoken = ${SPOKEN_PARAGRAPH};
+        if (!spoken && ++tries < 32) return;
+        clearInterval(poll);
+        if (!spoken) return done({ why: 'the voice never started' });
+        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true }));
+        const frontier = [...document.querySelectorAll('.book-content p')]
+          .find((x) => x.classList.contains('tw-block-hidden') || x.querySelector('.tw-hidden'));
+        setTimeout(() => {
+          const pill = (title) => {
+            const b = document.querySelector('[title^="' + title + '"]');
+            return b ? getComputedStyle(b.parentElement).pointerEvents : 'missing';
+          };
+          const res = {
+            spoken,
+            frontier: frontier ? frontier.textContent.slice(0, 6) : null,
+            voiceStillOn: !!document.querySelector('[title^="暂停朗读"]'),
+            typewriterOn: !!document.querySelector('[title^="暂停打字机"]'),
+            typewriterPill: pill('减速'),
+            voicePill: pill('语速')
+          };
+          document.querySelector('[title^="暂停打字机"]')?.click();
+          document.querySelector('[title^="暂停朗读"]')?.click();
+          if (window.speechSynthesis) window.speechSynthesis.cancel();
+          done(res);
+        }, 600);
+      }, 250);
+    });
+  })()`);
+
+  if (out.why) throw new Error(out.why);
+  if (!out.typewriterOn) throw new Error('Space did not start the typewriter');
+  if (out.voiceStillOn) throw new Error('the voice kept reading after the typewriter started');
+  if (paragraphNumber(out.frontier) !== paragraphNumber(out.spoken)) {
+    throw new Error(`voice was at ${out.spoken}, typewriter started at ${out.frontier}`);
+  }
+  if (out.typewriterPill === 'none' || out.voicePill !== 'none') {
+    throw new Error(
+      `pill under the typewriter: typing speed ${out.typewriterPill}, voice rate ${out.voicePill}`
+    );
+  }
+  return `朗读停在 ${out.spoken}，打字机从同一段接上，速度胶囊归打字机`;
+}
+
 // ----------------------------------------------------------------- run ----
 
 console.log('AutoBook smoke suite (real Tauri window via CDP)\n');
@@ -903,6 +1078,11 @@ let bookId = 0;
 try {
   snap = await snapshotSettings();
   console.log(`  settings snapshot taken: ${JSON.stringify(snap)}\n`);
+
+  // The reader scenarios were written against scroll mode and never said so;
+  // on a machine left in paginated mode three of them timed out waiting for
+  // a page that scrolls.
+  await session.evaluate(`(() => { localStorage.setItem('viewMode', 'continuous'); return 1; })()`);
 
   bookId = await importTestBook();
   console.log(`  test book imported as id ${bookId}\n`);
@@ -921,6 +1101,12 @@ try {
   );
   await scenario('排版：注释小图不再把后面的文字挤到下一行', () =>
     inlineImagesDoNotBreakTheLine(bookId)
+  );
+  await scenario('朗读起点：没选区时从当前屏开读（播放键、V 键）', () =>
+    voiceStartsOnScreen(bookId)
+  );
+  await scenario('打字机接管：朗读中开打字机会停掉朗读、接着那句打', () =>
+    typewriterTakesOverFromVoice(bookId)
   );
 } catch (err) {
   fail('suite setup', err.message);
