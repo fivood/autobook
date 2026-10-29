@@ -685,6 +685,7 @@ export default {
   'tts.pauseAria': 'Pause reading aloud',
   'tts.rateSlower': 'Speech rate −0.1',
   'tts.rateFaster': 'Speech rate +0.1',
+  'playback.dockAria': 'Playback controls',
 
   // Re-authorize folders picked before the fs scope was narrowed
   'fsReauth.title': 'Folders need re-authorizing',

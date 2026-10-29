@@ -304,12 +304,6 @@ export const ttsPositions$ = writableObjectLocalStorageSubject<Record<string, Tt
 
 export const readerRate$ = writableNumberLocalStorageSubject()('readerRate', 1);
 
-/** A TTS session is open — playing, or paused with a position to resume from.
- *  The TTS rate pill and the typewriter's speed pill overlay one slot under
- *  the play button, so they take turns on this rather than on "is speaking
- *  right now": a paused reader keeps the slot, which is the only way to
- *  change speed before resuming. Session-only, deliberately not persisted. */
-export const ttsArmed$ = writableSubject<boolean>(false);
 export const readerVoiceUri$ = writableStringLocalStorageSubject()('readerVoiceUri', '');
 
 /** Remembered voice per engine + book language, keyed `${engine}:${zh|ja|en}`.

@@ -690,6 +690,7 @@ export default {
   'tts.pauseAria': '読み上げ一時停止',
   'tts.rateSlower': '読み上げ速度 −0.1',
   'tts.rateFaster': '読み上げ速度 +0.1',
+  'playback.dockAria': '再生コントロール',
 
   // Re-authorize folders picked before the fs scope was narrowed
   'fsReauth.title': 'フォルダの再認可が必要です',

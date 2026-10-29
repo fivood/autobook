@@ -64,13 +64,11 @@
     faChevronLeft,
     faChevronRight,
     faCloudBolt,
-    faPause,
-    faPlay,
-    faSpinner
+    faSpinner,
+    faStopwatch
   } from '@fortawesome/free-solid-svg-icons';
   import BookReader from '$lib/components/book-reader/book-reader.svelte';
-  import AutoScrollFab from '$lib/components/book-reader/auto-scroll-fab.svelte';
-  import AutoReaderFab from '$lib/components/book-reader/auto-reader-fab.svelte';
+  import PlaybackDock from '$lib/components/book-reader/playback-dock.svelte';
   import type {
     AutoReader,
     AutoScroller,
@@ -139,7 +137,6 @@
     enableVerticalFontKerning$,
     enableFontVPAL$,
     verticalTextOrientation$,
-    ttsArmed$,
     ttsAutoAdvanceSection$,
     ttsPositions$,
     ttsStartStrategy$,
@@ -1035,9 +1032,6 @@
         // From the screen: drop whatever an earlier run left hidden, so the
         // typewriter re-walks from what the reader is looking at.
         else scroller.markContentChanged?.();
-        // Here rather than in the FAB, so Space claims the shared speed-pill
-        // slot back too; it left the voice's rate pill under the typewriter.
-        ttsArmed$.next(false);
         return;
       }
       if (!paused || autoReader?.wasReaderEnabled$.getValue()) return;
@@ -2801,10 +2795,7 @@ ${$t('reader.ttsFailed.hint')}`
 {$collectReaderImageGallerySpoilerToggles$ ?? ''}
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
 {#if !showSpinner}
-  <AutoScrollFab {autoScroller} {autoReader} />
-{/if}
-{#if !showSpinner}
-  <AutoReaderFab {autoReader} toggle={toggleTts} />
+  <PlaybackDock {autoScroller} {autoReader} {toggleTts} />
 {/if}
 <div
   class="fixed inset-x-0 top-0 z-10 h-12 w-full"
@@ -3262,7 +3253,11 @@ ${$t('reader.ttsFailed.hint')}`
         class:animate-pulse={frozenPosition > -1}
         use:multiClickHandler={[trackerSingleClickHandler, trackerDblClickHandler]}
       >
-        <Fa icon={$isTrackerPaused$ ? faPlay : faPause} />
+        <!-- A stopwatch, not ▶ / ⏸: that pair is the typewriter's, one corner
+             over, and starting playback resumes tracking — so pressing play
+             flipped this one too, and it read as a second play button. Paused
+             still shows as text-danger. -->
+        <Fa icon={faStopwatch} />
       </div>
     {/if}
     {#if dataToReplicate.length}

@@ -249,6 +249,7 @@ export default {
   'tts.pauseAria': '暂停朗读',
   'tts.rateSlower': '语速 −0.1',
   'tts.rateFaster': '语速 +0.1',
+  'playback.dockAria': '播放控制',
 
   // Book card status badge
   'bookCard.done': '已读',

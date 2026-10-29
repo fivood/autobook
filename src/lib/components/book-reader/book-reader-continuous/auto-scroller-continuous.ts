@@ -505,9 +505,9 @@ export class AutoScrollerContinuous implements AutoScroller {
     const rect = span.getBoundingClientRect();
     const w = this.doc.defaultView || window;
     const vh = w.innerHeight || 0;
-    // Keep the active line well above the bottom-right FAB stack
-    // (pause / speed / keyboard-help take ~220px); scrolling sooner
-    // means the typewriter caret never enters the occluded region.
+    // Keep the active line well above the bottom-right playback dock
+    // (~170px with both engines' rows); scrolling sooner means the
+    // typewriter caret never enters the occluded region.
     const safeBottom = Math.max(120, Math.floor(vh * 0.32));
     if (rect.bottom > vh - safeBottom) {
       span.scrollIntoView({ block: 'center', behavior: 'auto' });
