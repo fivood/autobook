@@ -157,7 +157,12 @@ export function highlightSlotStyles(opts: {
           alpha,
           underlineWidth,
           underlineStyle: 'solid',
-          ink: 'inherit',
+          // Light pages: the 0.5 wash darkens the ground under text that
+          // already carries the theme's alpha — sage-green body text on the
+          // blue, green and pink slots measured 4.0–4.2:1. Full strength, as
+          // the label already is. Dark pages keep inherit: a 0.12 wash leaves
+          // their body text well clear.
+          ink: darkPage ? 'inherit' : opaque(opts.fontColor, '#000000'),
           label: opaque(opts.fontColor, darkPage ? '#ffffff' : '#000000')
         }
       ];

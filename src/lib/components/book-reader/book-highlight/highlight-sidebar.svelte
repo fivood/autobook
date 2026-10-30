@@ -73,12 +73,12 @@
 >
   <div class="flex items-center justify-between border-b border-current/10 px-4 py-3">
     <h2 class="text-lg font-medium">{$t('highlight.sidebar.title')}</h2>
-    <span class="text-sm opacity-60">{$t('highlight.sidebar.count', { n: highlights.length })}</span>
+    <span class="text-sm text-muted">{$t('highlight.sidebar.count', { n: highlights.length })}</span>
   </div>
 
   <div class="flex-1 overflow-y-auto px-4 py-2">
     {#if !highlights.length}
-      <p class="py-8 text-center text-sm opacity-50">{$t('highlight.sidebar.empty')}</p>
+      <p class="py-8 text-center text-sm text-muted">{$t('highlight.sidebar.empty')}</p>
     {:else}
       {#each grouped as group (group.label)}
         <h3 class="sticky top-0 z-10 py-1.5 text-xs font-medium opacity-50" style="background:var(--background-color);">

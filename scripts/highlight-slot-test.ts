@@ -61,7 +61,9 @@ test('colour mode is unchanged by the slot rename', () => {
   const light = highlightSlotStyles({ mode: 'color', ...LIGHT });
   assert.equal(light['1'].rgb, '255, 235, 59');
   assert.equal(light['1'].alpha, '0.5');
-  assert.equal(light['1'].ink, 'inherit');
+  // Full-strength body colour under the 0.5 wash: inherit kept the theme's
+  // alpha and measured 4.0–4.2:1 on the blue, green and pink slots.
+  assert.equal(light['1'].ink, 'rgb(64, 90, 92)');
 
   // Dark pages take the faint wash plus a visible underline. The underline
   // being *visible* is the point: it used to be reset to transparent by the

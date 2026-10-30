@@ -227,7 +227,7 @@
 >
   <div class="flex items-center gap-2 border-b border-current/10 px-4 py-3">
     <h2 class="text-lg font-medium">{$t('ai.title')}</h2>
-    <span class="text-xs opacity-50"
+    <span class="text-xs text-muted"
       >{$t(spoilerSafe ? 'ai.subtitle' : 'ai.subtitleOpen', {
         pct: bookCharCount > 0 ? Math.round((exploredCharCount / bookCharCount) * 100) : 0
       })}</span
@@ -316,7 +316,7 @@
 
   <div bind:this={logEl} class="flex-1 overflow-y-auto px-4 py-3">
     {#if !messages.length}
-      <div class="py-8 text-center text-sm opacity-50">
+      <div class="py-8 text-center text-sm text-muted">
         <p>{$t(spoilerSafe ? 'ai.emptyHint1' : 'ai.emptyHint1Open')}</p>
         <p class="mt-2 text-xs">{$t('ai.emptyHint2')}</p>
       </div>

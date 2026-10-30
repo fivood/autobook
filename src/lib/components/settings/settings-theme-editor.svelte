@@ -263,7 +263,7 @@
     </button>
     <button
       class="settings-btn"
-      style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
+      style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--button-selected-text);"
       on:click={handleSave}
     >
       保存

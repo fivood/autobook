@@ -73,7 +73,7 @@
   </div>
 
   <div class="border-t border-current/10 px-4 py-2 text-xs">
-    <a class="underline opacity-70 hover:opacity-100" href="{pagePath}/settings"
+    <a class="underline text-muted hover:text-inherit" href="{pagePath}/settings"
       >{$t('readerSettings.more')}</a
     >
   </div>
@@ -85,14 +85,14 @@
      inverted fill the header's menu bar uses. */
   .drawer-tab {
     background: transparent;
-    opacity: 0.6;
-    transition: opacity 0.12s ease, background-color 0.12s ease;
+    color: var(--muted-text);
+    transition: color 0.12s ease, background-color 0.12s ease;
   }
   .drawer-tab:hover {
-    opacity: 1;
+    color: inherit;
   }
   .drawer-tab.is-active {
-    opacity: 1;
+    color: inherit;
     font-weight: 600;
   }
   .drawer-tab.is-active::after {

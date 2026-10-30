@@ -134,7 +134,7 @@
 </script>
 
 <div class="text-sm">
-  <p class="mb-3 opacity-70 leading-relaxed">{$t('sync.description')}</p>
+  <p class="mb-3 text-muted leading-relaxed">{$t('sync.description')}</p>
 
   <label class="mb-3 flex items-center gap-2">
     <input type="checkbox" checked={$syncEnabled$} on:change={onEnabledChange} />
@@ -146,7 +146,7 @@
       type="text"
       bind:value={tokenInput}
       placeholder={$t('sync.tokenPlaceholder')}
-      class="flex-1 rounded border-2 border-current/40 px-2 py-1 text-sm font-mono"
+      class="flex-1 rounded border-2 border-current/40 bg-transparent px-2 py-1 text-sm font-mono"
     />
     <button
       class="settings-btn"
@@ -172,7 +172,7 @@
     </button>
   </div>
 
-  <div class="mb-3 flex items-center gap-3 text-xs opacity-70">
+  <div class="mb-3 flex items-center gap-3 text-xs text-muted">
     <span>{$t('sync.deviceIdLabel')}<span class="font-mono">{$syncDeviceId$ || $t('sync.deviceIdUnset')}</span></span>
     <button
       class="opacity-60 hover:opacity-100"
@@ -193,7 +193,7 @@
       on:click={manualPull}
       disabled={busy || !$syncEnabled$ || !$syncToken$}
     ><Fa icon={faDownload} size="xs" /> {$t('sync.pullNow')}</button>
-    <span class="text-xs opacity-60">{$t('sync.lastSync', { time: formatTime($syncLastAt$) })}</span>
+    <span class="text-xs text-muted">{$t('sync.lastSync', { time: formatTime($syncLastAt$) })}</span>
   </div>
 
   {#if $syncLastError$}

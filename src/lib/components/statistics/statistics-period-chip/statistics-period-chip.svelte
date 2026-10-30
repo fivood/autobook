@@ -29,7 +29,7 @@
 </script>
 
 <div class="flex flex-wrap gap-1.5 py-2 items-center">
-  <span class="text-xs opacity-60 mr-1">{$t('stats.period.label')}</span>
+  <span class="text-xs text-muted mr-1">{$t('stats.period.label')}</span>
   {#each statisticsRangeTemplates as tpl (tpl)}
     {@const active = $lastStatisticsRangeTemplate$ === tpl}
     <button
@@ -59,9 +59,11 @@
     background: color-mix(in srgb, var(--accent-color, #5f7e7b) 12%, transparent);
   }
   .chip.active {
-    background: color-mix(in srgb, var(--accent-color, #5f7e7b) 20%, transparent);
+    /* 20% put the body text at 4.4:1 on its own wash. */
+    background: color-mix(in srgb, var(--accent-color, #5f7e7b) 12%, transparent);
     border-color: var(--accent-color, #5f7e7b);
-    color: var(--accent-color, #5f7e7b);
+    /* Not the accent: no theme sets --accent-color, and it on its own 20%
+       wash read 3.7:1. Weight and border carry the selection. */
     font-weight: 600;
   }
 </style>

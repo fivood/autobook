@@ -256,7 +256,7 @@
   }
   .hint {
     margin: 0.75rem 0.7rem 0;
-    font-size: 0.72rem;
-    opacity: 0.6;
+    font-size: 0.75rem;
+    color: var(--muted-text);
   }
 </style>

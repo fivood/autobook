@@ -149,22 +149,22 @@
   }
 </script>
 
-<div class="my-4 opacity-80">
+<div class="my-4 text-muted">
   {$t('stats.summary.header', { range: statisticsDateRangeLabel })}
 </div>
 
 {#if summary}
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 my-4">
     <div class="rounded border border-current/30 p-3">
-      <div class="text-xs opacity-70">{$t('stats.summary.readDays')}</div>
+      <div class="text-xs text-muted">{$t('stats.summary.readDays')}</div>
       <div class="text-xl font-medium tabular-nums">{summary.activeDays}</div>
     </div>
     <div class="rounded border border-current/30 p-3">
-      <div class="text-xs opacity-70">{$t('stats.summary.totalTime')}</div>
+      <div class="text-xs text-muted">{$t('stats.summary.totalTime')}</div>
       <div class="text-xl font-medium tabular-nums">{formatDuration(summary.totalSeconds)}</div>
     </div>
     <div class="rounded border border-current/30 p-3">
-      <div class="text-xs opacity-70">
+      <div class="text-xs text-muted">
         {summary.totalPages ? $t('stats.summary.totalCharsAndPages') : $t('stats.summary.totalChars')}
       </div>
       <div class="text-xl font-medium tabular-nums">
@@ -174,7 +174,7 @@
       </div>
     </div>
     <div class="rounded border border-current/30 p-3">
-      <div class="text-xs opacity-70">{$t('stats.summary.completedBooks')}</div>
+      <div class="text-xs text-muted">{$t('stats.summary.completedBooks')}</div>
       <div class="text-xl font-medium tabular-nums">{summary.totalCompleted}</div>
     </div>
   </div>
@@ -184,7 +184,7 @@
   {:else}
     <div class="rounded border border-current/25 overflow-hidden">
       <div
-        class="grid gap-2 px-3 py-2 text-[11px] opacity-60 border-b border-current/25"
+        class="grid gap-2 px-3 py-2 text-[11px] text-muted border-b border-current/25"
         style="grid-template-columns: 1.25rem 6rem 1.5rem 1fr 1fr 1fr 1fr 2rem;"
       >
         <div></div>
@@ -213,14 +213,14 @@
             <Fa icon={open ? faChevronDown : faChevronRight} />
           </button>
           <div class="whitespace-nowrap">{row.dateKey}</div>
-          <div class="opacity-70 text-xs">{weekdayOf(row.dateKey)}</div>
+          <div class="text-muted text-xs">{weekdayOf(row.dateKey)}</div>
           <div class="text-right">{formatDuration(row.seconds)}</div>
           <div class="text-right">
             {row.chars ? formatChars(row.chars) : ''}{row.pages
               ? `${row.chars ? ' · ' : ''}${tImmediate('stats.summary.pagesValue', { n: row.pages })}`
               : ''}{!row.chars && !row.pages ? '0' : ''}
           </div>
-          <div class="text-right opacity-80">
+          <div class="text-right text-muted">
             {row.weightedSpeedCharsPerHour ? formatChars(row.weightedSpeedCharsPerHour) : '—'}
           </div>
           <div class="text-right">

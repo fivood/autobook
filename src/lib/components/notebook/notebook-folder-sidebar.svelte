@@ -75,29 +75,29 @@
 
 <aside class="flex w-48 flex-shrink-0 flex-col border-r border-current/10 p-3 text-sm">
   <div class="mb-1 flex items-center justify-between">
-    <h2 class="text-xs font-medium uppercase opacity-50">{$t('notebook.sidebar.views')}</h2>
+    <h2 class="text-xs font-medium uppercase text-muted">{$t('notebook.sidebar.views')}</h2>
   </div>
   <button
     type="button"
     class="rounded px-2 py-1.5 text-left hover-soft {selectedKey === 'all' ? 'bg-soft-active' : ''}"
     style:font-weight={selectedKey === 'all' ? '600' : '400'}
     on:click={() => dispatch('select', 'all')}
-  >{$t('notebook.sidebar.all')} <span class="text-xs opacity-50">{counts.all ?? 0}</span></button>
+  >{$t('notebook.sidebar.all')} <span class="text-xs text-muted">{counts.all ?? 0}</span></button>
   <button
     type="button"
     class="rounded px-2 py-1.5 text-left hover-soft {selectedKey === 'unfiled' ? 'bg-soft-active' : ''}"
     style:font-weight={selectedKey === 'unfiled' ? '600' : '400'}
     on:click={() => dispatch('select', 'unfiled')}
-  >{$t('notebook.uncategorized')} <span class="text-xs opacity-50">{counts.unfiled ?? 0}</span></button>
+  >{$t('notebook.uncategorized')} <span class="text-xs text-muted">{counts.unfiled ?? 0}</span></button>
   <button
     type="button"
     class="rounded px-2 py-1.5 text-left hover-soft {selectedKey === 'standalone' ? 'bg-soft-active' : ''}"
     style:font-weight={selectedKey === 'standalone' ? '600' : '400'}
     on:click={() => dispatch('select', 'standalone')}
-  >{$t('notebook.standalone')} <span class="text-xs opacity-50">{counts.standalone ?? 0}</span></button>
+  >{$t('notebook.standalone')} <span class="text-xs text-muted">{counts.standalone ?? 0}</span></button>
 
   <div class="mt-4 mb-1 flex items-center justify-between">
-    <h2 class="text-xs font-medium uppercase opacity-50">{$t('notebook.foldersHeader')}</h2>
+    <h2 class="text-xs font-medium uppercase text-muted">{$t('notebook.foldersHeader')}</h2>
     <button
       type="button"
       class="opacity-50 hover:opacity-100"
@@ -106,7 +106,7 @@
     ><Fa icon={faPlus} size="xs" /></button>
   </div>
   {#if !folders.length}
-    <p class="px-2 py-1 text-xs opacity-40">{$t('notebook.noFolders')}</p>
+    <p class="px-2 py-1 text-xs text-muted">{$t('notebook.noFolders')}</p>
   {/if}
   {#each folders as f (f.id)}
     {@const key = `folder:${f.id}`}

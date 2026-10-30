@@ -12,6 +12,15 @@ const config = {
       colors: {
         'background-color': 'var(--background-color)',
         /*
+         * Secondary text. Derived per theme in +layout (mutedText): the body
+         * colour faded only as far as AA allows on that theme. Use
+         * `text-muted` (with `hover:text-inherit` where it used to be
+         * `hover:opacity-100`) instead of fading text with opacity-NN — the
+         * themes already bake an alpha into the body colour, so the extra
+         * fade landed at 2–3:1.
+         */
+        muted: 'var(--muted-text)',
+        /*
          * Tailwind can't put an alpha modifier on the `currentColor` keyword:
          * `border-current/20` generated no rule at all, so every one of the
          * ~90 uses of the border/divider idiom this repo documents silently

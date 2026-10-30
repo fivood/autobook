@@ -156,6 +156,93 @@ export function relativeLuminance(color: string): number | null {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
+/** WCAG contrast ratio of two CSS colours, any alpha ignored; null if unparseable. */
+export function contrastRatio(a: string, b: string): number | null {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  if (la === null || lb === null) return null;
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+const rgbString = ([r, g, b]: [number, number, number]) =>
+  `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+
+/** `from` mixed toward `to` by t (0 = from, 1 = to). */
+function mix(from: [number, number, number], to: [number, number, number], t: number): string {
+  return rgbString([0, 1, 2].map((i) => from[i] + (to[i] - from[i]) * t) as [number, number, number]);
+}
+
+/**
+ * Smallest (or, with `furthest`, largest) t in [0, 1] whose mix from → to still
+ * reads at `target` on `bg`. Assumes contrast changes monotonically along the
+ * mix, which holds for a mix toward black, white, or the background itself.
+ */
+function searchMix(
+  from: [number, number, number],
+  to: [number, number, number],
+  bg: string,
+  target: number,
+  furthest: boolean
+): number {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 24; i += 1) {
+    const t = (lo + hi) / 2;
+    const ok = (contrastRatio(mix(from, to, t), bg) ?? 0) >= target;
+    if (furthest ? ok : !ok) lo = t;
+    else hi = t;
+  }
+  return furthest ? lo : hi;
+}
+
+/**
+ * `color`, pushed toward black or white only as far as it takes to read at
+ * `target` on `bg`. Keeps a semantic hue (the danger red) recognisable while
+ * making it pass on whatever background the theme has.
+ */
+export function towardContrast(color: string, bg: string, target = 4.5): string {
+  const c = parseColor(color);
+  const b = parseColor(bg);
+  if (!c || !b) return color;
+  if ((contrastRatio(rgbString(c), bg) ?? 0) >= target) return rgbString(c);
+  const bgLum = relativeLuminance(bg) ?? 0;
+  const extreme: [number, number, number] = bgLum > 0.18 ? [0, 0, 0] : [255, 255, 255];
+  return mix(c, extreme, searchMix(c, extreme, bg, target, false));
+}
+
+/**
+ * The faintest version of `fg` that still reads at `target` on `bg` — the
+ * colour for secondary text.
+ *
+ * Secondary text used to be the body colour at 40–70% opacity. Themes already
+ * bake an alpha into the body colour (sage-green's text is 5.3:1 at full
+ * strength), so the extra fade landed at 2–3:1. This fades only as far as each
+ * theme can afford: a lot on the black-on-white theme, almost nothing on
+ * sage-green. Hierarchy has to come from size and weight where it can't.
+ */
+export function mutedText(fg: string, bg: string, target = 4.8): string {
+  const f = parseColor(fg);
+  const b = parseColor(bg);
+  if (!f || !b) return fg;
+  if ((contrastRatio(rgbString(f), bg) ?? 0) < target) return towardContrast(fg, bg, target);
+  return mix(f, b, searchMix(f, b, bg, target, true));
+}
+
+/** The first candidate that reads at `target` on `bg`, else the most legible. */
+export function readableOn(bg: string, candidates: string[], target = 4.5): string {
+  let best = candidates[0];
+  let bestRatio = -1;
+  for (const c of candidates) {
+    const ratio = contrastRatio(c, bg) ?? -1;
+    if (ratio >= target) return c;
+    if (ratio > bestRatio) {
+      best = c;
+      bestRatio = ratio;
+    }
+  }
+  return best;
+}
+
 /** Pick the stop set for a theme, from how bright its page background is. */
 export function stopsForBackground(backgroundColor: string | undefined): FormatColorStops {
   const lum = backgroundColor ? relativeLuminance(backgroundColor) : null;

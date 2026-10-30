@@ -548,7 +548,7 @@
             />
           {/key}
         {:else}
-          <p class="mt-2 text-xs opacity-60">{$t('settings.theme.editHint')}</p>
+          <p class="mt-2 text-xs text-muted">{$t('settings.theme.editHint')}</p>
         {/if}
       </SettingsItemGroup>
     </div>

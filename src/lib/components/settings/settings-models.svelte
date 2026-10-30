@@ -102,7 +102,7 @@
 
 <div class="space-y-3">
   <h4 class="font-medium">{$t('models.heading')}</h4>
-  <p class="mb-2 text-sm opacity-70">{$t('models.description')}</p>
+  <p class="mb-2 text-sm text-muted">{$t('models.description')}</p>
 
   {#each MODELS as model}
     {@const st = $statuses[model.id]}
@@ -110,7 +110,7 @@
       <div class="flex items-center justify-between gap-2">
         <div class="min-w-0">
           <div class="font-medium">{$t(model.nameKey)}</div>
-          <div class="text-xs opacity-60">{$t(model.purposeKey)}</div>
+          <div class="text-xs text-muted">{$t(model.purposeKey)}</div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
           {#if st?.checking}
@@ -131,7 +131,7 @@
           {/if}
         </div>
       </div>
-      <div class="mt-2 flex flex-wrap items-center gap-2 text-xs opacity-70">
+      <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>📍 {model.location}</span>
         <span>{model.size}</span>
         {#if model.uninstall}

@@ -365,7 +365,7 @@
   }
   .meta {
     font-size: 0.8125rem;
-    opacity: 0.65;
+    color: var(--muted-text);
     margin-bottom: 0.45rem;
   }
   .path-row {
@@ -408,7 +408,7 @@
   }
   .hint {
     font-size: 0.8125rem;
-    opacity: 0.6;
+    color: var(--muted-text);
     margin: 0.45rem 0 0;
     line-height: 1.5;
   }

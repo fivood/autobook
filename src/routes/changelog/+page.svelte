@@ -107,7 +107,7 @@
           type="button"
           class="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-left hover-soft"
           style:font-weight={activeIdx === i ? '600' : '400'}
-          style:opacity={activeIdx === i ? 1 : 0.7}
+          style:color={activeIdx === i ? null : 'var(--muted-text)'}
           on:click={() => selectVersion(i)}
         >
           <span>v{s.version}</span>

@@ -207,7 +207,7 @@
             class:group-hover:opacity-95={!speaking}
             class:group-hover:h-12={!speaking}
             class:group-hover:w-12={!speaking}
-            style="background-color: var(--button-selected); color: var(--menu-foreground);"
+            style="background-color: var(--button-selected); color: var(--button-selected-text);"
           >
             <Fa icon={speaking ? faPause : faVolumeHigh} size="lg" />
           </span>
@@ -265,7 +265,7 @@
             class:group-hover:opacity-95={!typing}
             class:group-hover:h-12={!typing}
             class:group-hover:w-12={!typing}
-            style="background-color: var(--button-selected); color: var(--menu-foreground);"
+            style="background-color: var(--button-selected); color: var(--button-selected-text);"
           >
             <!-- Idle, each button says which engine it is (▶ said only
                  "play", next to a speaker that said "what"). A text caret, not

@@ -34,7 +34,7 @@
 
   function btnStyle(isSelected: boolean, optStyle: Record<string, any> | undefined) {
     const base = isSelected
-      ? 'background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);'
+      ? 'background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--button-selected-text);'
       : '';
     return base + mapToStyleString(optStyle);
   }
@@ -84,26 +84,27 @@
 
 <style>
   /* Default mode (invertColors=false):
-     - selected = solid accent (inline style sets bg/color), bold, full opacity
-     - unselected = transparent box with dim text + dim border, no white fill
-       so dark theme doesn't make the "off" option look brighter than "on". */
+     - selected = solid accent (inline style sets bg/color), bold
+     - unselected = transparent box, secondary text, dim border, no white fill
+       so dark theme doesn't make the "off" option look brighter than "on".
+       It was the whole button at opacity 0.5: 2.4:1 on sage-green, too faint
+       to read the options you are choosing between. */
   .toggle-btn {
     font-size: 0.875rem;
     line-height: 1.3;
     background: transparent;
-    color: currentColor;
+    color: var(--muted-text);
     border-color: color-mix(in srgb, currentColor 32%, transparent);
-    opacity: 0.5;
     font-weight: 400;
   }
   .toggle-btn.selected {
-    opacity: 1;
     font-weight: 600;
     /* bg-color, border-color, color come from the inline style via btnStyle()
-       which uses --button-selected / --menu-foreground; keep those winning. */
+       which uses --button-selected / --button-selected-text; keep those
+       winning. */
   }
   .toggle-btn:not(.selected):hover {
-    opacity: 0.85;
+    color: inherit;
     background: color-mix(in srgb, currentColor 7%, transparent);
   }
 

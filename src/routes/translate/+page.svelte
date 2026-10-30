@@ -1123,7 +1123,7 @@
     <section class="rounded-lg border border-current/20 p-4">
       <h2 class="font-medium">{$t('translate.import.title')}</h2>
       <input class="mt-3 block w-full" type="file" multiple accept=".epub,.html,.htm,.txt,.text,.md,.markdown,.cbz,.cbr" on:change={inspect} />
-      <label class="mt-3 block text-sm opacity-70">{$t('translate.import.folder')}
+      <label class="mt-3 block text-sm text-muted">{$t('translate.import.folder')}
         <input class="mt-1 block w-full" type="file" multiple use:inputAllowDirectory on:change={inspect} />
       </label>
       {#if importQueue.length > 1}
@@ -1253,8 +1253,8 @@
     <div class="flex items-center justify-between gap-4">
       <div>
         <h2 class="font-medium">{$t('translate.runtime.title')}</h2>
-        <p class="mt-1 text-sm opacity-70">{runtimeMessage}</p>
-        <p class="mt-1 text-xs opacity-50">{$t('translate.runtime.endpointHint', { url: localTranslationBaseUrl() })}</p>
+        <p class="mt-1 text-sm text-muted">{runtimeMessage}</p>
+        <p class="mt-1 text-xs text-muted">{$t('translate.runtime.endpointHint', { url: localTranslationBaseUrl() })}</p>
       </div>
       <button class={buttonClasses} on:click={checkOllama}>{$t('translate.runtime.check')}</button>
     </div>

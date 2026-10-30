@@ -183,7 +183,7 @@
   class="flex w-52 shrink-0 flex-col gap-1 border-r-2 border-current/20 bg-current/5 py-3 pr-2 pl-3 text-sm"
   style="min-height: calc(100vh - 4rem);"
 >
-  <div class="px-3 pb-1 text-xs uppercase tracking-wide opacity-60">{$t('folders.section')}</div>
+  <div class="px-3 pb-1 text-xs uppercase tracking-wide text-muted">{$t('folders.section')}</div>
 
   <button
     type="button"
@@ -192,7 +192,7 @@
     on:click={() => activeFolderFilter$.next('all')}
   >
     <span>{$t('folders.allBooks')}</span>
-    <span class="opacity-60">{totalBookCount}</span>
+    <span class="text-muted">{totalBookCount}</span>
   </button>
 
   <button
@@ -202,7 +202,7 @@
     on:click={() => activeFolderFilter$.next('uncategorized')}
   >
     <span>{$t('folders.uncategorized')}</span>
-    <span class="opacity-60">{uncategorizedCount}</span>
+    <span class="text-muted">{uncategorizedCount}</span>
   </button>
 
   {#if archivedCount > 0 || $activeFolderFilter$ === ARCHIVED_FILTER}
@@ -224,7 +224,7 @@
     {#each folderGroups as group (group.key)}
       {#if group.items.length || group.canCreate}
         <div
-          class="mt-3 flex items-center justify-between px-3 pb-1 text-xs uppercase tracking-wide opacity-60"
+          class="mt-3 flex items-center justify-between px-3 pb-1 text-xs uppercase tracking-wide text-muted"
         >
           <span>{group.label}</span>
           {#if group.canCreate}
@@ -295,7 +295,7 @@
       </div>
     {/each}
       {#if group.canCreate && !group.items.length}
-        <div class="px-3 pt-2 text-xs opacity-50">{$t('folders.empty')}</div>
+        <div class="px-3 pt-2 text-xs text-muted">{$t('folders.empty')}</div>
       {/if}
     {/each}
   </div>

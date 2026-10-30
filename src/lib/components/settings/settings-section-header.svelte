@@ -31,7 +31,7 @@
   }
   p {
     font-size: 0.8rem;
-    opacity: 0.65;
+    color: var(--muted-text);
     margin: 0.35rem 0 0;
   }
 </style>

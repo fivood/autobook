@@ -81,9 +81,9 @@
 
   .menu-label {
     padding: 0.35rem 0.5rem 0.25rem;
-    /* 90% is the floor for 4.5:1 on every built-in theme — seafoam's menu is
-       the tightest (68% measured 3.5:1). Size, not fading, sets labels apart. */
-    color: color-mix(in srgb, var(--menu-foreground) 90%, transparent);
+    /* Derived per theme (--menu-muted): 68% of the menu text measured 3.5:1
+       on seafoam. Size, not fading, sets labels apart. */
+    color: var(--menu-muted);
     font-size: 0.8125rem;
     line-height: 1.3;
   }
@@ -111,13 +111,13 @@
   }
 
   .menu-item-danger {
-    color: var(--danger-color);
+    color: var(--menu-danger);
   }
 
   .menu-item-danger:hover,
   .menu-item-danger:focus-visible {
-    background: color-mix(in srgb, var(--danger-color) 16%, transparent);
-    color: var(--danger-color);
+    background: color-mix(in srgb, var(--menu-danger) 16%, transparent);
+    color: var(--menu-danger);
     outline: none;
   }
 
@@ -273,7 +273,8 @@ option {
   border-color: color-mix(in srgb, currentColor 55%, transparent);
 }
 .library-search::placeholder {
-  opacity: 0.55;
+  color: var(--muted-text);
+  opacity: 1;
 }
 
 /* CSS Custom Highlight API target: TTS-driven sentence-current marker.
@@ -370,10 +371,16 @@ option {
   --muted-color: #c3c1af;
   --menu-background: #2b5a69;
   --menu-foreground: #f0efe6;
-  /* Semantic red for destructive actions — kept theme-agnostic (no menu
-     variant) because every built-in menu palette so far is dark; when a
-     light-menu theme lands, override via .bg-menu context. */
-  --danger-color: #d95555;
+  /* Sage-green values of the colours +layout derives per theme (see
+     mutedText / towardContrast): secondary text, and the destructive red, each
+     only as far from the theme's own colour as AA requires on its surface. The
+     red has a menu variant because a red that reads on a light page does not
+     read on a dark menu. */
+  --muted-text: rgb(86, 108, 109);
+  --menu-muted: rgb(198, 208, 204);
+  --danger-color: rgb(183, 72, 72);
+  --menu-danger: rgb(240, 187, 187);
+  --button-selected-text: #f0efe6;
   scrollbar-color: #5f7e7b #f0efe6;
 }
 
@@ -448,6 +455,13 @@ input[type='range'] {
     background-color: var(--background-color);
     font-family: 'Noto Sans SC', 'Noto Sans JP', sans-serif;
   }
+  /* Preflight's fixed gray placeholder ignores the theme: the AI drawer's
+     prompt hint measured 3.9:1 on the dark theme. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted-text);
+    opacity: 1;
+  }
 }
 
 @layer utilities {
@@ -477,6 +491,11 @@ input[type='range'] {
   }
   .text-menu {
     color: var(--menu-foreground);
+  }
+  /* Secondary text on a menu surface — `text-muted` is derived against the
+     page, and on the menu colour it read 1.4:1. */
+  .text-menu-muted {
+    color: var(--menu-muted);
   }
   /* Inverted pair used for the "selected" or hovered row inside a themed
    * dropdown (sort menu, source picker, etc.). */

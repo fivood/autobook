@@ -32,7 +32,10 @@
     FORMAT_HUE,
     FORMAT_SATURATION_SCALE,
     FORMAT_STOPS_DARK,
-    stopsForBackground
+    mutedText,
+    readableOn,
+    stopsForBackground,
+    towardContrast
   } from '$lib/data/format-color';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -69,7 +72,19 @@
     setVar('--button-hover', theme.buttonHoverColor, 'rgba(95,126,123,0.18)');
     setVar('--selection-background', theme.selectionBackgroundColor, '#5f7e7b');
     setVar('--selection-foreground', theme.selectionFontColor, '#f0efe6');
-    setVar('--link-color', theme.linkColor, '#2b5a69');
+    // towardContrast: the water theme's link blue read 4.45:1 on its page.
+    setVar('--link-color', towardContrast(theme.linkColor || '#2b5a69', theme.backgroundColor || '#f0efe6'));
+    // Derived, never declared by a theme: each is the theme's own colour moved
+    // only as far as it takes to read at AA on the surface it sits on. Pinned
+    // across every built-in theme by scripts/theme-contrast-test.ts.
+    const page = theme.backgroundColor || '#f0efe6';
+    const menu = theme.menuBackgroundColor || '#2b5a69';
+    setVar('--muted-text', mutedText(theme.fontColor || '#405a5c', page));
+    setVar('--menu-muted', mutedText(theme.menuFontColor || '#f0efe6', menu));
+    setVar('--danger-color', towardContrast('#d95555', page));
+    setVar('--menu-danger', towardContrast('#d95555', menu));
+    const selected = theme.buttonSelectedColor || '#2b5a69';
+    setVar('--button-selected-text', readableOn(selected, [theme.menuFontColor || '#f0efe6', '#ffffff', '#111111']));
     // Highlight slot treatment. Every decision lives in `highlightSlotStyles`
     // (pure, tested); this only mirrors the result onto :root for app.scss.
     // The light/dark split reuses the same luminance test the format colours

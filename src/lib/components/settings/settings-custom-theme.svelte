@@ -208,7 +208,7 @@
       </select>
       <button
         class="settings-btn m-1"
-        style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
+        style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--button-selected-text);"
         on:click={handleCopyTheme}
       >
         复制
@@ -307,7 +307,7 @@
     </button>
     <button
       class="settings-btn m-1"
-      style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
+      style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--button-selected-text);"
       on:click={handleSave}
     >
       保存

@@ -580,7 +580,7 @@
         <option value="created">{$t('notebook.sort.created')}</option>
         <option value="relevance">{$t('notebook.sort.relevance')}</option>
       </select>
-      <span class="ml-2 text-xs opacity-50 tabular-nums">{filtered.length}/{highlights.length}</span>
+      <span class="ml-2 text-xs text-menu-muted tabular-nums">{filtered.length}/{highlights.length}</span>
     </svelte:fragment>
 
     <svelte:fragment slot="right">
@@ -654,14 +654,13 @@
 
   {#if highlights.length}
     <div class="flex flex-wrap items-center gap-2 border-b border-current/10 px-4 py-2 text-xs">
-      <span class="opacity-50">{$t('notebook.colorLabel')}</span>
+      <span class="text-muted">{$t('notebook.colorLabel')}</span>
       {#each HIGHLIGHT_SLOTS as c (c)}
         <button
           type="button"
-          class="rounded-full p-0.5 transition-opacity"
+          class="rounded-full p-0.5"
           class:ring-2={selectedColors.has(c)}
           class:ring-current={selectedColors.has(c)}
-          style:opacity={selectedColors.has(c) ? 1 : 0.65}
           title={c}
           on:click={() => toggleColor(c)}
         ><HighlightSlotSwatch slot={c} class="h-5 w-5 text-[0.6rem]" /></button>
@@ -669,15 +668,15 @@
       {#if selectedColors.size}
         <button
           type="button"
-          class="opacity-50 hover:opacity-100"
+          class="text-muted hover:text-inherit"
           on:click={() => (selectedColors = new Set())}
         >{$t('notebook.clear')}</button>
       {/if}
       {#if allTags.length}
-        <span class="ml-2 opacity-50">{$t('notebook.tagsLabel')}</span>
+        <span class="ml-2 text-muted">{$t('notebook.tagsLabel')}</span>
         <button
           type="button"
-          class="rounded-full border border-current/20 px-2 py-0.5 opacity-65 hover:opacity-100"
+          class="rounded-full border border-current/20 px-2 py-0.5 text-muted hover:text-inherit"
           title={$t('notebook.tagMode.tooltip')}
           on:click={() => (tagMode = tagMode === 'and' ? 'or' : 'and')}
         >{tagMode === 'and' ? $t('notebook.tagMode.and') : $t('notebook.tagMode.or')}</button>
@@ -686,16 +685,15 @@
             type="button"
             class="rounded-full border px-2 py-0.5 transition-colors"
             style:border-color={selectedTags.has(tag) ? 'transparent' : 'currentColor'}
-            style:background={selectedTags.has(tag) ? 'currentColor' : 'transparent'}
-            style:color={selectedTags.has(tag) ? 'var(--background-color)' : 'inherit'}
-            style:opacity={selectedTags.has(tag) ? 1 : 0.65}
+            style:background={selectedTags.has(tag) ? 'var(--font-color)' : 'transparent'}
+            style:color={selectedTags.has(tag) ? 'var(--background-color)' : 'var(--muted-text)'}
             on:click={() => toggleTag(tag)}
           >#{tag}</button>
         {/each}
         {#if selectedTags.size}
           <button
             type="button"
-            class="ml-2 opacity-50 hover:opacity-100"
+            class="ml-2 text-muted hover:text-inherit"
             on:click={() => (selectedTags = new Set())}
           >{$t('notebook.clear')}</button>
         {/if}
@@ -728,9 +726,9 @@
           <section class="mb-8">
             <div class="mb-3 flex items-baseline gap-3 border-b border-current/10 pb-2">
               <h2 class="text-lg font-medium">{#if isStandalone}{$t('notebook.standalone')}{:else}{@html highlightHtml(group.title, matchTerms)}{/if}</h2>
-              <span class="text-xs opacity-50">{$t('notebook.itemCount', { n: group.items.length })}</span>
+              <span class="text-xs text-muted">{$t('notebook.itemCount', { n: group.items.length })}</span>
               {#if !isStandalone && !bookExists}
-                <span class="rounded bg-current/10 px-2 py-0.5 text-xs opacity-70">{$t('notebook.deletedBook')}</span>
+                <span class="rounded bg-current/10 px-2 py-0.5 text-xs text-muted">{$t('notebook.deletedBook')}</span>
               {/if}
             </div>
             <ul class="space-y-2">
@@ -748,7 +746,7 @@
                       {:else}
                         <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{@html highlightHtml(h.text, matchTerms)}</p>
                         {#if h.memo}
-                          <p class="mt-2 whitespace-pre-wrap break-words rounded bg-current/5 px-2 py-1.5 text-sm italic opacity-80">📝 {@html highlightHtml(h.memo, matchTerms)}</p>
+                          <p class="mt-2 whitespace-pre-wrap break-words rounded bg-current/5 px-2 py-1.5 text-sm italic text-muted">📝 {@html highlightHtml(h.memo, matchTerms)}</p>
                         {/if}
                       {/if}
                       {#if h.tags && h.tags.length}
@@ -756,7 +754,7 @@
                           {#each h.tags as t (t)}
                             <button
                               type="button"
-                              class="rounded-full border border-current/20 px-2 py-0.5 text-xs opacity-70 hover:opacity-100"
+                              class="rounded-full border border-current/20 px-2 py-0.5 text-xs text-muted hover:text-inherit"
                               on:click={() => toggleTag(t)}
                             >#{t}</button>
                           {/each}
@@ -782,7 +780,7 @@
                           {/each}
                         </div>
                       {/if}
-                      <div class="mt-2 flex flex-wrap items-center gap-3 text-xs opacity-50">
+                      <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
                         <span>{formatTime(h.createdAt)}</span>
                         {#if !isStandalone && bookExists}
                           <button

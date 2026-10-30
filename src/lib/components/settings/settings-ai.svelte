@@ -85,10 +85,10 @@
 <div class="text-sm">
   <!-- ── Local runtime ─────────────────────────────────────────────── -->
   <h4 class="mb-1 font-medium">{$t('settings.ai.localHeading')}</h4>
-  <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ai.localDescription')}</p>
+  <p class="mb-3 text-muted leading-relaxed">{$t('settings.ai.localDescription')}</p>
 
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.ai.localBaseUrl')}</span>
+    <span class="text-xs text-muted">{$t('settings.ai.localBaseUrl')}</span>
     <input type="text" class={inputClasses} bind:value={$aiLocalBaseUrl$} spellcheck="false" />
   </label>
 
@@ -129,7 +129,7 @@
 
   {#if models.length}
     <label class="mb-3 block">
-      <span class="text-xs opacity-70">{$t('settings.ai.localModel')}</span>
+      <span class="text-xs text-muted">{$t('settings.ai.localModel')}</span>
       <select class={inputClasses} bind:value={$aiLocalModel$}>
         <option value="">{$t('settings.ai.autoLargest', { model: autoPick })}</option>
         {#each models as m (m.id)}
@@ -145,10 +145,10 @@
 
   <!-- ── Cloud endpoint ────────────────────────────────────────────── -->
   <h4 class="mb-1 mt-5 font-medium">{$t('settings.ai.cloudHeading')}</h4>
-  <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ai.cloudDescription')}</p>
+  <p class="mb-3 text-muted leading-relaxed">{$t('settings.ai.cloudDescription')}</p>
 
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.ai.provider')}</span>
+    <span class="text-xs text-muted">{$t('settings.ai.provider')}</span>
     <select class={inputClasses} bind:value={$aiProvider$}>
       <option value="anthropic">Anthropic</option>
       <option value="openai">{$t('ai.providerOpenaiLabel')}</option>
@@ -156,29 +156,29 @@
   </label>
 
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.ai.apiKey')}</span>
+    <span class="text-xs text-muted">{$t('settings.ai.apiKey')}</span>
     <input type="password" class={inputClasses} bind:value={$aiApiKey$} spellcheck="false" />
   </label>
 
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.ai.model')}</span>
+    <span class="text-xs text-muted">{$t('settings.ai.model')}</span>
     <input type="text" class={inputClasses} bind:value={$aiModel$} spellcheck="false" />
   </label>
 
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.ai.baseUrl')}</span>
+    <span class="text-xs text-muted">{$t('settings.ai.baseUrl')}</span>
     <input type="text" class={inputClasses} bind:value={$aiBaseUrl$} spellcheck="false" />
   </label>
 
   <!-- ── Per-feature switches ──────────────────────────────────────── -->
   <h4 class="mb-1 mt-5 font-medium">{$t('settings.ai.featuresHeading')}</h4>
-  <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ai.featuresDescription')}</p>
+  <p class="mb-3 text-muted leading-relaxed">{$t('settings.ai.featuresDescription')}</p>
 
   <label class="mb-2 flex items-start gap-2">
     <input type="checkbox" class="mt-1" bind:checked={$aiGlossEnabled$} />
     <span>
       {$t('settings.ai.glossToggle')}
-      <span class="block text-xs opacity-60">
+      <span class="block text-xs text-muted">
         {glossModel
           ? $t('settings.ai.wouldUse', { model: glossModel })
           : $t('settings.ai.noEndpoint')}
@@ -190,27 +190,27 @@
     <p class="mt-2 text-xs opacity-60">{$t('settings.ai.allModelsSmall')}</p>
   {/if}
 
-  <p class="mt-4 text-xs opacity-50 leading-relaxed">{$t('settings.ai.spoilerNote')}</p>
+  <p class="mt-4 text-xs text-muted leading-relaxed">{$t('settings.ai.spoilerNote')}</p>
 
   <!-- ── Translation workbench defaults ───────────────────────────── -->
   <h4 class="mb-1 mt-5 font-medium">{$t('settings.translate.heading')}</h4>
-  <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.translate.description')}</p>
+  <p class="mb-3 text-muted leading-relaxed">{$t('settings.translate.description')}</p>
 
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.translate.targetLang')}</span>
+    <span class="text-xs text-muted">{$t('settings.translate.targetLang')}</span>
     <input type="text" class={inputClasses} bind:value={$translateTargetLang$} spellcheck="false" />
   </label>
 
   <div class="mb-3 grid gap-3 sm:grid-cols-2">
     <label class="block">
-      <span class="text-xs opacity-70">{$t('settings.translate.draftSource')}</span>
+      <span class="text-xs text-muted">{$t('settings.translate.draftSource')}</span>
       <select class={inputClasses} bind:value={$translateDraftSource$}>
         <option value="local">{$t('translate.source.local')}</option>
         <option value="cloud">{$t('translate.source.cloud')}</option>
       </select>
     </label>
     <label class="block">
-      <span class="text-xs opacity-70">{$t('settings.translate.reviewSource')}</span>
+      <span class="text-xs text-muted">{$t('settings.translate.reviewSource')}</span>
       <select class={inputClasses} bind:value={$translateReviewSource$}>
         <option value="local">{$t('translate.source.local')}</option>
         <option value="cloud">{$t('translate.source.cloud')}</option>
@@ -220,7 +220,7 @@
 
   {#if models.length}
     <label class="mb-3 block">
-      <span class="text-xs opacity-70">{$t('settings.translate.localModel')}</span>
+      <span class="text-xs text-muted">{$t('settings.translate.localModel')}</span>
       <select class={inputClasses} bind:value={$translateLocalModel$}>
         <option value="">{$t('settings.ai.autoLargest', { model: autoPick })}</option>
         {#each models as m (m.id)}
@@ -231,35 +231,35 @@
   {/if}
 
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.translate.chunkChars')}</span>
+    <span class="text-xs text-muted">{$t('settings.translate.chunkChars')}</span>
     <input type="number" class={inputClasses} min="4000" max="100000" step="1000" bind:value={$translateChunkChars$} />
   </label>
 
   <div class="mb-3 grid gap-3 sm:grid-cols-2">
     <label class="block">
-      <span class="text-xs opacity-70">{$t('settings.translate.batchSegments')}</span>
+      <span class="text-xs text-muted">{$t('settings.translate.batchSegments')}</span>
       <input type="number" class={inputClasses} min="1" max="50" step="1" bind:value={$translateBatchSegments$} />
     </label>
     <label class="block">
-      <span class="text-xs opacity-70">{$t('settings.translate.maxSourceChars')}</span>
+      <span class="text-xs text-muted">{$t('settings.translate.maxSourceChars')}</span>
       <input type="number" class={inputClasses} min="500" max="60000" step="500" bind:value={$translateMaxSourceChars$} />
     </label>
   </div>
 
   <!-- ── Qwen-MT draft provider ────────────────────────────────────── -->
   <h4 class="mb-1 mt-5 font-medium">{$t('settings.ai.qwenMtHeading')}</h4>
-  <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ai.qwenMtDescription')}</p>
+  <p class="mb-3 text-muted leading-relaxed">{$t('settings.ai.qwenMtDescription')}</p>
 
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.ai.qwenMtBaseUrl')}</span>
+    <span class="text-xs text-muted">{$t('settings.ai.qwenMtBaseUrl')}</span>
     <input type="text" class={inputClasses} bind:value={$qwenMtBaseUrl$} spellcheck="false" placeholder="https://…/compatible-mode/v1" />
   </label>
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.ai.qwenMtApiKey')}</span>
+    <span class="text-xs text-muted">{$t('settings.ai.qwenMtApiKey')}</span>
     <input type="password" class={inputClasses} bind:value={$qwenMtApiKey$} spellcheck="false" />
   </label>
   <label class="mb-3 block">
-    <span class="text-xs opacity-70">{$t('settings.ai.qwenMtModel')}</span>
+    <span class="text-xs text-muted">{$t('settings.ai.qwenMtModel')}</span>
     <input type="text" class={inputClasses} bind:value={$qwenMtModel$} spellcheck="false" />
   </label>
 </div>

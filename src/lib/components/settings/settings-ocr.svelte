@@ -56,24 +56,24 @@
 <div class="grid gap-6">
   <section>
     <h4 class="mb-1 font-medium">{$t('settings.ocr.modelHeading')}</h4>
-    <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ocr.modelDescription')}</p>
+    <p class="mb-3 text-muted leading-relaxed">{$t('settings.ocr.modelDescription')}</p>
     <label class="block">
-      <span class="text-xs opacity-70">{$t('settings.ocr.model')}</span>
+      <span class="text-xs text-muted">{$t('settings.ocr.model')}</span>
       <select class={inputClasses} value={activeProfile} on:change={onModelProfileChange}>
         {#each OCR_MODEL_PROFILES as profile (profile.id)}
           <option value={profile.id}>{$t(profile.labelKey)}</option>
         {/each}
       </select>
-      <span class="mt-1 block text-xs opacity-60">{$t(activeProfileInfo.hintKey)}</span>
+      <span class="mt-1 block text-xs text-muted">{$t(activeProfileInfo.hintKey)}</span>
     </label>
   </section>
 
   <section>
     <h4 class="mb-1 font-medium">{$t('settings.ocr.pdfHeading')}</h4>
-    <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ocr.pdfDescription')}</p>
+    <p class="mb-3 text-muted leading-relaxed">{$t('settings.ocr.pdfDescription')}</p>
 
     <label class="mb-3 block">
-      <span class="text-xs opacity-70">{$t('settings.ocr.pdfLang')}</span>
+      <span class="text-xs text-muted">{$t('settings.ocr.pdfLang')}</span>
       <select class={inputClasses} bind:value={$pdfOcrLang$}>
         {#each OCR_LANGUAGE_OPTIONS as lang (lang.code)}
           <option value={lang.code} disabled={!isOcrLanguageSupported(lang.code, activeProfile)}>
@@ -85,11 +85,11 @@
 
     <label class="mb-3 flex items-center gap-2">
       <input type="checkbox" bind:checked={$pdfOcrPromptEnabled$} />
-      <span class="text-xs opacity-70">{$t('settings.ocr.pdfPrompt')}</span>
+      <span class="text-xs text-muted">{$t('settings.ocr.pdfPrompt')}</span>
     </label>
 
     <div class="flex items-center gap-3">
-      <span class="text-xs opacity-70">{$t('settings.ocr.pdfMemory')}</span>
+      <span class="text-xs text-muted">{$t('settings.ocr.pdfMemory')}</span>
       <button
         class="settings-btn"
         on:click={clearOcrMemory}
@@ -102,10 +102,10 @@
 
   <section>
     <h4 class="mb-1 font-medium">{$t('settings.ocr.comicHeading')}</h4>
-    <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ocr.comicDescription')}</p>
+    <p class="mb-3 text-muted leading-relaxed">{$t('settings.ocr.comicDescription')}</p>
 
     <label class="mb-3 block">
-      <span class="text-xs opacity-70">{$t('settings.ocr.comicLang')}</span>
+      <span class="text-xs text-muted">{$t('settings.ocr.comicLang')}</span>
       <select class={inputClasses} bind:value={$translateOcrLang$}>
         {#each OCR_LANGUAGE_OPTIONS as lang (lang.code)}
           <option value={lang.code} disabled={!isOcrLanguageSupported(lang.code, activeProfile)}>
@@ -117,23 +117,23 @@
 
     <label class="mb-3 flex items-center gap-2">
       <input type="checkbox" bind:checked={$translateComicAutoOcr$} />
-      <span class="text-xs opacity-70">{$t('settings.translate.comicAutoOcr')}</span>
+      <span class="text-xs text-muted">{$t('settings.translate.comicAutoOcr')}</span>
     </label>
 
     <label class="mb-3 block">
-      <span class="text-xs opacity-70">{$t('settings.ocr.lamaEndpoint')}</span>
+      <span class="text-xs text-muted">{$t('settings.ocr.lamaEndpoint')}</span>
       <input type="text" class={inputClasses} bind:value={$translateLamaEndpoint$} spellcheck="false" placeholder="http://127.0.0.1:8080" />
-      <span class="mt-1 block text-xs opacity-60">{$t('settings.ocr.lamaHint')}</span>
+      <span class="mt-1 block text-xs text-muted">{$t('settings.ocr.lamaHint')}</span>
     </label>
   </section>
 
   <section>
     <h4 class="mb-1 font-medium">{$t('settings.ocr.correctHeading')}</h4>
-    <p class="mb-3 opacity-70 leading-relaxed">{$t('settings.ocr.correctDescription')}</p>
+    <p class="mb-3 text-muted leading-relaxed">{$t('settings.ocr.correctDescription')}</p>
 
     <label class="flex items-center gap-2">
       <input type="checkbox" bind:checked={$aiOcrCorrectEnabled$} />
-      <span class="text-xs opacity-70">{$t('settings.ai.ocrCorrectToggle')}</span>
+      <span class="text-xs text-muted">{$t('settings.ai.ocrCorrectToggle')}</span>
     </label>
   </section>
 </div>
