@@ -104,7 +104,7 @@
       <div
         tabindex="0"
         role="button"
-        title="打开自定义字体对话框"
+        title={$t('fonts.openDialog')}
         on:click={() =>
           dialogManager.dialogs$.next([
             {
@@ -175,7 +175,7 @@
 <SettingsItemGroup title={$t('settings.item.fontWeight')} tooltip={$t('settings.tip.fontWeight')}>
   <input
     type="number"
-    placeholder="默认"
+    placeholder={$t('fonts.weightDefault')}
     class={inputClasses}
     step="100"
     min="100"

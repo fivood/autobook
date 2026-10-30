@@ -1,9 +1,7 @@
 import { dialogManager } from '$lib/data/dialog-manager';
 import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
 import { isTauri } from '$lib/data/env';
-
-const RESET_MESSAGE =
-  '将清除本地保存的 UI 设置（主题、字体、自定义快捷键、TTS 引擎选项等），书库与统计数据保留。应用会自动重启。\n\n继续吗？';
+import { tImmediate } from '$lib/i18n';
 
 /** Wipe Local Storage and reload. On desktop, ask Rust to schedule it so the
  *  wipe works even when stale UI state would block the page. */
@@ -34,8 +32,8 @@ export function confirmResetUiSettings(onConfirm?: () => void): void {
     {
       component: ConfirmDialog,
       props: {
-        dialogHeader: '重置 UI 设置',
-        dialogMessage: RESET_MESSAGE,
+        dialogHeader: tImmediate('settings.resetUi.title'),
+        dialogMessage: tImmediate('settings.resetUi.confirm'),
         contentStyles: 'white-space: pre-line;',
         resolver: async (wasCanceled: boolean) => {
           if (wasCanceled) return;

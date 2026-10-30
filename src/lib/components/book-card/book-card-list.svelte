@@ -238,7 +238,8 @@
   function formatChars(n: number): string {
     if (!n) return '—';
     if (n < 10_000) return tImmediate('bookCard.chars', { n: n.toLocaleString() });
-    return tImmediate('bookCard.wanChars', { n: (n / 10_000).toFixed(1) });
+    // {n} in 万 for zh / ja, {k} in thousands for en, which has no 万.
+    return tImmediate('bookCard.wanChars', { n: (n / 10_000).toFixed(1), k: Math.round(n / 1000) });
   }
 </script>
 

@@ -177,7 +177,7 @@
 
   $: optionsForTheme = availableThemes.map(({ theme, option }) => ({
     id: theme,
-    text: '中字',
+    text: $t('theme.sample'),
     style: {
       color: option.fontColor,
       'background-color': option.backgroundColor
@@ -251,7 +251,7 @@
       const parsed = JSON.parse(await file.text());
 
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        throw new Error('不是有效的主题文件');
+        throw new Error(tImmediate('theme.importInvalid'));
       }
 
       const entries = Object.entries(parsed).filter(
@@ -259,7 +259,7 @@
       );
 
       if (!entries.length) {
-        throw new Error('文件中没有可导入的主题');
+        throw new Error(tImmediate('theme.importEmpty'));
       }
 
       $customThemes$ = {
@@ -270,7 +270,7 @@
       dialogManager.dialogs$.next([
         {
           component: MessageDialog,
-          props: { title: '导入主题失败', message: error.message }
+          props: { title: tImmediate('theme.importFailed'), message: error.message }
         }
       ]);
     }
@@ -503,7 +503,7 @@
           {#if browser}
             <div class="flex">
               <button
-                title="新建主题"
+                title={$t('theme.new')}
                 class="settings-btn m-1"
                 on:click={handleNewTheme}
               >
@@ -511,7 +511,7 @@
                 <Ripple />
               </button>
               <button
-                title="导出自定义主题"
+                title={$t('theme.export')}
                 class="settings-btn m-1"
                 disabled={!Object.keys($customThemes$).length}
                 class:opacity-40={!Object.keys($customThemes$).length}
@@ -521,7 +521,7 @@
                 <Ripple />
               </button>
               <button
-                title="导入自定义主题"
+                title={$t('theme.import')}
                 class="settings-btn m-1"
                 on:click={() => themeImportInput?.click()}
               >
@@ -622,7 +622,7 @@
   {:else if activeSettings === 'Data'}
     <SettingsSectionHeader title={$t('settings.section.storageBackup')} hint={$t('settings.section.storageBackupHint')} />
     <div class="lg:col-span-3">
-      <SettingsItemGroup title={$t('settings.item.syncStats')} tooltip="把每天的阅读时长同步到云端，桌面 + 手机 PWA 都能看到合并的数据">
+      <SettingsItemGroup title={$t('settings.item.syncStats')} tooltip={$t('settings.item.syncStatsTip')}>
         <SettingsSync />
       </SettingsItemGroup>
     </div>
@@ -836,8 +836,8 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="空闲时间 (分钟)"
-        tooltip={'无页面交互（滚动 / 指针 / 选择）达到此分钟数后统计自动暂停，并把这段空闲从已计入的时长里扣回。默认 5 分钟，0 = 关闭（关掉的话，人离开了时长也会一直涨），最大 12 小时'}
+        title={$t('tracker.settings.idle')}
+        tooltip={$t('tracker.settings.idleTip')}
       >
         <input
           type="number"
@@ -861,10 +861,10 @@
           }}
         />
       </SettingsItemGroup>
-      <SettingsSectionHeader title="跳过检测" hint="单次采样字数突变（跳读 / 后退）的判定阈值与动作" />
+      <SettingsSectionHeader title={$t('tracker.settings.skipSection')} hint={$t('tracker.settings.skipSectionHint')} />
       <SettingsItemGroup
-        title="正向跳过阈值"
-        tooltip={'两次采样间正向字数增量超过此阈值触发相应动作（0 = 关闭）'}
+        title={$t('tracker.settings.forwardSkip')}
+        tooltip={$t('tracker.settings.forwardSkipTip')}
       >
         <input
           type="number"
@@ -882,8 +882,8 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup
-        title="反向跳过阈值"
-        tooltip={'两次采样间负向字数差超过此阈值触发相应动作（0 = 关闭）'}
+        title={$t('tracker.settings.backwardSkip')}
+        tooltip={$t('tracker.settings.backwardSkipTip')}
       >
         <input
           type="number"
@@ -903,8 +903,8 @@
       </SettingsItemGroup>
       {#if trackerForwardSkipThreshold || trackerBackwardSkipThreshold}
         <SettingsItemGroup
-          title="阈值动作"
-          tooltip={'达到阈值时执行的动作'}
+          title={$t('tracker.settings.skipAction')}
+          tooltip={$t('tracker.settings.skipActionTip')}
         >
           <ButtonToggleGroup
             options={optionsForTrackerSkipThresholdAction}
@@ -914,8 +914,8 @@
       {/if}
       {#if trackerAutoPause !== TrackerAutoPause.OFF}
         <SettingsItemGroup
-          title="词典检测"
-          tooltip={'开启后，检测到 Yomitan / jpdb-browser-reader 打开时跳过自动暂停（Yomitan 需关闭 Secure Container）'}
+          title={$t('tracker.settings.popupDetection')}
+          tooltip={$t('tracker.settings.popupDetectionTip')}
         >
           <ButtonToggleGroup
             options={optionsForToggle}
@@ -925,8 +925,8 @@
       {/if}
       {#if trackerIdleTime > 0}
         <SettingsItemGroup
-          title="空闲时回滚统计"
-          tooltip={'开启后，会从本次会话中扣除空闲时间以回滚统计'}
+          title={$t('tracker.settings.idleRollback')}
+          tooltip={$t('tracker.settings.idleRollbackTip')}
         >
           <ButtonToggleGroup
             options={optionsForToggle}
@@ -934,7 +934,7 @@
           />
         </SettingsItemGroup>
       {/if}
-      <SettingsSectionHeader title="阅读目标" hint="按日 / 周设定的字数与时长目标" />
+      <SettingsSectionHeader title={$t('goals.section')} hint={$t('goals.sectionHint')} />
       <div class="lg:col-span-3">
         <SettingsReadingGoals on:spinner={({ detail }) => (showSpinner = detail)} />
       </div>

@@ -4,6 +4,7 @@
   import { LocalFont } from '$lib/data/fonts';
   import { activateOnKeyup } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
 
   export let availableFonts: LocalFont[] = [LocalFont.NOTOSANSJP];
   export let fontValue: string;
@@ -12,7 +13,7 @@
 </script>
 
 <Popover bind:this={element} placement="bottom">
-  <div slot="icon" class="mx-2" title="显示可用的默认字体">
+  <div slot="icon" class="mx-2" title={$t('fonts.showDefaults')}>
     <Fa icon={faFont} />
   </div>
   <div class="menu-list" slot="content">

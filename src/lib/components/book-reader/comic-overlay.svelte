@@ -319,7 +319,9 @@
       style="background:var(--menu-background);color:var(--menu-foreground);opacity:0.75;"
       title={$t('comicOverlay.translations')}
     >
-      {rendered} 段译文{manualCount ? ` · ${manualCount} 手动` : ''}
+      {$t('comicOverlay.count', { n: rendered })}{manualCount
+        ? $t('comicOverlay.manualCount', { n: manualCount })
+        : ''}
     </div>
     <button
       class="rounded-full px-3 py-0.5 text-xs"

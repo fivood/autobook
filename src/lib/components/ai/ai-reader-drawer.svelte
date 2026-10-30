@@ -280,7 +280,7 @@
           class="rounded border border-current/20 bg-transparent px-2 py-1"
           value={$aiApiKey$}
           on:input={onKeyInput}
-          placeholder={provider === 'anthropic' ? 'sk-ant-...' : 'sk-... 或 ollama 任意'}
+          placeholder={provider === 'anthropic' ? 'sk-ant-...' : $t('ai.keyPlaceholder')}
         />
       </label>
       <label class="mb-2 flex flex-col gap-1">

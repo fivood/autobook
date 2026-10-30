@@ -1050,13 +1050,13 @@
           })}
         </span>
         <button
-          class="rounded px-3 py-2"
+          class="whitespace-nowrap rounded px-3 py-2"
           style="background:var(--menu-background);color:var(--menu-foreground);"
           on:click={restoreLatestJob}
         >
           {$t('translate.resume.action')}
         </button>
-        <button class="rounded border border-current/40 px-3 py-2 text-sm hover-soft" on:click={discardLatestJob}>
+        <button class="whitespace-nowrap rounded border border-current/40 px-3 py-2 text-sm hover-soft" on:click={discardLatestJob}>
           {$t('translate.resume.delete')}
         </button>
       </div>

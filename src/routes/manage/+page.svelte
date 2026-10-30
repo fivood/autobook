@@ -95,7 +95,6 @@
     executeReplicate$,
     type ReplicationProgress
   } from '$lib/functions/replication/replication-progress';
-  import { pluralize } from '$lib/functions/utils';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import pLimit from 'p-limit';
   import {
@@ -531,7 +530,7 @@
         const bookItem = $bookCards$.find((book) => book.id === bookId);
 
         if (!bookItem) {
-          throw new Error('未找到书籍标题');
+          throw new Error(tImmediate('errors.bookNotFound'));
         }
 
         const isForBrowser = $storageSource$ === StorageKey.BROWSER;
@@ -568,7 +567,7 @@
           {
             component: MessageDialog,
             props: {
-              title: '错误',
+              title: tImmediate('common.error'),
               message
             }
           }
@@ -653,7 +652,7 @@
     const connectivityPass = true;
 
     if (!connectivityPass && !replicationToProgress) {
-      const message = '此操作需要联网';
+      const message = tImmediate('errors.needsOnline');
 
       logger.warn(message);
 
@@ -661,7 +660,7 @@
         {
           component: MessageDialog,
           props: {
-            title: '失败',
+            title: tImmediate('errors.failedTitle'),
             message
           }
         }
@@ -927,7 +926,7 @@
     initializeReplicationProgressData();
 
     const supportedExtRegex = /\.(?:htmlz|epub|txt|md|markdown|mobi|azw3?|pdf|cbz|cbr|cb7|cbt)$/i;
-    const errorTitle = '书籍导入失败';
+    const errorTitle = tImmediate('manager.importFailed');
     const expanded = await expandZipArchives(Array.from(fileList)).catch((err) => {
       logger.warn(`Error expanding zip: ${err.message}`);
       return Array.from(fileList);
@@ -939,7 +938,7 @@
 
       showError(
         errorTitle,
-        '文件必须是 EPUB / HTMLZ / TXT / MD / Markdown / MOBI / AZW / AZW3 / PDF / CBZ / CBR / CB7 / CBT，或包含这些格式的 ZIP',
+        tImmediate('manager.importUnsupported'),
         ''
       );
       return { imported: [], skipped: [], error: '' };
@@ -978,7 +977,7 @@
           () => undefined
         );
       }
-      if (reportErrors) showError(errorTitle, error, '书籍导入期间发生错误');
+      if (reportErrors) showError(errorTitle, error, tImmediate('manager.importError'));
     } else {
       // Large-file hint: a big comic/scanned-PDF imported into the browser
       // (IndexedDB) store bloats it and slows every book-list refresh. When a
@@ -986,9 +985,7 @@
       // silently changing their chosen storage source.
       const largeFileCount = files.filter((f) => f.size > 100 * 1024 * 1024).length;
       if (largeFileCount > 0 && $storageSource$ === StorageKey.BROWSER && isTauri()) {
-        flashToast(
-          `检测到 ${largeFileCount} 个超过 100MB 的大文件，建议在设置中启用「外部文件存储」以节省浏览器存储`
-        );
+        flashToast(tImmediate('manager.largeFileHint', { n: largeFileCount }));
       }
     }
 
@@ -1014,7 +1011,7 @@
       );
       await onFilesChange(files);
     } catch (err: any) {
-      showError('书籍导入失败', err.message, '打开文件时发生错误');
+      showError(tImmediate('manager.importFailed'), err.message, tImmediate('manager.openFileError'));
     }
   }
 
@@ -1308,7 +1305,7 @@
     }
 
     if (error) {
-      showError('删除失败', error, '删除期间发生错误');
+      showError(tImmediate('manager.deleteFailed'), error, tImmediate('manager.deleteError'));
     }
   }
 
@@ -1317,7 +1314,7 @@
       return;
     }
 
-    const errorTitle = '导入失败';
+    const errorTitle = tImmediate('manager.backupImportFailed');
 
     cancelTooltip = tImmediate('manager.cancelImport');
 
@@ -1326,7 +1323,7 @@
     if (!file.name.endsWith('.zip')) {
       resetProgress();
 
-      showError(errorTitle, '无效文件 - 需要 zip 压缩包', '');
+      showError(errorTitle, tImmediate('manager.backupNeedsZip'), '');
       return;
     }
 
@@ -1358,7 +1355,7 @@
     resetProgress();
 
     if (error) {
-      showError(errorTitle, error, '导入期间发生错误');
+      showError(errorTitle, error, tImmediate('manager.backupImportError'));
     }
   }
 
@@ -1367,9 +1364,8 @@
       {
         component: MessageDialog,
         props: {
-          title: '旧域名',
-          message:
-            '您正在使用 ッツ 阅读器的旧域名 - 建议切换到 https://reader.ttsu.app 以避免问题并确保完整功能'
+          title: tImmediate('domainHint.title'),
+          message: tImmediate('domainHint.message')
         },
         disableCloseOnClick: true
       }
@@ -1442,9 +1438,9 @@
     resetProgress();
 
     if (failed) {
-      const errorMessage = `无法删除 ${pluralize(failed, '本书')} 的统计数据`;
+      const errorMessage = tImmediate('manager.statsDeleteFailed', { n: failed });
 
-      showError('删除失败', errorMessage, errorMessage);
+      showError(tImmediate('manager.deleteFailed'), errorMessage, errorMessage);
     }
   }
 
@@ -1524,7 +1520,7 @@
       resetProgress();
 
       if (error) {
-        showError('导出失败', error, '导出期间发生错误');
+        showError(tImmediate('manager.exportFailed'), error, tImmediate('manager.exportError'));
       }
     }),
     reduceToEmptyString()
@@ -1764,7 +1760,7 @@
     <div
       class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-blue-500/10 border-4 border-dashed border-blue-400 rounded-lg"
     >
-      <div class="text-xl font-semibold opacity-80">松开以导入书籍</div>
+      <div class="text-xl font-semibold opacity-80">{$t('manager.dropToImport')}</div>
     </div>
   {/if}
   <!--
@@ -1840,7 +1836,7 @@
     {/if}
   </div>
   {#if !$filteredBookCards$ || $booksAreLoading$}
-    加载中...
+    {$t('common.loading')}
   {:else if visibleBookCards.length}
     <BookCardList
       currentBookId={$currentBookId$}
@@ -1854,9 +1850,9 @@
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />
   {:else if $activeFolderFilter$ === ARCHIVED_FILTER}
-    <div class="mt-20 text-center text-sm opacity-60">{$t('manager.emptyArchive')}</div>
+    <div class="mt-20 text-center text-sm text-muted">{$t('manager.emptyArchive')}</div>
   {:else if $activeFolderFilter$ !== 'all'}
-    <div class="mt-20 text-center text-sm opacity-60">这个分类还是空的；拖书过来或框选后点上面的胶囊加入</div>
+    <div class="mt-20 text-center text-sm text-muted">{$t('manager.emptyFolder')}</div>
   {:else}
     <div
       class="mx-auto mt-44 flex w-3/6 flex-col items-center justify-center text-gray-400 text-opacity-40 hover:text-opacity-60 xl:w-3/12"
@@ -1870,7 +1866,7 @@
           <Fa icon={faUpload} style="width: 100%; height: auto" />
         </div>
         <span class="mt-4 text-sm opacity-60">
-          点击添加书籍
+          {$t('manager.clickToAdd')}
         </span>
       </button>
       <input

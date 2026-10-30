@@ -57,7 +57,7 @@
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import { secondsToMinutes } from '$lib/functions/statistic-util';
   import { clickOutside } from '$lib/functions/use-click-outside';
-  import { pluralize } from '$lib/functions/utils';
+  import { tImmediate } from '$lib/i18n';
   import pLimit from 'p-limit';
   import { tap } from 'rxjs';
   import { onDestroy, onMount, tick } from 'svelte';
@@ -300,7 +300,10 @@
         dialogManager.dialogs$.next([
           {
             component: MessageDialog,
-            props: { title: '错误', message: `导出失败：${error?.message ?? error}` }
+            props: {
+              title: tImmediate('common.error'),
+              message: tImmediate('stats.exportFailed', { detail: String(error?.message ?? error) })
+            }
           }
         ]);
       } finally {
@@ -380,8 +383,8 @@
           {
             component: MessageDialog,
             props: {
-              title: '错误',
-              message: `添加失败：${error?.message ?? error}`
+              title: tImmediate('common.error'),
+              message: tImmediate('stats.addFailed', { detail: String(error?.message ?? error) })
             }
           }
         ]);
@@ -609,7 +612,6 @@
       return;
     }
 
-    const titleLabel = pluralize(titlesToDelete.size, '书籍');
 
     let wasCanceled = false;
 
@@ -619,12 +621,17 @@
           {
             component: ConfirmDialog,
             props: {
-              dialogHeader: '删除数据',
-              dialogMessage: `This will delete data ${
-                startDate ? `from ${getDateRangeLabel(startDate, endDate)}` : ''
-              }  for ${titleLabel} (which may include start and/or completion Data)\n\nExecute an one time Sync with an export behavior of "overwrite" and/or statistics merge mode of "replace" to apply deletions to other devices.\n\n${titleLabel}:\n${[
-                ...titlesToDelete
-              ].join('\n\n')}`,
+              dialogHeader: tImmediate('stats.delete.header'),
+              dialogMessage: [
+                tImmediate(startDate ? 'stats.delete.confirmRange' : 'stats.delete.confirm', {
+                  n: titlesToDelete.size,
+                  range: startDate ? getDateRangeLabel(startDate, endDate) : ''
+                }),
+                tImmediate('stats.delete.syncHint'),
+                `${tImmediate('stats.delete.titles', { n: titlesToDelete.size })}\n${[
+                  ...titlesToDelete
+                ].join('\n\n')}`
+              ].join('\n\n'),
               contentStyles: 'white-space: pre-line;max-height: 20rem;overflow: auto;',
               resolver
             },
@@ -650,8 +657,8 @@
           {
             component: ConfirmDialog,
             props: {
-              dialogHeader: '删除数据',
-              dialogMessage: `Failed to delete Data: ${error}`,
+              dialogHeader: tImmediate('stats.delete.header'),
+              dialogMessage: tImmediate('stats.delete.failed', { detail: String(error) }),
               showCancel: false,
               resolver
             },
@@ -772,20 +779,23 @@
         {
           component: ConfirmDialog,
           props: {
-            dialogHeader: '更新数据',
-            dialogMessage: `This will update the Data for ${title} on ${dateKey}.\n\nTime: ${secondsToMinutes(
-              statistic.readingTime
-            )} min => ${secondsToMinutes(newReadingTime)} min\nCharacters: ${
-              statistic.charactersRead
-            } => ${newCharactersRead}\nSpeed: ${statistic.lastReadingSpeed} / h => ${
-              newStatistic.lastReadingSpeed
-            } / h\nMin Speed: ${statistic.minReadingSpeed} / h => ${
-              newStatistic.minReadingSpeed
-            } / h\nAlt Min Speed: ${statistic.altMinReadingSpeed} / h => ${
-              newStatistic.altMinReadingSpeed
-            } / h\nMax Speed: ${statistic.maxReadingSpeed} / h => ${
-              newStatistic.maxReadingSpeed
-            } / h`,
+            dialogHeader: tImmediate('stats.update.header'),
+            dialogMessage: tImmediate('stats.update.confirm', {
+              title,
+              date: dateKey,
+              time0: secondsToMinutes(statistic.readingTime),
+              time1: secondsToMinutes(newReadingTime),
+              chars0: statistic.charactersRead,
+              chars1: newCharactersRead,
+              speed0: statistic.lastReadingSpeed,
+              speed1: newStatistic.lastReadingSpeed,
+              min0: statistic.minReadingSpeed,
+              min1: newStatistic.minReadingSpeed,
+              altMin0: statistic.altMinReadingSpeed,
+              altMin1: newStatistic.altMinReadingSpeed,
+              max0: statistic.maxReadingSpeed,
+              max1: newStatistic.maxReadingSpeed
+            }),
             contentStyles: 'white-space: pre-line;max-height: 20rem;overflow: auto;',
             resolver
           },
@@ -810,8 +820,8 @@
         {
           component: MessageDialog,
           props: {
-            title: '错误',
-            message: `Update failed: ${message}`
+            title: tImmediate('common.error'),
+            message: tImmediate('stats.update.failed', { detail: message })
           }
         }
       ]);
@@ -916,8 +926,8 @@
         {
           component: MessageDialog,
           props: {
-            title: '错误',
-            message: `Error getting Data: ${message}`
+            title: tImmediate('common.error'),
+            message: tImmediate('stats.loadError', { detail: message })
           }
         }
       ]);

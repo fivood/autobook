@@ -9,6 +9,7 @@
   import { pagePath } from '$lib/data/env';
   import { goto } from '$app/navigation';
   import { createEventDispatcher, tick, onDestroy } from 'svelte';
+  import { t, tImmediate } from '$lib/i18n';
 
   export let existingTitles: string[] = [];
   export let startDayHoursForTracker = 0;
@@ -171,11 +172,11 @@
     const file = input.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      error = '封面必须是图片文件';
+      error = tImmediate('manual.coverNotImage');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      error = '封面文件过大（>5MB）';
+      error = tImmediate('manual.coverTooLarge');
       return;
     }
     coverFile = file;
@@ -234,20 +235,20 @@
 
   function buildEntry(): ManualStatisticEntry | null {
     if (!trimmedTitle) {
-      error = '请输入书名';
+      error = tImmediate('manual.titleRequired');
       return null;
     }
     if (!dateKey) {
-      error = '请选择日期';
+      error = tImmediate('manual.dateRequired');
       return null;
     }
     if (dateKey > todayKey) {
-      error = '日期不能晚于今天';
+      error = tImmediate('manual.dateInFuture');
       return null;
     }
     const readingTimeSeconds = Math.max(0, Math.round(((minutes ?? 0) as number) * 60));
     if (readingTimeSeconds <= 0) {
-      error = '请输入阅读时长（分钟）';
+      error = tImmediate('manual.minutesRequired');
       return null;
     }
     const charactersRead = Math.max(0, Math.floor((characters ?? 0) as number));
@@ -267,7 +268,7 @@
     try {
       await persistBookMeta();
     } catch (e: any) {
-      error = `保存书籍信息失败：${e?.message ?? e}`;
+      error = tImmediate('manual.saveBookFailed', { detail: String(e?.message ?? e) });
       return;
     }
     close(entry);
@@ -302,7 +303,7 @@
       await tick();
       minutesInputEl?.focus();
     } catch (e: any) {
-      error = `保存失败：${e?.message ?? e}`;
+      error = tImmediate('manual.saveFailed', { detail: String(e?.message ?? e) });
     } finally {
       continuing = false;
     }
@@ -310,10 +311,10 @@
 </script>
 
 <DialogTemplate>
-  <svelte:fragment slot="header">手动添加阅读记录</svelte:fragment>
+  <svelte:fragment slot="header">{$t('manual.title')}</svelte:fragment>
   <div class="flex flex-col gap-3 text-sm sm:text-base w-80 sm:w-[28rem]" slot="content">
     <label class="flex flex-col">
-      <span class="text-xs opacity-70">书名</span>
+      <span class="text-xs text-muted">{$t('manual.bookTitle')}</span>
       <input
         type="text"
         class={inputClasses}
@@ -322,20 +323,20 @@
         list="manual-existing-titles"
       />
       <datalist id="manual-existing-titles">
-        {#each Array.from(new Set(existingTitles.map((k) => k.split('__')[0]))) as t (t)}
-          <option value={t} />
+        {#each Array.from(new Set(existingTitles.map((k) => k.split('__')[0]))) as existingTitle (existingTitle)}
+          <option value={existingTitle} />
         {/each}
       </datalist>
     </label>
 
     <label class="flex flex-col">
-      <span class="text-xs opacity-70">日期</span>
+      <span class="text-xs text-muted">{$t('manual.date')}</span>
       <input type="date" class={inputClasses} max={todayKey} bind:value={dateKey} />
     </label>
 
     <div class="flex gap-3">
       <label class="flex flex-col flex-1 min-w-0">
-        <span class="text-xs opacity-70">时长（分钟）</span>
+        <span class="text-xs text-muted">{$t('manual.minutes')}</span>
         <input
           type="number"
           min="0"
@@ -346,7 +347,7 @@
         />
       </label>
       <label class="flex flex-col flex-1 min-w-0">
-        <span class="text-xs opacity-70">字数（可留空）</span>
+        <span class="text-xs text-muted">{$t('manual.chars')}</span>
         <input
           type="number"
           min="0"
@@ -361,10 +362,14 @@
     {#if totalCharacters}
       <label class="flex flex-col gap-1">
         <div class="flex items-baseline justify-between">
-          <span class="text-xs opacity-70">读到 {progressPct ?? 0}%</span>
-          <span class="text-[11px] opacity-50">
-            约 {(((progressPct ?? 0) * totalCharacters) / 100 / 10000).toFixed(1)} 万字（总
-            {(totalCharacters / 10000).toFixed(1)} 万）
+          <span class="text-xs text-muted">{$t('manual.progress', { pct: progressPct ?? 0 })}</span>
+          <span class="text-[11px] text-muted">
+            {$t('manual.progressChars', {
+              n: (((progressPct ?? 0) * totalCharacters) / 100 / 10000).toFixed(1),
+              total: (totalCharacters / 10000).toFixed(1),
+              k: Math.round(((progressPct ?? 0) * totalCharacters) / 100 / 1000),
+              totalK: Math.round(totalCharacters / 1000)
+            })}
           </span>
         </div>
         <input
@@ -380,7 +385,7 @@
 
     <label class="flex items-center gap-2 mt-1">
       <input type="checkbox" bind:checked={markCompleted} />
-      <span>标记为读完</span>
+      <span>{$t('manual.markFinished')}</span>
     </label>
 
     {#if trimmedTitle}
@@ -388,9 +393,9 @@
         type="button"
         class="self-start text-xs opacity-70 hover:opacity-100 underline underline-offset-2"
         on:click={openInNotebook}
-        title="打开笔记本并过滤到这本书的高亮 / 笔记"
+        title={$t('manual.openNotebookTitle')}
       >
-        在笔记本打开{noteCount ? `（${noteCount} 条）` : ''}
+        {noteCount ? $t('manual.openNotebookCount', { n: noteCount }) : $t('manual.openNotebook')}
       </button>
     {/if}
 
@@ -402,32 +407,32 @@
         on:click={() => (showBookMeta = !showBookMeta)}
       >
         <span
-          >书籍信息 {hasBookMeta ? '·' : ''}
+          >{$t('manual.bookInfo')} {hasBookMeta ? '·' : ''}
           {#if hasBookMeta}
             <span class="opacity-80">{[author, publisher].filter(Boolean).join(' · ')}</span>
           {/if}</span
         >
-        <span class="text-[10px]">{showBookMeta ? '收起 ▲' : '展开 ▼'}</span>
+        <span class="text-[10px]">{showBookMeta ? $t('manual.collapse') : $t('manual.expand')}</span>
       </button>
       {#if showBookMeta}
         <div class="flex flex-col gap-2 mt-2">
           <div class="flex gap-3">
             <label class="flex flex-col flex-1 min-w-0">
-              <span class="text-[11px] opacity-70">作者</span>
+              <span class="text-[11px] text-muted">{$t('manual.author')}</span>
               <input type="text" class={inputClasses} bind:value={author} />
             </label>
             <label class="flex flex-col flex-1 min-w-0">
-              <span class="text-[11px] opacity-70">译者（如有）</span>
+              <span class="text-[11px] text-muted">{$t('manual.translator')}</span>
               <input type="text" class={inputClasses} bind:value={translator} />
             </label>
           </div>
           <div class="flex gap-3">
             <label class="flex flex-col flex-[2] min-w-0">
-              <span class="text-[11px] opacity-70">出版社</span>
+              <span class="text-[11px] text-muted">{$t('manual.publisher')}</span>
               <input type="text" class={inputClasses} bind:value={publisher} />
             </label>
             <label class="flex flex-col flex-1 min-w-0">
-              <span class="text-[11px] opacity-70">出版年</span>
+              <span class="text-[11px] text-muted">{$t('manual.year')}</span>
               <input
                 type="number"
                 min="1000"
@@ -440,11 +445,11 @@
           </div>
           <div class="flex gap-3">
             <label class="flex flex-col flex-[2] min-w-0">
-              <span class="text-[11px] opacity-70">ISBN</span>
+              <span class="text-[11px] text-muted">ISBN</span>
               <input type="text" class={inputClasses} bind:value={isbn} />
             </label>
             <label class="flex flex-col flex-1 min-w-0">
-              <span class="text-[11px] opacity-70">总字数（万）</span>
+              <span class="text-[11px] text-muted">{$t('manual.totalChars')}</span>
               <input
                 type="number"
                 min="0"
@@ -456,11 +461,11 @@
             </label>
           </div>
           <label class="flex flex-col">
-            <span class="text-[11px] opacity-70">标签（逗号、顿号或换行分隔）</span>
+            <span class="text-[11px] text-muted">{$t('manual.tags')}</span>
             <input type="text" class={inputClasses} bind:value={tagsInput} />
           </label>
           <label class="flex flex-col">
-            <span class="text-[11px] opacity-70">备注</span>
+            <span class="text-[11px] text-muted">{$t('manual.notes')}</span>
             <textarea
               class="{inputClasses} min-h-[3rem] resize-y"
               bind:value={bookNotes}
@@ -474,12 +479,12 @@
                 <img src={existingCoverUrl} alt="existing cover" class="h-24 w-16 object-cover rounded border border-current/40" />
               {:else}
                 <div class="h-24 w-16 rounded border border-dashed border-current/40 flex items-center justify-center text-[10px] opacity-40">
-                  无封面
+                  {$t('manual.noCover')}
                 </div>
               {/if}
             </div>
             <div class="flex flex-col gap-1 flex-1">
-              <span class="text-[11px] opacity-70">封面（可选，≤5MB）</span>
+              <span class="text-[11px] text-muted">{$t('manual.cover')}</span>
               <input
                 type="file"
                 accept="image/*"
@@ -488,7 +493,7 @@
               />
               {#if coverPreviewUrl || (existingCoverUrl && !clearCover)}
                 <button type="button" class="text-[11px] opacity-60 hover:opacity-100 self-start" on:click={removeCover}>
-                  移除封面
+                  {$t('manual.removeCover')}
                 </button>
               {/if}
             </div>
@@ -500,15 +505,15 @@
     {#if hasConflict}
       <div class="mt-2 border border-yellow-500/60 rounded p-2 text-xs">
         <div class="mb-1 font-medium text-yellow-600">
-          该书籍在 {dateKey} 已有一条记录：
+          {$t('manual.conflict', { date: dateKey })}
         </div>
         <label class="flex items-center gap-2">
           <input type="radio" bind:group={conflictStrategy} value="append" />
-          <span>追加到已有记录（时长与字数相加）</span>
+          <span>{$t('manual.append')}</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="radio" bind:group={conflictStrategy} value="overwrite" />
-          <span>覆盖已有记录</span>
+          <span>{$t('manual.overwrite')}</span>
         </label>
       </div>
     {/if}
@@ -519,11 +524,11 @@
   </div>
   <div class="flex grow justify-between items-center gap-2" slot="footer">
     <button class={buttonClasses} on:click={() => close(undefined)} disabled={continuing}>
-      {savedCount > 0 ? '完成' : '取消'}
+      {savedCount > 0 ? $t('manual.done') : $t('dialog.cancel')}
       <Ripple />
     </button>
-    <div class="flex-1 text-center text-[11px] opacity-60">
-      {#if savedCount > 0}已保存 {savedCount} 条{/if}
+    <div class="flex-1 text-center text-[11px] text-muted">
+      {#if savedCount > 0}{$t('manual.savedCount', { n: savedCount })}{/if}
     </div>
     <div class="flex gap-2">
       {#if onSaveAndContinue}
@@ -531,14 +536,14 @@
           class={buttonClasses}
           on:click={submitAndContinue}
           disabled={continuing}
-          title="保存后清空时长/字数并前进一天，方便连续录入同一本书的多天记录"
+          title={$t('manual.saveContinueTitle')}
         >
-          {continuing ? '保存中…' : '保存并继续'}
+          {continuing ? $t('manual.saving') : $t('manual.saveContinue')}
           <Ripple />
         </button>
       {/if}
       <button class={buttonClasses} on:click={submit} disabled={continuing}>
-        添加
+        {$t('manual.add')}
         <Ripple />
       </button>
     </div>

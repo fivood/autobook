@@ -5,6 +5,7 @@
   import { activateOnKeyup } from '$lib/functions/utils';
   import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
+  import { t, tImmediate } from '$lib/i18n';
 
   export let isLoading: boolean;
   export let fontCache: Cache;
@@ -35,7 +36,7 @@
         file.name.endsWith('.otf')
       )
     ) {
-      currentError = '仅支持 woff2、woff、ttf 和 otf 字体';
+      currentError = tImmediate('fonts.unsupported');
       resetFileElement();
       return;
     }
@@ -44,11 +45,11 @@
       reservedFontNames.has(fontName) ||
       $userFonts$.find((userFont) => userFont.fileName === file.name || userFont.name === fontName)
     ) {
-      currentError = '已存在该名称的字体文件';
+      currentError = tImmediate('fonts.exists');
       resetFileElement();
       return;
     } else if (!fontName) {
-      currentError = '请输入字体名称以继续';
+      currentError = tImmediate('fonts.nameRequired');
     }
 
     fontFile = file;
@@ -90,7 +91,7 @@
 </script>
 
 <div class="flex flex-col min-w-[15rem] md:min-w-[20rem]">
-  <span>字体名称</span>
+  <span>{$t('fonts.name')}</span>
   <input
     class="mt-2"
     type="text"
@@ -102,9 +103,9 @@
         reservedFontNames.has(fontName) ||
         $userFonts$.find((userFont) => userFont.name === fontName)
       ) {
-        currentError = '已存在该名称的字体文件';
+        currentError = tImmediate('fonts.exists');
       } else if (!!fontFile && !fontName) {
-        currentError = '请输入字体名称以继续';
+        currentError = tImmediate('fonts.nameRequired');
       }
     }}
   />
@@ -118,12 +119,12 @@
         bind:this={fileElement}
         on:change={handleFileChange}
       />
-      {fontFile ? '已选择文件' : '选择文件 (然后点击保存)'}
+      {fontFile ? $t('fonts.fileChosen') : $t('fonts.chooseFile')}
     </label>
     <div
       tabindex="0"
       role="button"
-      title={canSave ? '保存' : '选择文件并输入字体名称以保存'}
+      title={canSave ? $t('theme.save') : $t('fonts.saveHint')}
       class:text-gray-500={!canSave}
       class:cursor-not-allowed={!canSave}
       on:click={() => {

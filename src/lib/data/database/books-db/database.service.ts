@@ -45,6 +45,7 @@ import { normalizeHighlightSlot } from '$lib/data/highlight-color';
 import MessageDialog from '$lib/components/message-dialog.svelte';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { dialogManager } from '$lib/data/dialog-manager';
+import { tImmediate } from '$lib/i18n';
 import { getDefaultStatistic } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
@@ -99,8 +100,8 @@ export class DatabaseService {
                 {
                   component: showReport ? LogReportDialog : MessageDialog,
                   props: {
-                    title: '失败',
-                    message: `发生错误: ${error.message}`
+                    title: tImmediate('errors.failedTitle'),
+                    message: tImmediate('errors.generic', { detail: error.message })
                   }
                 }
               ]);
@@ -815,7 +816,7 @@ export class DatabaseService {
     let existingStatistic = await db.get('statistic', [newStatistic.title, newStatistic.dateKey]);
 
     if (!existingStatistic) {
-      throw new Error('无法在数据库中找到记录');
+      throw new Error(tImmediate('errors.recordNotFound'));
     }
 
     existingStatistic = {

@@ -528,7 +528,7 @@
           {
             component: MessageDialog,
             props: {
-              title: '加载错误',
+              title: tImmediate('errors.loadTitle'),
               message
             }
           }
@@ -558,7 +558,7 @@
 
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(
-          () => reject(new Error('书籍加载超时（60秒），请检查控制台 [loadBook] 日志定位卡住的步骤')),
+          () => reject(new Error(tImmediate('errors.loadTimeout'))),
           60000
         );
       });
@@ -571,7 +571,7 @@
           {
             component: MessageDialog,
             props: {
-              title: '加载超时',
+              title: tImmediate('errors.loadTimeoutTitle'),
               message: error.message
             }
           }
@@ -1603,7 +1603,7 @@ ${$t('reader.ttsFailed.hint')}`
         const [hadError] = await trackerElm.processStatistics(diffToComplete);
 
         if (hadError) {
-          throw new Error('字数更新失败');
+          throw new Error(tImmediate('errors.charCountUpdate'));
         }
       }
 
@@ -1701,7 +1701,7 @@ ${$t('reader.ttsFailed.hint')}`
           {
             component: MessageDialog,
             props: {
-              title: '错误',
+              title: tImmediate('common.error'),
               message: tImmediate('errors.completeBook', { detail: message })
             }
           }
@@ -1826,9 +1826,7 @@ ${$t('reader.ttsFailed.hint')}`
       const externalBookData = await storageHandler.getBook(onProgress);
 
       if (externalBookData instanceof File) {
-        throw new Error(
-          `外部书籍数据格式错误（返回了文件而非解析后的数据）：${localBookData.title}`
-        );
+        throw new Error(tImmediate('errors.externalBookIsFile', { title: localBookData.title }));
       }
 
       if (externalBookData) {
@@ -1856,7 +1854,10 @@ ${$t('reader.ttsFailed.hint')}`
         // flow if they want disk parity.
       } else if (!localBookData.elementHtml) {
         throw new Error(
-          `未找到外部书籍数据：${localBookData.storageSource} 中不存在《${localBookData.title}》的书籍文件`
+          tImmediate('errors.externalBookMissing', {
+            source: localBookData.storageSource ?? '',
+            title: localBookData.title
+          })
         );
       } else {
         logger.warn(
@@ -1864,7 +1865,7 @@ ${$t('reader.ttsFailed.hint')}`
         );
       }
     } else if (!localBookData.elementHtml) {
-      throw new Error('书籍没有存储数据');
+      throw new Error(tImmediate('errors.noBookData'));
     }
 
     const dataToReturn = { id, ...bookData };
@@ -1878,7 +1879,7 @@ ${$t('reader.ttsFailed.hint')}`
         {
           component: MessageDialog,
           props: {
-            title: '更新错误',
+            title: tImmediate('errors.updateTitle'),
             message
           }
         }
@@ -2302,9 +2303,8 @@ ${$t('reader.ttsFailed.hint')}`
       {
         component: MessageDialog,
         props: {
-          title: '旧域名',
-          message:
-            '您正在使用 ッツ 阅读器的旧域名 - 建议切换到 https://reader.ttsu.app 以避免问题并确保完整功能'
+          title: tImmediate('domainHint.title'),
+          message: tImmediate('domainHint.message')
         },
         disableCloseOnClick: true
       }
@@ -2408,8 +2408,8 @@ ${$t('reader.ttsFailed.hint')}`
           {
             component: showReport ? LogReportDialog : MessageDialog,
             props: {
-              title: '处理数据错误',
-              message: `部分或全部数据无法存储到外部存储\n\n${error}`
+              title: tImmediate('errors.externalSaveTitle'),
+              message: tImmediate('errors.externalSave', { detail: String(error) })
             }
           }
         ]);
@@ -2506,7 +2506,7 @@ ${$t('reader.ttsFailed.hint')}`
         const [hadError, updated] = await trackerElm.flushUpdates(true);
 
         if (hadError) {
-          throw new Error('更新统计出错');
+          throw new Error(tImmediate('errors.statsUpdate'));
         }
 
         if (updated) {
@@ -2531,7 +2531,7 @@ ${$t('reader.ttsFailed.hint')}`
         {
           component: MessageDialog,
           props: {
-            title: '错误',
+            title: tImmediate('common.error'),
             message
           },
           disableCloseOnClick: true

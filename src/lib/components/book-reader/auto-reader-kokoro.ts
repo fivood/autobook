@@ -19,6 +19,7 @@
  */
 
 import { BlobAutoReader } from './auto-reader-blob-base';
+import { tImmediate } from '$lib/i18n';
 import {
   KOKORO_MODEL_REPOS,
   kokoroAccepted$,
@@ -76,7 +77,7 @@ async function loadModel(
   const promise = (async () => {
     onProgress({
       phase: 'loading',
-      message: `正在加载 Kokoro (${modelId})…`,
+      message: tImmediate('kokoro.status.loading', { model: modelId }),
       loaded: 0,
       total: 0,
       modelId,
@@ -93,7 +94,9 @@ async function loadModel(
         if (info?.status === 'progress' || info?.status === 'download') {
           onProgress({
             phase: 'loading',
-            message: info?.file ? `下载 ${info.file}…` : '正在下载模型…',
+            message: info?.file
+              ? tImmediate('kokoro.status.downloadingFile', { file: info.file })
+              : tImmediate('kokoro.status.downloading'),
             loaded: Number(info?.loaded || 0),
             total: Number(info?.total || 0),
             modelId,
@@ -136,7 +139,7 @@ export class AutoReaderKokoro extends BlobAutoReader {
 
   protected canStart(): string | null {
     if (!kokoroAccepted$.getValue()) {
-      return 'Kokoro 模型尚未下载。请在设置 → 阅读 → 朗读引擎 里点「下载并启用」';
+      return tImmediate('kokoro.status.notDownloaded');
     }
     return null;
   }
@@ -147,7 +150,7 @@ export class AutoReaderKokoro extends BlobAutoReader {
     try {
       tts = await loadModel(modelId, (status) => kokoroLoadStatus$.next(status));
     } catch (err: any) {
-      throw new Error(`Kokoro 加载失败: ${err?.message || err}`);
+      throw new Error(tImmediate('kokoro.status.loadFailed', { detail: err?.message || String(err) }));
     }
 
     // Validate the saved voice id against the model's actual voice list. The

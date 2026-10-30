@@ -32,6 +32,7 @@
  */
 
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
+import { tImmediate } from '$lib/i18n';
 import {
   ocrImageBlob,
   type OcrLanguage,
@@ -364,12 +365,12 @@ export async function runOcrOnPage(
   const pages = findPageImages(html);
   const target = pages.find((p) => p.pageNum === pageNum);
   if (!target) {
-    throw new Error(`OCR 中止：在书中未找到第 ${pageNum} 页的图片标记。`);
+    throw new Error(tImmediate('ocrBanner.pageMarkerMissing', { page: pageNum }));
   }
 
   const blob = pageBlobFromBook(book, pageNum);
   if (!blob) {
-    throw new Error(`OCR 中止：找不到第 ${pageNum} 页的原图数据。`);
+    throw new Error(tImmediate('ocrBanner.pageImageMissing', { page: pageNum }));
   }
 
   const ocrResult = await ocrImageBlob(blob, lang, profile);
@@ -393,7 +394,7 @@ export async function runOcrOnPage(
   const originalPageCount = countPageImages(html);
   if (newPageCount !== originalPageCount) {
     throw new Error(
-      `OCR 中止：单页重写后页数变化 (${originalPageCount} → ${newPageCount})，未保存。`
+      tImmediate('ocrBanner.pageCountChanged', { before: originalPageCount, after: newPageCount })
     );
   }
 
@@ -457,7 +458,7 @@ export async function runOcr(
   const total = pages.length;
 
   if (!total) {
-    throw new Error('OCR 中止：未找到任何带 data-pdf-page 的图片，可能不是 image 模式 PDF。');
+    throw new Error(tImmediate('ocrBanner.noPageImages'));
   }
 
   // Catastrophic-truncation guard: hard floor only. Mixed-mode PDFs can
@@ -470,10 +471,7 @@ export async function runOcr(
   // images left to process."
   const expected = book.sections?.length || total;
   if (expected > 100 && total < 5) {
-    throw new Error(
-      `OCR 中止：只在 ${expected} 节的书里找到 ${total} 个图片页，` +
-        '与目录差距过大。可能这本书在更早版本里已经被截断，请删除后重新导入原 PDF。'
-    );
+    throw new Error(tImmediate('ocrBanner.truncated', { sections: expected, pages: total }));
   }
 
   const chunks: string[] = [];
@@ -513,7 +511,7 @@ export async function runOcr(
     const blob = pageBlobFromBook(book, page.pageNum);
     if (!blob) {
       failedPages += 1;
-      if (!firstFailure) firstFailure = `第 ${page.pageNum} 页取不到图片数据`;
+      if (!firstFailure) firstFailure = tImmediate('ocrBanner.pageNoImage', { page: page.pageNum });
       console.warn(`[ocr] no blob for page ${page.pageNum}`);
       onProgress({ page: progressPage, total, text: '' });
       chunks.push(page.imgTag);
@@ -535,7 +533,10 @@ export async function runOcr(
     } catch (err: any) {
       failedPages += 1;
       if (!firstFailure) {
-        firstFailure = `第 ${page.pageNum} 页：${err?.message || String(err)}`;
+        firstFailure = tImmediate('ocrBanner.pageFailed', {
+          page: page.pageNum,
+          detail: err?.message || String(err)
+        });
       }
       console.warn(`[ocr] page ${page.pageNum} failed`, err);
     }
@@ -566,9 +567,7 @@ export async function runOcr(
 
   const newPageCount = countPageImages(newHtml);
   if (newPageCount < total) {
-    throw new Error(
-      `OCR 中止：序列化丢失了页面 (${newPageCount}/${total})，不保存以避免损坏。`
-    );
+    throw new Error(tImmediate('ocrBanner.pagesLost', { kept: newPageCount, total }));
   }
 
   const { sections: updatedSections, total: newCharacters } = recomputeSectionChars(

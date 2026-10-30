@@ -159,14 +159,14 @@
     {#if jobForThisBook?.status === 'running'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">OCR 运行中… {jobForThisBook.progress.page} / {jobForThisBook.progress.total} 页</div>
+        <div class="title">{$t('ocrBanner.running', { page: jobForThisBook.progress.page, total: jobForThisBook.progress.total })}</div>
         {#if jobForThisBook.progress.text}
           <div class="meta">{jobForThisBook.progress.text.slice(0, 80)}…</div>
         {:else}
-          <div class="meta">可以切到其它书继续阅读，OCR 会在后台继续</div>
+          <div class="meta">{$t('ocrBanner.runningHint')}</div>
         {/if}
       </div>
-      <button class="btn danger" on:click={abortOcrJob}><Fa icon={faStop} size="xs" /> 中止</button>
+      <button class="btn danger" on:click={abortOcrJob}><Fa icon={faStop} size="xs" /> {$t('ocrBanner.abort')}</button>
     {:else if jobForThisBook?.status === 'finished'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
@@ -174,40 +174,40 @@
           <!-- Every page failed. Saying 「OCR 完成」 here is how a textless book
                used to look identical to a good one. -->
           <div class="title">
-            OCR 没有识别出任何内容（{jobForThisBook.totalPages ?? jobForThisBook.progress.total} 页全部失败）
+            {$t('ocrBanner.allFailed', { n: jobForThisBook.totalPages ?? jobForThisBook.progress.total })}
           </div>
           <div class="meta">
-            {jobForThisBook.firstFailure || '换一个识别语言或模型后可以再试一次'}·
-            这本书没有被改动，下次打开还会再问
+            {jobForThisBook.firstFailure || $t('ocrBanner.retryHint')} ·
+            {$t('ocrBanner.unchanged')}
           </div>
         {:else if jobForThisBook.failedPages}
           <div class="title">
-            OCR 完成（共 {jobForThisBook.progress.total} 页，其中 {jobForThisBook.failedPages} 页失败）
+            {$t('ocrBanner.partial', { total: jobForThisBook.progress.total, failed: jobForThisBook.failedPages })}
           </div>
-          <div class="meta">{jobForThisBook.firstFailure || '点「应用」刷新阅读器加载新内容'}</div>
+          <div class="meta">{jobForThisBook.firstFailure || $t('ocrBanner.applyHint')}</div>
         {:else}
-          <div class="title">OCR 完成（共 {jobForThisBook.progress.total} 页）</div>
-          <div class="meta">点「应用」刷新阅读器加载新内容</div>
+          <div class="title">{$t('ocrBanner.done', { total: jobForThisBook.progress.total })}</div>
+          <div class="meta">{$t('ocrBanner.applyHint')}</div>
         {/if}
       </div>
-      <button class="btn primary" on:click={applyAndReload}>应用并刷新</button>
-      <button class="btn ghost" on:click={dismissResult} title="稍后再说"><Fa icon={faTimes} /></button>
+      <button class="btn primary" on:click={applyAndReload}>{$t('ocrBanner.applyReload')}</button>
+      <button class="btn ghost" on:click={dismissResult} title={$t('ocrBanner.later')}><Fa icon={faTimes} /></button>
     {:else if jobForThisBook?.status === 'errored'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">OCR 失败</div>
+        <div class="title">{$t('ocrBanner.failed')}</div>
         <div class="meta">{jobForThisBook.error}</div>
       </div>
-      <button class="btn primary" on:click={start}>重试</button>
+      <button class="btn primary" on:click={start}>{$t('ocrBanner.retry')}</button>
       <button class="btn ghost" on:click={dismissResult}><Fa icon={faTimes} /></button>
     {:else}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">检测到扫描版 PDF（无文字层）</div>
+        <div class="title">{$t('ocrBanner.detected')}</div>
         <div class="meta">
           {otherBookRunning
-            ? `「${$ocrJob$?.bookTitle}」正在 OCR — 中止后才能开始这本`
-            : '运行 OCR 后可被打字机 / AI / 词典使用，首次会下载语言模型'}
+            ? $t('ocrBanner.busyOther', { title: $ocrJob$?.bookTitle ?? '' })
+            : $t('ocrBanner.intro')}
         </div>
       </div>
       <label class="lang">
@@ -217,9 +217,9 @@
           {/each}
         </select>
       </label>
-      <button class="btn primary" on:click={start} disabled={otherBookRunning}>开始</button>
-      <button class="btn" on:click={dontAskForThisBook} title="只看原图，不要再为这本书提示">仅看原图</button>
-      <button class="btn ghost" on:click={dismiss} title="本次会话不再提示"><Fa icon={faTimes} /></button>
+      <button class="btn primary" on:click={start} disabled={otherBookRunning}>{$t('ocrBanner.start')}</button>
+      <button class="btn" on:click={dontAskForThisBook} title={$t('ocrBanner.imagesOnlyTitle')}>{$t('ocrBanner.imagesOnly')}</button>
+      <button class="btn ghost" on:click={dismiss} title={$t('ocrBanner.dismissSession')}><Fa icon={faTimes} /></button>
     {/if}
   </div>
 {/if}
@@ -236,38 +236,36 @@
       <Fa icon={faWandMagicSparkles} class="ico" />
       <div class="text">
         <div class="title">
-          OCR 纠错中… {correctJobForThisBook.progress.batch} / {correctJobForThisBook.progress
-            .totalBatches} 批
+          {$t('ocrBanner.correctRunning', { batch: correctJobForThisBook.progress.batch, total: correctJobForThisBook.progress.totalBatches })}
         </div>
         <div class="meta">
-          已修正 {correctJobForThisBook.progress.linesCorrected} 行 · 使用 {correctJobForThisBook.modelId}
+          {$t('ocrBanner.correctProgress', { lines: correctJobForThisBook.progress.linesCorrected, model: correctJobForThisBook.modelId })}
         </div>
       </div>
       <button class="btn danger" on:click={abortOcrCorrectJob}>
-        <Fa icon={faStop} size="xs" /> 中止
+        <Fa icon={faStop} size="xs" /> {$t('ocrBanner.abort')}
       </button>
     {:else if correctJobForThisBook.status === 'finished'}
       <Fa icon={faWandMagicSparkles} class="ico" />
       <div class="text">
         <div class="title">
-          纠错完成 · 修正 {correctJobForThisBook.progress.linesCorrected} / {correctJobForThisBook
-            .progress.totalLines} 行
+          {$t('ocrBanner.correctDone', { fixed: correctJobForThisBook.progress.linesCorrected, total: correctJobForThisBook.progress.totalLines })}
         </div>
         <div class="meta">
           {correctJobForThisBook.failedBatches
-            ? `${correctJobForThisBook.failedBatches} 批未返回可用结果，这些行保持原样`
-            : '刷新后生效，页面图像不变'}
+            ? $t('ocrBanner.correctPartial', { n: correctJobForThisBook.failedBatches })
+            : $t('ocrBanner.correctApplyHint')}
         </div>
       </div>
-      <button class="btn primary" on:click={applyCorrectAndReload}>应用并刷新</button>
+      <button class="btn primary" on:click={applyCorrectAndReload}>{$t('ocrBanner.applyReload')}</button>
       <button class="btn ghost" on:click={clearOcrCorrectJob}><Fa icon={faTimes} /></button>
     {:else}
       <Fa icon={faWandMagicSparkles} class="ico" />
       <div class="text">
-        <div class="title">OCR 纠错失败</div>
+        <div class="title">{$t('ocrBanner.correctFailed')}</div>
         <div class="meta">{correctJobForThisBook.error}</div>
       </div>
-      <button class="btn primary" on:click={startCorrect}>重试</button>
+      <button class="btn primary" on:click={startCorrect}>{$t('ocrBanner.retry')}</button>
       <button class="btn ghost" on:click={clearOcrCorrectJob}><Fa icon={faTimes} /></button>
     {/if}
   </div>
@@ -275,17 +273,17 @@
   <div class="banner">
     <Fa icon={faWandMagicSparkles} class="ico" />
     <div class="text">
-      <div class="title">可以用模型纠正 OCR 文字层</div>
+      <div class="title">{$t('ocrBanner.correctOffer')}</div>
       <div class="meta">
         {correctOtherBookRunning
-          ? `「${$ocrCorrectJob$?.bookTitle}」正在纠错 — 中止后才能开始这本`
-          : `修正形近字与多余空格，改善选择 / 搜索 / 朗读；页面图像不变 · ${endpoint?.label ?? ''}`}
+          ? $t('ocrBanner.correctBusyOther', { title: $ocrCorrectJob$?.bookTitle ?? '' })
+          : $t('ocrBanner.correctIntro', { endpoint: endpoint?.label ?? '' })}
       </div>
     </div>
     <button class="btn primary" on:click={startCorrect} disabled={correctOtherBookRunning}>
-      开始纠错
+      {$t('ocrBanner.correctStart')}
     </button>
-    <button class="btn ghost" on:click={() => (correctDismissed = true)} title="本次会话不再提示">
+    <button class="btn ghost" on:click={() => (correctDismissed = true)} title={$t('ocrBanner.dismissSession')}>
       <Fa icon={faTimes} />
     </button>
   </div>

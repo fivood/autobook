@@ -407,7 +407,10 @@
   async function kokoroDeleteCache() {
     const modelId = $kokoroModel$;
     const ok = confirm(
-      `确认删除本地缓存的 Kokoro ${modelId} 模型？（约 ${modelId === 'v1.1-zh' ? '320' : '80'} MB，之后需重新下载才能再用）`
+      tImmediate('settings.tts.kokoro.deleteConfirm', {
+        model: modelId,
+        size: modelId === 'v1.1-zh' ? 320 : 80
+      })
     );
     if (!ok) return;
     const { deleteKokoroCache } = await import(
@@ -726,13 +729,13 @@
     >
       <div class="space-y-3 text-sm">
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs opacity-70">模型</span>
+          <span class="text-xs text-muted">{$t('settings.tts.kokoro.model')}</span>
           <select
             class="settings-input px-2 py-1 text-sm"
             bind:value={$kokoroModel$}
           >
-            <option value="v1.1-zh">v1.1-zh · 中文首选 (40+ 中文音色，约 320 MB)</option>
-            <option value="v1.0">v1.0 · 英语原版 (28 英语音色，约 80 MB)</option>
+            <option value="v1.1-zh">{$t('settings.tts.kokoro.modelZh')}</option>
+            <option value="v1.0">{$t('settings.tts.kokoro.modelEn')}</option>
           </select>
         </div>
 
@@ -790,10 +793,8 @@
               {/each}
             </select>
           </div>
-          <p class="text-xs opacity-60">
-            中文听书优选 v1.1-zh；中文音色为编号命名（zf_/zm_），无描述性名称。
-          </p>
-          <p class="text-xs opacity-60">{$t('settings.tts.kokoro.cacheNote')}</p>
+          <p class="text-xs text-muted">{$t('settings.tts.kokoro.zhVoiceNote')}</p>
+          <p class="text-xs text-muted">{$t('settings.tts.kokoro.cacheNote')}</p>
         {/if}
       </div>
     </SettingsItemGroup>
@@ -803,12 +804,12 @@
 {#if $ttsEngine$ === 'edge'}
   <div class="lg:col-span-3">
     <SettingsItemGroup
-      title="Edge TTS 语音（微软免费）"
-      tooltip="走微软 Edge 浏览器内置「大声朗读」使用的免费 WSS 端点。中文晓晓/云扬质量对标 Azure Neural TTS，需能连 api.msedgeservices.com。"
+      title={$t('settings.tts.edge.title')}
+      tooltip={$t('settings.tts.edge.tooltip')}
     >
       <div class="space-y-2 text-sm">
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs opacity-70">音色</span>
+          <span class="text-xs text-muted">{$t('settings.tts.edge.voice')}</span>
           <select
             class="settings-input px-2 py-1 text-sm max-w-xs"
             value={edgeVoice}
@@ -834,7 +835,7 @@
                directly — without this, a voice outside the list is
                unreachable and an already-saved one renders as a blank
                select with no way back. -->
-          <span class="text-xs opacity-70">{$t('settings.tts.edgeCustomVoice')}</span>
+          <span class="text-xs text-muted">{$t('settings.tts.edgeCustomVoice')}</span>
           <input
             type="text"
             class="settings-input px-2 py-1 text-sm w-72"
@@ -844,27 +845,18 @@
             on:input={(e) => pickVoiceFor('edge', ttsEdgeVoiceId$, e.currentTarget.value)}
           />
         </div>
-        <p class="text-xs opacity-60">{$t('settings.tts.edgeCustomVoiceHint')}</p>
+        <p class="text-xs text-muted">{$t('settings.tts.edgeCustomVoiceHint')}</p>
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs opacity-70">代理</span>
+          <span class="text-xs text-muted">{$t('settings.tts.edge.proxy')}</span>
           <input
             type="text"
             class="settings-input px-2 py-1 text-sm w-72"
-            placeholder="留空 = 跟随系统代理；direct = 强制直连"
+            placeholder={$t('settings.tts.edge.proxyPlaceholder')}
             bind:value={$ttsEdgeProxyUrl$}
           />
         </div>
-        <p class="text-xs opacity-60">
-          国内需代理才能连 api.msedgeservices.com。留空会自动读取系统代理；报
-          <code>tls handshake eof</code> 时在此手填，如 <code>http://127.0.0.1:7897</code>。
-        </p>
-        <p class="text-xs opacity-60">
-          <strong>已配好代理仍失败</strong>，多半是代理软件内部把该域名判给了直连：主流 Clash 规则集会把微软的域名
-          归到「Ⓜ️ Microsoft」分组，而该分组默认选中「全球直连」。
-          把该分组改选为可用节点，或单独加一条
-          <code>DOMAIN-SUFFIX,api.msedgeservices.com,&lt;你的节点分组&gt;</code>
-          —— 后者只放行朗读，Windows Update / Office 仍走直连。
-        </p>
+        <p class="text-xs text-muted">{@html $t('settings.tts.edge.proxyHint')}</p>
+        <p class="text-xs text-muted">{@html $t('settings.tts.edge.proxyClash')}</p>
       </div>
     </SettingsItemGroup>
   </div>

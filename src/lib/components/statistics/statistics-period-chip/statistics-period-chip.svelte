@@ -1,19 +1,12 @@
 <script lang="ts">
   import {
     StatisticsRangeTemplate,
+    statisticsRangeTemplateLabelKey as LABEL_KEY,
     statisticsRangeTemplates
   } from '$lib/components/statistics/statistics-types';
   import { lastStatisticsRangeTemplate$ } from '$lib/data/store';
   import { t } from '$lib/i18n';
 
-  const LABEL_KEY: Record<StatisticsRangeTemplate, string> = {
-    [StatisticsRangeTemplate.TODAY]: 'stats.period.today',
-    [StatisticsRangeTemplate.WEEK]: 'stats.period.week',
-    [StatisticsRangeTemplate.MONTH]: 'stats.period.month',
-    [StatisticsRangeTemplate.YEAR]: 'stats.period.year',
-    [StatisticsRangeTemplate.ALL]: 'stats.period.all',
-    [StatisticsRangeTemplate.CUSTOM]: 'stats.period.custom'
-  };
   const HINT_KEY: Record<StatisticsRangeTemplate, string> = {
     [StatisticsRangeTemplate.TODAY]: 'stats.period.hint.today',
     [StatisticsRangeTemplate.WEEK]: 'stats.period.hint.week',

@@ -51,7 +51,7 @@
     {#each tabs as tab (tab.id)}
       <button
         type="button"
-        class="drawer-tab relative flex-1 px-3 py-2 text-sm"
+        class="drawer-tab relative flex-1 whitespace-nowrap px-2 py-2 text-sm"
         class:is-active={activeTab === tab.id}
         aria-pressed={activeTab === tab.id}
         on:click={() => (activeTab = tab.id)}

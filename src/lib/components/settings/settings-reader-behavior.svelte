@@ -144,8 +144,8 @@
     <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$avoidPageBreak$} />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="选中即书签"
-    tooltip={'开启后，书签会落在当前/上次选中文本附近段落，而不是页首'}
+    title={$t('settings.item.selectionBookmark')}
+    tooltip={$t('settings.tip.selectionBookmark')}
   >
     <ButtonToggleGroup
       options={optionsForToggle}

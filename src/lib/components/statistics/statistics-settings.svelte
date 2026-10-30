@@ -12,6 +12,8 @@
   import {
     type StatisticsDateChange,
     statisticsRangeTemplates,
+    statisticsRangeTemplateLabelKey,
+    statisticsAggregationModeLabelKey,
     readingTimeDataSources,
     charactersDataSources,
     readingSpeedDataSources,
@@ -21,9 +23,6 @@
     deleteStatisticsData$,
     setStatisticsDatesToAllTime$
   } from '$lib/components/statistics/statistics-types';
-  // Was imported from the now-deleted statistics-heatmap module — inlined
-  // because the 7-item constant isn't worth its own file.
-  const daysOfWeek = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   import { dialogManager } from '$lib/data/dialog-manager';
   import {
     confirmStatisticsDeletion$,
@@ -42,18 +41,15 @@
   } from '$lib/components/statistics/statistics-types';
   import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
 
   const dispatch = createEventDispatcher<{
     close: void;
     statisticsDateChange: StatisticsDateChange;
   }>();
 
-  const weekDays = [...daysOfWeek.slice(1, 7), daysOfWeek[0]].map((day, index) => {
-    if (day === '周日') {
-      return { day, index: 0 };
-    }
-    return { day, index: index + 1 };
-  });
+  // Day indexes as Date#getDay() counts them, listed Monday first.
+  const weekDays = [1, 2, 3, 4, 5, 6, 0];
 
   $: selectedStatisticsStartDate = $lastStatisticsStartDate$;
 
@@ -93,47 +89,47 @@
       class="mr-2 sm:mr-4 hover-danger"
       class:opacity-40={!$statisticsTitleFilterEnabled$}
       disabled={!$statisticsTitleFilterEnabled$}
-      title={$statisticsTitleFilterEnabled$ ? '按书名筛选' : '当前视图无可筛选内容'}
+      title={$statisticsTitleFilterEnabled$ ? $t('stats.filter.byTitle') : $t('stats.filter.unavailable')}
       on:click={openTitleFilter}
     >
-      筛选书籍
+      {$t('stats.filter.books')}
     </button>
     <button class="mr-2 sm:mr-4 hover-danger" on:click={() => exportStatisticsData(false)}>
-      导出选中项
+      {$t('stats.action.exportSelected')}
     </button>
     <button class="mr-2 sm:mr-4 hover-danger" on:click={() => deleteStatisticsData(false)}>
-      删除选中项
+      {$t('stats.action.deleteSelected')}
     </button>
     <button class="mr-2 sm:mr-4 hover-danger" on:click={() => exportStatisticsData()}>
-      导出全部
+      {$t('stats.action.exportAll')}
     </button>
-    <button class="hover-danger" on:click={() => deleteStatisticsData()}>删除全部</button>
+    <button class="hover-danger" on:click={() => deleteStatisticsData()}>{$t('stats.action.deleteAll')}</button>
   </div>
 </div>
 <div class="settings-scope flex-1 p-4 overflow-auto">
   <div class="flex flex-col mb-6">
-    <label for="datesTemplate">模板</label>
+    <label for="datesTemplate">{$t('stats.settings.template')}</label>
     <select id="datesTemplate" class="settings-input" bind:value={$lastStatisticsRangeTemplate$}>
       {#each statisticsRangeTemplates as statisticsRangeTemplate (statisticsRangeTemplate)}
         <option value={statisticsRangeTemplate}>
-          {statisticsRangeTemplate}
+          {$t(statisticsRangeTemplateLabelKey[statisticsRangeTemplate])}
         </option>
       {/each}
     </select>
   </div>
   <div class="flex flex-col mb-4 sm:hidden">
-    <label for="weekDay">每周起始日</label>
+    <label for="weekDay">{$t('stats.settings.weekStart')}</label>
     <select id="weekDay" class="settings-input" bind:value={$lastStartDayOfWeek$}>
-      {#each weekDays as weekDay (weekDay.day)}
-        <option value={weekDay.index}>
-          {weekDay.day}
+      {#each weekDays as weekDay (weekDay)}
+        <option value={weekDay}>
+          {$t('stats.weekdayLong.' + weekDay)}
         </option>
       {/each}
     </select>
   </div>
   <div class="flex justify-between sm:flex-row">
     <div class="flex flex-col">
-      <label for="fromDate">从</label>
+      <label for="fromDate">{$t('stats.settings.from')}</label>
       <input
         id="fromDate"
         type="date"
@@ -167,7 +163,7 @@
       </button>
     </div>
     <div class="flex flex-col">
-      <label for="toDate">到</label>
+      <label for="toDate">{$t('stats.settings.to')}</label>
       <input
         id="toDate"
         type="date"
@@ -181,11 +177,11 @@
       />
     </div>
     <div class="flex-col hidden sm:flex">
-      <label for="weekDay">每周起始日</label>
+      <label for="weekDay">{$t('stats.settings.weekStart')}</label>
       <select id="weekDay" class="settings-input" bind:value={$lastStartDayOfWeek$}>
-        {#each weekDays as weekDay (weekDay.day)}
-          <option value={weekDay.index}>
-            {weekDay.day}
+        {#each weekDays as weekDay (weekDay)}
+          <option value={weekDay}>
+            {$t('stats.weekdayLong.' + weekDay)}
           </option>
         {/each}
       </select>
@@ -195,53 +191,53 @@
     class="text-left mt-3 hover-danger"
     on:click={() => setStatisticsDatesToAllTime$.next()}
   >
-    设置为所选书籍的全部时间
+    {$t('stats.settings.allTimeForSelected')}
   </button>
   <div class="flex flex-wrap justify-between mt-4">
     <div class="flex flex-col my-2 w-full sm:w-[initial]">
       <Popover
-        contentText={'汇总标签页应使用的阅读时间属性'}
+        contentText={$t('stats.settings.timeSourceTip')}
         contentStyles="padding: 0.5rem;"
       >
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
-        <label for="timeDataSource">时间数据来源</label>
+        <label for="timeDataSource">{$t('stats.settings.timeSource')}</label>
       </Popover>
       <select id="timeDataSource" class="settings-input" bind:value={$lastReadingTimeDataSource$}>
         {#each readingTimeDataSources as readingTimeDataSource (readingTimeDataSource.key)}
           <option value={readingTimeDataSource.key}>
-            {readingTimeDataSource.label}
+            {$t(readingTimeDataSource.labelKey)}
           </option>
         {/each}
       </select>
     </div>
     <div class="flex flex-col my-2 w-full sm:w-[initial]">
       <Popover
-        contentText={'汇总标签页应使用的已读字数属性'}
+        contentText={$t('stats.settings.charsSourceTip')}
         contentStyles="padding: 0.5rem; max-width: 20rem;"
       >
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
-        <label for="charactersSource">字数数据来源</label>
+        <label for="charactersSource">{$t('stats.settings.charsSource')}</label>
       </Popover>
       <select id="charactersSource" class="settings-input" bind:value={$lastCharactersDataSource$}>
         {#each charactersDataSources as charactersDataSource (charactersDataSource.key)}
           <option value={charactersDataSource.key}>
-            {charactersDataSource.label}
+            {$t(charactersDataSource.labelKey)}
           </option>
         {/each}
       </select>
     </div>
     <div class="flex flex-col my-2 w-full sm:w-[initial]">
       <Popover
-        contentText={'汇总标签页应使用的阅读速度属性'}
+        contentText={$t('stats.settings.speedSourceTip')}
         contentStyles="padding: 0.5rem;"
       >
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
-        <label for="speedSource">速度数据来源</label>
+        <label for="speedSource">{$t('stats.settings.speedSource')}</label>
       </Popover>
       <select id="speedSource" class="settings-input" bind:value={$lastReadingSpeedDataSource$}>
         {#each readingSpeedDataSources as readingSpeedDataSource (readingSpeedDataSource.key)}
           <option value={readingSpeedDataSource.key}>
-            {readingSpeedDataSource.label}
+            {$t(readingSpeedDataSource.labelKey)}
           </option>
         {/each}
       </select>
@@ -249,11 +245,11 @@
   </div>
   <div class="flex flex-col mt-4">
     <Popover
-      contentText={'决定汇总标签页数据按哪个主要属性分组'}
+      contentText={$t('stats.settings.aggregationTip')}
       contentStyles="padding: 0.5rem;"
     >
       <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
-      <label for="primaryAggregration">主要聚合方式</label>
+      <label for="primaryAggregration">{$t('stats.settings.aggregation')}</label>
     </Popover>
     <select
       id="primaryAggregration"
@@ -262,13 +258,13 @@
     >
       {#each statisticsDataAggregrationModes as statisticsDataAggregrationMode (statisticsDataAggregrationMode)}
         <option value={statisticsDataAggregrationMode}>
-          {statisticsDataAggregrationMode}
+          {$t(statisticsAggregationModeLabelKey[statisticsDataAggregrationMode])}
         </option>
       {/each}
     </select>
   </div>
   <div class="mt-4">
-    <SettingsItemGroup title="确认统计删除" applyHeaderClasses={false}>
+    <SettingsItemGroup title={$t('stats.settings.confirmDelete')} applyHeaderClasses={false}>
       <ButtonToggleGroup
         invertColors
         options={optionsForToggle}

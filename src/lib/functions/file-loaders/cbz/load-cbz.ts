@@ -14,6 +14,7 @@
 
 import { BlobReader, BlobWriter, ZipReader, type Entry } from '@zip.js/zip.js';
 import type { LoadData } from '$lib/functions/file-loaders/types';
+import { tImmediate } from '$lib/i18n';
 import type { Section } from '$lib/data/database/books-db/versions/v4/books-db-v4';
 import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
 import {
@@ -92,7 +93,7 @@ export default async function loadCbz(
       .sort((a, b) => naturalCompare(a.filename, b.filename));
 
     if (!imageEntries.length) {
-      throw new Error('CBZ 文件里没有找到图片');
+      throw new Error(tImmediate('import.comicNoImages'));
     }
 
     let title = fallbackTitle;

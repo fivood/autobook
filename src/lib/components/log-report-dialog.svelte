@@ -5,6 +5,7 @@
   import { isTauri } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
   import { submitReport } from '$lib/functions/report-error';
+  import { t, tImmediate } from '$lib/i18n';
   import {
     theme$,
     viewMode$,
@@ -76,7 +77,7 @@
     enableReaderWakeLock$
   } from '$lib/data/store';
 
-  export let title = '错误';
+  export let title = tImmediate('common.error');
 
   export let message: string;
 
@@ -178,7 +179,9 @@
       message: message || '用户提交诊断日志',
       context: payload
     });
-    submitStatus = result.ok ? `已提交（ID: ${result.id}）` : `提交失败: ${result.error}`;
+    submitStatus = result.ok
+      ? tImmediate('logReport.submitted', { id: result.id ?? '' })
+      : tImmediate('logReport.submitFailed', { error: result.error ?? '' });
   }
 
   async function openRepo() {
@@ -213,7 +216,7 @@
         }
         const path = `AutoBook/Logs/${filename}`;
         await writeTextFile(path, reportPayload, { baseDir: BaseDirectory.Document });
-        downloadStatus = `已保存到 文档/${path}`;
+        downloadStatus = tImmediate('logReport.savedTo', { path });
         return;
       }
     } catch (err: any) {
@@ -229,7 +232,7 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    downloadStatus = '已下载';
+    downloadStatus = tImmediate('logReport.downloaded');
   }
 </script>
 
@@ -239,23 +242,23 @@
     <!-- pre-line: a batch import passes one line per failed file. -->
     <p class="whitespace-pre-line">{message}</p>
     {#if downloadStatus}
-      <p class="text-xs opacity-70 mt-2">{downloadStatus}</p>
+      <p class="text-xs text-muted mt-2">{downloadStatus}</p>
     {/if}
     {#if submitStatus}
-      <p class="text-xs opacity-70 mt-2">{submitStatus}</p>
+      <p class="text-xs text-muted mt-2">{submitStatus}</p>
     {/if}
   </svelte:fragment>
   <svelte:fragment slot="footer">
     <button class={buttonClasses} on:click={openRepo}>
-      打开仓库
+      {$t('logReport.openRepo')}
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={downloadReport}>
-      下载报告
+      {$t('logReport.download')}
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={submitReportToCloud}>
-      提交报告
+      {$t('logReport.submit')}
       <Ripple />
     </button>
   </svelte:fragment>

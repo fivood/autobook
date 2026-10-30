@@ -15,6 +15,7 @@
  */
 
 import type { LoadData } from '$lib/functions/file-loaders/types';
+import { tImmediate } from '$lib/i18n';
 import type { Section } from '$lib/data/database/books-db/versions/v4/books-db-v4';
 import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
 import {
@@ -105,7 +106,7 @@ export default async function loadCbr(
       .sort((a, b) => naturalCompare(a.path + a.file.name, b.path + b.file.name));
 
     if (!imageEntries.length) {
-      throw new Error('压缩包里没有找到图片，不是有效的漫画归档');
+      throw new Error(tImmediate('import.comicNoImages'));
     }
 
     let title = fallbackTitle;

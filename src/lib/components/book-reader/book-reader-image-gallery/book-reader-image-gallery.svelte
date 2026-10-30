@@ -10,6 +10,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { quintInOut } from 'svelte/easing';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
   import { fly } from 'svelte/transition';
 
   export let fontColor: string;
@@ -137,7 +138,7 @@
       style:background-color={backgroundColor}
     >
       <button
-        title="关闭图片库"
+        title={$t('gallery.close')}
         class="flex items-end md:items-center"
         on:click={closeReaderImageGallery}
       >
@@ -159,17 +160,17 @@
         >
           <img
             src={readerImageGalleryPicture.url}
-            alt="画廊图片"
+            alt={$t('gallery.image')}
             class="max-h-96 lg:max-h-64"
           />
           {#if showSpoiler}
             <button
-              title="显示图片"
+              title={$t('gallery.reveal')}
               class="spoiler-label"
               aria-hidden="true"
               on:click={() => toggleGalleryPictureSpoiler(readerImageGalleryPicture.url)}
             >
-              剧透
+              {$t('gallery.spoiler')}
             </button>
           {/if}
         </button>
@@ -185,7 +186,7 @@
       {@const showSpoiler = $hideSpoilerImage$ && !selectedImage.unspoilered}
       <div class="flex flex-1">
         <button
-          title="上一张"
+          title={$t('gallery.prev')}
           class="mx-4 text-5xl hover-danger"
           class:invisible={!selectedImageIndex}
           on:click={previousImage}
@@ -193,20 +194,20 @@
           <Fa icon={faChevronLeft} />
         </button>
         <div class="flex justify-center items-center flex-1" class:spoiler={showSpoiler}>
-          <img class="max-h-[94vh]" src={selectedImage.url} alt="当前图片" />
+          <img class="max-h-[94vh]" src={selectedImage.url} alt={$t('gallery.current')} />
           {#if showSpoiler}
             <button
-              title="显示图片"
+              title={$t('gallery.reveal')}
               class="spoiler-label"
               aria-hidden="true"
               on:click={() => toggleGalleryPictureSpoiler(selectedImage.url)}
             >
-              剧透
+              {$t('gallery.spoiler')}
             </button>
           {/if}
         </div>
         <button
-          title="下一张"
+          title={$t('gallery.next')}
           class="mx-4 text-5xl hover-danger"
           class:invisible={selectedImageIndex === $readerImageGalleryPictures$.length - 1}
           on:click={nextImage}
