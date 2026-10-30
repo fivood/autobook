@@ -186,8 +186,13 @@ export const DEFAULT_CUSTOM_COLORS = HIGHLIGHT_SLOTS.map((slot) => {
  */
 export function slotSwatchStyle(style: HighlightSlotStyle): string {
   const ring = style.underlineWidth === '0' ? '1px' : `min(2px, ${style.underlineWidth})`;
+  const wash = `rgba(${style.rgb}, ${style.alpha})`;
   return [
-    `background: rgba(${style.rgb}, ${style.alpha})`,
+    // The wash over the page colour, as the mark sits in the text — not over
+    // whatever the swatch is placed on. On the selection menu's dark surface a
+    // 0.5 wash came out mid-tone, and the number, set in the page's text
+    // colour, read at 1.8–2.7:1.
+    `background: linear-gradient(${wash}, ${wash}), var(--background-color)`,
     `border: ${ring} ${style.underlineStyle} rgb(${style.rgb})`
   ].join(';');
 }

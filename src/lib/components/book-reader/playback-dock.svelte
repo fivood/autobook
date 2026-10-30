@@ -163,7 +163,7 @@
     {#if autoReader}
       <div class="flex items-center">
         <div
-          class="menu-surface flex items-center rounded-full px-1 backdrop-blur transition-opacity duration-150"
+          class="menu-surface flex items-center rounded-full p-1 backdrop-blur transition-opacity duration-150"
           class:opacity-0={ttsPill === 'off'}
           class:opacity-70={ttsPill === 'paused'}
           class:pointer-events-none={ttsPill === 'off'}
@@ -219,7 +219,7 @@
     {#if autoScroller}
       <div class="flex items-center">
         <div
-          class="menu-surface flex items-center rounded-full px-1 backdrop-blur transition-opacity duration-150"
+          class="menu-surface flex items-center rounded-full p-1 backdrop-blur transition-opacity duration-150"
           class:opacity-0={typingPill === 'off'}
           class:opacity-70={typingPill === 'paused'}
           class:pointer-events-none={typingPill === 'off'}

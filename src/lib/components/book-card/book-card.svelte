@@ -247,7 +247,8 @@
     z-index: 2;
     padding: 0.12rem 0.5rem;
     border-radius: 999px;
-    font-size: 0.65rem;
+    /* 11px: the 0.65rem (10.4px) it was sat under the floor for UI text. */
+    font-size: 0.6875rem;
     font-weight: 700;
     letter-spacing: 0.06em;
     color: #fff;

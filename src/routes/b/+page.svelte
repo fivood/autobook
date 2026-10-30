@@ -3234,12 +3234,17 @@ ${$t('reader.ttsFailed.hint')}`
   </div>
 {/if}
 
+<!-- The footer reads in the theme's own text colour. It used the legacy
+     tooltipTextFontColor, which no theme sets, so every theme got the same
+     dark teal at 70%: 1.3–3.5:1 against the page, close to invisible on the
+     dark themes. Any opacity below the text colour's own drops some themes
+     under 4.5:1 again (sage-green's body text is 5.3:1). -->
 <div
   id="ttu-page-footer"
   tabindex="0"
   role="button"
   class="writing-horizontal-tb fixed bottom-0 left-0 z-10 flex h-8 w-full items-center justify-between text-xs leading-none"
-  style:color={$themeOption$?.tooltipTextFontColor}
+  style:color={$themeOption$?.fontColor}
   on:click={() => (showFooter = !showFooter)}
   on:keyup={activateOnKeyup}
 >
@@ -3302,7 +3307,7 @@ ${$t('reader.ttsFailed.hint')}`
         !$showPercentage$ &&
         !$showFooterChapterCharacterCounter$ &&
         !$showFooterChapterPercentage$}
-      style:color={$themeOption$?.tooltipTextFontColor}
+      style:color={$themeOption$?.fontColor}
       on:click|stopPropagation={({ target }) => {
         if (!$showCharacterCounter$ && !$showPercentage$) {
           return;

@@ -81,7 +81,9 @@
 
   .menu-label {
     padding: 0.35rem 0.5rem 0.25rem;
-    color: color-mix(in srgb, var(--menu-foreground) 68%, transparent);
+    /* 90% is the floor for 4.5:1 on every built-in theme — seafoam's menu is
+       the tightest (68% measured 3.5:1). Size, not fading, sets labels apart. */
+    color: color-mix(in srgb, var(--menu-foreground) 90%, transparent);
     font-size: 0.8125rem;
     line-height: 1.3;
   }

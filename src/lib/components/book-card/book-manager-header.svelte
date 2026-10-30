@@ -450,7 +450,7 @@
                     on:click={() => ($bookCoverMinWidth$ = 220)}
                   >{$t('manager.cover.large')}</button>
                 </div>
-                <div class="menu-label mt-1 opacity-60">{$t('manager.cover.autoLayout')}</div>
+                <div class="menu-label mt-1">{$t('manager.cover.autoLayout')}</div>
               </div>
             </Popover>
           </div>
