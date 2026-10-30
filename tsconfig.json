@@ -5,8 +5,18 @@
     "target": "ESNext",
     "module": "ES2022",
     "moduleResolution": "bundler",
+    // Vite is the only emitter (noEmit is set by the SvelteKit base config), so
+    // explicit `.ts` specifiers are safe. `src/lib/data/highlight-color.ts`
+    // needs one: `scripts/*-test.ts` load library modules under plain node,
+    // where the `$lib` alias does not exist.
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noImplicitReturns": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    // kokoro-js + @huggingface/transformers ship type definitions that don't
+    // pass strict — skip checking node_modules .d.ts files (our own code is
+    // still strict-checked).
+    "skipLibCheck": true
   }
 }

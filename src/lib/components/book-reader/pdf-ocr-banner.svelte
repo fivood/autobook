@@ -1,40 +1,91 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
-  import { faTimes, faMagnifyingGlass, faStop } from '@fortawesome/free-solid-svg-icons';
-  import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
+  import {
+    faTimes,
+    faMagnifyingGlass,
+    faStop,
+    faWandMagicSparkles
+  } from '@fortawesome/free-solid-svg-icons';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import {
     abortOcrJob,
     clearOcrJob,
     isOcrJobRunning,
     ocrJob$,
-    startOcrJob
+    startOcrJob,
+    type OcrLanguage,
+    type OcrModelProfile
   } from '$lib/functions/file-loaders/pdf/ocr-job-manager';
+  import {
+    abortOcrCorrectJob,
+    clearOcrCorrectJob,
+    hasCorrectableText,
+    isOcrCorrectJobRunning,
+    ocrCorrectJob$,
+    startOcrCorrectJob
+  } from '$lib/functions/file-loaders/pdf/ocr-correct-job';
+  import { resolveEndpoint, type ResolvedEndpoint } from '$lib/data/ai/endpoint';
+  import { probeLocalModels } from '$lib/data/ai/local-model';
+  import { database } from '$lib/data/store';
+  import {
+    aiOcrCorrectEnabled$,
+    ocrModelProfile$,
+    pdfOcrLang$,
+    pdfOcrPromptEnabled$,
+    pdfOcrSkippedBookIds$ as ocrSkippedBooks$
+  } from '$lib/data/store';
+  import {
+    OCR_LANGUAGE_OPTIONS,
+    isOcrLanguageSupported,
+    normalizeOcrModelProfile
+  } from '$lib/functions/file-loaders/pdf/ocr-options';
+  import { t } from '$lib/i18n';
 
   export let book: BooksDbBookData;
 
-  const ocrLang$ = writableStringLocalStorageSubject()('pdfOcrLang', 'chi_sim+eng');
-
   const dispatch = createEventDispatcher<{ dismissed: void }>();
 
-  const LANGS: Array<{ code: string; label: string }> = [
-    { code: 'chi_sim+eng', label: '简中 + 英' },
-    { code: 'chi_tra+eng', label: '繁中 + 英' },
-    { code: 'chi_sim', label: '简体中文' },
-    { code: 'chi_tra', label: '繁体中文' },
-    { code: 'eng', label: 'English' },
-    { code: 'jpn', label: '日本語' }
-  ];
+  $: skippedIds = new Set(($ocrSkippedBooks$ || '').split(',').filter(Boolean).map(Number));
+  $: skippedForThisBook = book?.id != null && skippedIds.has(book.id);
 
   let dismissed = false;
   // Job state for THIS book only — ignore jobs belonging to other books.
   $: jobForThisBook = $ocrJob$ && $ocrJob$.bookId === book.id ? $ocrJob$ : null;
   $: otherBookRunning = !!$ocrJob$ && $ocrJob$.bookId !== book.id && $ocrJob$.status === 'running';
 
+  // Per-book language wins over the global default. Changed on the fly in the
+  // banner; persisted back onto the book so a Japanese scan stays on `japan`
+  // even after the global default is changed for a different book.
+  $: activeProfile = normalizeOcrModelProfile($ocrModelProfile$);
+  $: availableLangs = OCR_LANGUAGE_OPTIONS.filter((lang) => isOcrLanguageSupported(lang.code, activeProfile));
+  $: storedOcrLang = (book.ocrLang || $pdfOcrLang$) as OcrLanguage;
+  $: ocrLang = isOcrLanguageSupported(storedOcrLang, activeProfile) ? storedOcrLang : 'ch';
+
+  function setOcrLang(value: OcrLanguage) {
+    if (!value) return;
+    ocrLang = value;
+    pdfOcrLang$.next(value);
+    // Write the per-book override back. Best-effort — if the write fails the
+    // global default still holds for this session.
+    database.db
+      .then(async (db) => {
+        const fresh = await db.get('data', book.id);
+        if (fresh) await db.put('data', { ...fresh, ocrLang: value });
+      })
+      .catch(() => {
+        // A failed per-book write just loses the override; global default wins.
+      });
+  }
+
+  function onLangChange(event: Event) {
+    setOcrLang((event.currentTarget as HTMLSelectElement).value as OcrLanguage);
+  }
+
   function start() {
     if (isOcrJobRunning()) return;
-    startOcrJob(book, $ocrLang$);
+    if (storedOcrLang !== ocrLang) setOcrLang(ocrLang);
+    startOcrJob(book, ocrLang as OcrLanguage, activeProfile as OcrModelProfile);
   }
 
   function applyAndReload() {
@@ -50,57 +101,191 @@
     dismissed = true;
     dispatch('dismissed');
   }
+
+  function dontAskForThisBook() {
+    if (book?.id == null) return;
+    const next = new Set(skippedIds);
+    next.add(book.id);
+    $ocrSkippedBooks$ = Array.from(next).join(',');
+    dismissed = true;
+    dispatch('dismissed');
+  }
+
+  // ── OCR post-correction ────────────────────────────────────────────
+  // Corrects the transparent text layer only; the page image the reader
+  // looks at never changes. So this improves selection / search / TTS /
+  // AI context, and a poor result costs nothing visible and is re-runnable.
+
+  let endpoint: ResolvedEndpoint | undefined;
+  let correctDismissed = false;
+
+  onMount(() => {
+    // 3B is the floor where fixing glyph confusions stops introducing new
+    // errors of its own.
+    probeLocalModels()
+      .then(() => (endpoint = resolveEndpoint('prefer-local', 3)))
+      .catch(() => {
+        // Absent runtime simply leaves `endpoint` undefined; no UI appears.
+      });
+  });
+
+  $: correctJobForThisBook =
+    $ocrCorrectJob$ && $ocrCorrectJob$.bookId === book.id ? $ocrCorrectJob$ : null;
+  $: correctOtherBookRunning =
+    !!$ocrCorrectJob$ && $ocrCorrectJob$.bookId !== book.id && $ocrCorrectJob$.status === 'running';
+  // Offered once the book actually has a text layer, which is also true for
+  // books OCR'd in an earlier session — those never show the OCR prompt again.
+  $: canCorrect =
+    $aiOcrCorrectEnabled$ &&
+    !!endpoint &&
+    !correctDismissed &&
+    !correctJobForThisBook &&
+    !!book?.elementHtml &&
+    hasCorrectableText(book);
+
+  function startCorrect() {
+    if (!endpoint || isOcrCorrectJobRunning()) return;
+    startOcrCorrectJob(book, endpoint.opts);
+  }
+
+  function applyCorrectAndReload() {
+    clearOcrCorrectJob();
+    window.location.reload();
+  }
 </script>
 
-{#if !dismissed}
+{#if !dismissed && !skippedForThisBook && $pdfOcrPromptEnabled$}
   <div class="banner">
     {#if jobForThisBook?.status === 'running'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">OCR 运行中… {jobForThisBook.progress.page} / {jobForThisBook.progress.total} 页</div>
+        <div class="title">{$t('ocrBanner.running', { page: jobForThisBook.progress.page, total: jobForThisBook.progress.total })}</div>
         {#if jobForThisBook.progress.text}
           <div class="meta">{jobForThisBook.progress.text.slice(0, 80)}…</div>
         {:else}
-          <div class="meta">可以切到其它书继续阅读，OCR 会在后台继续</div>
+          <div class="meta">{$t('ocrBanner.runningHint')}</div>
         {/if}
       </div>
-      <button class="btn danger" on:click={abortOcrJob}><Fa icon={faStop} size="xs" /> 中止</button>
+      <button class="btn danger" on:click={abortOcrJob}><Fa icon={faStop} size="xs" /> {$t('ocrBanner.abort')}</button>
     {:else if jobForThisBook?.status === 'finished'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">OCR 完成（共 {jobForThisBook.progress.total} 页）</div>
-        <div class="meta">点「应用」刷新阅读器加载新内容</div>
+        {#if jobForThisBook.failedPages && jobForThisBook.failedPages >= (jobForThisBook.totalPages ?? jobForThisBook.progress.total)}
+          <!-- Every page failed. Saying 「OCR 完成」 here is how a textless book
+               used to look identical to a good one. -->
+          <div class="title">
+            {$t('ocrBanner.allFailed', { n: jobForThisBook.totalPages ?? jobForThisBook.progress.total })}
+          </div>
+          <div class="meta">
+            {jobForThisBook.firstFailure || $t('ocrBanner.retryHint')} ·
+            {$t('ocrBanner.unchanged')}
+          </div>
+        {:else if jobForThisBook.failedPages}
+          <div class="title">
+            {$t('ocrBanner.partial', { total: jobForThisBook.progress.total, failed: jobForThisBook.failedPages })}
+          </div>
+          <div class="meta">{jobForThisBook.firstFailure || $t('ocrBanner.applyHint')}</div>
+        {:else}
+          <div class="title">{$t('ocrBanner.done', { total: jobForThisBook.progress.total })}</div>
+          <div class="meta">{$t('ocrBanner.applyHint')}</div>
+        {/if}
       </div>
-      <button class="btn primary" on:click={applyAndReload}>应用并刷新</button>
-      <button class="btn ghost" on:click={dismissResult} title="稍后再说"><Fa icon={faTimes} /></button>
+      <button class="btn primary" on:click={applyAndReload}>{$t('ocrBanner.applyReload')}</button>
+      <button class="btn ghost" on:click={dismissResult} title={$t('ocrBanner.later')}><Fa icon={faTimes} /></button>
     {:else if jobForThisBook?.status === 'errored'}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">OCR 失败</div>
+        <div class="title">{$t('ocrBanner.failed')}</div>
         <div class="meta">{jobForThisBook.error}</div>
       </div>
-      <button class="btn primary" on:click={start}>重试</button>
+      <button class="btn primary" on:click={start}>{$t('ocrBanner.retry')}</button>
       <button class="btn ghost" on:click={dismissResult}><Fa icon={faTimes} /></button>
     {:else}
       <Fa icon={faMagnifyingGlass} class="ico" />
       <div class="text">
-        <div class="title">检测到扫描版 PDF（无文字层）</div>
+        <div class="title">{$t('ocrBanner.detected')}</div>
         <div class="meta">
           {otherBookRunning
-            ? `「${$ocrJob$?.bookTitle}」正在 OCR — 中止后才能开始这本`
-            : '运行 OCR 后可被打字机 / AI / 词典使用，首次会下载语言模型'}
+            ? $t('ocrBanner.busyOther', { title: $ocrJob$?.bookTitle ?? '' })
+            : $t('ocrBanner.intro')}
         </div>
       </div>
       <label class="lang">
-        <select bind:value={$ocrLang$} disabled={otherBookRunning}>
-          {#each LANGS as l (l.code)}
-            <option value={l.code}>{l.label}</option>
+        <select value={ocrLang} on:change={onLangChange} disabled={otherBookRunning}>
+          {#each availableLangs as l (l.code)}
+            <option value={l.code}>{$t(l.labelKey)}</option>
           {/each}
         </select>
       </label>
-      <button class="btn primary" on:click={start} disabled={otherBookRunning}>开始</button>
-      <button class="btn ghost" on:click={dismiss} title="本次会话不再提示"><Fa icon={faTimes} /></button>
+      <button class="btn primary" on:click={start} disabled={otherBookRunning}>{$t('ocrBanner.start')}</button>
+      <button class="btn" on:click={dontAskForThisBook} title={$t('ocrBanner.imagesOnlyTitle')}>{$t('ocrBanner.imagesOnly')}</button>
+      <button class="btn ghost" on:click={dismiss} title={$t('ocrBanner.dismissSession')}><Fa icon={faTimes} /></button>
     {/if}
+  </div>
+{/if}
+
+<!--
+  Correction lives in its own block rather than a branch of the one above:
+  that banner is suppressed once a book lands in the OCR skip list, which is
+  exactly the state a previously-OCR'd book is in — the one that most needs
+  correcting.
+-->
+{#if correctJobForThisBook}
+  <div class="banner">
+    {#if correctJobForThisBook.status === 'running'}
+      <Fa icon={faWandMagicSparkles} class="ico" />
+      <div class="text">
+        <div class="title">
+          {$t('ocrBanner.correctRunning', { batch: correctJobForThisBook.progress.batch, total: correctJobForThisBook.progress.totalBatches })}
+        </div>
+        <div class="meta">
+          {$t('ocrBanner.correctProgress', { lines: correctJobForThisBook.progress.linesCorrected, model: correctJobForThisBook.modelId })}
+        </div>
+      </div>
+      <button class="btn danger" on:click={abortOcrCorrectJob}>
+        <Fa icon={faStop} size="xs" /> {$t('ocrBanner.abort')}
+      </button>
+    {:else if correctJobForThisBook.status === 'finished'}
+      <Fa icon={faWandMagicSparkles} class="ico" />
+      <div class="text">
+        <div class="title">
+          {$t('ocrBanner.correctDone', { fixed: correctJobForThisBook.progress.linesCorrected, total: correctJobForThisBook.progress.totalLines })}
+        </div>
+        <div class="meta">
+          {correctJobForThisBook.failedBatches
+            ? $t('ocrBanner.correctPartial', { n: correctJobForThisBook.failedBatches })
+            : $t('ocrBanner.correctApplyHint')}
+        </div>
+      </div>
+      <button class="btn primary" on:click={applyCorrectAndReload}>{$t('ocrBanner.applyReload')}</button>
+      <button class="btn ghost" on:click={clearOcrCorrectJob}><Fa icon={faTimes} /></button>
+    {:else}
+      <Fa icon={faWandMagicSparkles} class="ico" />
+      <div class="text">
+        <div class="title">{$t('ocrBanner.correctFailed')}</div>
+        <div class="meta">{correctJobForThisBook.error}</div>
+      </div>
+      <button class="btn primary" on:click={startCorrect}>{$t('ocrBanner.retry')}</button>
+      <button class="btn ghost" on:click={clearOcrCorrectJob}><Fa icon={faTimes} /></button>
+    {/if}
+  </div>
+{:else if canCorrect}
+  <div class="banner">
+    <Fa icon={faWandMagicSparkles} class="ico" />
+    <div class="text">
+      <div class="title">{$t('ocrBanner.correctOffer')}</div>
+      <div class="meta">
+        {correctOtherBookRunning
+          ? $t('ocrBanner.correctBusyOther', { title: $ocrCorrectJob$?.bookTitle ?? '' })
+          : $t('ocrBanner.correctIntro', { endpoint: endpoint?.label ?? '' })}
+      </div>
+    </div>
+    <button class="btn primary" on:click={startCorrect} disabled={correctOtherBookRunning}>
+      {$t('ocrBanner.correctStart')}
+    </button>
+    <button class="btn ghost" on:click={() => (correctDismissed = true)} title={$t('ocrBanner.dismissSession')}>
+      <Fa icon={faTimes} />
+    </button>
   </div>
 {/if}
 
@@ -123,7 +308,7 @@
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
     font-size: 0.85rem;
   }
-  .ico { font-size: 1rem; opacity: 0.9; }
+  :global(.ico) { font-size: 1rem; opacity: 0.9; }
   .text { flex: 1; min-width: 0; }
   .title { font-weight: 600; }
   .meta { font-size: 0.72rem; opacity: 0.75; margin-top: 0.15rem; }
@@ -146,11 +331,4 @@
   .btn.primary { background: rgba(255, 255, 255, 0.18); }
   .btn.danger { background: rgba(220, 90, 90, 0.35); border-color: rgba(220, 90, 90, 0.5); }
   .btn.ghost { background: transparent; border-color: transparent; opacity: 0.7; padding: 0.3rem 0.5rem; }
-  .err {
-    width: 100%;
-    margin-top: 0.4rem;
-    font-size: 0.72rem;
-    opacity: 0.85;
-    color: #ffc8c8;
-  }
 </style>

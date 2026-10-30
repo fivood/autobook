@@ -2,10 +2,29 @@
   // Survives /b unmount so navigating to /settings and back doesn't re-format the book.
   // Keyed on (bookId, viewMode, blurMode, lastBookmarkModified). Only the latest entry is kept
   // to avoid leaking object URLs from prior books.
-  const formattedBookCache = new Map<
-    string,
-    { htmlContent: string; styleSheet: string; language?: string }
-  >();
+  //
+  // We also own the lifecycle of the entry's blob object URLs: when an entry
+  // is evicted (via clear() or replaced), revoke its URLs here. Doing the
+  // revocation in `format-book-data-html.ts`'s observable teardown (the
+  // previous design) tore URLs down the moment the BookReader unmounted —
+  // which is also when /b → /settings → /b lands a cache hit pointing at
+  // dead URLs, so every <img> rendered as a broken-image icon
+  // (`naturalWidth: 0`).
+  interface FormattedBookEntry {
+    htmlContent: string;
+    styleSheet: string;
+    language?: string;
+    objectUrls: string[];
+  }
+  const formattedBookCache = new Map<string, FormattedBookEntry>();
+  function evictFormattedBookCache() {
+    for (const entry of formattedBookCache.values()) {
+      for (const url of entry.objectUrls) {
+        URL.revokeObjectURL(url);
+      }
+    }
+    formattedBookCache.clear();
+  }
 </script>
 
 <script lang="ts">
@@ -30,18 +49,26 @@
     timer
   } from 'rxjs';
   import {
-    extractText,
-    ttsIndexToCalculatorIndex
+    applyStartPosition,
+    indexOfPosition,
+    positionOfIndex,
+    resolvePlaybackStart
   } from '$lib/components/book-reader/auto-reader-shared';
+  import { TtsHighlighter } from '$lib/components/book-reader/tts-highlight';
   import { quintInOut } from 'svelte/easing';
-  import { fly } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { faCloudBolt, faPause, faPlay, faSpinner } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faChevronLeft,
+    faChevronRight,
+    faCloudBolt,
+    faSpinner,
+    faStopwatch
+  } from '@fortawesome/free-solid-svg-icons';
   import BookReader from '$lib/components/book-reader/book-reader.svelte';
-  import AutoScrollFab from '$lib/components/book-reader/auto-scroll-fab.svelte';
-  import AutoReaderFab from '$lib/components/book-reader/auto-reader-fab.svelte';
+  import PlaybackDock from '$lib/components/book-reader/playback-dock.svelte';
   import type {
     AutoReader,
     AutoScroller,
@@ -86,7 +113,6 @@
     viewMode$,
     selectionToBookmarkEnabled$,
     lineHeight$,
-    syncTarget$,
     autoReplication$,
     skipKeyDownListener$,
     replicationSaveBehavior$,
@@ -99,7 +125,6 @@
     openTrackerOnCompletion$,
     addCharactersOnCompletion$,
     statisticsMergeMode$,
-    isOnline$,
     manualBookmark$,
     customThemes$,
     overwriteBookCompletion$,
@@ -114,20 +139,50 @@
     verticalTextOrientation$,
     ttsAutoAdvanceSection$,
     ttsPositions$,
+    ttsStartStrategy$,
     ttsToggleRequest$,
     highlightSidebarOpen$
   } from '$lib/data/store';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
+  import BookTextEditorDialog from '$lib/components/book-reader/book-text-editor-dialog.svelte';
   import PdfOcrBanner from '$lib/components/book-reader/pdf-ocr-banner.svelte';
+  import PdfPageContextMenu from '$lib/components/book-reader/pdf-page-context-menu.svelte';
+  import KeyboardShortcutsHelp from '$lib/components/book-reader/keyboard-shortcuts-help.svelte';
+  import BookImageZoom from '$lib/components/book-reader/book-image-zoom.svelte';
+  import WrFootnotePopup from '$lib/components/book-reader/wr-footnote-popup.svelte';
+  import ComicTranslateBanner from '$lib/components/book-reader/comic-translate-banner.svelte';
+  import ComicOverlay from '$lib/components/book-reader/comic-overlay.svelte';
   import { isScannedPdf } from '$lib/functions/file-loaders/pdf/pdf-ocr-runner';
+  import { hasIndexableText, isComicBook } from '$lib/data/ai/has-indexable-text';
   import HighlightContextMenu from '$lib/components/book-reader/book-highlight/highlight-context-menu.svelte';
   import HighlightMemoDialog from '$lib/components/book-reader/book-highlight/highlight-memo-dialog.svelte';
+  import HighlightMemoCard from '$lib/components/book-reader/book-highlight/highlight-memo-card.svelte';
   import HighlightSidebar from '$lib/components/book-reader/book-highlight/highlight-sidebar.svelte';
-  import AiReaderDrawer from '$lib/components/ai/ai-reader-drawer.svelte';
+  // Lazy-load the AI drawer module on first open. ~300 lines of Svelte
+  // template + downstream markdown/highlight deps; users who never open
+  // the AI panel never pay the parse cost on cold start.
+  import type AiReaderDrawerComponent from '$lib/components/ai/ai-reader-drawer.svelte';
+  let AiReaderDrawer: typeof AiReaderDrawerComponent | null = null;
+  async function loadAiDrawer() {
+    if (!AiReaderDrawer) {
+      AiReaderDrawer = (await import('$lib/components/ai/ai-reader-drawer.svelte')).default;
+    }
+  }
+  // Same lazy-load reasoning as the AI drawer: the TTS panel drags in the
+  // preset catalogue and the kokoro/edge voice tables, none of which a reader
+  // who never opens settings should parse on cold start.
+  import type ReaderSettingsDrawerComponent from '$lib/components/book-reader/reader-settings-drawer.svelte';
+  let ReaderSettingsDrawer: typeof ReaderSettingsDrawerComponent | null = null;
+  async function loadReaderSettingsDrawer() {
+    if (!ReaderSettingsDrawer) {
+      ReaderSettingsDrawer = (
+        await import('$lib/components/book-reader/reader-settings-drawer.svelte')
+      ).default;
+    }
+  }
   import DictPopup from '$lib/components/dict/dict-popup.svelte';
-  import { dictFolderPath$ } from '$lib/data/store';
-  import { scanDictFolder, loadedDicts$ } from '$lib/data/dict/dict-manager';
+  import { extractSentence } from '$lib/data/ai/gloss';
   import {
     highlights$ as hlStore$,
     initHighlightManager,
@@ -142,19 +197,39 @@
     scrollToHighlight,
     getHighlightIdFromElement
   } from '$lib/components/book-reader/book-highlight/highlight-renderer';
-  import type { BooksDbHighlight, HighlightColor } from '$lib/data/database/books-db/versions/books-db';
+  import type { BooksDbHighlight, HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
   import {
     readerImageGalleryPictures$,
     toggleImageGalleryPictureSpoiler$,
     updateImageGalleryPictureSpoilers$
   } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
-  import BookReaderImageGallery from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery.svelte';
+  import type BookReaderImageGalleryComponent from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery.svelte';
+  let BookReaderImageGallery: typeof BookReaderImageGalleryComponent | null = null;
+  async function loadImageGallery() {
+    if (!BookReaderImageGallery) {
+      BookReaderImageGallery = (
+        await import('$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery.svelte')
+      ).default;
+    }
+  }
   import {
     getDefaultStatistic,
     isTrackerMenuOpen$,
     isTrackerPaused$
   } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
-  import BookReadingTracker from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker.svelte';
+  // 874 lines of template + stats logic — the heaviest single component
+  // gated behind the statistics-enabled toggle. We still want to load it
+  // as soon as a stats-tracked book is opened, but doing it asynchronously
+  // means initial parse / hydration of the page doesn't block on it.
+  import type BookReadingTrackerComponent from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker.svelte';
+  let BookReadingTracker: typeof BookReadingTrackerComponent | null = null;
+  async function loadReadingTracker() {
+    if (!BookReadingTracker) {
+      BookReadingTracker = (
+        await import('$lib/components/book-reader/book-reading-tracker/book-reading-tracker.svelte')
+      ).default;
+    }
+  }
   import {
     getChapterData,
     nextChapter$,
@@ -192,7 +267,26 @@
   import { availableThemes } from '$lib/data/theme-option';
   import { ViewMode } from '$lib/data/view-mode';
   import loadBookData from '$lib/functions/book-data-loader/load-book-data';
+  import { elementForCharIndex } from '$lib/components/book-reader/char-index-locator';
+  import {
+    addPlaybackCharacters,
+    setPlaybackMode
+  } from '$lib/components/book-reader/playback-progress';
+  import { detectLanguage } from '$lib/functions/file-loaders/detect-language';
+  import { ttsIndexToCalculatorIndex } from '$lib/components/book-reader/tts-calculator-index';
+  import {
+    formatTextSource,
+    getEditableTextFormat,
+    recoverTextSource,
+    type EditableTextFormat
+  } from '$lib/functions/file-loaders/text-source';
+  import {
+    STAGE_LABELS,
+    type LoadProgress
+  } from '$lib/functions/book-data-loader/load-progress';
+  import { Subject } from 'rxjs';
   import { formatPageTitle } from '$lib/functions/format-page-title';
+  import { attachReaderZoom } from '$lib/functions/reader-zoom';
   import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
   import {
     AutoReplicationType,
@@ -212,7 +306,7 @@
   import { clickOutside } from '$lib/functions/use-click-outside';
   import {
     convertRemToPixels,
-    dummyFn,
+    activateOnKeyup,
     isMobile$,
     limitToRange,
     getWeightedAverage
@@ -227,13 +321,12 @@
     getReferencePoints,
     pulseElement
   } from '$lib/functions/range-util';
+  import { t, tImmediate } from '$lib/i18n';
 
   let showSpinner = true;
-
-  $: if (browser) {
-    // eslint-disable-next-line no-console
-    console.log('[showSpinner] reactive value:', showSpinner);
-  }
+  let loadProgress: LoadProgress = { stage: 'idle', pct: 0, label: '' };
+  const loadProgress$ = new Subject<LoadProgress>();
+  loadProgress$.subscribe((p) => (loadProgress = p));
   let showHeader = false;
   let headerEnterTimer: ReturnType<typeof setTimeout> | undefined;
   let isBookmarkScreen = false;
@@ -265,9 +358,23 @@
   let storedExploredCharacter = 0;
   let hasBookmarkData = false;
   let blockDataUpdates = false;
-  let trackerElm: BookReadingTracker;
+  let trackerElm: BookReadingTrackerComponent;
+  // Kick off the lazy tracker load as soon as the reader confirms stats
+  // tracking is enabled. Page hydration finishes first; the tracker arrives
+  // a tick later without blocking initial render.
+  $: if (browser && $statisticsEnabled$ && !BookReadingTracker) {
+    loadReadingTracker();
+  }
   let showTrackerIcon = false;
   let wasTrackerPaused = true;
+  /**
+   * The reader deliberately switched tracking off during this session.
+   *
+   * `wasTrackerPaused` cannot answer that: it starts `true` simply because
+   * nothing has started the tracker yet, so treating it as a decision would
+   * block playback from ever starting the clock.
+   */
+  let userPausedTracking = false;
   let frozenPosition = -1;
   let skipFirstFreezeChange = false;
   let bookCompleted = false;
@@ -285,11 +392,24 @@
   let hlMemoSelectedText = '';
   let hlMemoTags: string[] = [];
   let aiDrawerOpen = false;
+  let aiInitialInput = '';
+  let settingsDrawerOpen = false;
+  /** Set when a comic translation job with renderable output is found — the
+   * overlay shows it, so the "open translation workbench" banner would be
+   * redundant. */
+  let comicHasTranslation = false;
+  let bookTextEditorOpen = false;
+  let bookTextEditorSaving = false;
+  let bookTextEditorSource = '';
+  let bookTextEditorOriginal: string | undefined;
+  let bookTextEditorRecovered = false;
+  let bookTextEditorFormat: EditableTextFormat = 'markdown';
   let dictPopupOpen = false;
   let dictPopupWord = '';
+  let dictPopupSentence = '';
   let dictPopupX = 0;
   let dictPopupY = 0;
-  let hlPendingColor: HighlightColor = 'yellow';
+  let hlPendingColor: HighlightSlot = '1';
   let hlPendingRange: Range | undefined;
   let syncedResolver: () => void;
 
@@ -312,12 +432,11 @@
 
   const rawBookData$ = bookId$.pipe(
     switchMap((id) => {
+      loadProgress$.next({ stage: 'db-fetch', pct: 5, label: STAGE_LABELS['db-fetch'] });
       const loadPromise = (async () => {
         let bookData: BooksDbBookData | undefined;
 
         try {
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] start', id);
           localStorageHandler = getStorageHandler(
           window,
           StorageKey.BROWSER,
@@ -330,15 +449,15 @@
         );
 
         localStorageHandler.startContext({ id, title: '' });
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before getBook');
         bookData = await localStorageHandler.getBook();
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] after getBook', bookData?.title, bookData?.storageSource, !!bookData?.elementHtml);
 
         if (!bookData) {
           return bookData;
         }
+        // Baseline for the storage-pull stage; the external disk extraction
+        // (saveExternalLastRead → storageHandler.getBook) advances this from
+        // 10% onward via its onProgress callback.
+        loadProgress$.next({ stage: 'storage-pull', pct: 10, label: STAGE_LABELS['storage-pull'] });
 
         const currentContext = {
           id: bookData.id,
@@ -349,58 +468,59 @@
         localStorageHandler.startContext(currentContext);
 
         if (bookData.storageSource) {
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] before getStorageHandlerByName', bookData.storageSource);
           externalStorageHandler = await getStorageHandlerByName(bookData.storageSource, true);
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] after getStorageHandlerByName');
-        } else if ($autoReplication$ !== AutoReplicationType.Off) {
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] before getStorageHandlerByName syncTarget', $syncTarget$);
-          externalStorageHandler = await getStorageHandlerByName($syncTarget$);
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] after getStorageHandlerByName syncTarget');
+        } else if ($autoReplication$ !== AutoReplicationType.Off && isTauri()) {
+          externalStorageHandler = await getStorageHandlerByName(
+            InternalStorageSources.INTERNAL_TAURI_FS
+          );
         }
 
         bookData.lastBookOpen = new Date().getTime();
 
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before updateLastRead (browser)');
         await localStorageHandler.updateLastRead(bookData);
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] after updateLastRead (browser)');
 
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before syncDownData');
         await syncDownData(externalStorageHandler, currentContext);
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] after syncDownData');
 
         if (!$statisticsEnabled$) {
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] before setFirstBookRead');
           const wasNew = (
             await database.setFirstBookRead(currentContext.title, $startDayHoursForTracker$)
           )[1];
-          // eslint-disable-next-line no-console
-          console.log('[loadBook] after setFirstBookRead', wasNew);
 
           if (wasNew) {
             scheduleReplication(StorageDataType.STATISTICS);
           }
         }
 
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before saveExternalLastRead');
-        bookData = await saveExternalLastRead(externalStorageHandler, bookData);
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] after saveExternalLastRead', !!bookData?.elementHtml);
+        let lastPullUpdate = 0;
+        let lastPullPct = 10;
+        bookData = await saveExternalLastRead(externalStorageHandler, bookData, (done, total) => {
+          // Map the disk extraction progress into the reader's storage-pull
+          // stage (10% → 50%): the external pull is the slow step for big
+          // books, and without this it sits frozen on 10% for tens of seconds.
+          // A fast 100MB zip can fire hundreds of per-entry callbacks in a
+          // blink — throttle to ~150ms so the bar visibly advances, and force
+          // the final 50% so the stage doesn't stall just under the boundary.
+          const pct = 10 + Math.round((done / Math.max(1, total)) * 40);
+          const now = Date.now();
+          if (pct === 50 || now - lastPullUpdate > 150) {
+            lastPullUpdate = now;
+            lastPullPct = pct;
+            loadProgress$.next({ stage: 'storage-pull', pct, label: STAGE_LABELS['storage-pull'] });
+          } else if (pct > lastPullPct) {
+            lastPullPct = pct;
+          }
+        });
+        if (lastPullPct < 50) {
+          loadProgress$.next({ stage: 'storage-pull', pct: 50, label: STAGE_LABELS['storage-pull'] });
+        }
 
+        // The detected fallback is applied reactively below — at this point
+        // the content is not rendered yet, so there is nothing to detect from.
         if (bookData.language) {
           document.documentElement.lang = bookData.language;
         }
       } catch (error: any) {
-        const message = `Error loading book: ${error.message}`;
+        const message = tImmediate('errors.loadBook', { detail: error.message });
 
         logger.warn(message);
 
@@ -408,20 +528,16 @@
           {
             component: MessageDialog,
             props: {
-              title: '加载错误',
+              title: tImmediate('errors.loadTitle'),
               message
             }
           }
         ]);
         return undefined;
       } finally {
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] finally running, showSpinner -> false');
         syncedResolver();
 
         showSpinner = false;
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] showSpinner after assignment:', showSpinner);
       }
 
       if (externalStorageHandler) {
@@ -433,18 +549,16 @@
           $readingGoalsMergeMode$,
           $cacheStorageData$,
           false,
-          bookData.storageSource || $syncTarget$
+          bookData.storageSource || InternalStorageSources.INTERNAL_TAURI_FS
         );
       }
 
-        // eslint-disable-next-line no-console
-        console.log('[loadBook] before return', !!bookData?.elementHtml);
         return bookData;
       })();
 
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(
-          () => reject(new Error('书籍加载超时（60秒），请检查控制台 [loadBook] 日志定位卡住的步骤')),
+          () => reject(new Error(tImmediate('errors.loadTimeout'))),
           60000
         );
       });
@@ -457,7 +571,7 @@
           {
             component: MessageDialog,
             props: {
-              title: '加载超时',
+              title: tImmediate('errors.loadTimeoutTitle'),
               message: error.message
             }
           }
@@ -478,9 +592,31 @@
     reduceToEmptyString()
   );
 
+  // `/b?pos=N` (the library's random-quote card) opens at character N instead
+  // of the saved bookmark. It only stands in for the bookmark during the
+  // initial scroll; whatever gets saved afterwards (auto-bookmark, manual) is
+  // the real reading position as usual. Dropped from the URL once read so a
+  // reload resumes from the saved bookmark.
+  let pendingOpenPos = browser
+    ? Number(new URL(window.location.href).searchParams.get('pos') ?? NaN)
+    : NaN;
+
   const initBookmarkData$ = rawBookData$.pipe(
     tap((rawBookData) => {
       if (!rawBookData) return;
+      if (Number.isFinite(pendingOpenPos) && pendingOpenPos >= 0) {
+        bookmarkData = Promise.resolve({
+          dataId: rawBookData.id,
+          exploredCharCount: pendingOpenPos,
+          progress: 0,
+          lastBookmarkModified: 0
+        });
+        pendingOpenPos = NaN;
+        const url = new URL(window.location.href);
+        url.searchParams.delete('pos');
+        window.history.replaceState({}, '', url.toString());
+        return;
+      }
       bookmarkData = database.getBookmark(rawBookData.id);
     }),
     reduceToEmptyString()
@@ -488,8 +624,6 @@
 
   const bookData$ = rawBookData$.pipe(
     switchMap((rawBookData) => {
-      // eslint-disable-next-line no-console
-      console.log('[bookData$] received rawBookData', !!rawBookData?.elementHtml);
       if (!rawBookData) return EMPTY;
 
       sectionList$.next(rawBookData.sections || []);
@@ -499,25 +633,23 @@
       const cacheKey = `${rawBookData.id}|${isPaginated ? 'p' : 'c'}|${$hideSpoilerImageMode$}|${rawBookData.lastBookModified || 0}`;
       const cached = formattedBookCache.get(cacheKey);
       if (cached) {
-        // eslint-disable-next-line no-console
-        console.log('[bookData$] returning cached');
         return of(cached);
       }
 
-      // eslint-disable-next-line no-console
-      console.log('[bookData$] before loadBookData');
       return loadBookData(
         rawBookData,
         '.book-content',
         document,
         isPaginated,
-        $hideSpoilerImageMode$
+        $hideSpoilerImageMode$,
+        loadProgress$
       ).pipe(
         tap((data) => {
-          // eslint-disable-next-line no-console
-          console.log('[bookData$] after loadBookData', !!data?.htmlContent);
-          // Keep only last entry; freeing the prior URLs is risky since other refs may exist.
-          formattedBookCache.clear();
+          // Only keep the latest entry. evictFormattedBookCache revokes
+          // the prior entry's blob URLs as it clears — safe now because
+          // formatBookDataHtml hands URL ownership to this cache instead
+          // of revoking them on observable teardown.
+          evictFormattedBookCache();
           formattedBookCache.set(cacheKey, data);
         })
       );
@@ -696,18 +828,39 @@
 
   $: scheduleHighlightRender($hlStore$);
 
-  $: if ($highlightSidebarOpen$) {
+  /**
+   * Stop playback for something that may move the reader elsewhere.
+   *
+   * A paused typewriter keeps everything past its frontier hidden, so landing
+   * past it showed a blank page. The stop still records the cursor first, so
+   * closing the TOC without going anywhere resumes exactly as before — the
+   * start rule re-hides from the cursor while it is on screen.
+   */
+  function stopPlaybackForJump() {
     autoScroller?.off();
     autoReader?.off();
+    autoScroller?.markContentChanged?.();
   }
 
-  $: if ($tocIsOpen$) {
-    autoScroller?.off();
-    autoReader?.off();
-  }
+  $: if ($highlightSidebarOpen$) stopPlaybackForJump();
+
+  $: if ($tocIsOpen$) stopPlaybackForJump();
+
+  // Throttle the explored-char PAGE_CHANGE dispatch. exploredCharCount is
+  // bumped per-character during typewriter/scroll, and a synchronous
+  // CustomEvent per change allocates + fans out to every fromEvent(PAGE_CHANGE)
+  // subscriber (~60/s). No consumer reads the event's detail — they all treat
+  // it as a "position changed" signal with their own debounce/throttle — so
+  // emitting at most once per 150ms is safe.
+  const exploredPageChange$ = new Subject<number>();
+  exploredPageChange$.pipe(debounceTime(150)).subscribe((explored) => {
+    document.dispatchEvent(
+      new CustomEvent(PAGE_CHANGE, { detail: { exploredCharCount: explored } })
+    );
+  });
 
   $: if (browser && bookCharCount) {
-    document.dispatchEvent(new CustomEvent(PAGE_CHANGE, { detail: { exploredCharCount } }));
+    exploredPageChange$.next(exploredCharCount);
   }
 
   $: if (browser) {
@@ -738,43 +891,90 @@
 
   $: isPaginated = $viewMode$ === ViewMode.Paginated;
 
+  /** Image books (PDF / CBZ page images) zoom by scaling the page image, text
+   *  books by font size. One flag drives both the zoom widget and Ctrl+wheel so
+   *  the two can't disagree about which a book is. */
+  $: imageZoomMode =
+    !!$rawBookData$ &&
+    !isPaginated &&
+    /pdf-page-img|cbz-img/.test($rawBookData$.elementHtml || '');
+
   // --- TTS position memory ---
   let currentSectionIndex = 0;
   let sectionStartCharCount = 0;
-  let lastTtsSaveTime = 0;
-  let ttsExtractedText = '';
-  let ttsExtractedTextSection = -1;
+  const ttsHighlighter = new TtsHighlighter();
+
+  /**
+   * The language the reader actually works with.
+   *
+   * `bookData.language` is empty for everything imported before the loaders
+   * started keeping it — and, until this release, for every book stored on the
+   * filesystem, because the field was simply missing from the list of things
+   * written into `bookdata_*.zip`. An empty language means the TTS engine keeps
+   * its `zh-CN` default and picks the Chinese voice slot, which is how an
+   * English book ends up read aloud with every number in Chinese.
+   *
+   * Guessing from the rendered text costs one scan of the first 2000
+   * characters and needs no re-import, so an existing library is fixed the
+   * next time each book is opened.
+   */
+  $: effectiveLanguage =
+    $bookData$?.language ||
+    ($rawBookData$?.elementHtml ? detectLanguage(stripTags($rawBookData$.elementHtml)) : undefined);
+
+  /**
+   * Books whose unit of reading is a page, not a character: scanned PDFs and
+   * comics. The tracker counts pages dwelt on for these, which is the only
+   * meaningful measure when the content is images.
+   *
+   * Comics were excluded by a `pdf-page-` prefix check even though cbz/cbr
+   * number their sections `cbz-page-N`, so a comic got neither a sensible
+   * character count nor a page count.
+   */
+  function isPagedBook(data: { sections?: { reference?: string }[] } | undefined): boolean {
+    const ref = data?.sections?.[0]?.reference || '';
+    return ref.startsWith('pdf-page-') || ref.startsWith('cbz-page-');
+  }
+
+  /** Enough to keep tag names out of the Latin-letter count. */
+  function stripTags(html: string): string {
+    return html.slice(0, 20000).replace(/<[^>]*>/g, ' ');
+  }
+
+  $: if (browser && effectiveLanguage) {
+    document.documentElement.lang = effectiveLanguage;
+  }
 
   $: ttsSeekCharCount = Math.max(0, exploredCharCount - sectionStartCharCount);
 
-  $: ttsResumePosition = (() => {
+  /**
+   * Where playback last stopped — the voice's sentence or the typewriter's
+   * frontier — as an extractText() index into the reader's content. Both
+   * engines start from it while it is still on screen (resolvePlaybackStart).
+   *
+   * Persisted per book, so a reopened book carries on from the same sentence.
+   * The view mode is part of it: continuous indexes the whole book, paginated
+   * one section. A function, not a `$:`, because a stop and the start right
+   * after it run in the same tick.
+   */
+  function playbackCursor(): number | undefined {
     const id = getBookIdSync();
-    if (!id) return undefined;
-    const saved = $ttsPositions$[String(id)];
-    if (!saved) return undefined;
-    if (saved.section !== currentSectionIndex) return undefined;
-    // Only resume when the visible position is where the user left off —
-    // an intentional jump elsewhere should start TTS from the new spot.
-    if (Math.abs(saved.explored - exploredCharCount) > 30) return undefined;
-    return { para: saved.para, offset: saved.offset };
-  })();
+    const saved = id ? $ttsPositions$[String(id)] : undefined;
+    if (!saved || typeof saved.index !== 'number') return undefined;
+    if (saved.section !== currentSectionIndex || saved.paginated !== isPaginated) return undefined;
+    return saved.index;
+  }
 
-  function persistTtsPosition() {
+  function rememberPlaybackCursor(index: number | null | undefined) {
     const id = getBookIdSync();
-    if (!id || !autoReader) return;
-    const { para, offset } = autoReader.getPosition();
+    if (!id || index == null) return;
     $ttsPositions$ = {
       ...$ttsPositions$,
-      [String(id)]: {
-        section: currentSectionIndex,
-        para,
-        offset,
-        explored: exploredCharCount
-      }
+      [String(id)]: { section: currentSectionIndex, index, paginated: isPaginated }
     };
   }
 
-  function clearTtsPosition() {
+  function forgetPlaybackCursor() {
     const id = getBookIdSync();
     if (!id) return;
     const next = { ...$ttsPositions$ };
@@ -786,35 +986,144 @@
   /** When >=0, TTS hit a section end and we're waiting for currentSectionIndex
    * to reach this value before re-preparing + resuming reading. */
   let ttsAwaitingSection = -1;
+  /** Chapter the voice finished a section in — paginated 章止 stops at the
+   *  section boundary that opens a new one. */
+  let ttsChapterAtSectionEnd = -1;
 
-  $: if (autoReader && autoReader !== ttsWiredReader && isPaginated && browser) {
+  /**
+   * Playback handover between the typewriter and the voice, through the one
+   * playback cursor: each engine records where it stopped, and either one
+   * starts from there while it is on screen.
+   *
+   * Only a genuine stop counts. Starting the voice turns the typewriter off as
+   * a side effect (and runs revealAll() first, so its frontier is at the end
+   * of the section by then) — recording that would point the cursor at the
+   * wrong place. Hence the `!other.isRunning` guard, and the latches: both
+   * subjects are BehaviorSubjects that replay their current value to a new
+   * subscriber, so without one the initial `false` reads as a stop that never
+   * happened — which is how a reload used to overwrite the saved position
+   * with the first sentence of the book.
+   */
+  let ttsWasOn = false;
+  let scrollerWasOn = false;
+  let scrollerWiredHandoff: AutoScroller | undefined;
+
+  $: if (autoScroller && autoScroller !== scrollerWiredHandoff && browser) {
+    scrollerWiredHandoff = autoScroller;
+    const scroller = autoScroller;
+    scroller.wasAutoScrollerEnabled$.subscribe((on) => {
+      const started = !scrollerWasOn && on;
+      const paused = scrollerWasOn && !on;
+      scrollerWasOn = on;
+      if (started) {
+        // Exclusive in this direction too. Only starting the voice used to stop
+        // the typewriter, so pressing play on the typewriter mid-sentence left
+        // the voice reading text the typewriter had just hidden. Its stop
+        // records the sentence as the cursor.
+        if (autoReader?.wasReaderEnabled$.getValue()) autoReader.off();
+        // Every start passes through here, FAB or Space, and before the
+        // typewriter resolves its own start — so this is where it gets the
+        // same start rule as the voice. Exact index, no sentence snap: the
+        // frontier it stopped at is a character, and re-typing half a sentence
+        // is not a resume.
+        const start = resolvePlaybackStart($ttsStartStrategy$, playbackCursor());
+        const position = start && positionOfIndex(start.index);
+        if (position) scroller.revealFromPositionLater?.(position.node, position.offset);
+        // From the screen: drop whatever an earlier run left hidden, so the
+        // typewriter re-walks from what the reader is looking at.
+        else scroller.markContentChanged?.();
+        return;
+      }
+      if (!paused || autoReader?.wasReaderEnabled$.getValue()) return;
+      const position = scroller.frontierPosition?.();
+      if (position) rememberPlaybackCursor(indexOfPosition(position.node, position.offset));
+    });
+  }
+
+  $: if (autoReader && autoReader !== ttsWiredReader && browser) {
     ttsWiredReader = autoReader;
     autoReader.onBoundary = (charIndex) => {
-      // Auto-page-flip: whatever the TTS engine is about to speak should be
-      // on-screen. charIndex is a section-local offset into extractText()'s
-      // raw string (counts whitespace, punctuation, …). The paginated
-      // calculator uses getCharacterCount() which strips those — translate
-      // before handing it over so we don't drift off the section end.
-      if (typeof charIndex === 'number') {
-        const el = document.querySelector('.book-content') as HTMLElement | null;
-        let calcLocal = charIndex;
-        if (el) {
-          if (ttsExtractedTextSection !== currentSectionIndex) {
-            ttsExtractedText = extractText(el);
-            ttsExtractedTextSection = currentSectionIndex;
-          }
-          calcLocal = ttsIndexToCalculatorIndex(ttsExtractedText, charIndex);
+      // Update the current-sentence visual highlight (CSS Custom Highlight
+      // API, no DOM mutation). Works in both view modes.
+      const sentence = autoReader?.getCurrentSentence?.();
+      if (sentence) {
+        ttsHighlighter.setRange(sentence.globalStart, sentence.globalEnd);
+        // Engines report boundaries many times per sentence; count each
+        // sentence once, when it first becomes the spoken one.
+        if (sentence.globalStart !== lastCountedSentenceStart) {
+          lastCountedSentenceStart = sentence.globalStart;
+          addPlaybackCharacters(sentence.text);
         }
-        pageManager?.ensureCharVisible?.(calcLocal + sectionStartCharCount);
       }
-      const now = Date.now();
-      if (now - lastTtsSaveTime < 2000) return;
-      lastTtsSaveTime = now;
-      persistTtsPosition();
+
+      if (typeof charIndex === 'number') {
+        if (isPaginated) {
+          // Auto-page-flip: whatever the TTS engine is about to speak should
+          // be on-screen. charIndex is a section-local offset into
+          // extractText()'s raw string; the paginated calculator counts a
+          // different set of nodes entirely. The translation walks the DOM
+          // rather than the string because the difference is node-level —
+          // furigana and hidden subtrees — not just which characters count.
+          // See tts-calculator-index.ts.
+          const el = document.querySelector('.book-content') as HTMLElement | null;
+          const calcLocal = el ? ttsIndexToCalculatorIndex(el, charIndex) : charIndex;
+          pageManager?.ensureCharVisible?.(calcLocal + sectionStartCharCount);
+        } else {
+          // Continuous mode: the text stays fully visible and only the
+          // sentence highlight tracks the voice.
+          //
+          // TTS used to drive the typewriter's char-by-char reveal from this
+          // same callback, and it could never line up: neither engine reports
+          // where the voice actually is. Web Speech fires per *word*, and the
+          // blob engines fire every 2% of audio duration and derive the index
+          // as `sentenceLength * elapsedFraction` — a straight line through
+          // speech that is anything but linear (pauses, punctuation, numbers).
+          // Sentence boundaries are the one position both engines know
+          // exactly, so that is the only thing we paint.
+          if (sentence) followSpokenSentence(sentence.globalStart);
+        }
+      }
+    };
+    // Four call sites in BlobAutoReader report failures through onError and
+    // nobody was listening, so every one of them ended the same way: the
+    // engine calls off(), the FAB flips back, and the reader is left pressing
+    // play at a button that refuses with no reason given. The common ones are
+    // not exotic — a wrong Edge proxy (`tls handshake eof`), Kokoro not
+    // downloaded yet, a bad key on a custom HTTP endpoint.
+    // Web Speech only. Nothing installed speaks the book's language, so the
+    // platform falls back to whatever it has — most visibly a Chinese voice
+    // reading English numbers in Chinese, which looks like the app choosing
+    // wrong rather than a missing voice pack.
+    if ('onVoiceMissing' in autoReader) {
+      (autoReader as { onVoiceMissing?: (lang: string) => void }).onVoiceMissing = (lang) => {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: {
+              title: tImmediate('reader.voiceMissing.title'),
+              message: tImmediate('reader.voiceMissing.body', { lang })
+            }
+          }
+        ]);
+      };
+    }
+
+    autoReader.onError = (message) => {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: $t('reader.ttsFailed.title'),
+            message: `${message}
+
+${$t('reader.ttsFailed.hint')}`
+          }
+        }
+      ]);
     };
     autoReader.onEnd = () => {
       if (!$ttsAutoAdvanceSection$) {
-        clearTtsPosition();
+        forgetPlaybackCursor();
         return;
       }
       const sectionAtEnd = currentSectionIndex;
@@ -822,23 +1131,85 @@
       // Svelte stores.
       setTimeout(() => {
         if (!pageManager || typeof pageManager.advanceToNextSection !== 'function') {
-          clearTtsPosition();
+          forgetPlaybackCursor();
           return;
         }
         // Must call as a method so `this` binds — otherwise the inner
         // `this.nextSection(...)` throws.
+        const chapterAtEnd = $sectionData$?.length ? getChapterData($sectionData$)[1] : -1;
         const advanced = pageManager.advanceToNextSection();
         if (advanced) {
           ttsAwaitingSection = sectionAtEnd + 1;
+          ttsChapterAtSectionEnd = chapterAtEnd;
         } else {
-          clearTtsPosition();
+          forgetPlaybackCursor();
         }
       }, 0);
     };
     autoReader.wasReaderEnabled$.subscribe((enabled) => {
-      // Pausing saves the precise spot (throttled boundary saves lag ~2s).
-      if (!enabled && ttsWiredReader === autoReader) persistTtsPosition();
+      setPlaybackMode(enabled ? 'tts' : 'manual');
+      if (enabled) {
+        lastCountedSentenceStart = -1;
+        const el = document.querySelector('.book-content') as HTMLElement | null;
+        // Nothing to hide or reveal here any more — book-reader-continuous
+        // already reveals everything and stops the typewriter when TTS turns
+        // on, and this side used to immediately undo that by re-hiding.
+        lastFollowedSentenceStart = -1;
+        ttsFollowSuspendedUntil = 0;
+        ttsHighlighter.prepare(el || undefined);
+      } else {
+        ttsHighlighter.clear();
+      }
+      const ttsStopped = ttsWasOn && !enabled;
+      ttsWasOn = enabled;
+      // Null past the last sentence, so finishing the book records nothing
+      // and onEnd's forget stands.
+      if (ttsStopped) rememberPlaybackCursor(autoReader?.getCurrentSentence?.()?.globalStart);
     });
+  }
+
+  /** Sentence whose characters were already counted into playback progress. */
+  let lastCountedSentenceStart = -1;
+
+  /** Sentence start we last scrolled to, so a 50-boundaries-per-sentence
+   * engine doesn't re-scroll on every one of them. */
+  let lastFollowedSentenceStart = -1;
+  /** Manual scrolling wins: any real scroll gesture parks the auto-follow for
+   * a while instead of fighting it back on the next boundary. */
+  let ttsFollowSuspendedUntil = 0;
+
+  const TTS_FOLLOW_SUSPEND_MS = 8000;
+
+  function suspendTtsFollow() {
+    ttsFollowSuspendedUntil = Date.now() + TTS_FOLLOW_SUSPEND_MS;
+  }
+
+  function followSpokenSentence(globalStart: number) {
+    if (globalStart === lastFollowedSentenceStart) return;
+    lastFollowedSentenceStart = globalStart;
+    if (Date.now() < ttsFollowSuspendedUntil) return;
+    scrollSentenceIntoView(globalStart);
+  }
+
+  function scrollSentenceIntoView(globalIdx: number) {
+    if (typeof window === 'undefined') return;
+    const root = document.querySelector('.book-content') as HTMLElement | null;
+    if (!root) return;
+    // Walk text nodes and find the one containing globalIdx, then scroll its
+    // parent roughly to center. Deliberately a plain walk: the typewriter now
+    // wraps only the one paragraph straddling its reveal frontier, so
+    // indexing `.tw-c` spans would address the wrong character entirely (and
+    // even when it wrapped the whole book it silently skipped newlines).
+    // Shared with the highlighter's index space; see char-index-locator.ts
+    // for what went wrong when this walk was inline here and diverged.
+    const target = elementForCharIndex(root, globalIdx);
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      const vh = window.innerHeight || 0;
+      if (rect.top < vh * 0.2 || rect.bottom > vh * 0.7) {
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
   }
 
   // After the new section finishes rendering (currentSectionIndex catches up),
@@ -852,6 +1223,13 @@
     // Defer so DOM/innerHTML updates from the new section land before
     // extractText() runs.
     setTimeout(() => {
+      if (
+        $autoScrollStopAtChapter$ &&
+        $sectionData$?.length &&
+        getChapterData($sectionData$)[1] !== ttsChapterAtSectionEnd
+      ) {
+        return;
+      }
       autoReader?.prepare();
       autoReader?.setPosition(0, 0);
       autoReader?.on();
@@ -867,18 +1245,77 @@
 
   $: tapButtonTop = `${showHeader ? 3 : 2}rem`;
 
+  /** Width of each edge tap zone. We tie it to the user-configured margin
+   * so the zone naturally fills the no-text gap on either side of the
+   * page — bigger margin → bigger hit area, no extra setting to tune.
+   *
+   * Horizontal reading: the side gap is `(viewport - secondDimensionMaxValue) / 2`
+   * when a max content-width cap is set; if not, fall back to a discoverable
+   * minimum (5rem ≈ a thumb's worth).
+   * Vertical reading: `firstDimensionMargin` is literally the left/right
+   * padding around the rotated text, so use it directly.
+   */
+  $: tapEdgeWidthPx = (() => {
+    if (!browser) return 80;
+    const min = convertRemToPixels(window, 5);
+    if ($verticalMode$) {
+      return Math.max(min, $firstDimensionMargin$ ?? 0);
+    }
+    const cap = $secondDimensionMaxValue$ ?? 0;
+    const viewportW = $containerViewportWidth$ ?? window.innerWidth;
+    if (!cap || cap >= viewportW) return min;
+    return Math.max(min, Math.floor((viewportW - cap) / 2));
+  })();
+
+  $: tapEdgeWidth = `${tapEdgeWidthPx}px`;
+
+  // Visual page-turn hint: a circular chevron button that fades in when
+  // the cursor approaches either edge of the viewport. Pure UX
+  // discoverability — the wider invisible tap-edge button under it
+  // already handles the click, the floating chevron just tells the user
+  // "yes, this side flips a page". Auto-hides 1.2s after the cursor
+  // leaves the trigger zone, so the page stays visually clean while
+  // reading.
+  let leftHintVisible = false;
+  let rightHintVisible = false;
+  let edgeHintTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function onWindowPointerMove(ev: PointerEvent) {
+    if (!isPaginated || !$enableTapEdgeToFlip$ || $skipKeyDownListener$) {
+      leftHintVisible = false;
+      rightHintVisible = false;
+      return;
+    }
+    const w = window.innerWidth;
+    // Trigger zone matches the tap-edge button: the hint shows whenever
+    // the cursor is inside the zone that would actually flip the page on
+    // click.
+    const zone = tapEdgeWidthPx;
+    leftHintVisible = ev.clientX < zone;
+    rightHintVisible = ev.clientX > w - zone;
+    clearTimeout(edgeHintTimer);
+    if (leftHintVisible || rightHintVisible) {
+      edgeHintTimer = setTimeout(() => {
+        leftHintVisible = false;
+        rightHintVisible = false;
+      }, 1200);
+    }
+  }
+
   $: footerChapterProgress = getCurrentChapterProgress($sectionData$);
 
   let lastChapterIndexForAutoStop = -1;
   $: if ($sectionData$?.length && autoScroller) {
     const [, chapterIndex] = getChapterData($sectionData$);
+    // 章止 holds for the voice too — in scroll mode its follow-scroll is what
+    // carries the view across the chapter line.
     if (
       lastChapterIndexForAutoStop !== -1 &&
       chapterIndex !== lastChapterIndexForAutoStop &&
-      $autoScrollStopAtChapter$ &&
-      autoScroller.wasAutoScrollerEnabled$.getValue()
+      $autoScrollStopAtChapter$
     ) {
-      autoScroller.off();
+      if (autoScroller.wasAutoScrollerEnabled$.getValue()) autoScroller.off();
+      if (autoReader?.wasReaderEnabled$.getValue()) autoReader.off();
     }
     lastChapterIndexForAutoStop = chapterIndex;
   }
@@ -901,6 +1338,10 @@
   function handleGlobalContextMenu(ev: MouseEvent) {
     const target = ev.target as HTMLElement;
     if (!target.closest('.book-content')) return;
+    // Page images (PDF scan pages, comic pages) own their own context menu —
+    // the per-page OCR re-run. Highlights only apply to text, so skip the
+    // highlight logic here and let PdfPageContextMenu handle the event.
+    if (target.closest('img.pdf-page-img, img.book-page-image')) return;
     handleBookContentContextMenu(ev);
   }
 
@@ -910,26 +1351,71 @@
     handleBookContentClick(ev);
   }
 
+  // --- Memo hover card -------------------------------------------------
+  let memoCardAnchor: { left: number; right: number; top: number; bottom: number } | undefined;
+  let memoCardText = '';
+  let memoCardTags: string[] = [];
+
+  /** Only marks carrying `data-hl-memo` are worth a store lookup. */
+  function handleGlobalMouseOver(ev: MouseEvent) {
+    const target = ev.target as HTMLElement | null;
+    const mark = target?.closest?.('mark[data-hl-memo]') as HTMLElement | null;
+    if (!mark || !mark.closest('.book-content')) {
+      if (memoCardAnchor) memoCardAnchor = undefined;
+      return;
+    }
+    const id = getHighlightIdFromElement(mark);
+    if (id === undefined) return;
+    const hl = $hlStore$.find((h) => h.id === id);
+    if (!hl?.memo) return;
+    const r = mark.getBoundingClientRect();
+    memoCardText = hl.memo;
+    memoCardTags = hl.tags || [];
+    memoCardAnchor = { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+  }
+
   onMount(() => {
+    // Read through a getter, not captured: the same reader instance serves a
+    // text book and an image book across navigations.
+    const detachZoom = attachReaderZoom(() => imageZoomMode);
     document.addEventListener('ttu-action', handleAction, false);
     document.addEventListener('contextmenu', handleGlobalContextMenu);
     document.addEventListener('click', handleGlobalClick);
+    document.addEventListener('mouseover', handleGlobalMouseOver);
+    // The card is anchored in viewport coordinates, so any scroll invalidates
+    // it. Hiding is cheaper and less jumpy than repositioning mid-scroll.
+    const hide = () => (memoCardAnchor = undefined);
+    window.addEventListener('scroll', hide, true);
+    return () => {
+      detachZoom();
+      document.removeEventListener('mouseover', handleGlobalMouseOver);
+      window.removeEventListener('scroll', hide, true);
+    };
   });
+
+  /** Every route to the voice — its button, tray, global shortcut, V. V used
+   *  to call toggle() directly, skipping the start position, so on a freshly
+   *  opened book it read from the first sentence of the book. */
+  function toggleTts() {
+    if (!autoReader) return;
+    if (!autoReader.wasReaderEnabled$.getValue()) {
+      // Straight from a running typewriter: its stop records the frontier, so
+      // the voice carries on from that sentence. Starting the voice used to
+      // stop the typewriter only afterwards, and the voice began at the top
+      // of the screen instead.
+      autoScroller?.off();
+      autoReader.prepare();
+      applyStartPosition(autoReader, $ttsStartStrategy$, playbackCursor(), ttsSeekCharCount);
+    }
+    autoReader.toggle();
+  }
 
   // Tray menu / global shortcut request TTS toggle. Works in both view modes
   // (continuous + paginated) since AutoReaderContinuous is wired in both.
   let lastTtsToggleAt = 0;
   $: if (browser && $ttsToggleRequest$ > lastTtsToggleAt && autoReader) {
     lastTtsToggleAt = $ttsToggleRequest$;
-    if (!autoReader.wasReaderEnabled$.getValue()) {
-      autoReader.prepare();
-      if (ttsResumePosition) {
-        autoReader.setPosition(ttsResumePosition.para, ttsResumePosition.offset);
-      } else {
-        autoReader.seekToExplored(ttsSeekCharCount);
-      }
-    }
-    autoReader.toggle();
+    toggleTts();
   }
 
   function handleAction({ detail }: any) {
@@ -979,8 +1465,7 @@
         (upSyncEnabled && dataToReplicateQueue.length))
     ) {
       event.preventDefault();
-      // eslint-disable-next-line no-param-reassign
-      return (event.returnValue = '确定要退出吗？');
+      return (event.returnValue = tImmediate('dialog.beforeUnload'));
     }
 
     return event;
@@ -1003,6 +1488,7 @@
 
     dialogManager.dialogs$.next([]);
     wasTrackerPaused = !$isTrackerPaused$;
+    userPausedTracking = wasTrackerPaused;
     isTrackerPaused$.next(wasTrackerPaused);
   }
 
@@ -1024,7 +1510,7 @@
         {
           component: NumberDialog,
           props: {
-            dialogHeader: `跳转到进度（当前 ${currentPct}%）`,
+            dialogHeader: tImmediate('dialog.jumpToProgress.header', { pct: currentPct }),
             minValue: 0,
             maxValue: 100,
             resolver
@@ -1041,6 +1527,7 @@
     }
 
     restartTrackerAfterCharacterChangeOrTime(1000);
+    stopPlaybackForJump();
 
     const target = Math.min(total, Math.max(1, Math.round((percent / 100) * total)));
 
@@ -1081,10 +1568,10 @@
         {
           component: ConfirmDialog,
           props: {
-            dialogHeader: '完成本书',
-            dialogMessage: `您想要完成本书吗${
-              diffToComplete ? ` and capture ${diffToComplete} characters read` : ''
-            }?`,
+            dialogHeader: tImmediate('dialog.completeBook.header'),
+            dialogMessage: diffToComplete
+              ? tImmediate('dialog.completeBook.bodyWithChars', { chars: diffToComplete })
+              : tImmediate('dialog.completeBook.body'),
             resolver
           }
         }
@@ -1116,7 +1603,7 @@
         const [hadError] = await trackerElm.processStatistics(diffToComplete);
 
         if (hadError) {
-          throw new Error('字数更新失败');
+          throw new Error(tImmediate('errors.charCountUpdate'));
         }
       }
 
@@ -1211,13 +1698,13 @@
       }
     } catch ({ message }: any) {
       dialogManager.dialogs$.next([
-        {
-          component: MessageDialog,
-          props: {
-            title: '错误',
-            message: `Error completing Book: ${message}`
+          {
+            component: MessageDialog,
+            props: {
+              title: tImmediate('common.error'),
+              message: tImmediate('errors.completeBook', { detail: message })
+            }
           }
-        }
       ]);
     }
   }
@@ -1288,13 +1775,16 @@
       if (throwIfNotFound) {
         throw new Error(`No storage source found`);
       }
-
       return undefined;
     }
 
+    // After the storage-sources unification: the only external target is
+    // the on-disk library (INTERNAL_TAURI_FS). INTERNAL_DEFAULT still maps
+    // here for books saved before the split.
     if (
-      storageSourceName === InternalStorageSources.INTERNAL_TAURI_FS ||
-      (storageSourceName === InternalStorageSources.INTERNAL_DEFAULT && isTauri())
+      isTauri() &&
+      (storageSourceName === InternalStorageSources.INTERNAL_TAURI_FS ||
+        storageSourceName === InternalStorageSources.INTERNAL_DEFAULT)
     ) {
       return getStorageHandler(
         window,
@@ -1307,76 +1797,67 @@
         $readingGoalsMergeMode$
       );
     }
-    if (storageSourceName) {
-      const db = await database.db;
-      const storageSource = await db.get('storageSource', storageSourceName);
 
-      if (storageSource) {
-        return getStorageHandler(
-          window,
-          storageSource.type,
-          storageSourceName,
-          true,
-          $cacheStorageData$,
-          $replicationSaveBehavior$,
-          $statisticsMergeMode$,
-          $readingGoalsMergeMode$
-        );
-      }
-      if (throwIfNotFound) {
-        throw new Error(`No storage source with name ${storageSourceName} found`);
-      }
+    if (throwIfNotFound) {
+      throw new Error(`No storage source with name ${storageSourceName} found`);
     }
 
-    const message = `未找到名为 ${storageSourceName} 的存储来源 - 跳过自动导入/导出`;
-
-    logger.warn(message);
-
-    dialogManager.dialogs$.next([
-      {
-        component: MessageDialog,
-        props: {
-          title: '配置错误',
-          message
-        }
-      }
-    ]);
-
+    logger.warn(`跳过外部存储：不再支持的来源 ${storageSourceName}`);
     return undefined;
   }
 
   async function saveExternalLastRead(
     storageHandler: BaseStorageHandler | undefined,
-    localBookData: BooksDbBookData
+    localBookData: BooksDbBookData,
+    onProgress?: (done: number, total: number) => void
   ) {
     if (!storageHandler) {
       return localBookData;
     }
 
-    // eslint-disable-next-line prefer-const
     let { id, ...bookData } = localBookData;
 
     if (localBookData.storageSource) {
-      const externalBookData = await storageHandler.getBook();
+      // This is the real disk pull for external-storage books: the IDB record
+      // is an empty stub, and extractBookData reads + decompresses the whole
+      // bookdata zip here. Feed the reader's storage-pull progress from it —
+      // the 409-line callback on localStorageHandler never fires (that's an
+      // IDB read, not the disk extraction).
+      const externalBookData = await storageHandler.getBook(onProgress);
 
       if (externalBookData instanceof File) {
-        throw new Error(
-          `外部书籍数据格式错误（返回了文件而非解析后的数据）：${localBookData.title}`
-        );
+        throw new Error(tImmediate('errors.externalBookIsFile', { title: localBookData.title }));
       }
 
       if (externalBookData) {
-        bookData = {
-          ...externalBookData,
-          ...{
-            id: localBookData.id,
-            lastBookOpen: localBookData.lastBookOpen,
-            storageSource: localBookData.storageSource
-          }
-        };
+        // Prefer the fresher of (IDB local) vs (external disk) by
+        // lastBookModified. Without this guard, any local-only mutation —
+        // most importantly an OCR run that writes to IDB but hasn't been
+        // pushed to FS yet — gets silently clobbered the next time the
+        // book is opened, because the stale disk copy unconditionally
+        // overrides the fresher local one. Symptom: OCR'd PDFs lose their
+        // <p class="pdf-ocr-text"> paragraphs the moment the user reloads.
+        const localTs = localBookData.lastBookModified || 0;
+        const externalTs = externalBookData.lastBookModified || 0;
+        if (externalTs >= localTs) {
+          bookData = {
+            ...externalBookData,
+            ...{
+              id: localBookData.id,
+              lastBookOpen: localBookData.lastBookOpen,
+              storageSource: localBookData.storageSource
+            }
+          };
+        }
+        // else: localBookData is newer — keep what IDB gave us. The user
+        // can replicate up to external storage later via the normal export
+        // flow if they want disk parity.
       } else if (!localBookData.elementHtml) {
         throw new Error(
-          `未找到外部书籍数据：${localBookData.storageSource} 中不存在《${localBookData.title}》的书籍文件`
+          tImmediate('errors.externalBookMissing', {
+            source: localBookData.storageSource ?? '',
+            title: localBookData.title
+          })
         );
       } else {
         logger.warn(
@@ -1384,13 +1865,13 @@
         );
       }
     } else if (!localBookData.elementHtml) {
-      throw new Error('书籍没有存储数据');
+      throw new Error(tImmediate('errors.noBookData'));
     }
 
     const dataToReturn = { id, ...bookData };
 
     await storageHandler.updateLastRead(dataToReturn).catch((error: any) => {
-      const message = `Failed to update last read on external storage: ${error.message}`;
+      const message = tImmediate('errors.updateLastRead', { detail: error.message });
 
       logger.warn(message);
 
@@ -1398,7 +1879,7 @@
         {
           component: MessageDialog,
           props: {
-            title: '更新错误',
+            title: tImmediate('errors.updateTitle'),
             message
           }
         }
@@ -1462,7 +1943,7 @@
       scrollToBookmark,
       (x) => multiplier$.next(multiplier$.getValue() + x),
       autoScroller,
-      autoReader,
+      toggleTts,
       pageManager,
       $verticalMode$,
       changeChapter,
@@ -1531,7 +2012,7 @@
     hlMenuVisible = true;
   }
 
-  async function handleHlColor(color: HighlightColor) {
+  async function handleHlColor(color: HighlightSlot) {
     const container = getBookContentEl();
     if (!container) return;
 
@@ -1555,11 +2036,79 @@
       hlMemoSelectedText = hlPendingRange.toString();
       hlMemoText = '';
       hlMemoTags = [];
-      hlPendingColor = 'yellow';
+      hlPendingColor = '1';
       hlMemoDialogOpen = true;
       skipKeyDownListener$.next(true);
     }
     hlMenuVisible = false;
+  }
+
+  /** The text the toolbar is acting on: the pending selection when creating,
+   *  the stored highlight's own text when it was opened on an existing one. */
+  function hlMenuText() {
+    if (hlMenuMode === 'create') return hlPendingRange?.toString() ?? '';
+    return hlEditTarget?.text ?? '';
+  }
+
+  async function handleHlCopy() {
+    const text = hlMenuText();
+    hlMenuVisible = false;
+    hlEditTarget = undefined;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error: any) {
+      // The async Clipboard API refuses whenever the document isn't the focused
+      // one ("Document is not focused") — measured on this WebView. The old
+      // synchronous copy command has no such condition, so it is the fallback,
+      // and only a failure of both is worth telling the reader about.
+      if (!copyViaCommand(text)) {
+        dialogManager.dialogs$.next([
+          {
+            component: MessageDialog,
+            props: { title: tImmediate('highlight.copyFailed'), message: error?.message ?? String(error) }
+          }
+        ]);
+      }
+    }
+  }
+
+  function copyViaCommand(text: string) {
+    const selection = window.getSelection();
+    const kept = selection && selection.rangeCount ? selection.getRangeAt(0) : undefined;
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } catch {
+      // Unsupported command: reported to the caller as not copied.
+    }
+    area.remove();
+    // Selecting the textarea took the reader's own selection away.
+    if (kept && selection) {
+      selection.removeAllRanges();
+      selection.addRange(kept);
+    }
+    return copied;
+  }
+
+  async function handleHlAskAi() {
+    const text = hlMenuText().trim();
+    hlMenuVisible = false;
+    hlEditTarget = undefined;
+    if (!text) return;
+    pauseTracker();
+    showHeader = false;
+    // Quoted and left open-ended: what to ask about it is the reader's call.
+    aiInitialInput = `「${text}」\n`;
+    await loadAiDrawer();
+    aiDrawerOpen = true;
   }
 
   function handleHlLookup() {
@@ -1573,10 +2122,66 @@
       return;
     }
     dictPopupWord = text;
+    dictPopupSentence = extractSelectionSentence(hlPendingRange, text);
     dictPopupX = hlMenuX;
     dictPopupY = hlMenuY + 30;
     dictPopupOpen = true;
     hlMenuVisible = false;
+  }
+
+  /**
+   * Grab the sentence around a selection for the contextual gloss. Walks up to
+   * the nearest block-level ancestor rather than using the text node alone,
+   * because inline markup (ruby, emphasis, links) routinely splits a sentence
+   * across several text nodes. Returns '' when the sentence can't be recovered;
+   * the gloss then falls back to word-only, and the dictionary is unaffected.
+   */
+  function extractSelectionSentence(range: Range, selected: string): string {
+    try {
+      let node: Node | null = range.commonAncestorContainer;
+      if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+      let block = node as HTMLElement | null;
+      while (
+        block &&
+        block.parentElement &&
+        (block.textContent || '').length < selected.length + 40
+      ) {
+        block = block.parentElement;
+      }
+      const text = (block?.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text) return '';
+      const at = text.indexOf(selected);
+      return extractSentence(text, at >= 0 ? at : 0);
+    } catch {
+      // Detached ranges and cross-document nodes both land here; a missing
+      // sentence only downgrades the gloss, so it is not worth surfacing.
+      return '';
+    }
+  }
+
+  /**
+   * "Start here": pick where playback begins without leaving a highlight
+   * behind — the selection menu's own answer to the fact that highlighting a
+   * passage and starting from it were the same gesture.
+   *
+   * The typewriter comes first because it is the half that is visibly
+   * running: moving its reveal frontier IS the answer there, and starting the
+   * voice instead would switch the typewriter off (they are exclusive).
+   */
+  function handleHlStartHere() {
+    hlMenuVisible = false;
+
+    // Both engines take the selection as their start, so this is a restart
+    // of whichever is playing — the voice when neither is. A running voice
+    // has to be restarted anyway: it reads its position only when it queues
+    // the next utterance, so a bare seek would finish the current one first.
+    if (autoScroller?.wasAutoScrollerEnabled$.getValue()) {
+      autoScroller.off();
+      autoScroller.toggle();
+      return;
+    }
+    autoReader?.off();
+    toggleTts();
   }
 
   function handleHlEditMemoRequest() {
@@ -1674,6 +2279,8 @@
     const data = await bookmarkData;
     if (!data || !bookmarkManager) return;
 
+    stopPlaybackForJump();
+
     if (data.exploredCharCount !== exploredCharCount) {
       pauseTracker(true);
     }
@@ -1696,9 +2303,8 @@
       {
         component: MessageDialog,
         props: {
-          title: '旧域名',
-          message:
-            '您正在使用 ッツ 阅读器的旧域名 - 建议切换到 https://reader.ttsu.app 以避免问题并确保完整功能'
+          title: tImmediate('domainHint.title'),
+          message: tImmediate('domainHint.message')
         },
         disableCloseOnClick: true
       }
@@ -1729,6 +2335,7 @@
       pauseTracker(true);
     }
 
+    stopPlaybackForJump();
     nextChapter$.next(nextChapter.reference);
   }
 
@@ -1745,7 +2352,8 @@
       openActionBackdrop();
     }
 
-    const currentHandlerStorageSource = $rawBookData$.storageSource || $syncTarget$;
+    const currentHandlerStorageSource =
+      $rawBookData$.storageSource || InternalStorageSources.INTERNAL_TAURI_FS;
 
     externalStorageHandler.updateSettings(
       window,
@@ -1787,6 +2395,11 @@
 
     if (error) {
       if (!isSilent) {
+        // Same rule as everywhere else: the report dialog is an extra, not a
+        // replacement for the reason. The context sentence is worth keeping
+        // though — `error` alone rarely says *which* operation failed.
+        // (errorCount is per-operation here too; clearHistory runs at the top
+        // of this replication path.)
         const showReport = logger.errorCount > 1;
 
         logger.warn(error);
@@ -1795,10 +2408,8 @@
           {
             component: showReport ? LogReportDialog : MessageDialog,
             props: {
-              title: '处理数据错误',
-              message: showReport
-                ? `部分或全部数据无法存储到外部存储`
-                : error
+              title: tImmediate('errors.externalSaveTitle'),
+              message: tImmediate('errors.externalSave', { detail: String(error) })
             }
           }
         ]);
@@ -1863,8 +2474,8 @@
             {
               component: ConfirmDialog,
               props: {
-                dialogHeader: '确认退出',
-                dialogMessage: '当前位置未添加书签。继续离开吗？',
+                dialogHeader: tImmediate('dialog.confirmExit.header'),
+                dialogMessage: tImmediate('dialog.confirmExit.body'),
                 resolver
               },
 
@@ -1895,7 +2506,7 @@
         const [hadError, updated] = await trackerElm.flushUpdates(true);
 
         if (hadError) {
-          throw new Error('更新统计出错');
+          throw new Error(tImmediate('errors.statsUpdate'));
         }
 
         if (updated) {
@@ -1920,7 +2531,7 @@
         {
           component: MessageDialog,
           props: {
-            title: '错误',
+            title: tImmediate('common.error'),
             message
           },
           disableCloseOnClick: true
@@ -1942,8 +2553,7 @@
       return;
     }
 
-    autoScroller?.off();
-    autoReader?.off();
+    stopPlaybackForJump();
 
     if ($pauseTrackerOnCustomPointChange$) {
       pauseTracker();
@@ -1967,7 +2577,6 @@
     } = getReferencePoints(window, contentEl, $verticalMode$, firstDimensionMargin);
 
     merge(fromEvent(document, 'pointerup'), fromEvent(document, 'pointermove'))
-      // eslint-disable-next-line rxjs/no-ignored-takewhile-value
       .pipe(takeWhile(() => isSelectingCustomReadingPoint))
       .subscribe((event: Event) => {
         if (!(event instanceof PointerEvent)) {
@@ -2060,6 +2669,106 @@
       });
   }
 
+  function openBookTextEditor() {
+    const book = $rawBookData$;
+    if (!book) return;
+    const format = getEditableTextFormat(book);
+    if (!format) return;
+    // Vault-synced books are read-only here: the file is authoritative, so the
+    // next scan would overwrite whatever was typed in.
+    if (book.sourcePath) {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: tImmediate('bookEditor.saveFailedTitle'),
+            message: tImmediate('vaultSync.editDisabled')
+          }
+        }
+      ]);
+      return;
+    }
+
+    pauseTracker();
+    showHeader = false;
+    bookTextEditorFormat = format;
+    bookTextEditorRecovered = typeof book.sourceText !== 'string';
+    bookTextEditorSource = book.sourceText ?? recoverTextSource(book.elementHtml || '', format);
+    bookTextEditorOriginal = book.sourceTextOriginal;
+    bookTextEditorOpen = true;
+  }
+
+  async function saveBookTextSource(source: string) {
+    const visibleBook = $rawBookData$;
+    if (!visibleBook || bookTextEditorSaving) return;
+
+    bookTextEditorSaving = true;
+    try {
+      const current = await database.getData(visibleBook.id);
+      if (!current) throw new Error('Book data is no longer available');
+
+      const format = getEditableTextFormat(current);
+      if (!format) throw new Error('Only Markdown and TXT books can be edited');
+
+      const currentSource =
+        current.sourceText ?? recoverTextSource(current.elementHtml || '', format);
+      const formatted = formatTextSource(source, format);
+      const now = Date.now();
+      const updated: BooksDbBookData = {
+        ...current,
+        sourceText: source,
+        sourceTextOriginal: current.sourceTextOriginal ?? currentSource,
+        elementHtml: formatted.elementHtml,
+        characters: formatted.characters,
+        sections: formatted.sections,
+        lastBookModified: now
+      };
+
+      const shouldWriteExternal =
+        !!externalStorageHandler &&
+        (!!updated.storageSource ||
+          $autoReplication$ === AutoReplicationType.Up ||
+          $autoReplication$ === AutoReplicationType.All);
+
+      // For an external-storage book, write the canonical bookdata archive
+      // before updating the local cache. This prevents a stale disk copy from
+      // winning on the next launch if the external write fails.
+      if (shouldWriteExternal && externalStorageHandler) {
+        const { id: _id, ...externalBookData } = updated;
+        externalStorageHandler.startContext({
+          id: updated.id,
+          title: updated.title,
+          imagePath: updated.coverImage
+        });
+        await externalStorageHandler.saveBook(externalBookData, true);
+      }
+
+      const db = await database.db;
+      await db.put('data', updated);
+      evictFormattedBookCache();
+      bookTextEditorOpen = false;
+
+      // Recreate the reader's section managers and text indexes from the new
+      // source. The route is client-only, so a local reload is deterministic
+      // and avoids leaving stale highlight/range objects alive.
+      window.location.reload();
+    } catch (error: any) {
+      dialogManager.dialogs$.next([
+        {
+          component: MessageDialog,
+          props: {
+            title: tImmediate('bookEditor.saveFailedTitle'),
+            message: tImmediate('bookEditor.saveFailed', {
+              error: error?.message || String(error)
+            })
+          }
+        }
+      ]);
+    } finally {
+      bookTextEditorSaving = false;
+    }
+  }
+
   function scheduleReplication(dataType: StorageDataType) {
     if (upSyncEnabled) {
       const toReplicate = isReplicating ? dataToReplicateQueue : dataToReplicate;
@@ -2085,30 +2794,47 @@
 
 {$collectReaderImageGallerySpoilerToggles$ ?? ''}
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
-{#if !showSpinner && !isPaginated}
-  <AutoScrollFab {autoScroller} />
-{/if}
-{#if !showSpinner && isPaginated}
-  <AutoReaderFab {autoReader} seekCharCount={ttsSeekCharCount} resumePosition={ttsResumePosition} />
+{#if !showSpinner}
+  <PlaybackDock {autoScroller} {autoReader} {toggleTts} />
 {/if}
 <div
   class="fixed inset-x-0 top-0 z-10 h-12 w-full"
   role="button"
   tabindex="-1"
-  aria-label="显示阅读器菜单"
+  aria-label={$t('readerFooter.menuAria')}
   on:mouseenter={() => {
     clearTimeout(headerEnterTimer);
     headerEnterTimer = setTimeout(() => (showHeader = true), 200);
   }}
   on:mouseleave={() => clearTimeout(headerEnterTimer)}
   on:click={() => (showHeader = true)}
-  on:keyup={dummyFn}
+  on:keyup={activateOnKeyup}
 ></div>
 {#if $rawBookData$ && isScannedPdf($rawBookData$)}
   <PdfOcrBanner
     book={$rawBookData$}
     on:updated={() => window.location.reload()}
   />
+{/if}
+{#if $rawBookData$ && isComicBook($rawBookData$)}
+  <ComicOverlay title={$rawBookData$.title} on:hasTranslation={() => (comicHasTranslation = true)} />
+  {#if !comicHasTranslation}
+    <ComicTranslateBanner
+      bookId={$rawBookData$.id}
+      bookTitle={$rawBookData$.title}
+      on:translate={() => leaveReader(`${mergeEntries.TRANSLATE.routeId}?bookId=${$rawBookData$?.id || ''}`, false)}
+    />
+  {/if}
+{/if}
+{#if imageZoomMode}
+  <BookImageZoom />
+{/if}
+<WrFootnotePopup />
+{#if $rawBookData$ && /data-pdf-page=/.test($rawBookData$.elementHtml || '')}
+  <PdfPageContextMenu book={$rawBookData$} />
+{/if}
+{#if $rawBookData$}
+  <KeyboardShortcutsHelp />
 {/if}
 
 {#if showHeader}
@@ -2120,6 +2846,9 @@
     <BookReaderHeader
       hasChapterData={!!$sectionData$?.length}
       hasText={!!bookCharCount}
+      textEditable={!!($rawBookData$ && getEditableTextFormat($rawBookData$))}
+      aiAvailable={$rawBookData$ ? hasIndexableText($rawBookData$) : true}
+      hasReadableText={$rawBookData$ ? hasIndexableText($rawBookData$) : true}
       hasCustomReadingPoint={!!(
         ($customReadingPointEnabled$ || isPaginated) &&
         ((isPaginated && customReadingPointRange) ||
@@ -2127,8 +2856,10 @@
       )}
       showFullscreenButton={fullscreenManager.fullscreenEnabled}
       autoScrollMultiplier={$multiplier$}
+      bookTitle={$rawBookData$?.title ?? ''}
       {hasBookmarkData}
       bind:isBookmarkScreen
+      on:editTextClick={openBookTextEditor}
       on:tocClick={() => {
         pauseTracker();
 
@@ -2140,9 +2871,10 @@
         showHeader = false;
         highlightSidebarOpen$.next(true);
       }}
-      on:aiClick={() => {
+      on:aiClick={async () => {
         pauseTracker();
         showHeader = false;
+        await loadAiDrawer();
         aiDrawerOpen = true;
       }}
       on:jumpClick={handleJump}
@@ -2186,11 +2918,20 @@
 
         leaveReader(mergeEntries.STATISTICS.routeId, false);
       }}
-      on:readerImageGalleryClick={() => {
+      on:translateClick={() => {
         showHeader = false;
+        leaveReader(`${mergeEntries.TRANSLATE.routeId}?bookId=${$rawBookData$?.id || ''}`, false);
+      }}
+      on:readerImageGalleryClick={async () => {
+        showHeader = false;
+        await loadImageGallery();
         showReaderImageGallery = true;
       }}
-      on:settingsClick={() => leaveReader(mergeEntries.SETTINGS.routeId, false)}
+      on:settingsClick={async () => {
+        showHeader = false;
+        await loadReaderSettingsDrawer();
+        settingsDrawerOpen = true;
+      }}
       on:domainHintClick={onDomainHintClick}
       on:bookManagerClick={() => leaveReader(mergeEntries.MANAGE.routeId)}
     />
@@ -2198,13 +2939,14 @@
 {/if}
 
 {#if $bookData$ && $rawBookData$}
-  {#if $statisticsEnabled$}
-    <BookReadingTracker
+  {#if $statisticsEnabled$ && BookReadingTracker}
+    <svelte:component
+      this={BookReadingTracker}
       fontColor={$themeOption$.fontColor}
       backgroundColor={$backgroundColor$}
       bookTitle={$rawBookData$.title}
       sectionData={$sectionData$}
-      isPdfBook={!!$rawBookData$.sections?.[0]?.reference?.startsWith('pdf-page-')}
+      isPdfBook={isPagedBook($rawBookData$)}
       {frozenPosition}
       {exploredCharCount}
       {bookCharCount}
@@ -2218,7 +2960,8 @@
           scheduleReplication(StorageDataType.STATISTICS);
         }
       }}
-      on:trackerAvailable={() => (showTrackerIcon = true)}
+      {userPausedTracking}
+    on:trackerAvailable={() => (showTrackerIcon = true)}
       on:trackerMenuClosed={() => {
         if (!wasTrackerPaused) {
           isTrackerPaused$.next(false);
@@ -2233,7 +2976,7 @@
   <StyleSheetRenderer styleSheet={$bookData$.styleSheet} />
   <BookReader
     htmlContent={$bookData$.htmlContent}
-    language={$bookData$?.language}
+    language={effectiveLanguage}
     width={$containerViewportWidth$ ?? 0}
     height={$containerViewportHeight$ ?? 0}
     {fontFeatureSettings}
@@ -2317,14 +3060,40 @@
   </div>
 {/if}
 
-{#if aiDrawerOpen && $rawBookData$}
-  <AiReaderDrawer
+{#if settingsDrawerOpen && ReaderSettingsDrawer}
+  <svelte:component
+    this={ReaderSettingsDrawer}
+    bookLanguage={effectiveLanguage}
+    on:close={() => (settingsDrawerOpen = false)}
+  />
+{/if}
+
+{#if aiDrawerOpen && $rawBookData$ && AiReaderDrawer}
+  <svelte:component
+    this={AiReaderDrawer}
     bookId={$rawBookData$.id}
     bookTitle={$rawBookData$.title}
     elementHtml={$rawBookData$.elementHtml}
     {exploredCharCount}
     {bookCharCount}
-    on:close={() => (aiDrawerOpen = false)}
+    initialInput={aiInitialInput}
+    on:close={() => {
+      aiDrawerOpen = false;
+      aiInitialInput = '';
+    }}
+  />
+{/if}
+
+{#if bookTextEditorOpen && $rawBookData$}
+  <BookTextEditorDialog
+    bookTitle={$rawBookData$.title}
+    source={bookTextEditorSource}
+    originalSource={bookTextEditorOriginal}
+    format={bookTextEditorFormat}
+    recoveredFromHtml={bookTextEditorRecovered}
+    saving={bookTextEditorSaving}
+    on:save={({ detail }) => saveBookTextSource(detail.source)}
+    on:cancel={() => (bookTextEditorOpen = false)}
   />
 {/if}
 
@@ -2350,10 +3119,14 @@
   visible={hlMenuVisible}
   mode={hlMenuMode}
   hasMemo={hlEditTarget?.memo ? true : false}
+  aiAvailable={$rawBookData$ ? hasIndexableText($rawBookData$) : false}
   on:color={({ detail }) => handleHlColor(detail)}
   on:memo={handleHlMemoRequest}
   on:editMemo={handleHlEditMemoRequest}
   on:lookup={handleHlLookup}
+  on:startHere={handleHlStartHere}
+  on:copy={handleHlCopy}
+  on:askAi={handleHlAskAi}
   on:delete={handleHlDelete}
   on:close={() => { hlMenuVisible = false; hlEditTarget = undefined; }}
 />
@@ -2361,6 +3134,8 @@
 {#if dictPopupOpen}
   <DictPopup
     word={dictPopupWord}
+    sentence={dictPopupSentence}
+    bookTitle={$rawBookData$?.title ?? ''}
     x={dictPopupX}
     y={dictPopupY}
     on:close={() => (dictPopupOpen = false)}
@@ -2377,8 +3152,11 @@
   />
 {/if}
 
-{#if showReaderImageGallery}
-  <BookReaderImageGallery
+<HighlightMemoCard anchor={memoCardAnchor} memo={memoCardText} tags={memoCardTags} />
+
+{#if showReaderImageGallery && BookReaderImageGallery}
+  <svelte:component
+    this={BookReaderImageGallery}
     fontColor={$themeOption$.fontColor}
     backgroundColor={$backgroundColor$}
     on:close={() => (showReaderImageGallery = false)}
@@ -2398,45 +3176,93 @@
 
 {#if $enableTapEdgeToFlip$ && isPaginated && !$skipKeyDownListener$}
   <button
-    class="fixed left-0 z-10 w-5"
+    class="fixed left-0 z-10"
     on:click={$verticalMode$ ? () => pageManager?.nextPage() : () => pageManager?.prevPage()}
     style:height={tapButtonHeight}
     style:top={tapButtonTop}
+    style:width={tapEdgeWidth}
   />
   <button
-    class="fixed right-0 z-10 w-5"
+    class="fixed right-0 z-10"
     on:click={$verticalMode$ ? () => pageManager?.prevPage() : () => pageManager?.nextPage()}
     style:height={tapButtonHeight}
     style:top={tapButtonTop}
+    style:width={tapEdgeWidth}
   />
+  <!-- Visual edge-flip hint. Pointer-events disabled because the clickable
+       target is the big invisible button above; the chevron just signals
+       "this side flips a page". -->
+  {#if leftHintVisible}
+    <div
+      class="edge-flip-hint left"
+      style:top={tapButtonTop}
+      style:left="0.75rem"
+      transition:fade={{ duration: 180 }}
+    >
+      <Fa icon={$verticalMode$ ? faChevronRight : faChevronLeft} />
+    </div>
+  {/if}
+  {#if rightHintVisible}
+    <div
+      class="edge-flip-hint right"
+      style:top={tapButtonTop}
+      style:right="0.75rem"
+      transition:fade={{ duration: 180 }}
+    >
+      <Fa icon={$verticalMode$ ? faChevronLeft : faChevronRight} />
+    </div>
+  {/if}
 {/if}
 
 {#if showSpinner}
-  <div class="fixed inset-0 flex h-full w-full items-center justify-center text-7xl">
-    <Fa icon={faSpinner} spin />
+  <div class="fixed inset-0 flex flex-col h-full w-full items-center justify-center gap-6">
+    <Fa icon={faSpinner} spin class="text-7xl" />
+    {#if loadProgress.stage !== 'idle' && loadProgress.stage !== 'done'}
+      <div class="w-72 flex flex-col gap-2 items-center">
+        <div class="text-sm opacity-75 tabular-nums">
+          {loadProgress.label || STAGE_LABELS[loadProgress.stage]}
+          <span class="opacity-60">· {loadProgress.pct}%</span>
+        </div>
+        <div class="w-full h-1.5 rounded bg-current/20 overflow-hidden">
+          <div
+            class="h-full rounded transition-[width] duration-150"
+            style="width:{loadProgress.pct}%;background:var(--accent-color, #5f7e7b)"
+          ></div>
+        </div>
+      </div>
+    {/if}
   </div>
 {/if}
 
+<!-- The footer reads in the theme's own text colour. It used the legacy
+     tooltipTextFontColor, which no theme sets, so every theme got the same
+     dark teal at 70%: 1.3–3.5:1 against the page, close to invisible on the
+     dark themes. Any opacity below the text colour's own drops some themes
+     under 4.5:1 again (sage-green's body text is 5.3:1). -->
 <div
   id="ttu-page-footer"
   tabindex="0"
   role="button"
   class="writing-horizontal-tb fixed bottom-0 left-0 z-10 flex h-8 w-full items-center justify-between text-xs leading-none"
-  style:color={$themeOption$?.tooltipTextFontColor}
+  style:color={$themeOption$?.fontColor}
   on:click={() => (showFooter = !showFooter)}
-  on:keyup={dummyFn}
+  on:keyup={activateOnKeyup}
 >
   <div class="flex h-full">
     {#if showTrackerIcon}
       <div
         role="button"
-        title="单击打开统计菜单，双击切换统计"
+        title={$t('readerFooter.statsMenu')}
         class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
-        class:text-red-500={$isTrackerPaused$}
+        class:text-danger={$isTrackerPaused$}
         class:animate-pulse={frozenPosition > -1}
         use:multiClickHandler={[trackerSingleClickHandler, trackerDblClickHandler]}
       >
-        <Fa icon={$isTrackerPaused$ ? faPlay : faPause} />
+        <!-- A stopwatch, not ▶ / ⏸: that pair is the typewriter's, one corner
+             over, and starting playback resumes tracking — so pressing play
+             flipped this one too, and it read as a second play button. Paused
+             still shows as text-danger. -->
+        <Fa icon={faStopwatch} />
       </div>
     {/if}
     {#if dataToReplicate.length}
@@ -2444,7 +3270,7 @@
         tabindex="0"
         role="button"
         class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
-        class:text-red-500={externalStorageErrors > 1}
+        class:text-danger={externalStorageErrors > 1}
         class:animate-pulse={externalStorageErrors > 1 || isReplicating}
         on:click|stopPropagation={() => {
           if ($statisticsEnabled$) {
@@ -2458,7 +3284,7 @@
             }
           });
         }}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         <Fa icon={faCloudBolt} />
       </div>
@@ -2475,13 +3301,13 @@
     <div
       tabindex="0"
       role="button"
-      title="点击复制进度"
+      title={$t('readerFooter.copyProgress')}
       class="writing-horizontal-tb fixed bottom-2 right-2 z-10 text-xs leading-none select-none whitespace-pre"
       class:invisible={!$showCharacterCounter$ &&
         !$showPercentage$ &&
         !$showFooterChapterCharacterCounter$ &&
         !$showFooterChapterPercentage$}
-      style:color={$themeOption$?.tooltipTextFontColor}
+      style:color={$themeOption$?.fontColor}
       on:click|stopPropagation={({ target }) => {
         if (!$showCharacterCounter$ && !$showPercentage$) {
           return;
@@ -2493,7 +3319,7 @@
           pulseElement(target.parentElement || target, 'add', 0.5, 500);
         }
       }}
-      on:keyup={dummyFn}
+      on:keyup={activateOnKeyup}
     >
       <span class="mr-4" class:invisible={!footerChapterProgress}>{footerChapterProgress}</span>
       <span class:invisible={!$showCharacterCounter$ && !$showPercentage$}>{currentProgress}</span>
@@ -2508,6 +3334,9 @@
 <svelte:window
   on:keydown={onKeydown}
   on:beforeunload={handleUnload}
+  on:pointermove={onWindowPointerMove}
+  on:wheel={suspendTtsFollow}
+  on:touchmove={suspendTtsFollow}
   on:resize={() => {
     if ($statisticsEnabled$ && !$isTrackerPaused$) {
       pauseTracker();
@@ -2520,3 +3349,30 @@
     }
   }}
 />
+
+<style lang="scss">
+  // Visual page-flip hint that fades in when the cursor enters the edge
+  // tap zone. Pure UX: the wider invisible button under it handles the
+  // actual click. `pointer-events: none` keeps it out of selection / drag
+  // paths so reading and highlighting feel untouched.
+  .edge-flip-hint {
+    position: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.32);
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 1.1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    z-index: 11;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    // Vertical center inside the tap-button band (tapButtonTop -> bottom);
+    // translateY moves the chevron off the band's top to its visual middle.
+    transform: translateY(40vh);
+  }
+</style>

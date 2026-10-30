@@ -5,19 +5,20 @@
   import { userFontsCacheName } from '$lib/data/fonts';
   import { logger } from '$lib/data/logger';
   import { userFonts$ } from '$lib/data/store';
-  import { dummyFn } from '$lib/functions/utils';
+  import { activateOnKeyup } from '$lib/functions/utils';
   import { faSpinner, faTrashCan } from '@fortawesome/free-solid-svg-icons';
   import type { BehaviorSubject } from 'rxjs';
   import { onMount } from 'svelte';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
 
   export let fontFamily: BehaviorSubject<string>;
 
-  const tabs = ['已存储', '添加'];
+  const tabs = ['stored', 'add'];
 
   let isLoading = false;
   let cacheLoaded = false;
-  let currentTab = '已存储';
+  let currentTab = 'stored';
   let fontCache: Cache | undefined;
 
   onMount(async () => {
@@ -97,14 +98,14 @@
                 class:text-gray-500={currentTab !== tab}
                 on:click={() => (currentTab = tab)}
               >
-                {tab}
+                {$t('fonts.tab.' + tab)}
               </button>
             </li>
           {/each}
         </ul>
       </div>
       <div class="mt-5">
-        {#if currentTab === '已存储'}
+        {#if currentTab === 'stored'}
           {#if $userFonts$.length}
             <div
               class="grid grid-cols-[repeat(3,auto)] items-center gap-y-4 gap-x-4 max-h-[50vh] overflow-auto break-all md:gap-x-14"
@@ -113,37 +114,37 @@
                 <div
                   tabindex="0"
                   role="button"
-                  title="点击选择字体"
+                  title={$t('fonts.pick')}
                   class="hover:text-blue-700"
                   on:click={() => selectFont(userFont.name)}
-                  on:keyup={dummyFn}
+                  on:keyup={activateOnKeyup}
                 >
                   {userFont.name}
                 </div>
                 <div
                   tabindex="0"
                   role="button"
-                  title="点击选择字体"
+                  title={$t('fonts.pick')}
                   class="hover:text-blue-700"
                   on:click={() => selectFont(userFont.name)}
-                  on:keyup={dummyFn}
+                  on:keyup={activateOnKeyup}
                 >
                   {userFont.fileName}
                 </div>
                 <div
                   tabindex="0"
                   role="button"
-                  title="移除字体"
+                  title={$t('fonts.remove')}
                   class="hover:text-blue-700"
                   on:click={() => removeFont(userFont.path)}
-                  on:keyup={dummyFn}
+                  on:keyup={activateOnKeyup}
                 >
                   <Fa icon={faTrashCan} />
                 </div>
               {/each}
             </div>
           {:else}
-            <div>当前没有保存的字体</div>
+            <div class="text-muted">{$t('fonts.none')}</div>
           {/if}
         {:else if fontCache}
           <SvelteUserFontAdd {fontCache} bind:isLoading />

@@ -27,6 +27,7 @@
   import { debounceTime, fromEvent, tap } from 'rxjs';
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
 
   export let statisticsTitleFilters: Map<string, boolean>;
   export let titlesInStatisticsDateRange: Set<string>;
@@ -99,7 +100,6 @@
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function setTitlesToFilter(_: any) {
     const entries = [...statisticsTitleFilters.entries()];
 
@@ -108,7 +108,6 @@
     applyTitleFilters();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function applyTitleFilters(..._: any) {
     tick().then(() => {
       filteredTitles = titlesToFilter.filter(
@@ -170,7 +169,7 @@
 {$resizeHandler$ ?? ''}
 <div class="flex items-center p-4">
   <button
-    title="关闭标题筛选"
+    title={$t('stats.filter.close')}
     class="flex items-end md:items-center"
     on:click={() => dispatch('close')}
   >
@@ -180,15 +179,15 @@
 <div class="flex flex-col flex-1 px-4">
   <input
     type="search"
-    placeholder="筛选标题"
+    placeholder={$t('stats.filter.placeholder')}
     class="w-full text-black"
     bind:value={titleFilter}
     on:input={handleTitleFilterChange}
   />
   <div class="flex justify-between mt-6 text-2xl">
     <button
-      title="应用筛选"
-      class="hover:text-red-500"
+      title={$t('stats.filter.apply')}
+      class="hover-danger"
       on:click={() => {
         dispatch('applyFilter', titlesToFilter);
         dispatch('close');
@@ -196,26 +195,26 @@
     >
       <Fa icon={faCircleCheck} />
     </button>
-    <button title="全选" class="hover:text-red-500" on:click={() => handleSelectAll(true)}>
+    <button title={$t('stats.filter.selectAll')} class="hover-danger" on:click={() => handleSelectAll(true)}>
       <Fa icon={faListCheck} />
     </button>
-    <button title="取消全选" class="hover:text-red-500" on:click={() => handleSelectAll(false)}>
+    <button title={$t('stats.filter.selectNone')} class="hover-danger" on:click={() => handleSelectAll(false)}>
       <Fa icon={faList} />
     </button>
     <button
       title={$lastStatisticsFilterDateRangeOnly$
-        ? '显示所有时间的标题'
-        : '仅显示所选日期范围的标题'}
-      class="hover:text-red-500"
+        ? $t('stats.filter.allTime')
+        : $t('stats.filter.rangeOnly')}
+      class="hover-danger"
       on:click={() => ($lastStatisticsFilterDateRangeOnly$ = !$lastStatisticsFilterDateRangeOnly$)}
     >
       <Fa icon={$lastStatisticsFilterDateRangeOnly$ ? faCalendarXmark : faCalendar} />
     </button>
     <button
       title={$lastStatisticsFilterShowSelectedTitlesOnly$
-        ? '显示所有标题'
-        : '仅显示选中的标题'}
-      class="hover:text-red-500"
+        ? $t('stats.filter.showAll')
+        : $t('stats.filter.selectedOnly')}
+      class="hover-danger"
       on:click={() =>
         ($lastStatisticsFilterShowSelectedTitlesOnly$ =
           !$lastStatisticsFilterShowSelectedTitlesOnly$)}
@@ -224,8 +223,8 @@
     </button>
     {#if $preFilteredTitlesForStatistics$.size}
       <button
-        title="移除预筛选"
-        class="hover:text-red-500"
+        title={$t('stats.filter.clearPrefilter')}
+        class="hover-danger"
         on:click={() => dispatch('clearPrefilter')}
       >
         <Fa icon={faTrash} />
@@ -259,7 +258,7 @@
         {/each}
       </div>
     {:else}
-      <div class="mt-6 text-2xl text-center">没有可筛选的标题</div>
+      <div class="mt-6 text-2xl text-center text-muted">{$t('stats.filter.empty')}</div>
     {/if}
   </div>
   <div

@@ -7,6 +7,7 @@
     type SectionWithProgress
   } from '$lib/components/book-reader/book-toc/book-toc';
   import HtmlRenderer from '$lib/components/html-renderer.svelte';
+  import { pdfPageShell } from '$lib/functions/pdf-page-shell';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { isStoredFont } from '$lib/data/fonts';
   import { FuriganaStyle } from '$lib/data/furigana-style';
@@ -389,11 +390,14 @@
 
     autoReaderConcrete = createAutoReader($ttsEngine$, destroy$);
     if (language) autoReaderConcrete.lang = language;
-    autoReaderConcrete.onBoundary = (charIndex) => {
-      autoScrollerConcrete?.seekToCharIndex(charIndex);
-    };
+    // No onBoundary here: /b's own handler owns that slot (it is a single
+    // property, so whatever was assigned here was overwritten anyway) and it
+    // no longer drives the reveal at all.
     autoReaderConcrete.wasReaderEnabled$.subscribe((enabled) => {
       if (enabled) {
+        // TTS and the typewriter are mutually exclusive: stop the typewriter
+        // and put the whole text back on screen, so the reader can read ahead
+        // and scroll freely while the voice runs.
         autoScrollerConcrete?.revealAll();
         autoScrollerConcrete?.off();
       }
@@ -693,6 +697,7 @@
 
 <div
   bind:this={contentEl}
+  use:pdfPageShell
   style:color={fontColor}
   style:font-size="{fontSize}px"
   style:line-height={lineHeight}
@@ -807,11 +812,17 @@
 />
 
 <style lang="scss">
-  @import '../styles';
+  @use '../styles';
 
   .book-content {
+    // EPUB / inline illustrations get capped at viewport height so a
+    // tall figure doesn't blow the layout. PDF page images and CBZ comic
+    // pages are wrapped in `.pdf-page-shell` whose `aspect-ratio` already
+    // sizes them correctly — capping their height here truncates the
+    // image so the transparent OCR text layer no longer aligns with the
+    // visible scan. Exclude both.
     :global(svg),
-    :global(img) {
+    :global(img:not(.pdf-page-img)) {
       max-height: 100vh;
     }
   }

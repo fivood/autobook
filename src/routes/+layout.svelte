@@ -3,14 +3,21 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import DomainHint from '$lib/components/domain-hint.svelte';
+  import FsReauthorize from '$lib/components/fs-reauthorize.svelte';
   import OcrMiniStatus from '$lib/components/ocr-mini-status.svelte';
   import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
   import { basePath, clearConsoleOnReload, isTauri, pagePath } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
+  import { installOcrFetchTracker } from '$lib/data/models-registry';
   import { checkForUpdate } from '$lib/functions/updater/check-for-update';
+  import { syncAlwaysOnTop } from '$lib/functions/window-always-on-top';
   import { goto } from '$app/navigation';
   import {
     customThemes$,
+    editFilePath$,
+    highlightCustomColors$,
+    highlightPalette$,
+    highlightSlotStyles$,
     pendingLaunchFiles$,
     syncEnabled$,
     syncToken$,
@@ -20,9 +27,19 @@
   } from '$lib/data/store';
   import { startSyncLoop } from '$lib/data/sync/sync-manager';
   import { availableThemes } from '$lib/data/theme-option';
+  import { highlightSlotStyles } from '$lib/data/highlight-color';
+  import {
+    FORMAT_HUE,
+    FORMAT_SATURATION_SCALE,
+    FORMAT_STOPS_DARK,
+    mutedText,
+    readableOn,
+    stopsForBackground,
+    towardContrast
+  } from '$lib/data/format-color';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
-  import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
+  import { isMobile, isMobile$ } from '$lib/functions/utils';
   import { MetaTags } from 'svelte-meta-tags';
   import '../app.scss';
 
@@ -51,11 +68,59 @@
     setVar('--menu-background', theme.menuBackgroundColor, '#2b5a69');
     setVar('--menu-foreground', theme.menuFontColor, '#f0efe6');
     setVar('--button-selected', theme.buttonSelectedColor, '#2b5a69');
-    setVar('--button-border', (theme as any).buttonBorderColor, theme.buttonSelectedColor);
+    setVar('--button-border', (theme as any).buttonBorderColor, theme.buttonSelectedColor); // optional/legacy theme key not on the Theme type
     setVar('--button-hover', theme.buttonHoverColor, 'rgba(95,126,123,0.18)');
     setVar('--selection-background', theme.selectionBackgroundColor, '#5f7e7b');
     setVar('--selection-foreground', theme.selectionFontColor, '#f0efe6');
-    setVar('--link-color', theme.linkColor, '#2b5a69');
+    // towardContrast: the water theme's link blue read 4.45:1 on its page.
+    setVar('--link-color', towardContrast(theme.linkColor || '#2b5a69', theme.backgroundColor || '#f0efe6'));
+    // Derived, never declared by a theme: each is the theme's own colour moved
+    // only as far as it takes to read at AA on the surface it sits on. Pinned
+    // across every built-in theme by scripts/theme-contrast-test.ts.
+    const page = theme.backgroundColor || '#f0efe6';
+    const menu = theme.menuBackgroundColor || '#2b5a69';
+    setVar('--muted-text', mutedText(theme.fontColor || '#405a5c', page));
+    setVar('--menu-muted', mutedText(theme.menuFontColor || '#f0efe6', menu));
+    setVar('--danger-color', towardContrast('#d95555', page));
+    setVar('--menu-danger', towardContrast('#d95555', menu));
+    const selected = theme.buttonSelectedColor || '#2b5a69';
+    setVar('--button-selected-text', readableOn(selected, [theme.menuFontColor || '#f0efe6', '#ffffff', '#111111']));
+    // Highlight slot treatment. Every decision lives in `highlightSlotStyles`
+    // (pure, tested); this only mirrors the result onto :root for app.scss.
+    // The light/dark split reuses the same luminance test the format colours
+    // use, so a custom theme is classified the same way.
+    const darkPage = stopsForBackground(theme.backgroundColor) === FORMAT_STOPS_DARK;
+    const slotStyles = highlightSlotStyles({
+      mode: $highlightPalette$,
+      custom: $highlightCustomColors$.split(','),
+      fontColor: theme.fontColor,
+      backgroundColor: theme.backgroundColor,
+      darkPage
+    });
+    highlightSlotStyles$.next(slotStyles);
+    for (const [slot, style] of Object.entries(slotStyles)) {
+      s.setProperty(`--hl-${slot}-rgb`, style.rgb);
+      s.setProperty(`--hl-${slot}-alpha`, style.alpha);
+      s.setProperty(`--hl-${slot}-bw`, style.underlineWidth);
+      s.setProperty(`--hl-${slot}-bs`, style.underlineStyle);
+      s.setProperty(`--hl-${slot}-ink`, style.ink);
+    }
+
+    // Book-format identity colors. The hue carries "which format is this";
+    // the lightness/saturation stops come from whether this theme is light or
+    // dark, so a custom theme gets sensible format colors without declaring
+    // any. Emitted as finished hsl() values rather than raw channels so the
+    // consuming CSS stays readable.
+    const stops = stopsForBackground(theme.backgroundColor);
+    s.setProperty('--fmt-cover-shade', String(stops.coverShade));
+    for (const [name, hue] of Object.entries(FORMAT_HUE)) {
+      const scale = FORMAT_SATURATION_SCALE[name] ?? 1;
+      const sat = (v: number) => `${Math.round(v * scale)}%`;
+      s.setProperty(`--fmt-${name}-chip-bg`, `hsl(${hue} ${sat(stops.chipBgSaturation)} ${stops.chipBgLightness}%)`);
+      s.setProperty(`--fmt-${name}-chip-ring`, `hsl(${hue} ${sat(stops.chipRingSaturation)} ${stops.chipRingLightness}%)`);
+      s.setProperty(`--fmt-${name}-cover-bg`, `hsl(${hue} ${sat(stops.coverBgSaturation)} ${stops.coverBgLightness}%)`);
+      s.setProperty(`--fmt-${name}-cover-accent`, `hsl(${hue} ${sat(stops.coverAccentSaturation)} ${stops.coverAccentLightness}%)`);
+    }
   }
 
   if (clearConsoleOnReload && import.meta.hot) {
@@ -113,6 +178,21 @@
     zIndex = '';
   }
 
+  function handleDialogKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && dialogs.length > 0 && !clickOnCloseDisabled) {
+      event.preventDefault();
+      closeAllDialogs();
+    }
+  }
+
+  // Remove only the dialog that dispatched 'close' (by identity), not the whole
+  // stack. This lets a dialog's resolver push a follow-up dialog before close
+  // fires — closeAllDialogs would wipe that just-pushed dialog (the chaining bug
+  // that kept settings-data-paths' double-confirm on native confirm()).
+  function removeDialog(closing: Dialog) {
+    dialogManager.dialogs$.next(dialogs.filter((d) => d !== closing));
+  }
+
   dialogManager.dialogs$.subscribe((d) => {
     clickOnCloseDisabled = d[0]?.disableCloseOnClick ?? false;
     zIndex = d[0]?.zIndex ?? '';
@@ -122,10 +202,15 @@
   page.subscribe((p) => (path = p.url.pathname));
 
   onMount(async () => {
+    // Track PaddleOCR model downloads so the model manager can show
+    // "downloaded" without a cache-storage handle.
+    installOcrFetchTracker();
     if (browser && syncEnabled$.getValue() && syncToken$.getValue()) {
       startSyncLoop();
     }
     if (!isTauri()) return;
+
+    syncAlwaysOnTop();
 
     // Books opened via file association / CLI: queue paths and land on the
     // manager, which performs the actual import.
@@ -135,8 +220,20 @@
 
       const queueLaunchFiles = (paths: string[]) => {
         if (!paths?.length) return;
-        pendingLaunchFiles$.next([...pendingLaunchFiles$.getValue(), ...paths]);
-        goto(`${pagePath}/manage`);
+        // Markdown opened from Explorer is a scratch file to edit, not a book
+        // to keep: it opens in the editor and is never imported. Books in the
+        // same batch still queue, and import next time /manage mounts.
+        // ponytail: one editor, so only the first .md of a batch opens.
+        const isMd = (p: string) => /\.(md|markdown)$/i.test(p);
+        const books = paths.filter((p) => !isMd(p));
+        const md = paths.find(isMd);
+        if (books.length) pendingLaunchFiles$.next([...pendingLaunchFiles$.getValue(), ...books]);
+        if (md) {
+          editFilePath$.next(md);
+          goto(`${pagePath}/edit`);
+        } else {
+          goto(`${pagePath}/manage`);
+        }
       };
 
       queueLaunchFiles(await invoke<string[]>('take_launch_files'));
@@ -146,35 +243,38 @@
       // subscribe and act when they can (e.g. /b toggles TTS).
       listen('tts-toggle', () => ttsToggleRequest$.next(Date.now()));
 
-      // Apply current shortcut, then keep it in sync with user changes.
-      const applyShortcut = (accel: string) =>
+      // Apply current shortcut and keep it in sync with user changes.
+      // BehaviorSubject.subscribe fires synchronously with the current value,
+      // so we don't need (and must not add) a separate initial invoke — a second
+      // parallel `unregister_all + register` races the first and the second
+      // register hits "HotKey already registered".
+      ttsShortcut$.subscribe((accel) =>
         invoke('set_tts_shortcut', { accelerator: accel }).catch((err) =>
-          // eslint-disable-next-line no-console
           console.warn('[tts-shortcut] register failed:', err)
-        );
-      applyShortcut(ttsShortcut$.getValue());
-      ttsShortcut$.subscribe(applyShortcut);
+        )
+      );
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[launch-files] init failed:', err);
     }
 
     try {
       const update = await checkForUpdate();
       if (update) {
+        // Backdrop/Escape close is disabled — a mid-download dismissal would
+        // leave the download running invisibly. The dialog's own "later" /
+        // "close" button is the only way out (guarded by phase in the dialog).
         dialogManager.dialogs$.next([
-          { component: UpdateDialog, props: { update } }
+          { component: UpdateDialog, props: { update }, disableCloseOnClick: true }
         ]);
       }
     } catch (err) {
       // silent — no banner on check failure
-      // eslint-disable-next-line no-console
       console.warn('[updater] check failed:', err);
     }
   });
 </script>
 
-<svelte:window bind:online={$isOnline$} />
+<svelte:window bind:online={$isOnline$} on:keydown={handleDialogKeydown} />
 
 <MetaTags
   title="AutoBook"
@@ -197,17 +297,18 @@
 <OcrMiniStatus />
 
 {#if dialogs.length > 0}
-  <div class="writing-horizontal-tb fixed inset-0 z-50 h-full w-full" style:z-index={zIndex}>
+  <!-- Modal dialogs sit above every transient overlay (TOC/highlight drawers
+       z-60, dict popup z-80, notebook/editor modals z-90/95, toast z-100) so a
+       confirm never renders behind an open drawer. -->
+  <div class="writing-horizontal-tb fixed inset-0 z-[200] h-full w-full" style:z-index={zIndex}>
     <div
-      tabindex="0"
-      role="button"
+      aria-hidden="true"
       class="tap-highlight-transparent absolute inset-0 bg-black/[.32]"
       on:click={() => {
         if (!clickOnCloseDisabled) {
           closeAllDialogs();
         }
       }}
-      on:keyup={dummyFn}
     />
 
     <div
@@ -217,7 +318,7 @@
         {#if typeof dialog.component === 'string'}
           {@html dialog.component}
         {:else}
-          <svelte:component this={dialog.component} {...dialog.props} on:close={closeAllDialogs} />
+          <svelte:component this={dialog.component} {...dialog.props} on:close={() => removeDialog(dialog)} />
         {/if}
       {/each}
     </div>
@@ -227,3 +328,5 @@
 <span style={`font-family: ${$fontFamilyGroupOne$ || 'Noto Serif JP'}`} />
 
 <DomainHint />
+
+<FsReauthorize />

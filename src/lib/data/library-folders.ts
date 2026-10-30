@@ -10,6 +10,7 @@
 import { BehaviorSubject } from 'rxjs';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import type { BooksDbBookFolder, BooksDbFolder } from '$lib/data/database/books-db/versions/books-db';
+import type { BookCardId } from '$lib/data/book-id';
 import { database } from '$lib/data/store';
 
 export const folders$ = new BehaviorSubject<BooksDbFolder[]>([]);
@@ -38,7 +39,10 @@ export async function refreshFolders() {
   bookFolders$.next(allBookFolders);
 }
 
-export async function createFolder(name: string): Promise<BooksDbFolder | undefined> {
+export async function createFolder(
+  name: string,
+  source?: BooksDbFolder['source']
+): Promise<BooksDbFolder | undefined> {
   const trimmed = name.trim();
   if (!trimmed) return undefined;
   const db = await getDb();
@@ -49,10 +53,31 @@ export async function createFolder(name: string): Promise<BooksDbFolder | undefi
   const id = (await db.add('folder', {
     name: trimmed,
     sortOrder,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    ...(source ? { source } : {})
   } as BooksDbFolder)) as number;
   await refreshFolders();
   return folders$.getValue().find((f) => f.id === id);
+}
+
+/**
+ * Folder mirroring a directory path from a folder import, named by its path
+ * relative to the picked directory (`读书/技术`). Re-importing the same tree
+ * reuses the existing folder rather than piling up duplicates, so the mapping
+ * stays stable across imports.
+ *
+ * A hand-made folder that happens to share the name is reused as-is — the
+ * user already treats those as the same category, and silently creating a
+ * second one with an identical label would be worse than the lost `source`
+ * marker.
+ */
+export async function findOrCreateLocalFolder(
+  path: string
+): Promise<BooksDbFolder | undefined> {
+  const trimmed = path.trim();
+  if (!trimmed) return undefined;
+  const existing = folders$.getValue().find((f) => f.name === trimmed);
+  return existing ?? createFolder(trimmed, 'local');
 }
 
 export async function renameFolder(id: number, name: string) {
@@ -83,7 +108,7 @@ export async function deleteFolder(id: number) {
   await refreshFolders();
 }
 
-export async function addBooksToFolder(bookIds: number[], folderId: number) {
+export async function addBooksToFolder(bookIds: BookCardId[], folderId: number) {
   if (!bookIds.length) return;
   const db = await getDb();
   const tx = db.transaction('bookFolder', 'readwrite');
@@ -96,7 +121,7 @@ export async function addBooksToFolder(bookIds: number[], folderId: number) {
   await refreshFolders();
 }
 
-export async function removeBooksFromFolder(bookIds: number[], folderId: number) {
+export async function removeBooksFromFolder(bookIds: BookCardId[], folderId: number) {
   if (!bookIds.length) return;
   const db = await getDb();
   const tx = db.transaction('bookFolder', 'readwrite');
@@ -109,7 +134,7 @@ export async function removeBooksFromFolder(bookIds: number[], folderId: number)
 
 /** Drop all folder assignments for a book — call when the book itself is
  * deleted from the library. */
-export async function clearBookFolderAssignments(bookId: number) {
+export async function clearBookFolderAssignments(bookId: BookCardId) {
   const db = await getDb();
   const tx = db.transaction('bookFolder', 'readwrite');
   const idx = tx.store.index('bookId');

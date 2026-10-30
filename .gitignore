@@ -22,3 +22,26 @@ build-*.log
 latest.json
 release-notes-*.md
 test-dicts/
+
+# static/vendor/ runtime assets (libarchive / ort / pdfjs sidecars),
+# all populated by scripts/copy-vendor-assets.js on npm install. Tracking
+# them bloats the repo with ~32 MB of binaries and churns on every upstream bump.
+static/vendor/libarchive/
+static/vendor/ort/
+static/vendor/pdfjs/
+
+# 本地 AI 验证密钥，永不提交
+ai-verify.local.json
+
+# CodeGraph 本地索引（每机器重建，勿入库）
+.codegraph/
+
+# zvec-grep 本地索引（同上）
+.zvec-grep/
+
+# 本机测试产物（按日期分目录，39M+）
+test-artifacts/
+# 测试用例含本机绝对路径与书库内容，不通用
+docs/test-cases-ai.md
+# 语言路由方案，内容已基本落地，留作本机草稿
+docs/language-routing-plan.md

@@ -6,42 +6,217 @@
  * Shared helpers used by every AutoReader engine.
  */
 
-const SENTENCE_DELIMITER = /([。！？；.!?;\n]+)/;
+import type { AutoReader } from './types';
+// With the extension: scripts/tts-start-position-test.ts loads this module
+// under plain node.
+import { domPositionForCharIndex } from './char-index-locator.ts';
 
-export function splitSentences(text: string): string[] {
-  const result: string[] = [];
-  const parts = text.split(SENTENCE_DELIMITER);
-  let buffer = '';
-  for (let i = 0; i < parts.length; i++) {
-    buffer += parts[i];
-    if (SENTENCE_DELIMITER.test(parts[i]) || i === parts.length - 1) {
-      const trimmed = buffer.trim();
-      if (trimmed) result.push(trimmed);
-      buffer = '';
-    }
-  }
-  if (buffer.trim()) result.push(buffer.trim());
-  return result;
+/**
+ * One TTS unit. `text` is trimmed (engines choke on whitespace-only input),
+ * but `start` / `end` are offsets into the ORIGINAL extractText() string.
+ *
+ * Carrying explicit offsets is load-bearing: the old code derived a global
+ * index by summing `sentences[i].length`, which silently drifted by one
+ * character for every whitespace byte trim() had removed. Over a novel with
+ * a newline between every paragraph that adds up to hundreds of characters,
+ * and the drift lands straight in the TTS sentence highlight and the
+ * typewriter reveal — both of which index into the untrimmed string.
+ */
+export interface Sentence {
+  text: string;
+  start: number;
+  end: number;
 }
 
-export function extractText(root: HTMLElement): string {
-  // 如果 DOM 已被 typewriter 修改，从 .tw-c span 提取以保持索引一致
-  const twcSpans = root.querySelectorAll('.tw-c');
-  if (twcSpans.length > 0) {
-    return Array.from(twcSpans)
-      .map((span) => span.textContent || '')
-      .join('');
+/**
+ * Cap on a single TTS unit. Only bites on pathological input (a wall of text
+ * with no terminal punctuation); normal prose splits well below it. Without a
+ * cap those become one multi-thousand-character utterance, which engines
+ * reject with `text-too-long` — and the recovery path skips the whole thing,
+ * silently dropping content from the read-through.
+ */
+const MAX_SENTENCE_LENGTH = 180;
+
+const TERMINALS = new Set(['。', '！', '？', '；', '…', '.', '!', '?', ';', '\n']);
+
+/** Closing marks that belong to the sentence they follow, not the next one.
+ *  Chinese fiction is full of 「…。」 and “…！” — splitting on the terminal
+ *  alone strands the closer at the head of the next utterance. */
+const CLOSERS = new Set([
+  '」', '』', '”', '’', '"', "'",
+  '）', ')', '》', '〉', '】', '］', ']', '｝', '}', '〕', '〗'
+]);
+
+/** Preferred break points when a unit has to be cut for length. */
+const SOFT_BREAKS = new Set(['，', ',', '、', '：', ':', '—', '–', ' ', '　']);
+
+/** Lowercased words whose trailing period is part of the abbreviation. */
+const ABBREVIATIONS = new Set([
+  'mr', 'mrs', 'ms', 'dr', 'prof', 'st', 'jr', 'sr', 'vs', 'etc', 'inc', 'ltd',
+  'co', 'no', 'vol', 'fig', 'ch', 'p', 'pp', 'ed', 'eds', 'cf', 'al', 'approx',
+  'dept', 'est', 'min', 'max', 'ave', 'blvd', 'rd'
+]);
+
+/** Is the '.' at `i` an actual sentence terminator, or part of a token? */
+function isSentencePeriod(text: string, i: number): boolean {
+  const prev = text[i - 1];
+  const next = text[i + 1];
+
+  // Decimals and dotted version/IP numbers: 3.14, v1.2.3, 192.168.0.1
+  if (prev >= '0' && prev <= '9' && next >= '0' && next <= '9') return false;
+
+  // Scan back over the alphabetic token immediately before the dot.
+  let j = i - 1;
+  while (j >= 0 && /[A-Za-z]/.test(text[j])) j -= 1;
+  const word = text.slice(j + 1, i);
+
+  // A lone letter before a period is an initial or a dotted abbreviation
+  // ("J. K. Rowling", "e.g.", "a.m.", "U.S.A."), never a sentence end —
+  // single-letter sentences don't occur in prose.
+  if (word.length === 1) return false;
+  if (ABBREVIATIONS.has(word.toLowerCase())) return false;
+
+  return true;
+}
+
+/** Something a voice can say: a letter or a digit in any script. */
+const SPEAKABLE = /[\p{L}\p{N}]/u;
+
+/** Trim `text[from, to)` and emit it, splitting further if over the cap. */
+function emit(out: Sentence[], text: string, from: number, to: number, maxLength: number) {
+  const raw = text.slice(from, to);
+  const lead = raw.length - raw.trimStart().length;
+  const trimmed = raw.trim();
+  if (!trimmed) return;
+
+  const base = from + lead;
+
+  // A unit of bare punctuation is dropped: nothing to say, and Edge TTS answers
+  // it with no audio at all, which the reader reports as a failed read. Books
+  // produce these wherever a note marker sits between a sentence and its
+  // closing quotes — 「倾向。<sup>[3]</sup> ’”」 flattens to 「倾向。\n[3]\n ’”」,
+  // and the newline terminal strands 「’”」 as a unit of its own.
+  const push = (s: Sentence) => {
+    if (SPEAKABLE.test(s.text)) out.push(s);
+  };
+
+  if (trimmed.length <= maxLength) {
+    push({ text: trimmed, start: base, end: base + trimmed.length });
+    return;
   }
 
+  // Over the cap: walk forward cutting at the last soft break inside each
+  // window, so the pieces still land on comma/colon boundaries and the voice
+  // doesn't chop mid-word. Falls back to a hard cut when a window has none.
+  let cursor = 0;
+  while (trimmed.length - cursor > maxLength) {
+    const windowEnd = cursor + maxLength;
+    let cut = -1;
+    for (let k = windowEnd; k > cursor + maxLength / 2; k -= 1) {
+      if (SOFT_BREAKS.has(trimmed[k])) {
+        cut = k + 1;
+        break;
+      }
+    }
+    if (cut < 0) cut = windowEnd;
+    const piece = trimmed.slice(cursor, cut).trim();
+    if (piece) {
+      const pieceLead = trimmed.slice(cursor, cut).length - trimmed.slice(cursor, cut).trimStart().length;
+      push({
+        text: piece,
+        start: base + cursor + pieceLead,
+        end: base + cursor + pieceLead + piece.length
+      });
+    }
+    cursor = cut;
+  }
+  const tailRaw = trimmed.slice(cursor);
+  const tail = tailRaw.trim();
+  if (tail) {
+    const tailLead = tailRaw.length - tailRaw.trimStart().length;
+    push({
+      text: tail,
+      start: base + cursor + tailLead,
+      end: base + cursor + tailLead + tail.length
+    });
+  }
+}
+
+/**
+ * Split into TTS units, each carrying its offset into `text`.
+ *
+ * A unit ends at a run of terminal punctuation plus any closing quotes /
+ * brackets that trail it. Periods that belong to a number or an abbreviation
+ * don't terminate. Units longer than `maxLength` are cut at soft breaks.
+ */
+export function splitSentencesDetailed(
+  text: string,
+  maxLength = MAX_SENTENCE_LENGTH
+): Sentence[] {
+  const out: Sentence[] = [];
+  let start = 0;
+  let i = 0;
+
+  const isTerminalAt = (idx: number) => {
+    const ch = text[idx];
+    if (!TERMINALS.has(ch)) return false;
+    if (ch === '.' && !isSentencePeriod(text, idx)) return false;
+    return true;
+  };
+
+  while (i < text.length) {
+    if (!isTerminalAt(i)) {
+      i += 1;
+      continue;
+    }
+    // Absorb the run of terminals, then any closers, then any terminals that
+    // follow those (「真的吗？」。) — until neither applies.
+    let end = i + 1;
+    for (;;) {
+      if (end < text.length && isTerminalAt(end)) {
+        end += 1;
+        continue;
+      }
+      if (end < text.length && CLOSERS.has(text[end])) {
+        end += 1;
+        continue;
+      }
+      break;
+    }
+    emit(out, text, start, end, maxLength);
+    start = end;
+    i = end;
+  }
+
+  if (start < text.length) emit(out, text, start, text.length, maxLength);
+
+  return out;
+}
+
+/**
+ * Flatten the rendered book content to plain text.
+ *
+ * Always a straight text-node walk — deliberately NOT special-cased on the
+ * typewriter's `.tw-c` spans. Wrapping each character in a span doesn't change
+ * what a SHOW_TEXT walk yields, so the special case bought nothing, and it
+ * actively dropped the raw \n / \t nodes that prepareChars() leaves unwrapped:
+ * the same book returned a different string (and therefore different char
+ * indices) depending on whether the typewriter had run yet.
+ */
+export function extractText(root: HTMLElement, { speech = false } = {}): string {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   const parts: string[] = [];
+  const markerCache = new Map<Element, boolean>();
   let node: Node | null = walker.nextNode();
   while (node) {
     const parent = node.parentElement;
     if (parent) {
       const tag = parent.tagName;
       if (tag !== 'SCRIPT' && tag !== 'STYLE') {
-        parts.push(node.textContent || '');
+        const text = node.textContent || '';
+        parts.push(
+          speech && insideNoteMarker(parent, root, markerCache) ? ' '.repeat(text.length) : text
+        );
       }
     }
     node = walker.nextNode();
@@ -49,43 +224,72 @@ export function extractText(root: HTMLElement): string {
   return parts.join('');
 }
 
-export function computeGlobalCharIndex(
-  paragraphs: string[],
-  paraIndex: number,
-  localIndex: number
-): number {
-  let acc = 0;
-  for (let i = 0; i < paraIndex; i++) {
-    acc += paragraphs[i].length;
+// ---- note markers --------------------------------------------------------
+//
+// `extractText(root, { speech: true })` is what the voice reads: the same
+// string, same length — every offset elsewhere is in extractText() space —
+// with the text of footnote markers blanked to spaces, so 「倾向。[3]」 is read
+// as 「倾向。」 and a marker on a line of its own becomes whitespace the
+// splitter drops.
+
+/** A linked marker's text: 3, [3], ［注3］, (12), 注, *, †. */
+const LINKED_MARKER = /^[[［(（〔【]?(?:注|註|note)?\d{0,4}[*＊†‡]*[\]］)）〕】]?$/i;
+/** An unlinked superscript only counts when bracketed or labelled 注: a bare
+ *  <sup>2</sup> is far more often an exponent (10², m²) than a note. */
+const SUP_MARKER = /^(?:[[［〔【](?:注|註)?\d{1,4}[\]］〕】]|(?:注|註)\d{0,4})$/;
+
+export function isNoteMarker(el: Element): boolean {
+  const text = (el.textContent || '').replace(/\s+/g, '');
+  if (!text) return false;
+  if (el.tagName === 'A') {
+    const noteref =
+      /noteref/i.test(el.getAttribute('epub:type') || '') ||
+      el.getAttribute('role') === 'doc-noteref' ||
+      (el.getAttribute('href') || '').includes('#');
+    return noteref && /[\d注註*＊†‡]/i.test(text) && LINKED_MARKER.test(text);
   }
-  return acc + localIndex;
+  return el.tagName === 'SUP' && SUP_MARKER.test(text);
+}
+
+function insideNoteMarker(el: Element, root: Element, cache: Map<Element, boolean>): boolean {
+  const seen: Element[] = [];
+  let hit = false;
+  for (let cur: Element | null = el; cur && cur !== root; cur = cur.parentElement) {
+    const known = cache.get(cur);
+    if (known !== undefined) {
+      hit = known;
+      break;
+    }
+    seen.push(cur);
+    if (isNoteMarker(cur)) {
+      hit = true;
+      break;
+    }
+  }
+  for (const s of seen) cache.set(s, hit);
+  return hit;
+}
+
+export function computeGlobalCharIndex(
+  sentences: Sentence[],
+  index: number,
+  localOffset: number
+): number {
+  const sentence = sentences[index];
+  if (!sentence) return 0;
+  return sentence.start + localOffset;
 }
 
 /**
  * Translate a DOM (node, offset) pair inside the rendered book content into
  * a character index that aligns with extractText() output — so it can feed
- * straight into seekParagraphsToExplored / autoReader.seekToExplored.
+ * straight into seekSentencesToExplored / autoReader.seekToExplored.
  */
 export function domPositionToCharIndex(
   root: HTMLElement,
   targetNode: Node,
   targetOffset: number
 ): number | null {
-  // Typewriter wraps every character in its own .tw-c span; if those are
-  // present, mirror extractText()'s span-walk so indices line up.
-  const twcSpans = root.querySelectorAll('.tw-c');
-  if (twcSpans.length > 0) {
-    let total = 0;
-    for (let i = 0; i < twcSpans.length; i++) {
-      const span = twcSpans[i];
-      if (span === targetNode || span.contains(targetNode)) {
-        return total + targetOffset;
-      }
-      total += (span.textContent || '').length;
-    }
-    return total;
-  }
-
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   let total = 0;
   let node: Node | null = walker.nextNode();
@@ -97,30 +301,177 @@ export function domPositionToCharIndex(
         if (node === targetNode) {
           return total + targetOffset;
         }
-        if (node.contains(targetNode)) {
-          // Selection inside a descendant of this text node shouldn't happen
-          // (text nodes have no element children), but be defensive.
-          return total + targetOffset;
-        }
         total += (node.textContent || '').length;
       }
     }
     node = walker.nextNode();
   }
+  // Selection anchored on an element (rather than a text node) — resolve it
+  // to the first text node inside and retry once.
+  if (targetNode.nodeType === Node.ELEMENT_NODE) {
+    const inner = document.createTreeWalker(targetNode, NodeFilter.SHOW_TEXT, null).nextNode();
+    if (inner) return domPositionToCharIndex(root, inner, 0);
+  }
   return null;
 }
 
 /**
- * Convenience: read the current document selection's start position and map
- * it to a char index inside `root`. Returns null when there's no selection
- * inside the content area.
+ * Where the last selection inside the tracked content started, as a char
+ * index into `extractText(trackedRoot)`.
+ *
+ * Stored as a number rather than as the Range, and that is the whole point:
+ * it is what lets "select a passage, highlight it, press play" start at the
+ * passage. Applying a highlight calls removeAllRanges() — the selection
+ * overlay would otherwise sit on top of the fresh mark — so there is no live
+ * selection left by the time the user reaches the play button. Holding the
+ * Range would not survive either: the highlight renderer unwraps every
+ * <mark>, normalize()s the container and re-wraps, merging and splitting
+ * exactly the text nodes a stale Range points at. A char index is untouched
+ * by all of that, since <mark> contributes no text.
+ */
+let rememberedIndex: number | null = null;
+
+/**
+ * Element the remembered index is measured against — the reader's own
+ * contentEl. /b's outer .book-content wrapper walks text nodes in a different
+ * order, so an index taken there lands somewhere else entirely.
+ */
+let trackedRoot: HTMLElement | undefined;
+
+let listeningForSelection = false;
+
+function rememberSelection() {
+  if (!trackedRoot) return;
+  const sel = window.getSelection();
+  // rangeCount 0 means the selection was wiped rather than moved — the very
+  // case this memory exists for, so keep what we already have.
+  if (!sel || !sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  if (!trackedRoot.contains(range.startContainer)) return;
+  rememberedIndex = domPositionToCharIndex(trackedRoot, range.startContainer, range.startOffset);
+}
+
+/**
+ * A DOM position inside the tracked content as an extractText() index, and
+ * back. How the typewriter's frontier joins the playback cursor: its own
+ * character space concatenates block `textContent`, which drops any text not
+ * inside a block element, so the numbers do not translate. A DOM position
+ * costs each side only the walk it already owns.
+ */
+export function indexOfPosition(node: Node, offset: number): number | null {
+  return trackedRoot ? domPositionToCharIndex(trackedRoot, node, offset) : null;
+}
+
+export function positionOfIndex(index: number): { node: Text; offset: number } | null {
+  return trackedRoot ? domPositionForCharIndex(trackedRoot, index) : null;
+}
+
+/** Point the selection memory at this reader's content. Called from
+ *  setContentEl, so it resets on every section / view-mode change. */
+export function trackSelectionIn(root: HTMLElement | undefined) {
+  trackedRoot = root;
+  rememberedIndex = null;
+  if (root && typeof document !== 'undefined' && !listeningForSelection) {
+    listeningForSelection = true;
+    document.addEventListener('selectionchange', rememberSelection);
+  }
+}
+
+/**
+ * Where the last selection or caret inside `root` started — once.
+ *
+ * Read from the memory even while the selection is still live: the tracker
+ * already saw it. Consumed, and the live selection dropped with it: a caret
+ * stays put after play, so pause → play kept jumping back to it instead of
+ * resuming. Dropping it also stops the typewriter's wrap / unwrap, which
+ * moves a caret sitting in the block it rewrites, from re-arming the memory
+ * with a position the reader never picked.
  */
 export function selectionToCharIndex(root: HTMLElement): number | null {
+  if (root !== trackedRoot) return null;
+  const index = rememberedIndex;
+  rememberedIndex = null;
   const sel = typeof window === 'undefined' ? null : window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0);
-  if (!root.contains(range.startContainer)) return null;
-  return domPositionToCharIndex(root, range.startContainer, range.startOffset);
+  if (index != null && sel?.rangeCount && root.contains(sel.getRangeAt(0).startContainer)) {
+    sel.removeAllRanges();
+  }
+  return index;
+}
+
+/**
+ * Is the character at `index` inside the visible part of the content?
+ *
+ * Clipping ancestors count, not just the window: paginated mode scrolls the
+ * section inside its own box, and the neighbouring page sits beside it.
+ */
+export function isIndexOnScreen(index: number): boolean {
+  if (!trackedRoot) return false;
+  const pos = domPositionForCharIndex(trackedRoot, index);
+  if (!pos) return false;
+  const range = document.createRange();
+  range.setStart(pos.node, pos.offset);
+  range.setEnd(pos.node, Math.min(pos.node.length, pos.offset + 1));
+  const rect = range.getBoundingClientRect();
+  let top = 0;
+  let left = 0;
+  let bottom = window.innerHeight;
+  let right = window.innerWidth;
+  for (let el: HTMLElement | null = trackedRoot; el && el !== document.body; el = el.parentElement) {
+    if (getComputedStyle(el).overflow === 'visible') continue;
+    const box = el.getBoundingClientRect();
+    top = Math.max(top, box.top);
+    left = Math.max(left, box.left);
+    bottom = Math.min(bottom, box.bottom);
+    right = Math.min(right, box.right);
+  }
+  return rect.bottom > top && rect.top < bottom && rect.right > left && rect.left < right;
+}
+
+/**
+ * The one rule both engines start by. Returns an extractText() index, or null
+ * for "from the screen" — which each engine reads its own way (the voice from
+ * the first sentence on screen, the typewriter keeping the screen and typing
+ * on below it).
+ *
+ * 1. A selection or caret the reader made — exactly there, whatever the
+ *    strategy: it is the one start they pointed at.
+ * 2. Where playback last stopped (`cursor`, either engine), while it is still
+ *    on screen. Off screen means the reader scrolled or jumped away, and a
+ *    stop point from back there must not drag them back. 'resume' skips the
+ *    screen check.
+ * 3. Otherwise null.
+ *
+ * The cursor snaps to its sentence start: the reader saw half that sentence
+ * go by, and a voice starting mid-clause sounds broken.
+ */
+export function resolvePlaybackStart(
+  strategy: string,
+  cursor: number | undefined,
+  onScreen: (index: number) => boolean = isIndexOnScreen
+): { index: number; snap: boolean } | null {
+  const picked = trackedRoot ? selectionToCharIndex(trackedRoot) : null;
+  if (picked != null) return { index: picked, snap: false };
+  if (cursor != null && (strategy === 'resume' || onScreen(cursor))) {
+    return { index: cursor, snap: true };
+  }
+  return null;
+}
+
+/**
+ * Put the voice where playback should begin. `prepare()` must already have
+ * run — every branch needs the sentence list.
+ */
+export function applyStartPosition(
+  reader: Pick<AutoReader, 'seekToExplored' | 'seekToCalculatorIndex'>,
+  strategy: string,
+  cursor: number | undefined,
+  /** `exploredCharCount`, section-local — calculator space, not extractText. */
+  seekCharCount: number,
+  onScreen?: (index: number) => boolean
+) {
+  const start = resolvePlaybackStart(strategy, cursor, onScreen);
+  if (start) reader.seekToExplored(start.index, start.snap);
+  else reader.seekToCalculatorIndex(seekCharCount);
 }
 
 /**
@@ -138,17 +489,22 @@ export function ttsIndexToCalculatorIndex(extractedText: string, ttsIndex: numbe
   return Array.from(slice.replace(NOT_COUNTED_REGEX, '')).length;
 }
 
-export function seekParagraphsToExplored(
-  paragraphs: string[],
-  exploredCharCount: number
-): { paraIndex: number; charOffset: number } {
-  let acc = 0;
-  for (let i = 0; i < paragraphs.length; i++) {
-    const len = paragraphs[i].length;
-    if (acc + len > exploredCharCount) {
-      return { paraIndex: i, charOffset: exploredCharCount - acc };
+/**
+ * Locate the sentence covering a global char offset. Offsets that land in the
+ * whitespace between two sentences resolve to the start of the following one,
+ * so resuming never replays text the user already heard.
+ */
+export function seekSentencesToExplored(
+  sentences: Sentence[],
+  exploredCharCount: number,
+  snapToSentenceStart = false
+): { index: number; offset: number } {
+  for (let i = 0; i < sentences.length; i += 1) {
+    const s = sentences[i];
+    if (exploredCharCount < s.start) return { index: i, offset: 0 };
+    if (exploredCharCount < s.end) {
+      return { index: i, offset: snapToSentenceStart ? 0 : exploredCharCount - s.start };
     }
-    acc += len;
   }
-  return { paraIndex: paragraphs.length, charOffset: 0 };
+  return { index: sentences.length, offset: 0 };
 }

@@ -10,16 +10,25 @@
 
 import type { DBSchema } from 'idb';
 import type BooksDbV6 from '$lib/data/database/books-db/versions/v6/books-db-v6';
+import type { BookCardId } from '$lib/data/book-id';
 
 export interface BooksDbV7Folder {
   id: number;
   name: string;
   sortOrder: number;
   createdAt: number;
+  /** `'local'` = mirrored from a directory during a folder import, where the
+   * name is the relative path inside the picked folder (`读书/技术`). Absent
+   * = created by hand in the reader. Only affects grouping in the sidebar;
+   * optional so existing rows need no migration. */
+  source?: 'local';
 }
 
 export interface BooksDbV7BookFolder {
-  bookId: number;
+  /** Library-card id, not the IDB `data.id` — under external file storage
+   * these differ. Means folder assignments are scoped to the storage source
+   * they were made under; see book-id.ts. */
+  bookId: BookCardId;
   folderId: number;
   addedAt: number;
 }

@@ -229,7 +229,7 @@ function themeObjValueToStringValue<T extends string>(objValue: Record<T, ColorO
     const obj = value as ColorObject;
     acc[key as T] = `rgba(${obj.r}, ${obj.g}, ${obj.b}, ${obj.a ?? 1})`;
     return acc;
-  }, {} as any);
+  }, {} as any); // reduce seed — {} isn't directly assignable to Record<T,string>
 }
 
 function camelCaseToKebabCase(s: string) {

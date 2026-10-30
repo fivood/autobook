@@ -4,6 +4,8 @@
   import { buttonClasses } from '$lib/css-classes';
   import { isTauri } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
+  import { submitReport } from '$lib/functions/report-error';
+  import { t, tImmediate } from '$lib/i18n';
   import {
     theme$,
     viewMode$,
@@ -47,8 +49,6 @@
     autoReplication$,
     replicationSaveBehavior$,
     showExternalPlaceholder$,
-    syncTarget$,
-    keepLocalStatisticsOnDeletion$,
     overwriteBookCompletion$,
     startDayHoursForTracker$,
     statisticsMergeMode$,
@@ -77,7 +77,7 @@
     enableReaderWakeLock$
   } from '$lib/data/store';
 
-  export let title = '错误';
+  export let title = tImmediate('common.error');
 
   export let message: string;
 
@@ -140,8 +140,6 @@
           autoReplication: autoReplication$.getValue(),
           replicationSaveBehavior: replicationSaveBehavior$.getValue(),
           showExternalPlaceholder: showExternalPlaceholder$.getValue(),
-          syncTarget: !!syncTarget$.getValue(),
-          keepLocalStatisticsOnDeletion: keepLocalStatisticsOnDeletion$.getValue(),
           overwriteBookCompletion: overwriteBookCompletion$.getValue(),
           startDayHoursForTracker: startDayHoursForTracker$.getValue(),
           statisticsMergeMode: statisticsMergeMode$.getValue(),
@@ -171,6 +169,20 @@
     );
 
   let downloadStatus = '';
+  let submitStatus = '';
+
+  async function submitReportToCloud() {
+    submitStatus = '';
+    const payload = JSON.parse(reportPayload) as Record<string, unknown>;
+    const result = await submitReport({
+      type: 'error',
+      message: message || '用户提交诊断日志',
+      context: payload
+    });
+    submitStatus = result.ok
+      ? tImmediate('logReport.submitted', { id: result.id ?? '' })
+      : tImmediate('logReport.submitFailed', { error: result.error ?? '' });
+  }
 
   async function openRepo() {
     const url = 'https://github.com/fivood/autobook';
@@ -204,11 +216,10 @@
         }
         const path = `AutoBook/Logs/${filename}`;
         await writeTextFile(path, reportPayload, { baseDir: BaseDirectory.Document });
-        downloadStatus = `已保存到 文档/${path}`;
+        downloadStatus = tImmediate('logReport.savedTo', { path });
         return;
       }
     } catch (err: any) {
-      // eslint-disable-next-line no-console
       console.warn('[log-report] tauri save failed, falling back:', err);
     }
     // Browser fallback: blob download trick (data: URIs are rejected by WebView2).
@@ -221,25 +232,33 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    downloadStatus = '已下载';
+    downloadStatus = tImmediate('logReport.downloaded');
   }
 </script>
 
 <DialogTemplate>
   <svelte:fragment slot="header">{title}</svelte:fragment>
   <svelte:fragment slot="content">
-    <p>{message}</p>
+    <!-- pre-line: a batch import passes one line per failed file. -->
+    <p class="whitespace-pre-line">{message}</p>
     {#if downloadStatus}
-      <p class="text-xs opacity-70 mt-2">{downloadStatus}</p>
+      <p class="text-xs text-muted mt-2">{downloadStatus}</p>
+    {/if}
+    {#if submitStatus}
+      <p class="text-xs text-muted mt-2">{submitStatus}</p>
     {/if}
   </svelte:fragment>
   <svelte:fragment slot="footer">
     <button class={buttonClasses} on:click={openRepo}>
-      打开仓库
+      {$t('logReport.openRepo')}
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={downloadReport}>
-      下载报告
+      {$t('logReport.download')}
+      <Ripple />
+    </button>
+    <button class={buttonClasses} on:click={submitReportToCloud}>
+      {$t('logReport.submit')}
       <Ripple />
     </button>
   </svelte:fragment>

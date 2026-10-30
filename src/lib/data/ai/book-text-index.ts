@@ -37,11 +37,21 @@ export interface BookTextIndex {
   plaintextLen: number;
 }
 
+/** A BM25 index over a whole book runs to megabytes, and nothing evicted this
+ *  map before — every book the user asked the AI about stayed resident for the
+ *  session. Two entries cover the real access pattern (current book, plus the
+ *  one you flipped away from and came back to) without unbounded growth. */
+const MAX_CACHED_INDEXES = 2;
 const cache = new Map<number, BookTextIndex>();
 
 export function buildBookTextIndex(bookId: number, bookTitle: string, elementHtml: string): BookTextIndex {
   const cached = cache.get(bookId);
-  if (cached && cached.bookTitle === bookTitle) return cached;
+  if (cached && cached.bookTitle === bookTitle) {
+    // Re-insert so Map iteration order stays least-recently-used first.
+    cache.delete(bookId);
+    cache.set(bookId, cached);
+    return cached;
+  }
   const plaintext = htmlToPlaintext(elementHtml);
   const chunks = chunkBookText(plaintext);
   const index = buildIndex(chunks);
@@ -51,12 +61,12 @@ export function buildBookTextIndex(bookId: number, bookTitle: string, elementHtm
     index,
     plaintextLen: plaintext.length
   };
-  cache.set(bookId, value);
-  return value;
-}
-
-export function clearBookTextIndex(bookId: number) {
   cache.delete(bookId);
+  cache.set(bookId, value);
+  while (cache.size > MAX_CACHED_INDEXES) {
+    cache.delete(cache.keys().next().value as number);
+  }
+  return value;
 }
 
 function htmlToPlaintext(html: string): string {

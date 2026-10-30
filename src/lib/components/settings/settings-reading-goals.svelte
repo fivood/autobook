@@ -4,7 +4,6 @@
     faChevronLeft,
     faChevronRight,
     faEdit,
-    faRotate,
     faSave,
     faTrash
   } from '@fortawesome/free-solid-svg-icons';
@@ -12,53 +11,33 @@
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import SettingsReadingGoalsMerge from '$lib/components/settings/settings-reading-goals-merge.svelte';
-  import SettingsSyncDialog from '$lib/components/settings/settings-sync-dialog.svelte';
   import { buttonClasses } from '$lib/css-classes';
-  import type {
-    BooksDbReadingGoal,
-    BooksDbStorageSource
-  } from '$lib/data/database/books-db/versions/books-db';
-  import { dialogManager, type SyncSelection } from '$lib/data/dialog-manager';
+  import type { BooksDbReadingGoal } from '$lib/data/database/books-db/versions/books-db';
+  import { dialogManager } from '$lib/data/dialog-manager';
   import {
     getCurrentReadingGoal,
     getDateRangeLabel,
     type ReadingGoal,
     type ReadingGoalSaveResult
   } from '$lib/data/reading-goal';
-  import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
-  import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import {
-    cacheStorageData$,
     database,
-    isOnline$,
     readingGoal$,
-    readingGoalsMergeMode$,
-    replicationSaveBehavior$,
-    startDayHoursForTracker$,
-    statisticsMergeMode$
+    startDayHoursForTracker$
   } from '$lib/data/store';
-  import { replicateData } from '$lib/functions/replication/replicator';
-  import { pluralize } from '$lib/functions/utils';
+  import { t, tImmediate } from '$lib/i18n';
   import { getDateKey, secondsToMinutes } from '$lib/functions/statistic-util';
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
-
-  export let storageSources: BooksDbStorageSource[] = [];
 
   const dispatch = createEventDispatcher<{
     spinner: boolean;
   }>();
 
   const readingGoalFrequencies = [
-    {
-      id: ReadingGoalFrequency.DAILY,
-      label: '每日 (1天)'
-    },
-    {
-      id: ReadingGoalFrequency.WEEKLY,
-      label: '每周 (7天)'
-    },
-    { id: ReadingGoalFrequency.MONTHLY, label: '每月 (30天)' }
+    ReadingGoalFrequency.DAILY,
+    ReadingGoalFrequency.WEEKLY,
+    ReadingGoalFrequency.MONTHLY
   ];
 
   let currentTimeGoal = 0;
@@ -70,8 +49,6 @@
   let sortedReadingGoals: BooksDbReadingGoal[] = [];
   let historyIndex = 0;
   const itemsPerPage = 1;
-
-  $: availableSources = storageSources;
 
   $: saveDisabled = !!((currentTimeGoal || currentCharacterGoal) && !currentReadingGoalStartDate);
 
@@ -187,8 +164,8 @@
           {
             component: MessageDialog,
             props: {
-              title: '错误',
-              message: `更新阅读目标出错: ${error.message}`
+              title: tImmediate('common.error'),
+              message: tImmediate('goals.updateError', { detail: error.message })
             }
           }
         ])
@@ -202,74 +179,6 @@
     }
   }
 
-  async function syncReadingGoals() {
-    const [source, target] = await new Promise<SyncSelection[]>((resolver) => {
-      dialogManager.dialogs$.next([
-        {
-          component: SettingsSyncDialog,
-          props: {
-            settingsSyncHeader: '同步阅读目标',
-            storageSources: availableSources,
-            resolver
-          },
-          disableCloseOnClick: true
-        }
-      ]);
-    });
-
-    if (!source || !target) {
-      return;
-    }
-
-    dispatch('spinner', true);
-
-    try {
-      const error = await replicateData(
-        getStorageHandler(
-          window,
-          source.type,
-          source.id,
-          target.type === StorageKey.BROWSER,
-          $cacheStorageData$,
-          $replicationSaveBehavior$,
-          $statisticsMergeMode$,
-          $readingGoalsMergeMode$
-        ),
-        getStorageHandler(
-          window,
-          target.type,
-          target.id,
-          target.type === StorageKey.BROWSER,
-          $cacheStorageData$,
-          $replicationSaveBehavior$,
-          $statisticsMergeMode$,
-          $readingGoalsMergeMode$
-        ),
-        false,
-        [],
-        [StorageDataType.READING_GOALS]
-      );
-
-      if (error) {
-        throw new Error(error);
-      }
-
-      await updateReadingGoalsData();
-    } catch ({ message }: any) {
-      dialogManager.dialogs$.next([
-        {
-          component: MessageDialog,
-          props: {
-            title: '错误',
-            message: `同步阅读目标出错: ${message}`
-          }
-        }
-      ]);
-    } finally {
-      dispatch('spinner', false);
-    }
-  }
-
   async function deleteReadingGoals(readingGoalToDelete?: ReadingGoal, dateRangeLabel?: string) {
     let dialogMessage = '';
 
@@ -277,32 +186,30 @@
       const isCurrentReadingGoal =
         $readingGoal$.goalStartDate &&
         $readingGoal$.goalStartDate === readingGoalToDelete.goalStartDate;
-      const term =
-        getDateKey($startDayHoursForTracker$) >= readingGoalToDelete.goalStartDate
-          ? '开始于'
-          : '将从';
-      dialogMessage = `${
-        isCurrentReadingGoal ? `当前阅读目标${term}` : '归档阅读目标针对'
-      } ${dateRangeLabel} 将被删除${isCurrentReadingGoal ? '（不归档）' : ''}`;
+      const range = dateRangeLabel ?? '';
+      dialogMessage = !isCurrentReadingGoal
+        ? tImmediate('goals.delete.archived', { range })
+        : getDateKey($startDayHoursForTracker$) >= readingGoalToDelete.goalStartDate
+          ? tImmediate('goals.delete.currentStarted', { range })
+          : tImmediate('goals.delete.currentUpcoming', { range });
     } else if (readingGoals.length > 1) {
-      dialogMessage = `所有归档的阅读目标将被删除${
-        $readingGoal$.goalStartDate ? '（包括当前的）' : ''
-      }`;
+      dialogMessage = tImmediate(
+        $readingGoal$.goalStartDate ? 'goals.delete.allWithCurrent' : 'goals.delete.all'
+      );
     } else {
-      dialogMessage = $readingGoal$.goalStartDate
-        ? '您的当前阅读目标将被删除（不归档）'
-        : '您的归档阅读目标将被删除';
+      dialogMessage = tImmediate(
+        $readingGoal$.goalStartDate ? 'goals.delete.onlyCurrent' : 'goals.delete.onlyArchived'
+      );
     }
 
-    dialogMessage +=
-      '\n\n执行一次性同步，导出行为设为"覆盖"和/或阅读目标合并模式设为"替换"，以将删除应用到其他设备';
+    dialogMessage += `\n\n${tImmediate('goals.delete.syncHint')}`;
 
     const wasCanceled = await new Promise((resolver) => {
       dialogManager.dialogs$.next([
         {
           component: ConfirmDialog,
           props: {
-            dialogHeader: '删除数据',
+            dialogHeader: tImmediate('goals.delete.header'),
             dialogMessage,
             contentStyles: 'white-space: pre-line;',
             resolver
@@ -326,8 +233,8 @@
         {
           component: MessageDialog,
           props: {
-            title: '错误',
-            message: `An Error occurred: ${message}`
+            title: tImmediate('common.error'),
+            message: tImmediate('goals.deleteError', { detail: message })
           }
         }
       ]);
@@ -345,8 +252,8 @@
         {
           component: MessageDialog,
           props: {
-            title: '错误',
-            message: `加载阅读目标出错: ${error.message}`
+            title: tImmediate('common.error'),
+            message: tImmediate('goals.loadError', { detail: error.message })
           }
         }
       ]);
@@ -369,7 +276,7 @@
 <div class="mb-8 sm:col-span-2 lg:col-span-3">
   <div class="flex flex-grow">
     <h1 class="mb-2 text-xl font-medium w-full">
-      <span class="capitalize">阅读目标</span>
+      <span>{$t('goals.section')}</span>
     </h1>
     {#if isInEditMode}
       <button class={`${buttonClasses} mr-4`} disabled={saveDisabled} on:click={saveReadingGoal}>
@@ -377,7 +284,7 @@
           class="flex items-center justify-center hover:opacity-50"
           class:cursor-not-allowed={saveDisabled}
         >
-          <span class="mr-2">保存</span>
+          <span class="mr-2">{$t('theme.save')}</span>
           <Fa icon={faSave} />
         </div>
       </button>
@@ -395,20 +302,14 @@
         }}
       >
         <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">取消</span>
+          <span class="mr-2">{$t('dialog.cancel')}</span>
           <Fa icon={faCancel} />
         </div>
       </button>
     {:else}
-      <button class={buttonClasses} on:click={syncReadingGoals}>
-        <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">同步</span>
-          <Fa icon={faRotate} />
-        </div>
-      </button>
       <button class={buttonClasses} on:click={() => (isInEditMode = true)}>
         <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">编辑</span>
+          <span class="mr-2">{$t('goals.edit')}</span>
           <Fa icon={faEdit} />
         </div>
       </button>
@@ -418,11 +319,11 @@
         on:click={() => deleteReadingGoals()}
       >
         <div
-          title="删除所有阅读目标"
+          title={$t('goals.resetTitle')}
           class="flex items-center justify-center hover:opacity-50"
           class:cursor-not-allowed={!readingGoals.length}
         >
-          <span class="mr-2">重置</span>
+          <span class="mr-2">{$t('common.reset')}</span>
           <Fa icon={faTrash} />
         </div>
       </button>
@@ -431,7 +332,7 @@
   <hr class="border border-black" />
   <div class="grid grid-cols-1 gap-4 justify-between items-end mt-4 md:grid-cols-4">
     <div class="flex flex-col">
-      时间目标 (分钟)
+      {$t('goals.timeGoal')}
       <input
         type="number"
         min="0"
@@ -442,7 +343,7 @@
       />
     </div>
     <div class="flex flex-col">
-      字数目标
+      {$t('goals.charGoal')}
       <input
         type="number"
         min="0"
@@ -453,21 +354,21 @@
       />
     </div>
     <div class="flex flex-col">
-      频率
+      {$t('goals.frequency')}
       <select
         class:cursor-not-allowed={!isInEditMode}
         disabled={!isInEditMode}
         bind:value={currentReadingGoalFrequency}
       >
-        {#each readingGoalFrequencies as readingGoalFrequency (readingGoalFrequency.id)}
-          <option value={readingGoalFrequency.id}>
-            {readingGoalFrequency.label}
+        {#each readingGoalFrequencies as frequency (frequency)}
+          <option value={frequency}>
+            {$t('goals.freq.' + frequency)}
           </option>
         {/each}
       </select>
     </div>
     <div class="flex flex-col">
-      开始日期
+      {$t('goals.startDate')}
       <input
         type="date"
         class:cursor-not-allowed={!isInEditMode}
@@ -477,7 +378,7 @@
     </div>
   </div>
   <details class="mt-6 cursor-pointer">
-    <summary>阅读目标历史 ({pluralize(readingGoals.length, '项')})</summary>
+    <summary>{$t('goals.history', { n: readingGoals.length })}</summary>
     {#if readingGoals.length}
       <div class="grid-cols-[repeat(4,1fr)_0.1fr] hidden sm:grid">
         {#each historyReadingGoals as historyGoal (historyGoal.goalStartDate)}
@@ -486,12 +387,12 @@
             historyGoal.goalEndDate
           )}
           <div>{dateRangeLabel}</div>
-          <div>{secondsToMinutes(historyGoal.timeGoal)} 分钟</div>
-          <div>{historyGoal.characterGoal} 字</div>
-          <div>{historyGoal.goalFrequency}</div>
+          <div>{$t('goals.minutes', { n: secondsToMinutes(historyGoal.timeGoal) })}</div>
+          <div>{$t('goals.chars', { n: historyGoal.characterGoal })}</div>
+          <div>{$t('goals.freq.' + historyGoal.goalFrequency)}</div>
           <button
             on:click={() => deleteReadingGoals(historyGoal, dateRangeLabel)}
-            title="删除阅读目标"
+            title={$t('goals.deleteOne')}
           >
             <Fa icon={faTrash} />
           </button>
@@ -504,11 +405,11 @@
             historyGoal.goalEndDate
           )}
           <div class="my-2">
-            {dateRangeLabel} / {secondsToMinutes(historyGoal.timeGoal)} min / {historyGoal.characterGoal}
-            characters / {historyGoal.goalFrequency}
+            {dateRangeLabel} / {$t('goals.minutes', { n: secondsToMinutes(historyGoal.timeGoal) })} /
+            {$t('goals.chars', { n: historyGoal.characterGoal })} / {$t('goals.freq.' + historyGoal.goalFrequency)}
             <button
               on:click={() => deleteReadingGoals(historyGoal, dateRangeLabel)}
-              title="删除阅读目标"
+              title={$t('goals.deleteOne')}
             >
               <Fa icon={faTrash} />
             </button>
@@ -517,7 +418,7 @@
       </div>
       <div class="mt-3 flex justify-between">
         <button
-          title={currentHistoryIndex === 0 ? '' : '上一页'}
+          title={currentHistoryIndex === 0 ? '' : $t('goals.prevPage')}
           disabled={currentHistoryIndex === 0}
           class:opacity-50={currentHistoryIndex === 0}
           class:cursor-not-allowed={currentHistoryIndex === 0}
@@ -526,7 +427,7 @@
           <Fa icon={faChevronLeft} />
         </button>
         <button
-          title={hasNextHistoryPage ? '下一页' : ''}
+          title={hasNextHistoryPage ? $t('goals.nextPage') : ''}
           disabled={!hasNextHistoryPage}
           class:opacity-50={!hasNextHistoryPage}
           class:cursor-not-allowed={!hasNextHistoryPage}
@@ -536,7 +437,7 @@
         </button>
       </div>
     {:else}
-      <div>暂无归档的阅读目标</div>
+      <div class="text-muted">{$t('goals.historyEmpty')}</div>
     {/if}
   </details>
 </div>
