@@ -195,7 +195,10 @@
 
   dialogManager.dialogs$.subscribe((d) => {
     clickOnCloseDisabled = d[0]?.disableCloseOnClick ?? false;
-    zIndex = d[0]?.zIndex ?? '';
+    // A bare '<div/>' is not a dialog but the dimming backdrop a z-60 drawer
+    // (TOC, reading tracker, statistics panels) pushes under itself. At the
+    // modal z-200 it covered those drawers and swallowed every click on them.
+    zIndex = d[0]?.zIndex ?? (d[0]?.component === '<div/>' ? '50' : '');
     dialogs = d;
   });
 
