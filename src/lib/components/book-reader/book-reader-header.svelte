@@ -11,6 +11,7 @@
     faHighlighter,
     faImages,
     faList,
+    faMagnifyingGlass,
     faPenToSquare,
     faRobot,
     faRotateLeft,
@@ -67,6 +68,7 @@
     bookmarkClick: void;
     scrollToBookmarkClick: void;
     jumpClick: void;
+    searchClick: void;
     completeBook: void;
     fullscreenClick: void;
     showCustomReadingPoint: void;
@@ -86,6 +88,14 @@
    * stays an untranslated id; only labelKey / titleKey reach the screen.
    */
   const overflow = {
+    searchClick: {
+      routeId: '',
+      label: 'reader:search',
+      labelKey: 'reader.search',
+      icon: faMagnifyingGlass,
+      title: '',
+      titleKey: 'reader.searchTitle'
+    },
     completeBook: {
       routeId: '',
       label: 'reader:completeBook',
@@ -185,6 +195,7 @@
     const items = [];
 
     if (hasText) {
+      items.push(overflow.searchClick);
       items.push(mergeEntries.JUMP_TO_POSITION);
     }
 

@@ -241,6 +241,9 @@
   import BookToc from '$lib/components/book-reader/book-toc/book-toc.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import NumberDialog from '$lib/components/number-dialog.svelte';
+  import BookSearchDialog from '$lib/components/book-reader/book-search-dialog.svelte';
+  import { extractQuoteBlocks } from '$lib/functions/random-quote-loader';
+  import type { QuoteBlock } from '$lib/functions/random-quote';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import { preFilteredTitlesForStatistics$ } from '$lib/components/statistics/statistics-types';
   import {
@@ -1526,20 +1529,73 @@ ${$t('reader.ttsFailed.hint')}`
       return;
     }
 
+    await jumpToPosition(dataId, Math.min(total, Math.max(1, Math.round((percent / 100) * total))));
+  }
+
+  /**
+   * Land on a position chosen in 跳转 or 书内搜索 — the reader saying "I am
+   * here now" — and save it as the reading position on the spot. The
+   * scroll-driven auto-bookmark skips the first scroll after a book opens,
+   * which is exactly when these get used (open the book, jump to where the
+   * printed copy is), so leaving it to that lost the jump on the next open.
+   */
+  async function jumpToPosition(dataId: number, target: number) {
     restartTrackerAfterCharacterChangeOrTime(1000);
     stopPlaybackForJump();
-
-    const target = Math.min(total, Math.max(1, Math.round((percent / 100) * total)));
-
-    bookmarkManager.scrollToBookmark(
-      {
-        dataId: dataId,
-        exploredCharCount: target,
-        lastBookmarkModified: new Date().getTime(),
-        progress: 0
-      },
+    const now = Date.now();
+    bookmarkManager?.scrollToBookmark(
+      { dataId, exploredCharCount: target, lastBookmarkModified: now, progress: 0 },
       customReadingPointScrollOffset
     );
+    if ($manualBookmark$) return;
+    const data: BooksDbBookmarkData = {
+      dataId,
+      exploredCharCount: target,
+      progress: bookCharCount ? target / bookCharCount : 0,
+      lastBookmarkModified: now
+    };
+    await database.putBookmark(data);
+    bookmarkData = Promise.resolve(data);
+    scheduleReplication(StorageDataType.PROGRESS);
+  }
+
+  // Blocks for in-book search, rebuilt only when the book or its text changes.
+  let searchCache: { key: string; blocks: QuoteBlock[]; total: number } | undefined;
+  let lastSearchQuery = '';
+
+  /**
+   * Find a phrase and start reading there — mainly for catching up with a
+   * printed copy. Lands through the same `jumpToPosition` as 跳转.
+   */
+  async function handleSearch() {
+    const dataId = getBookIdSync();
+    const book = $rawBookData$;
+    if (!bookmarkManager || !dataId || !book?.elementHtml) return;
+
+    const key = `${book.id}|${book.lastBookModified || 0}`;
+    if (searchCache?.key !== key) {
+      searchCache = { key, ...extractQuoteBlocks(book.elementHtml) };
+    }
+    const { blocks, total } = searchCache;
+
+    pauseTracker();
+    skipKeyDownListener$.next(true);
+    const result = await new Promise<{ pos: number; query: string } | undefined>((resolver) => {
+      dialogManager.dialogs$.next([
+        {
+          component: BookSearchDialog,
+          props: { blocks, totalChars: total, initialQuery: lastSearchQuery, resolver }
+        }
+      ]);
+    });
+    skipKeyDownListener$.next(false);
+
+    if (!result) {
+      restartTrackerAfterCharacterChangeOrTime(1);
+      return;
+    }
+    lastSearchQuery = result.query;
+    await jumpToPosition(dataId, Math.max(1, result.pos));
   }
 
   async function completeBook() {
@@ -1925,6 +1981,19 @@ ${$t('reader.ttsFailed.hint')}`
   }
 
   function onKeydown(ev: KeyboardEvent) {
+    // Ctrl+F is the one search shortcut everyone already knows; the keybind
+    // map below only does bare keys, so it is handled ahead of it.
+    if (
+      !$skipKeyDownListener$ &&
+      (ev.ctrlKey || ev.metaKey) &&
+      !ev.altKey &&
+      !ev.shiftKey &&
+      ev.key.toLowerCase() === 'f'
+    ) {
+      ev.preventDefault();
+      handleSearch();
+      return;
+    }
     if (
       $skipKeyDownListener$ ||
       ev.altKey ||
@@ -2878,6 +2947,7 @@ ${$t('reader.ttsFailed.hint')}`
         aiDrawerOpen = true;
       }}
       on:jumpClick={handleJump}
+      on:searchClick={handleSearch}
       on:completeBook={completeBook}
       on:setCustomReadingPoint={handleSetCustomReadingPoint}
       on:showCustomReadingPoint={() => {

@@ -21,6 +21,11 @@ export function getCharacterCount(node: Node) {
 const isNotJapaneseRegex =
   /[^0-9A-Z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]+/gimu;
 
+/** Whether one character counts toward the reader's position, same rule as below. */
+export function isCountedCharacter(ch: string): boolean {
+  return ch.replace(isNotJapaneseRegex, '') !== '';
+}
+
 function getRawCharacterCount(node: Node) {
   if (!node.textContent) return 0;
   return countUnicodeCharacters(node.textContent.replace(isNotJapaneseRegex, ''));
