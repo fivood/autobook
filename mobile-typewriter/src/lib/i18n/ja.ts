@@ -22,7 +22,6 @@ export default {
   'landing.syncOpen': 'デバイス間で読書時間を同期',
   'landing.desktopFullLink':
     'デスクトップ完全版（ハイライト／ノート／AI／オフライン辞書／Obsidian 同期）：{link}',
-  'landing.syncFab': '同期設定',
 
   'ingest.pdfProgress': 'ページ {loaded} / {total} を描画中…',
   'ingest.readFail': '読み込み失敗：{err}',
@@ -48,10 +47,10 @@ export default {
   'pdf.resume': '続きから',
   'pdf.alt': '{n} ページ',
 
-  'scroll.toTypewriter': 'タイプライターモードに切替',
-  'scroll.label': 'スワイプ読書',
+  'mode.auto': '自動再生',
+  'mode.label': '読み方',
 
-  'typewriter.toScroll': '手動スワイプ読書に切替',
+  'mode.manual': '手動スワイプ',
   'typewriter.speedUnit': '{n} 字／秒',
   'typewriter.play': '再生',
   'typewriter.pause': '一時停止',
@@ -67,8 +66,7 @@ export default {
   'sync.description':
     '32 文字の token が認証です。デスクトップの「設定 → データ → 同期」で生成して下に貼り付けるか、ここで生成してデスクトップに貼り付けます。',
   'sync.enable': '同期を有効化',
-  'sync.tokenPlaceholder': '32 文字の hex token',
-  'sync.save': '保存',
+  'sync.tokenPlaceholder': '32 文字のトークンを貼り付け（自動保存）',
   'sync.generate': '生成',
   'sync.copy': 'コピー',
   'sync.deviceIdLabel': 'この device-id：',
@@ -78,7 +76,7 @@ export default {
   'sync.lastSync': '前回：{time}',
   'sync.never': 'なし',
   'sync.tokenInvalid': 'token は 32 文字の hex にしてください',
-  'sync.saved': '保存しました',
+  'sync.saved': '保存しました。同期オン',
   'sync.tokenCleared': 'token を消去しました',
   'sync.generated': '生成しました。デスクトップの「設定 → データ → 同期」に貼り付けるとペアリングされます',
   'sync.copyFail': 'コピー失敗：{err}',

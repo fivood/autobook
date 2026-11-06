@@ -40,24 +40,36 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   }
 
-  function applyToken() {
+  /** Used to need an explicit 保存 tap *and* a separate 启用 checkbox —
+   * people pasted the token, closed the sheet and nothing synced. A valid
+   * token now saves itself and turns sync on; only half-typed input waits. */
+  function applyToken(final: boolean) {
     const next = tokenInput.trim().toLowerCase();
+    if (next === getSyncToken()) return;
     if (next && !isValidToken(next)) {
-      message = tImmediate('sync.tokenInvalid');
+      if (final) message = tImmediate('sync.tokenInvalid');
       return;
     }
     setSyncToken(next);
     tokenInput = next;
-    message = next ? tImmediate('sync.saved') : tImmediate('sync.tokenCleared');
-    if (enabled && next) startSyncLoop();
+    if (!next) {
+      message = tImmediate('sync.tokenCleared');
+      return;
+    }
+    enabled = true;
+    setSyncEnabled(true);
+    startSyncLoop();
+    message = tImmediate('sync.saved');
   }
 
   function genNew() {
     const t = generateToken();
     tokenInput = t;
     setSyncToken(t);
+    enabled = true;
+    setSyncEnabled(true);
+    startSyncLoop();
     message = tImmediate('sync.generated');
-    if (enabled) startSyncLoop();
   }
 
   async function copyToken() {
@@ -138,8 +150,9 @@
         spellcheck="false"
         autocapitalize="off"
         autocorrect="off"
+        on:input={() => applyToken(false)}
+        on:change={() => applyToken(true)}
       />
-      <button on:click={applyToken}>{$t('sync.save')}</button>
       <button on:click={genNew}>{$t('sync.generate')}</button>
       <button class="icon" on:click={copyToken} disabled={!tokenInput} aria-label={$t('sync.copy')}>
         {#if copied}

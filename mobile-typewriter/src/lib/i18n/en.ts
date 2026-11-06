@@ -22,7 +22,6 @@ export default {
   'landing.syncOpen': 'Sync reading time across devices',
   'landing.desktopFullLink':
     'Desktop full version (highlights / notebook / AI / offline dictionary / Obsidian sync): {link}',
-  'landing.syncFab': 'Sync settings',
 
   'ingest.pdfProgress': 'Rendering page {loaded} / {total}…',
   'ingest.readFail': 'Read failed: {err}',
@@ -48,10 +47,10 @@ export default {
   'pdf.resume': 'Resume',
   'pdf.alt': 'Page {n}',
 
-  'scroll.toTypewriter': 'Switch to typewriter mode',
-  'scroll.label': 'Swipe reading',
+  'mode.auto': 'Auto-play',
+  'mode.label': 'Reading mode',
 
-  'typewriter.toScroll': 'Switch to manual swipe reading',
+  'mode.manual': 'Swipe',
   'typewriter.speedUnit': '{n} chars/s',
   'typewriter.play': 'Play',
   'typewriter.pause': 'Pause',
@@ -67,8 +66,7 @@ export default {
   'sync.description':
     'A 32-char token is the credential. Generate it on the desktop under "Settings → Data → Sync" and paste it below, or generate one here and paste it into the desktop app.',
   'sync.enable': 'Enable sync',
-  'sync.tokenPlaceholder': '32-char hex token',
-  'sync.save': 'Save',
+  'sync.tokenPlaceholder': 'Paste the 32-char token (saves automatically)',
   'sync.generate': 'Generate',
   'sync.copy': 'Copy',
   'sync.deviceIdLabel': 'This device-id: ',
@@ -78,7 +76,7 @@ export default {
   'sync.lastSync': 'Last: {time}',
   'sync.never': 'never',
   'sync.tokenInvalid': 'Token must be 32 hex characters',
-  'sync.saved': 'Saved',
+  'sync.saved': 'Saved — sync is on',
   'sync.tokenCleared': 'Token cleared',
   'sync.generated': 'Generated. Paste it into the desktop "Settings → Data → Sync" to pair.',
   'sync.copyFail': 'Copy failed: {err}',

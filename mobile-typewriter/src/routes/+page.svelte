@@ -1082,70 +1082,44 @@
           <span title={$t('pdf.resumeTooltip')}>{$t('pdf.resume')}</span>
         </label>
       </div>
-    {:else if book && readMode === 'scroll'}
-      <!-- Scroll mode: no play / speed / 章止 — those only mean
-           anything for the typewriter engine. Keep the mode toggle
-           and 续读 so the user can flip back or carry over. -->
-      <div class="controls">
-        <button
-          class="chip mode-chip"
-          on:click={toggleReadMode}
-          title={$t('scroll.toTypewriter')}
-          aria-label={$t('scroll.toTypewriter')}
-        >
-          <!-- Typewriter glyph: top "paper sheet" + keyboard body with
-               three dots representing keys / chars typed -->
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
-            <rect x="7" y="3" width="10" height="5" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
-            <rect x="3" y="9" width="18" height="10" rx="1.6"/>
-            <circle cx="8" cy="14" r="1.1" fill="var(--chip-bg)"/>
-            <circle cx="12" cy="14" r="1.1" fill="var(--chip-bg)"/>
-            <circle cx="16" cy="14" r="1.1" fill="var(--chip-bg)"/>
-          </svg>
-        </button>
-        <span class="speed">{$t('scroll.label')}</span>
-        <label class="row stop-at-chapter">
-          <input type="checkbox" bind:checked={autoResumeOnVisible} />
-          <span title={$t('pdf.resumeTooltip')}>{$t('pdf.resume')}</span>
-        </label>
-      </div>
     {:else if book}
-      <div class="controls">
-        <div class="row">
-          <button class="chip" on:click={() => bumpSpeed(-1)}>−</button>
-          <span class="speed">{$t('typewriter.speedUnit', { n: speed })}</span>
-          <button class="chip" on:click={() => bumpSpeed(1)}>+</button>
-        </div>
-        <button class="play" on:click={togglePlay} aria-label={playing ? $t('typewriter.pause') : $t('typewriter.play')}>
-          {#if playing}
-            <svg viewBox="0 0 24 24" width="32" height="32"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-          {:else}
-            <svg viewBox="0 0 24 24" width="32" height="32"><path d="M7 5v14l12-7L7 5z"/></svg>
+      <!-- One bar for both text modes. The mode used to be a bare icon next to
+           play that showed the *other* mode, so you couldn't tell which one
+           you were in; the labelled two-way switch shows both. -->
+      <div class="controls text-controls">
+        <div class="row options-row">
+          <div class="mode-switch" role="group" aria-label={$t('mode.label')}>
+            <button type="button" class:active={readMode === 'typewriter'} aria-pressed={readMode === 'typewriter'} on:click={() => readMode !== 'typewriter' && toggleReadMode()}>{$t('mode.auto')}</button>
+            <button type="button" class:active={readMode === 'scroll'} aria-pressed={readMode === 'scroll'} on:click={() => readMode !== 'scroll' && toggleReadMode()}>{$t('mode.manual')}</button>
+          </div>
+          <label class="row stop-at-chapter">
+            <input type="checkbox" bind:checked={autoResumeOnVisible} />
+            <span title={readMode === 'scroll' ? $t('pdf.resumeTooltip') : $t('typewriter.resumeTooltip')}>{$t('typewriter.resume')}</span>
+          </label>
+          {#if readMode === 'typewriter'}
+            <label class="row stop-at-chapter">
+              <input type="checkbox" bind:checked={stopAtChapter} />
+              <span>{$t('typewriter.chapterStop')}</span>
+            </label>
           {/if}
-        </button>
-        <button
-          class="chip mode-chip"
-          on:click={toggleReadMode}
-          title={$t('typewriter.toScroll')}
-          aria-label={$t('typewriter.toScroll')}
-        >
-          <!-- Scroll glyph: vertical double-headed arrow (up + down) +
-               three short content lines suggesting "scroll through" -->
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
-            <path d="M12 2 L8 7 H11 V17 H8 L12 22 L16 17 H13 V7 H16 Z"/>
-          </svg>
-        </button>
-        <label class="row stop-at-chapter">
-          <input type="checkbox" bind:checked={autoResumeOnVisible} />
-          <span title={$t('typewriter.resumeTooltip')}>{$t('typewriter.resume')}</span>
-        </label>
-        <label class="row stop-at-chapter">
-          <input type="checkbox" bind:checked={stopAtChapter} />
-          <span>{$t('typewriter.chapterStop')}</span>
-        </label>
+        </div>
+        {#if readMode === 'typewriter'}
+          <div class="row play-row">
+            <button class="chip" on:click={() => bumpSpeed(-1)}>−</button>
+            <span class="speed">{$t('typewriter.speedUnit', { n: speed })}</span>
+            <button class="chip" on:click={() => bumpSpeed(1)}>+</button>
+            <button class="play" on:click={togglePlay} aria-label={playing ? $t('typewriter.pause') : $t('typewriter.play')}>
+              {#if playing}
+                <svg viewBox="0 0 24 24" width="32" height="32"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              {:else}
+                <svg viewBox="0 0 24 24" width="32" height="32"><path d="M7 5v14l12-7L7 5z"/></svg>
+              {/if}
+            </button>
+          </div>
+        {/if}
       </div>
 
-      {#if book.chapters.length > 1}
+      {#if readMode === 'typewriter' && book.chapters.length > 1}
         <details class="toc">
           <summary>{$t('typewriter.tocSummary', { n: book.chapters.length })}</summary>
           <ul>
@@ -1161,7 +1135,6 @@
         </details>
       {/if}
     {/if}
-    <button class="sync-fab" title={$t('landing.syncFab')} on:click={() => (syncOpen = true)}>⇅</button>
   </div>
 {/if}
 
@@ -1448,8 +1421,7 @@
      from feeling jarring. */
   .reader.chrome-hidden .topbar,
   .reader.chrome-hidden .controls,
-  .reader.chrome-hidden .toc,
-  .reader.chrome-hidden .sync-fab {
+  .reader.chrome-hidden .toc {
     opacity: 0;
     pointer-events: none;
     transform: translateY(var(--chrome-shift, 0));
@@ -1543,12 +1515,6 @@
   /* Mode chips: round like the speed +/- chips so they fit the same
      visual rhythm. SVG icons inside are sized 20×20, color inherits
      from chip-text. */
-  .mode-chip {
-    padding: 0;
-  }
-  .mode-chip svg {
-    display: block;
-  }
 
   /* PDF reader: each page wrapped in a shell that holds the rendered
      JPEG plus the transparent text-layer overlay. aspect-ratio keeps
@@ -1735,6 +1701,35 @@
   .stop-at-chapter {
     font-size: 0.8rem;
     color: var(--fg-dim);
+    white-space: nowrap;
+  }
+  .text-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .options-row {
+    gap: 0.8rem;
+  }
+  .play-row {
+    justify-content: center;
+    gap: 0.8rem;
+  }
+  .mode-switch {
+    display: inline-flex;
+    margin-right: auto;
+    border: 1px solid var(--fg-dim);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .mode-switch button {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.85rem;
+    color: var(--fg-dim);
+  }
+  .mode-switch button.active {
+    background: var(--accent);
+    color: var(--accent-text);
   }
 
   .toc {

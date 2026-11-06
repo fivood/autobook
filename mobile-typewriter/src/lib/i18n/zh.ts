@@ -28,7 +28,6 @@ export default {
   'landing.syncOpen': '跨设备同步阅读时长',
   'landing.desktopFullLink':
     '桌面完整版（高亮 / 笔记本 / AI / 离线词典 / Obsidian 同步）：{link}',
-  'landing.syncFab': '同步设置',
 
   // Ingest / load progress
   'ingest.pdfProgress': '渲染第 {loaded} / {total} 页…',
@@ -57,12 +56,12 @@ export default {
   'pdf.resume': '续读',
   'pdf.alt': '第 {n} 页',
 
-  // Scroll-mode bottom bar
-  'scroll.toTypewriter': '切换到打字机模式',
-  'scroll.label': '滑屏阅读',
+  // Reading-mode switch (typewriter / scroll)
+  'mode.auto': '自动播放',
+  'mode.label': '阅读方式',
 
   // Typewriter bottom bar + controls
-  'typewriter.toScroll': '切换到手动滑屏阅读',
+  'mode.manual': '手动滑屏',
   'typewriter.speedUnit': '{n} 字/秒',
   'typewriter.play': '播放',
   'typewriter.pause': '暂停',
@@ -79,8 +78,7 @@ export default {
   'sync.description':
     '32 字符 token 是认证。先在桌面端「设置 → 数据 → 同步」生成，把同一串粘进下方；或直接在这里生成、复制到桌面端。',
   'sync.enable': '启用同步',
-  'sync.tokenPlaceholder': '32 字符 hex token',
-  'sync.save': '保存',
+  'sync.tokenPlaceholder': '粘贴 32 字符 token（自动保存）',
   'sync.generate': '生成',
   'sync.copy': '复制',
   'sync.deviceIdLabel': '本机 device-id：',
@@ -90,7 +88,7 @@ export default {
   'sync.lastSync': '上次：{time}',
   'sync.never': '从未',
   'sync.tokenInvalid': 'token 必须是 32 字符 hex',
-  'sync.saved': '已保存',
+  'sync.saved': '已保存，同步已开启',
   'sync.tokenCleared': 'token 已清除',
   'sync.generated': '已生成。把它粘到桌面端「设置 → 数据 → 同步」即可对接',
   'sync.copyFail': '复制失败：{err}',
