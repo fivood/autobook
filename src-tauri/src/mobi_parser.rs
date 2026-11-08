@@ -81,7 +81,7 @@ fn strip_tags(s: &str) -> String {
 /// PalmDoc LZ77 decompression — copied from the mobi crate because the
 /// crate's `decompress_palmdoc()` is `pub(crate)` and we need the raw bytes
 /// before any string conversion so we can try CJK encodings directly.
-fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
+pub(crate) fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
     let length = data.len();
     let mut pos: usize = 0;
     let mut text_pos: usize = 0;
@@ -131,10 +131,11 @@ fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
                     pos += b;
                 }
             }
+            // Back-reference: the next byte completes it. (Was `pos >=
+            // text.len()` — input pos vs OUTPUT length — which cut every CJK
+            // record short, since escaped UTF-8 literals cost more input than
+            // they produce.)
             0x80..=0xbf => {
-                if pos >= text.len() {
-                    return text;
-                }
                 prev = Some(byte);
             }
             _ => {
@@ -374,7 +375,7 @@ pub(crate) fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec
         return None;
     }
 
-    let mut bytes = match compression {
+    let bytes = match compression {
         17480 => {
             // Huff/CDIC
             decompress_huffcdic(&records, rec0, text_record_count, extra_flags)?
@@ -393,8 +394,102 @@ pub(crate) fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec
         }
     };
 
+    // filepos values are offsets into the bytes as decompressed — anchor
+    // them before control-char stripping shifts anything.
+    let mut bytes = add_filepos_anchors(&bytes);
     strip_mobi_control_chars(&mut bytes);
     Some((bytes, text_encoding))
+}
+
+fn find_byte(hay: &[u8], b: u8, from: usize) -> Option<usize> {
+    hay.get(from..)?.iter().position(|&c| c == b).map(|i| i + from)
+}
+
+/// MOBI6 links are `<a filepos=N>`, N a byte offset into the decompressed
+/// text. After Calibre `MobiReader.add_anchors`: put `<a id="fileposN"></a>`
+/// at each target and turn each link into `href="#fileposN"`. One change
+/// from Calibre: a target on a tag gets the anchor just *inside* it (after
+/// its `>`, and past a following pagebreak), so a note's `<li>` contains it
+/// and a chapter link lands in the chapter, not the end of the one before.
+fn add_filepos_anchors(raw: &[u8]) -> Vec<u8> {
+    const KEY: &[u8] = b"filepos=";
+    let mut edits: Vec<(usize, usize, Vec<u8>)> = Vec::new(); // (at, replaced len, insert)
+    let mut targets = std::collections::BTreeSet::new();
+    let mut k = 0;
+    while k + KEY.len() <= raw.len() {
+        if !raw[k..k + KEY.len()].eq_ignore_ascii_case(KEY) {
+            k += 1;
+            continue;
+        }
+        let mut j = k + KEY.len();
+        let quoted = matches!(raw.get(j), Some(b'"' | b'\''));
+        j += quoted as usize;
+        let digits = j;
+        while j < raw.len() && raw[j].is_ascii_digit() {
+            j += 1;
+        }
+        // Only inside a tag: the nearest `<`/`>` before it must be `<`.
+        let in_tag = raw[..k].iter().rposition(|&c| c == b'<' || c == b'>').map(|p| raw[p]) == Some(b'<');
+        let n = std::str::from_utf8(&raw[digits..j]).ok().and_then(|s| s.parse::<usize>().ok());
+        if let (true, Some(n)) = (in_tag, n) {
+            if quoted && matches!(raw.get(j), Some(b'"' | b'\'')) {
+                j += 1;
+            }
+            edits.push((k, j - k, format!("href=\"#filepos{n}\"").into_bytes()));
+            if n > 0 && n < raw.len() {
+                targets.insert(n);
+            }
+        }
+        k = j.max(k + 1);
+    }
+    for n in targets {
+        let l = find_byte(raw, b'<', n);
+        let mut at = match find_byte(raw, b'>', n) {
+            // In a tag or right at one → just past its `>`.
+            Some(r) if l.map_or(true, |l| r < l || l == n) => r + 1,
+            _ => n,
+        };
+        if raw[at..].starts_with(b"<mbp:pagebreak") {
+            at = find_byte(raw, b'>', at).map_or(at, |g| g + 1);
+        }
+        edits.push((at, 0, format!("<a id=\"filepos{n}\"></a>").into_bytes()));
+    }
+    if edits.is_empty() {
+        return raw.to_vec();
+    }
+    edits.sort_by_key(|e| e.0);
+    let mut out = Vec::with_capacity(raw.len() + edits.len() * 24);
+    let mut cur = 0;
+    for (at, len, ins) in edits {
+        if at < cur {
+            continue;
+        }
+        out.extend_from_slice(&raw[cur..at]);
+        out.extend_from_slice(&ins);
+        cur = at + len;
+    }
+    out.extend_from_slice(&raw[cur..]);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::add_filepos_anchors;
+
+    #[test]
+    fn filepos_links_get_anchors() {
+        let note = b"<p>x<sup><a filepos=0000000040>[1]</a></sup></p>"; // link
+        let mut raw = note.to_vec();
+        raw.resize(40, b' ');
+        raw.extend_from_slice(b"<li value=\"1\"><p>note</p></li></p><mbp:pagebreak/><h1>2</h1>");
+        let ch = raw.len() - b"</p><mbp:pagebreak/><h1>2</h1>".len();
+        raw.extend_from_slice(format!("<a filepos=\"{ch}\">2</a> filepos=9 stays").as_bytes());
+        let out = String::from_utf8(add_filepos_anchors(&raw)).unwrap();
+        assert!(out.starts_with("<p>x<sup><a href=\"#filepos40\">[1]</a>"), "{out}");
+        assert!(out.contains("<li value=\"1\"><a id=\"filepos40\"></a><p>note"), "{out}");
+        assert!(out.contains(&format!("<mbp:pagebreak/><a id=\"filepos{ch}\"></a><h1>")), "{out}");
+        assert!(out.contains(&format!("<a href=\"#filepos{ch}\">2</a> filepos=9 stays")), "{out}");
+    }
 }
 
 /// Decode UTF-8 bytes with CP1252 fallback for invalid sequences.

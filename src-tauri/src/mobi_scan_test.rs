@@ -805,3 +805,48 @@ fn inspect_error_records() {
     eprint!("{summary}inspect report: {}\n", report.display());
 }
 
+
+/// Dump `parse_mobi_bytes(...).html` for one file (`AUTOBOOK_MOBI_FILE`) to
+/// `<temp>/mobi_dump.html` and print section / text-char counts. Used to
+/// check KF8 reassembly against the source EPUB.
+/// Run: `$env:AUTOBOOK_MOBI_FILE='<book>.azw3'; cargo test --lib dump_one_mobi -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn dump_one_mobi() {
+    let Ok(path) = std::env::var("AUTOBOOK_MOBI_FILE") else { return };
+    let bytes = fs::read(&path).expect("read file");
+    let parsed = parse_mobi_bytes(&bytes).expect("parse");
+    let mut depth = 0i32;
+    let text_chars = parsed.html.chars().filter(|&c| match c {
+        '<' => { depth += 1; false }
+        '>' if depth > 0 => { depth -= 1; false }
+        _ => depth == 0 && !c.is_whitespace(),
+    }).count();
+    let out = temp_report("mobi_dump.html");
+    fs::write(&out, &parsed.html).expect("write");
+    eprintln!(
+        "pagebreaks={} text_chars={} kindle:pos left={} well_formed={} -> {}",
+        count(&parsed.html, "<mbp:pagebreak/>"),
+        text_chars,
+        count(&parsed.html, "kindle:pos"),
+        parsed.well_formed,
+        out.display()
+    );
+}
+
+/// Print the raw MOBI6 bytes around the first few `filepos=` targets
+/// (`AUTOBOOK_MOBI_FILE`), to see what kind of tag each one lands on.
+#[test]
+#[ignore]
+fn peek_filepos_targets() {
+    let Ok(path) = std::env::var("AUTOBOOK_MOBI_FILE") else { return };
+    let bytes = fs::read(&path).expect("read file");
+    let (raw, _) = extract_raw_content_bytes_direct(&bytes).expect("raw");
+    let s = String::from_utf8_lossy(&raw);
+    for (n, (i, _)) in s.match_indices("filepos=").enumerate().skip(10).step_by(60).take(5) {
+        let num: String = s[i + 8..].chars().filter(|c| c.is_ascii_digit()).take(10).collect();
+        let p: usize = num.parse().unwrap_or(0);
+        eprintln!("#{n} link: {}", &s[i.saturating_sub(60)..i + 40]);
+        eprintln!("   target {p}: {:?}", String::from_utf8_lossy(&raw[p.saturating_sub(20)..(p + 120).min(raw.len())]));
+    }
+}

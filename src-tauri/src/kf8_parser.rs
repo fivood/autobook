@@ -227,73 +227,6 @@ fn is_pure_kf8(record_0: &[u8]) -> bool {
     read_u32_be(record_0, 16 + 0x58) == 8
 }
 
-/// PalmDoc decompression — same algorithm used by MOBI6, shared here so we
-/// don't depend on mobi crate's private impl.
-fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
-    let length = data.len();
-    let mut pos: usize = 0;
-    let mut text_pos: usize = 0;
-    let mut text: Vec<u8> = Vec::with_capacity(length * 2);
-
-    let mut prev = None;
-    while pos < length {
-        let byte = data[pos];
-        pos += 1;
-        match byte {
-            new if prev.is_some() => {
-                let old = prev.take().unwrap();
-                let mut dist_len_bytes = u16::from_be_bytes([old, new]);
-                dist_len_bytes &= 0x3fff;
-                let offset = (dist_len_bytes >> 3) as usize;
-                let len = ((dist_len_bytes & 0x0007) + 3) as usize;
-                let mut start = if offset > text_pos {
-                    if text_pos == 0 {
-                        return text;
-                    }
-                    offset % text_pos
-                } else {
-                    text_pos - offset
-                };
-                // Copy len bytes, advancing `start` as `text` grows so
-                // overlapping back-references copy the full run instead of
-                // freezing `end` at the old length.
-                for _ in 0..len {
-                    let byte = text[start];
-                    text.push(byte);
-                    text_pos += 1;
-                    start += 1;
-                }
-            }
-            0x0 | 0x09..=0x7f => {
-                text.push(byte);
-                text_pos += 1;
-            }
-            0x1..=0x8 => {
-                let b = byte as usize;
-                if pos + b <= length {
-                    for ch in &data[pos..(pos + b)] {
-                        text.push(*ch);
-                        text_pos += 1;
-                    }
-                    pos += b;
-                }
-            }
-            0x80..=0xbf => {
-                if pos >= text.len() {
-                    return text;
-                }
-                prev = Some(byte);
-            }
-            _ => {
-                text.push(b' ');
-                text.push(byte ^ 0x80);
-                text_pos += 2;
-            }
-        }
-    }
-    text
-}
-
 fn detect_image_ext(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
         Some("jpg")
@@ -471,124 +404,287 @@ fn reassemble_phase2_concat(
     buf
 }
 
-/// Phase 3: fragment-into-skeleton reassembly. For each skeleton,
-/// interleave its fragment bytes into the template at each fragment's
-/// insert_pos. Produces byte-accurate per-section XHTML.
-///
-/// Matches Calibre `mobi8.py::Mobi8Reader::write_opf` — per-file layout
-/// is `base_xml[0:ip_1] + frag_1_data + base_xml[ip_1:ip_2] + frag_2_data
-/// + ... + base_xml[ip_N:]`. Fragment start_pos and length come directly
-/// from the fragment row (tag 6 tuple), not derived from position gaps.
-/// Grouping by parent skeleton is via `parent_ord` (Calibre's
-/// `file_number`, tag 3), which is populated for every well-formed KF8.
+/// Phase 3: fragment-into-skeleton reassembly, per Calibre `mobi8.py`
+/// `build_parts`: fragments are consumed in table order, `num_fragments`
+/// per skeleton; their bytes sit back-to-back right after the skeleton
+/// template; `insert_pos` is absolute in flow 0, so `insert_pos - skel.offset`
+/// is the offset into the *growing* part (earlier fragments included).
+/// Then `kindle:pos` links are resolved to `#id` and the parts are joined by
+/// `<mbp:pagebreak/>` for the frontend's section split.
+// ponytail: no Calibre-style nudge for insert points that land mid-tag
+// (badly formed KF8, launchpad #1082669); add it if such a file shows up.
 fn reassemble_with_fragments(
     skels: &[crate::kf8_indx::SkeletonRow],
     frags: &[crate::kf8_indx::FragmentRow],
     raw_html_bytes: &[u8],
-    _flow0_end: usize,
     cncx_pool: &[u8],
     ncx_labels: &[Option<String>],
 ) -> Vec<u8> {
-    // Group fragments by parent skeleton ordinal (Calibre `file_number`,
-    // tag 3). Fall back to sequential grouping by num_fragments if
-    // parent_ord looks bogus for the whole file.
-    let use_parent_ord = frags.iter().any(|f| f.parent_ord > 0)
-        && frags.iter().all(|f| (f.parent_ord as usize) < skels.len());
-    let mut groups: Vec<Vec<&crate::kf8_indx::FragmentRow>> = vec![Vec::new(); skels.len()];
-    if use_parent_ord {
-        for f in frags {
-            groups[f.parent_ord as usize].push(f);
+    let raw = raw_html_bytes;
+    let mut parts: Vec<Vec<u8>> = Vec::with_capacity(skels.len());
+    let mut first_frag: Vec<usize> = Vec::with_capacity(skels.len());
+    let mut fi = 0usize;
+    for skel in skels {
+        let start = (skel.offset as usize).min(raw.len());
+        let mut base = (start + skel.length as usize).min(raw.len());
+        let mut part = raw[start..base].to_vec();
+        first_frag.push(fi);
+        let n = (skel.num_fragments as usize).min(frags.len().saturating_sub(fi));
+        for f in &frags[fi..fi + n] {
+            let end = (base + f.length as usize).min(raw.len());
+            let ip = (f.insert_pos as usize)
+                .saturating_sub(skel.offset as usize)
+                .min(part.len());
+            part.splice(ip..ip, raw[base..end].iter().copied());
+            base = end;
         }
-    } else {
-        let mut cursor = 0usize;
-        for (i, s) in skels.iter().enumerate() {
-            let take = (s.num_fragments as usize).min(frags.len().saturating_sub(cursor));
-            for f in &frags[cursor..cursor + take] {
-                groups[i].push(f);
-            }
-            cursor += take;
-        }
+        fi += n;
+        parts.push(part);
     }
 
-    let total_estimate: usize = skels.iter().map(|s| s.length as usize).sum::<usize>()
-        + frags.iter().map(|f| f.length as usize).sum::<usize>()
-        + skels.len() * 16;
-    let mut buf: Vec<u8> = Vec::with_capacity(total_estimate);
-    let mut kept = 0usize;
+    resolve_pos_links(&mut parts, skels, frags);
 
-    for (i, skel) in skels.iter().enumerate() {
-        let tpl_start = skel.offset as usize;
-        let tpl_end = (tpl_start + skel.length as usize).min(raw_html_bytes.len());
-        if tpl_start >= tpl_end {
+    let mut buf: Vec<u8> = Vec::with_capacity(parts.iter().map(|p| p.len() + 16).sum());
+    let mut kept = 0usize;
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() {
             continue;
         }
-        let base_xml = &raw_html_bytes[tpl_start..tpl_end];
-
-        // Fragment bytes for this skeleton live in raw text starting
-        // right after the template (i.e. at skel.offset + skel.length).
-        // Fragment.start_pos is an offset within that region, not an
-        // absolute offset — Calibre's `mobi8.py` computes fragment data
-        // as `text[fragment_start + start_pos : + length]`.
-        let frag_base = tpl_end;
-
-        let mut group = groups[i].clone();
-        // Reassemble in insert_pos order — walk the template linearly.
-        group.sort_by_key(|f| f.insert_pos);
-
         buf.extend_from_slice(b"<mbp:pagebreak/>");
-        // Prefer the NCX-derived chapter label (real epub TOC name).
-        // Fall back to the fragment table's CNCX only if it isn't an
-        // xpath position anchor (e.g. `P-//*[@aid='UGI0']`, which is
-        // what fragment CNCX actually holds in practice) — this branch
-        // is defensive and rarely fires. If neither has a usable name,
-        // omit the marker and let the frontend scan `<h*>` in the body.
-        let label: Option<String> = ncx_labels
-            .get(i)
-            .cloned()
-            .flatten()
-            .or_else(|| {
-                let first = group.first()?;
-                if first.toc_cncx == 0 || cncx_pool.is_empty() {
-                    return None;
-                }
-                let name = crate::kf8_indx::read_cncx_name(cncx_pool, first.toc_cncx)?;
-                let looks_like_xpath =
-                    name.starts_with("P-//") || name.starts_with("//*[") || name.contains("[@aid");
-                if looks_like_xpath || name.trim().is_empty() {
-                    None
-                } else {
-                    Some(name)
-                }
-            });
+        // Prefer the NCX-derived chapter label (real epub TOC name). Fall
+        // back to the fragment CNCX only if it isn't an xpath position
+        // anchor (e.g. `P-//*[@aid='UGI0']`, what it holds in practice).
+        // Neither → omit and let the frontend scan `<h*>`.
+        let label: Option<String> = ncx_labels.get(i).cloned().flatten().or_else(|| {
+            let first = frags
+                .get(first_frag[i])
+                .filter(|_| skels[i].num_fragments > 0)?;
+            if first.toc_cncx == 0 || cncx_pool.is_empty() {
+                return None;
+            }
+            let name = crate::kf8_indx::read_cncx_name(cncx_pool, first.toc_cncx)?;
+            let looks_like_xpath =
+                name.starts_with("P-//") || name.starts_with("//*[") || name.contains("[@aid");
+            (!looks_like_xpath && !name.trim().is_empty()).then_some(name)
+        });
         if let Some(l) = label {
-            let sanitized = l.replace("-->", "-- >");
             buf.extend_from_slice(b"<!--autobook-section-label:");
-            buf.extend_from_slice(sanitized.as_bytes());
+            buf.extend_from_slice(l.replace("-->", "-- >").as_bytes());
             buf.extend_from_slice(b"-->");
         }
-        let mut cur = 0usize;
-        for f in &group {
-            let ip = (f.insert_pos as usize).min(base_xml.len());
-            if ip > cur {
-                buf.extend_from_slice(&base_xml[cur..ip]);
-                cur = ip;
-            }
-            let fs = frag_base + f.start_pos as usize;
-            let fe = (fs + f.length as usize).min(raw_html_bytes.len());
-            if fs < fe && fs < raw_html_bytes.len() {
-                buf.extend_from_slice(&raw_html_bytes[fs..fe]);
-            }
-        }
-        if cur < base_xml.len() {
-            buf.extend_from_slice(&base_xml[cur..]);
-        }
+        buf.extend_from_slice(part);
         kept += 1;
     }
-
     if kept < 2 {
         buf.clear();
     }
     buf
+}
+
+const POS_PREFIX: &[u8] = b"kindle:pos:fid:";
+
+fn find_from(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
+    hay.get(from..)?
+        .windows(needle.len())
+        .position(|w| w == needle)
+        .map(|i| i + from)
+}
+
+/// Kindle base32 (`0-9A-V`) prefix of `s` → (value, digits consumed).
+fn base32_prefix(s: &[u8]) -> (usize, usize) {
+    let mut v = 0usize;
+    let mut n = 0usize;
+    for &c in s {
+        let d = match c {
+            b'0'..=b'9' => c - b'0',
+            b'A'..=b'V' => c - b'A' + 10,
+            b'a'..=b'v' => c - b'a' + 10,
+            _ => break,
+        };
+        v = v.saturating_mul(32).saturating_add(d as usize);
+        n += 1;
+    }
+    (v, n)
+}
+
+/// Parse `kindle:pos:fid:F:off:O` at `at` → (fid, off, total length).
+fn parse_pos_link(html: &[u8], at: usize) -> Option<(usize, usize, usize)> {
+    let mut p = at + POS_PREFIX.len();
+    let (fid, n) = base32_prefix(&html[p..]);
+    if n == 0 || !html[p + n..].starts_with(b":off:") {
+        return None;
+    }
+    p += n + 5;
+    let (off, m) = base32_prefix(&html[p..]);
+    (m > 0).then_some((fid, off, p + m - at))
+}
+
+/// Value of attribute `name` in one tag (`<...>`), matched case-insensitively
+/// and only right after whitespace (so `aid` never matches inside `data-aid`).
+fn tag_attr<'a>(tag: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
+    let skip_ws = |mut j: usize| {
+        while j < tag.len() && tag[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        j
+    };
+    for i in 1..tag.len().saturating_sub(name.len()) {
+        if !tag[i - 1].is_ascii_whitespace() || !tag[i..i + name.len()].eq_ignore_ascii_case(name) {
+            continue;
+        }
+        let j = skip_ws(i + name.len());
+        if tag.get(j) != Some(&b'=') {
+            continue;
+        }
+        let j = skip_ws(j + 1);
+        if let Some(&q @ (b'"' | b'\'')) = tag.get(j) {
+            let v = &tag[j + 1..];
+            return v.iter().position(|&c| c == q).map(|e| &v[..e]);
+        }
+    }
+    None
+}
+
+enum Anchor {
+    Id(Vec<u8>),
+    Aid(Vec<u8>),
+}
+
+/// Calibre `get_id_tag`: nearest tag at/before `npos` carrying id / a@name
+/// (or, failing those on that tag, aid). A position inside a tag counts
+/// that tag.
+fn anchor_before(part: &[u8], npos: usize) -> Option<Anchor> {
+    let npos = npos.min(part.len());
+    let end = match (find_from(part, b">", npos), find_from(part, b"<", npos)) {
+        (Some(g), Some(l)) if l == npos || g < l => g + 1,
+        (Some(g), None) => g + 1,
+        _ => npos,
+    };
+    let block = &part[..end];
+    let mut close = block.len();
+    while let Some(lt) = block[..close].iter().rposition(|&c| c == b'<') {
+        let tag = &block[lt..close];
+        close = lt;
+        let Some(gt) = tag.iter().position(|&c| c == b'>') else { continue };
+        let tag = &tag[..=gt];
+        let is_a = tag.len() > 2 && tag[1].eq_ignore_ascii_case(&b'a') && tag[2].is_ascii_whitespace();
+        let id = tag_attr(tag, b"id").or_else(|| is_a.then(|| tag_attr(tag, b"name")).flatten());
+        if let Some(v) = id {
+            return Some(Anchor::Id(v.to_vec()));
+        }
+        if let Some(v) = tag_attr(tag, b"aid") {
+            return Some(Anchor::Aid(v.to_vec()));
+        }
+    }
+    None
+}
+
+/// Rewrite every `kindle:pos:fid:F:off:O` to `#id` (Calibre
+/// `get_id_tag_by_pos_fid`: pos = frags[F].insert_pos + O, located in the
+/// skeleton whose flow-0 span holds it). Targets known only by `aid` get
+/// `id="aid-X"` added. Unresolvable links are left for the frontend's
+/// section-level fallback.
+fn resolve_pos_links(
+    parts: &mut [Vec<u8>],
+    skels: &[crate::kf8_indx::SkeletonRow],
+    frags: &[crate::kf8_indx::FragmentRow],
+) {
+    // Pass 1 on the untouched parts: (part, at, len, target id).
+    let mut edits: Vec<(usize, usize, usize, Vec<u8>)> = Vec::new();
+    let mut aids: Vec<std::collections::HashSet<Vec<u8>>> = vec![Default::default(); parts.len()];
+    for (pi, part) in parts.iter().enumerate() {
+        let mut from = 0;
+        while let Some(at) = find_from(part, POS_PREFIX, from) {
+            from = at + POS_PREFIX.len();
+            let Some((fid, off, len)) = parse_pos_link(part, at) else { continue };
+            let Some(f) = frags.get(fid) else { continue };
+            let pos = f.insert_pos as usize + off;
+            let Some(ti) = skels.iter().zip(parts.iter()).position(|(s, p)| {
+                let s0 = s.offset as usize;
+                pos >= s0 && pos < s0 + p.len()
+            }) else {
+                continue;
+            };
+            let id = match anchor_before(&parts[ti], pos - skels[ti].offset as usize) {
+                Some(Anchor::Id(v)) => v,
+                Some(Anchor::Aid(v)) => {
+                    let id = [b"aid-".as_slice(), &v].concat();
+                    aids[ti].insert(v);
+                    id
+                }
+                None => continue,
+            };
+            edits.push((pi, at, len, id));
+            from = at + len;
+        }
+    }
+    // Pass 2: link rewrites, back to front so earlier offsets stay valid.
+    for (pi, at, len, id) in edits.into_iter().rev() {
+        let href = [b"#".as_slice(), &id].concat();
+        parts[pi].splice(at..at + len, href);
+    }
+    for (pi, set) in aids.iter().enumerate() {
+        for aid in set {
+            let needle = [b" aid=\"".as_slice(), aid, b"\""].concat();
+            if let Some(at) = find_from(&parts[pi], &needle, 0) {
+                let ins = [b" id=\"aid-".as_slice(), aid, b"\""].concat();
+                parts[pi].splice(at..at, ins);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kf8_indx::{FragmentRow, SkeletonRow};
+
+    fn skel(offset: u32, length: u32, n: u32) -> SkeletonRow {
+        SkeletonRow { name: String::new(), num_fragments: n, offset, length }
+    }
+    fn frag(insert_pos: u32, length: u32) -> FragmentRow {
+        FragmentRow { insert_pos, parent_ord: 0, start_pos: 0, length, toc_cncx: 0 }
+    }
+
+    #[test]
+    fn reassembles_and_resolves_pos_links() {
+        // flow 0: skel0 template + 2 frags, then skel1 template + 1 frag.
+        // Both templates take their fragments right after `<body>` (12).
+        let t: &[u8] = b"<html><body></body></html>";
+        let f0: &[u8] = b"<p id=\"c1\"><a href=\"kindle:pos:fid:0002:off:0000000003\">*</a></p>";
+        let f1: &[u8] = b"<p>tail</p>";
+        let f2: &[u8] = b"<div aid=\"7\">x<p aid=\"8\">note</p></div>";
+        let raw = [t, f0, f1, t, f2].concat();
+        let s1 = (t.len() + f0.len() + f1.len()) as u32;
+        let tl = t.len() as u32;
+        let skels = [skel(0, tl, 2), skel(s1, tl, 1)];
+        let frags = [
+            frag(12, f0.len() as u32),
+            frag(12 + f0.len() as u32, f1.len() as u32),
+            frag(s1 + 12, f2.len() as u32),
+        ];
+        let out = reassemble_with_fragments(&skels, &frags, &raw, &[], &[]);
+        let out = String::from_utf8(out).unwrap();
+        let parts: Vec<&str> = out.split("<mbp:pagebreak/>").filter(|s| !s.is_empty()).collect();
+        // pos = frag2.insert_pos + 3 → inside `<div aid="7">` → that tag.
+        assert_eq!(
+            parts[0],
+            "<html><body><p id=\"c1\"><a href=\"#aid-7\">*</a></p><p>tail</p></body></html>"
+        );
+        assert_eq!(
+            parts[1],
+            "<html><body><div id=\"aid-7\" aid=\"7\">x<p aid=\"8\">note</p></div></body></html>"
+        );
+    }
+
+    #[test]
+    fn anchor_prefers_nearest_id() {
+        let html: &[u8] = b"<div id=\"a\"><p aid=\"1\">t</p><span id=\"b\">x</span>yz";
+        let Some(Anchor::Id(v)) = anchor_before(html, html.len() - 1) else { panic!() };
+        assert_eq!(v, b"b");
+        let Some(Anchor::Aid(v)) = anchor_before(html, 16) else { panic!() };
+        assert_eq!(v, b"1");
+    }
 }
 
 /// Top-level entry. Returns `Ok(Some(parsed))` if the file is KF8 (joint or
@@ -688,7 +784,7 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         let trimmed = strip_record_trailers(record, header.extra_record_data_flags);
         let chunk = match header.compression {
             1 => trimmed.to_vec(),
-            2 => decompress_palmdoc(trimmed),
+            2 => crate::mobi_parser::decompress_palmdoc(trimmed),
             17480 => match huff.as_mut() {
                 Some(h) => h.unpack(trimmed),
                 None => return Err("KF8 Huff/CDIC decoder not initialized".into()),
@@ -896,7 +992,6 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
                         &skels,
                         &frags,
                         raw_html_bytes.as_slice(),
-                        flow0_end,
                         &cncx_pool,
                         &skel_labels,
                     ),
