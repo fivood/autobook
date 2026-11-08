@@ -250,7 +250,7 @@
     background: color-mix(in srgb, currentColor 12%, transparent);
     border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
     border-radius: 0.3rem;
-    font-family: ui-monospace, monospace;
+    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
     font-size: 0.75rem;
     line-height: 1.2;
   }

@@ -383,7 +383,8 @@
     white-space: nowrap;
     direction: rtl;
     text-align: left;
-    font-family: ui-monospace, monospace;
+    /* 裸 monospace 在 Windows 上会落到 MS Gothic 一类日文字体，`\` 画成 `¥` */
+    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
     font-size: 0.8125rem;
     padding: 0.25rem 0.4rem;
     background: rgba(127, 127, 127, 0.12);
