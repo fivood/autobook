@@ -656,11 +656,13 @@
       return;
     }
 
-    const checkForParent = !chapterId.startsWith(prependValue);
-
-    targetElement = checkForParent
-      ? targetElement.closest(`div[id^="${prependValue}"]`) || targetElement
-      : targetElement;
+    // In-book links go to the element itself. They used to be widened to the
+    // enclosing chapter, so a link into the end of a long chapter landed on
+    // its first page. A target with no box (a `display:none` note) can't be
+    // scrolled to, so that one still falls back to its chapter.
+    if (!chapterId.startsWith(prependValue) && !targetElement.getClientRects().length) {
+      targetElement = targetElement.closest(`div[id^="${prependValue}"]`) || targetElement;
+    }
 
     willNavigate = true;
 

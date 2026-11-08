@@ -363,6 +363,17 @@ option {
   img { max-width: 100%; }
 }
 
+/* Outside .md-section: the paginated reader renders a section's innerHTML
+   without that wrapper. */
+sup.md-footnote-ref { font-size: 0.75em; line-height: 0; }
+.md-footnotes {
+  margin-top: 2em;
+  padding-top: 0.6em;
+  border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  font-size: 0.9em;
+  ol { list-style: decimal; padding-left: 1.6em; }
+}
+
 :root {
   /* Sage green palette */
   --font-color: #405a5c;

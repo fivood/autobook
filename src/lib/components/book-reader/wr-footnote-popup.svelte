@@ -7,8 +7,13 @@
    * ancestor captures fixed descendants, so on every chapter's final page that
    * box landed thousands of pixels off-screen. This one lives outside the book
    * content; styles.scss switches the book's box off.
+   *
+   * EPUB note links (footnote.ts) open the same box on click. That one stays
+   * until the next click elsewhere, and takes the pointer so a long note can be
+   * scrolled and copied.
    */
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
+  import { footnote$ } from './footnote';
 
   const MARKER = '.book-content span.reader_footer_note';
   const GAP = 8;
@@ -19,19 +24,34 @@
   let left = 0;
   let top = 0;
   let fontSize = 16;
+  let clicked = false;
+
+  const sub = footnote$.subscribe(({ anchor, text: t }) => {
+    clicked = true;
+    // The marker itself is usually shrunk (superscript, 0.75em); size off the
+    // paragraph it sits in.
+    place(anchor, t, anchor.closest('p,li,dd,div,blockquote') ?? anchor);
+  });
+  onDestroy(() => sub.unsubscribe());
 
   function marker(target: EventTarget | null): HTMLElement | null {
     return target instanceof Element ? target.closest<HTMLElement>(MARKER) : null;
   }
 
-  async function show(ev: MouseEvent) {
+  function show(ev: MouseEvent) {
+    if (clicked && text) return;
     const el = marker(ev.target);
     if (!el) return;
-    text = el.dataset.wrFooternote ?? '';
+    clicked = false;
+    place(el, el.dataset.wrFooternote ?? '');
+  }
+
+  async function place(el: Element, t: string, sizeFrom: Element = el) {
+    text = t;
     if (!text) return;
     // A size step below the text it annotates, following the reader's font
     // size setting.
-    fontSize = parseFloat(getComputedStyle(el).fontSize) * 0.85 || 16;
+    fontSize = parseFloat(getComputedStyle(sizeFrom).fontSize) * 0.85 || 16;
     await tick();
     if (!box) return;
     // Above the marker when it fits, else below; centred on it and kept
@@ -44,7 +64,10 @@
 
   function hide(ev?: Event) {
     if (!text) return;
-    if (ev?.type === 'mouseout' && !marker(ev.target)) return;
+    if (ev?.type === 'mouseout' && (clicked || !marker(ev.target))) return;
+    if (clicked && ev?.target instanceof Node && box?.contains(ev.target)) return;
+    // Ctrl+C on a selection inside the box mustn't close it before the copy.
+    if (ev instanceof KeyboardEvent && (ev.ctrlKey || ev.metaKey || ev.key === 'Shift')) return;
     text = '';
   }
 </script>
@@ -63,7 +86,8 @@
 {#if text}
   <div
     class="wr-note"
-    role="tooltip"
+    class:wr-note--clicked={clicked}
+    role={clicked ? 'note' : 'tooltip'}
     bind:this={box}
     style:left="{left}px"
     style:top="{top}px"
@@ -91,5 +115,11 @@
     line-height: 1.7;
     white-space: normal;
     pointer-events: none;
+  }
+  .wr-note--clicked {
+    max-height: 50vh;
+    overflow-y: auto;
+    pointer-events: auto;
+    user-select: text;
   }
 </style>

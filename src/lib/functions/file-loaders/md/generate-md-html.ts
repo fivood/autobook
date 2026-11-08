@@ -33,6 +33,7 @@ import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
 import { sanitizeHtml } from '$lib/functions/sanitize-html';
+import { extractMdFootnotes } from './md-footnotes';
 
 // The default `highlight.js` entry point pulls in ~190 grammars — Erlang,
 // Smalltalk, the lot — for a reading app that meets code blocks occasionally.
@@ -132,10 +133,11 @@ export function getFormattedElementMd(data: string) {
 
   // Pre-render math so marked doesn't mangle the LaTeX.
   const withMath = renderMath(withoutFrontmatter);
+  const { text: withRefs, notes } = extractMdFootnotes(withMath);
 
   // Split on top-level headings (# / ##) for TOC sections. Lower-level
   // headings stay inside the section.
-  const lines = withMath.split(/\r?\n/);
+  const lines = withRefs.split(/\r?\n/);
   const sectionBuckets: { label: string; lines: string[] }[] = [
     { label: '', lines: [] }
   ];
@@ -152,13 +154,22 @@ export function getFormattedElementMd(data: string) {
     sectionBuckets.shift();
   }
   if (!sectionBuckets.length) {
-    sectionBuckets.push({ label: '', lines: [withMath] });
+    sectionBuckets.push({ label: '', lines: [withRefs] });
   }
 
   let totalChars = 0;
   sectionBuckets.forEach((bucket, idx) => {
     const sectionId = `section-${idx + 1}`;
-    const html = marked.parse(bucket.lines.join('\n'), { async: false }) as string;
+    let html = marked.parse(bucket.lines.join('\n'), { async: false }) as string;
+    if (notes.length && idx === sectionBuckets.length - 1) {
+      const items = notes
+        .map(
+          ({ n, text }) =>
+            `<li id="md-fn-${n}" class="md-footnote">${marked.parseInline(text, { async: false })} <a class="md-footnote-back" href="#md-fnref-${n}">↩</a></li>`
+        )
+        .join('');
+      html += `<section class="md-footnotes"><ol>${items}</ol></section>`;
+    }
     const wrapper = document.createElement('div');
     wrapper.id = sectionId;
     wrapper.className = 'md-section';

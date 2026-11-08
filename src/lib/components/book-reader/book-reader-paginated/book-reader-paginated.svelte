@@ -777,16 +777,38 @@
     }
   }
 
-  nextChapter$.pipe(takeUntil(destroy$)).subscribe((chapterId) => {
+  nextChapter$.pipe(takeUntil(destroy$)).subscribe(async (chapterId) => {
+    const selector = `[id="${CSS.escape(chapterId)}"]`;
     const nextSectionIndex = sections.findIndex((section, index) => {
       if (section.id === chapterId) return true;
-      return !!getSectionElement(index)?.querySelector(`[id="${chapterId}"]`);
+      return !!getSectionElement(index)?.querySelector(selector);
     });
 
-    if (nextSectionIndex > -1) {
+    if (nextSectionIndex < 0) return;
+
+    // Same as the 'cue' action: open the section, then page to the anchor
+    // inside it. Stopping at the section start (the old behaviour) put a link
+    // into the end of a long chapter on its first page.
+    const isAnchor = sections[nextSectionIndex].id !== chapterId;
+    if (nextSectionIndex !== sectionIndex$.getValue()) {
+      const ready = new Promise<void>((resolve) => {
+        sectionReady$.pipe(take(1)).subscribe(() => resolve());
+      });
       sectionIndex$.next(nextSectionIndex);
       concretePageManager?.scrollTo(0, true);
+      if (!isAnchor) return;
+      await ready;
+    } else if (!isAnchor) {
+      concretePageManager?.scrollTo(0, true);
+      return;
     }
+
+    const target = contentEl?.querySelector(selector);
+    if (!target || !calculator || !concretePageManager) return;
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    const scrollPos = calculator.getScrollPosByCharCount(calculator.calcExploredCharCount(range));
+    if (scrollPos >= 0) concretePageManager.scrollTo(scrollPos, true);
   });
 </script>
 

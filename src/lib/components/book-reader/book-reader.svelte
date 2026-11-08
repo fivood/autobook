@@ -199,7 +199,8 @@
         document,
         furiganaStyle,
         hideSpoilerImage,
-        navigator.standalone || window.matchMedia('(display-mode: fullscreen)').matches
+        navigator.standalone || window.matchMedia('(display-mode: fullscreen)').matches,
+        () => htmlContent
       );
       return contentEl$.pipe(mergeMap((contentEl) => reactiveElementsFn(contentEl)));
     }),
