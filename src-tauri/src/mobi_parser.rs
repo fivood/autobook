@@ -411,6 +411,18 @@ fn find_byte(hay: &[u8], b: u8, from: usize) -> Option<usize> {
 /// from Calibre: a target on a tag gets the anchor just *inside* it (after
 /// its `>`, and past a following pagebreak), so a note's `<li>` contains it
 /// and a chapter link lands in the chapter, not the end of the one before.
+/// `at` inside `&name;` / `&#123;` → just past its `;`. An anchor spliced
+/// into an entity breaks it into literal text (Calibre moves it the same way).
+fn past_entity(raw: &[u8], at: usize) -> usize {
+    let name = |b: u8| b.is_ascii_alphanumeric() || b == b'#';
+    let back = raw[at.saturating_sub(32)..at].iter().rev().take_while(|&&b| name(b)).count();
+    if back == 0 || at < back + 1 || raw[at - back - 1] != b'&' {
+        return at;
+    }
+    let fwd = raw[at..].iter().take(32).take_while(|&&b| name(b)).count();
+    if raw.get(at + fwd) == Some(&b';') { at + fwd + 1 } else { at }
+}
+
 fn add_filepos_anchors(raw: &[u8]) -> Vec<u8> {
     const KEY: &[u8] = b"filepos=";
     let mut edits: Vec<(usize, usize, Vec<u8>)> = Vec::new(); // (at, replaced len, insert)
@@ -452,6 +464,7 @@ fn add_filepos_anchors(raw: &[u8]) -> Vec<u8> {
         if raw[at..].starts_with(b"<mbp:pagebreak") {
             at = find_byte(raw, b'>', at).map_or(at, |g| g + 1);
         }
+        at = past_entity(raw, at);
         edits.push((at, 0, format!("<a id=\"filepos{n}\"></a>").into_bytes()));
     }
     if edits.is_empty() {
@@ -489,6 +502,20 @@ mod tests {
         assert!(out.contains("<li value=\"1\"><a id=\"filepos40\"></a><p>note"), "{out}");
         assert!(out.contains(&format!("<mbp:pagebreak/><a id=\"filepos{ch}\"></a><h1>")), "{out}");
         assert!(out.contains(&format!("<a href=\"#filepos{ch}\">2</a> filepos=9 stays")), "{out}");
+    }
+
+    #[test]
+    fn filepos_anchor_never_splits_an_entity() {
+        // Links to a byte inside `&amp;`, and to the `x` after a bare `&`.
+        let body = b"<p>a&amp;b c &x</p>";
+        let link = |n: usize| format!("<a filepos={n:010}>1</a>");
+        let head = link(0).len() * 2;
+        let (in_amp, after_bare) = (head + 6, head + 14);
+        assert_eq!((body[6], body[14]), (b'm', b'x'));
+        let raw = [link(in_amp).into_bytes(), link(after_bare).into_bytes(), body.to_vec()].concat();
+        let out = String::from_utf8(add_filepos_anchors(&raw)).unwrap();
+        assert!(out.contains(&format!("a&amp;<a id=\"filepos{in_amp}\"></a>b")), "{out}");
+        assert!(out.contains(&format!("c &<a id=\"filepos{after_bare}\"></a>x</p>")), "{out}");
     }
 }
 

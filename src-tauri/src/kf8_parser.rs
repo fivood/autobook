@@ -404,6 +404,51 @@ fn reassemble_phase2_concat(
     buf
 }
 
+/// Calibre's test for a broken insert point, with Python `find`'s -1 for
+/// "absent" kept: the tail closes a tag before opening one, or the head ends
+/// inside an open tag.
+fn lands_mid_tag(part: &[u8], ip: usize) -> bool {
+    let pos = |o: Option<usize>| o.map_or(-1, |i| i as i64);
+    let (head, tail) = part.split_at(ip);
+    pos(tail.iter().position(|&b| b == b'>')) < pos(tail.iter().position(|&b| b == b'<'))
+        || pos(head.iter().rposition(|&b| b == b'>')) < pos(head.iter().rposition(|&b| b == b'<'))
+}
+
+/// Byte index of the `>` closing the first tag carrying `aid="…"` (Calibre
+/// `locate_beg_end_of_tag`).
+fn aid_tag_end(part: &[u8], aid: &str) -> Option<usize> {
+    let lower = part.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(at) = find_from(&lower, b"aid", from) {
+        from = at + 3;
+        // `aid` as a whole attribute name: whitespace before, `=` after.
+        if at == 0 || !lower[at - 1].is_ascii_whitespace() {
+            continue;
+        }
+        let rest = &part[at + 3..];
+        let eq = rest.iter().position(|b| !b.is_ascii_whitespace())?;
+        if rest[eq] != b'=' {
+            continue;
+        }
+        let after = &rest[eq + 1..];
+        let q = after.iter().position(|b| !b.is_ascii_whitespace())?;
+        let quote = after[q];
+        if quote != b'"' && quote != b'\'' {
+            continue;
+        }
+        let value = &after[q + 1..];
+        if !value.starts_with(aid.as_bytes()) || value.get(aid.len()) != Some(&quote) {
+            continue;
+        }
+        let open = part[..at].iter().rposition(|&b| b == b'<')?;
+        if part[open..at].contains(&b'>') {
+            continue;
+        }
+        return part[at..].iter().position(|&b| b == b'>').map(|i| at + i);
+    }
+    None
+}
+
 /// Phase 3: fragment-into-skeleton reassembly, per Calibre `mobi8.py`
 /// `build_parts`: fragments are consumed in table order, `num_fragments`
 /// per skeleton; their bytes sit back-to-back right after the skeleton
@@ -411,8 +456,6 @@ fn reassemble_phase2_concat(
 /// is the offset into the *growing* part (earlier fragments included).
 /// Then `kindle:pos` links are resolved to `#id` and the parts are joined by
 /// `<mbp:pagebreak/>` for the frontend's section split.
-// ponytail: no Calibre-style nudge for insert points that land mid-tag
-// (badly formed KF8, launchpad #1082669); add it if such a file shows up.
 fn reassemble_with_fragments(
     skels: &[crate::kf8_indx::SkeletonRow],
     frags: &[crate::kf8_indx::FragmentRow],
@@ -430,11 +473,30 @@ fn reassemble_with_fragments(
         let mut part = raw[start..base].to_vec();
         first_frag.push(fi);
         let n = (skel.num_fragments as usize).min(frags.len().saturating_sub(fi));
+        // The aid of the skeleton's anchor tag, from the first fragment's TOC
+        // text `P-//*[@aid='UGI0']`. Calibre reads it once per skeleton too.
+        let aid = frags
+            .get(fi)
+            .filter(|_| n > 0 && !cncx_pool.is_empty())
+            .and_then(|f| crate::kf8_indx::read_cncx_name(cncx_pool, f.toc_cncx))
+            .and_then(|t| {
+                t.strip_prefix("P-//*[@aid='")?
+                    .strip_suffix("']")
+                    .map(str::to_owned)
+            });
         for f in &frags[fi..fi + n] {
             let end = (base + f.length as usize).min(raw.len());
-            let ip = (f.insert_pos as usize)
+            let mut ip = (f.insert_pos as usize)
                 .saturating_sub(skel.offset as usize)
                 .min(part.len());
+            // Badly formed KF8 (launchpad #1082669) puts insert points inside
+            // a tag, which splices the fragment into the tag's attributes.
+            // Calibre then recomputes the point from the aid tag's end.
+            if lands_mid_tag(&part, ip) {
+                if let Some(tag_end) = aid.as_deref().and_then(|a| aid_tag_end(&part, a)) {
+                    ip = (tag_end + 1 + f.start_pos as usize).min(part.len());
+                }
+            }
             part.splice(ip..ip, raw[base..end].iter().copied());
             base = end;
         }
@@ -547,6 +609,8 @@ fn tag_attr<'a>(tag: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
 
 enum Anchor {
     Id(Vec<u8>),
+    /// `<a name>` with no id — the reader looks targets up by id only.
+    Name(Vec<u8>),
     Aid(Vec<u8>),
 }
 
@@ -568,9 +632,11 @@ fn anchor_before(part: &[u8], npos: usize) -> Option<Anchor> {
         let Some(gt) = tag.iter().position(|&c| c == b'>') else { continue };
         let tag = &tag[..=gt];
         let is_a = tag.len() > 2 && tag[1].eq_ignore_ascii_case(&b'a') && tag[2].is_ascii_whitespace();
-        let id = tag_attr(tag, b"id").or_else(|| is_a.then(|| tag_attr(tag, b"name")).flatten());
-        if let Some(v) = id {
+        if let Some(v) = tag_attr(tag, b"id") {
             return Some(Anchor::Id(v.to_vec()));
+        }
+        if let Some(v) = is_a.then(|| tag_attr(tag, b"name")).flatten() {
+            return Some(Anchor::Name(v.to_vec()));
         }
         if let Some(v) = tag_attr(tag, b"aid") {
             return Some(Anchor::Aid(v.to_vec()));
@@ -589,9 +655,32 @@ fn resolve_pos_links(
     skels: &[crate::kf8_indx::SkeletonRow],
     frags: &[crate::kf8_indx::FragmentRow],
 ) {
-    // Pass 1 on the untouched parts: (part, at, len, target id).
+    // Links become plain `#id`, one namespace for the whole book, but each
+    // part was its own file and ids repeat across them (note `n1` in every
+    // chapter). The first part to use an id keeps it; later ones that a link
+    // needs get `id--part`, so the link can't land on the first.
+    let mut owner: std::collections::HashMap<Vec<u8>, usize> = Default::default();
+    for (pi, part) in parts.iter().enumerate() {
+        let mut from = 0;
+        while let Some(at) = find_from(part, b" id=\"", from) {
+            from = at + 5;
+            if let Some(end) = find_from(part, b"\"", from) {
+                owner.entry(part[from..end].to_vec()).or_insert(pi);
+            }
+        }
+    }
+    let unique = |v: &[u8], ti: usize| -> Vec<u8> {
+        match owner.get(v) {
+            Some(&first) if first != ti => [v, b"--", ti.to_string().as_bytes()].concat(),
+            _ => v.to_vec(),
+        }
+    };
+
+    // Pass 1 on the untouched parts: (part, at, len, target id), plus per
+    // part the attribute to find and the id to give that target.
     let mut edits: Vec<(usize, usize, usize, Vec<u8>)> = Vec::new();
-    let mut aids: Vec<std::collections::HashSet<Vec<u8>>> = vec![Default::default(); parts.len()];
+    let mut targets: Vec<std::collections::HashMap<Vec<u8>, Vec<u8>>> =
+        vec![Default::default(); parts.len()];
     for (pi, part) in parts.iter().enumerate() {
         let mut from = 0;
         while let Some(at) = find_from(part, POS_PREFIX, from) {
@@ -605,15 +694,18 @@ fn resolve_pos_links(
             }) else {
                 continue;
             };
-            let id = match anchor_before(&parts[ti], pos - skels[ti].offset as usize) {
-                Some(Anchor::Id(v)) => v,
-                Some(Anchor::Aid(v)) => {
-                    let id = [b"aid-".as_slice(), &v].concat();
-                    aids[ti].insert(v);
-                    id
-                }
+            let (attr, value) = match anchor_before(&parts[ti], pos - skels[ti].offset as usize) {
+                Some(Anchor::Id(v)) => (b"id".as_slice(), v),
+                Some(Anchor::Name(v)) => (b"name".as_slice(), v),
+                Some(Anchor::Aid(v)) => (b"aid".as_slice(), v),
                 None => continue,
             };
+            let id = if attr == b"aid" {
+                [b"aid-".as_slice(), &value].concat()
+            } else {
+                unique(&value, ti)
+            };
+            targets[ti].insert([b" ", attr, b"=\"", &value, b"\""].concat(), id.clone());
             edits.push((pi, at, len, id));
             from = at + len;
         }
@@ -623,12 +715,18 @@ fn resolve_pos_links(
         let href = [b"#".as_slice(), &id].concat();
         parts[pi].splice(at..at + len, href);
     }
-    for (pi, set) in aids.iter().enumerate() {
-        for aid in set {
-            let needle = [b" aid=\"".as_slice(), aid, b"\""].concat();
-            if let Some(at) = find_from(&parts[pi], &needle, 0) {
-                let ins = [b" id=\"aid-".as_slice(), aid, b"\""].concat();
-                parts[pi].splice(at..at, ins);
+    // Pass 3: give each target the id its links now use — a renamed `id`
+    // replaces the old one, `name` / `aid` targets gain one.
+    for (pi, wanted) in targets.iter().enumerate() {
+        for (needle, id) in wanted {
+            let Some(at) = find_from(&parts[pi], needle, 0) else { continue };
+            let new_id = [b" id=\"".as_slice(), id, b"\""].concat();
+            if needle.starts_with(b" id=") {
+                if needle[..] != new_id[..] {
+                    parts[pi].splice(at..at + needle.len(), new_id);
+                }
+            } else {
+                parts[pi].splice(at..at, new_id);
             }
         }
     }
@@ -644,6 +742,42 @@ mod tests {
     }
     fn frag(insert_pos: u32, length: u32) -> FragmentRow {
         FragmentRow { insert_pos, parent_ord: 0, start_pos: 0, length, toc_cncx: 0 }
+    }
+
+    #[test]
+    fn spots_insert_points_inside_a_tag_and_finds_the_aid_tag() {
+        let t: &[u8] = b"<html><body aid=\"0\"></body></html>";
+        let body_end = b"<html><body aid=\"0\">".len();
+        assert_eq!(t[body_end - 1], b'>');
+        assert!(lands_mid_tag(t, 9), "inside `<body aid=…>`");
+        assert!(lands_mid_tag(t, body_end - 1), "right before the body tag's `>`");
+        assert!(!lands_mid_tag(t, body_end), "after the body tag");
+        assert_eq!(aid_tag_end(t, "0"), Some(body_end - 1));
+        // `data-aid` and a longer value don't count.
+        assert_eq!(aid_tag_end(b"<p data-aid='0'><p aid='01'><i aid = '0' >", "0"), Some(41));
+        assert_eq!(aid_tag_end(t, "1"), None);
+    }
+
+    #[test]
+    fn repeated_ids_and_name_anchors_get_their_own_target() {
+        // Both parts have a `n1`; part 0 links to part 1's, and to an `<a name>`.
+        let t: &[u8] = b"<html><body></body></html>";
+        let f0: &[u8] = b"<p id=\"n1\">a</p><a href=\"kindle:pos:fid:0001:off:0000000000\">x</a><a href=\"kindle:pos:fid:0002:off:0000000000\">y</a>";
+        let f1: &[u8] = b"<p id=\"n1\">note</p>";
+        let f2: &[u8] = b"<a name=\"m\">m</a>";
+        let raw = [t, f0, t, f1, f2].concat();
+        let s1 = (t.len() + f0.len()) as u32;
+        let tl = t.len() as u32;
+        let skels = [skel(0, tl, 1), skel(s1, tl, 2)];
+        let frags = [
+            frag(12, f0.len() as u32),
+            frag(s1 + 12, f1.len() as u32),
+            frag(s1 + 12 + f1.len() as u32, f2.len() as u32),
+        ];
+        let out = String::from_utf8(reassemble_with_fragments(&skels, &frags, &raw, &[], &[])).unwrap();
+        let parts: Vec<&str> = out.split("<mbp:pagebreak/>").filter(|s| !s.is_empty()).collect();
+        assert!(parts[0].contains("<p id=\"n1\">a</p><a href=\"#n1--1\">x</a><a href=\"#m\">y</a>"), "{}", parts[0]);
+        assert!(parts[1].contains("<p id=\"n1--1\">note</p><a id=\"m\" name=\"m\">m</a>"), "{}", parts[1]);
     }
 
     #[test]

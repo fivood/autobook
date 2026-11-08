@@ -56,6 +56,61 @@ function isNoteRef(a: Element) {
 }
 
 /**
+ * Ids that sit at `a`'s spot: its own, its inline wrappers' (`<sup id>`), and
+ * empty `<a id>`s just before any of them — where a MOBI6 back-link lands, the
+ * Rust side drops `<a id="fileposN"></a>` in front of the reference.
+ */
+function idsAt(a: Element): string[] {
+  const ids: string[] = [];
+  for (let el: Element | null = a; el && INLINE.test(el.tagName); el = el.parentElement) {
+    if (el.id) ids.push(el.id);
+    let prev = el.previousElementSibling;
+    while (prev?.tagName === 'A' && !prev.textContent?.trim()) {
+      if (prev.id) ids.push(prev.id);
+      prev = prev.previousElementSibling;
+    }
+  }
+  return ids;
+}
+
+// The reader rewrites rendered links to `/b#id` (see reactive-elements), so
+// compare the fragment only.
+const hashOf = (l: Element) => (l.getAttribute('href') || '').replace(/^[^#]*/, '');
+
+/** No visible text in `root` before `el` (whitespace and tags don't count). */
+function leads(el: Element, root: Element): boolean {
+  if (el === root) return true;
+  const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (el.contains(n) || el.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) return true;
+    if (n.textContent?.trim()) return false;
+  }
+  return true;
+}
+
+/**
+ * The note links back to this reference: the one sure sign of a note pair
+ * that needs no class or marker. MOBI6 books have neither — their markers can
+ * be anything — but Kindle notes always carry the back-link.
+ *
+ * Other links pair up too, so the shape has to fit as well: a note opens at
+ * its anchor (a back-link's target sits mid-paragraph, after the text that
+ * cites it), and it isn't the first text of its chapter (a contents entry's
+ * target is the chapter title, which often links back to the contents).
+ */
+function linksBack(a: Element, target: Element, block: Element): boolean {
+  const text = (a.textContent || '').trim();
+  if (!text || text.length > 8 || (block.textContent || '').trim() === text) return false;
+  if (!leads(target, block)) return false;
+  const section =
+    block.parentElement?.closest('[id^="ttu-"], .mobi-section') ?? block.ownerDocument.body;
+  if (section && leads(block, section)) return false;
+  const back = new Set(idsAt(a).map((id) => `#${id}`));
+  if (!back.size) return false;
+  return Array.from(block.querySelectorAll('a[href]')).some((l) => back.has(hashOf(l)));
+}
+
+/**
  * The note text `a` points at, or null when it's an ordinary cross-link that
  * should keep jumping. `target` is the element its href resolves to.
  */
@@ -70,13 +125,22 @@ export function noteTextFor(a: Element, target: Element): string | null {
     : target;
   if (block.matches(`${HEADING},[id^="ttu-"],[class*="ttu-book"]`)) return null;
   if (block.querySelector(HEADING)) return null;
-  if (!block.closest(NOTE_BODY) && !isNoteRef(a)) return null;
+  if (!block.closest(NOTE_BODY) && !isNoteRef(a) && !linksBack(a, target, block)) return null;
 
-  // Back-arrows (↩) at the end of a note are links, not text.
-  const text = (block.textContent || '')
-    .replace(/[↩↑⤴]︎?/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // The note's own way back — `返回`, `[1]`, ↩ — is a link, not note text.
+  // Except when it's all there is: Calibre's MOBI6 output puts the whole
+  // note inside its back-link.
+  const tidy = (el: Element) =>
+    (el.textContent || '')
+      .replace(/[↩↑⤴]︎?/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const backHrefs = new Set(idsAt(a).map((id) => `#${id}`));
+  const body = block.cloneNode(true) as Element;
+  body.querySelectorAll('a[href]').forEach((l) => {
+    if (backHrefs.has(hashOf(l))) l.remove();
+  });
+  const text = tidy(body) || tidy(block);
   if (!text || text.length > MAX_NOTE_CHARS) return null;
   return text;
 }

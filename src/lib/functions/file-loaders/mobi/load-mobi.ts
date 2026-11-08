@@ -12,6 +12,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
+import { tocLabels } from './mobi-toc-labels';
 
 interface ParsedMobiImage {
   index: number;
@@ -204,12 +205,10 @@ function stripEmbeddedFonts(root: HTMLElement) {
   });
 }
 
-/** KF8 in-book cross-references use `kindle:pos:fid:AID:off:OFFSET` URLs
- * where AID matches the `<body aid="…">` attribute of the target section
- * and OFFSET is a base32 character position within it. Calibre rewrites
- * these to `partN.html#anchor` when exporting to epub. We do the same,
- * targeting `#section-N` since we ignore off (jumping to section top is
- * accurate enough for TOC clicks and inter-chapter links). */
+/** Fallback for `kindle:pos:fid:AID:off:OFFSET` links the Rust side
+ * (`resolve_pos_links`) couldn't pin to an element — it rewrites the rest to
+ * `#id` before they get here. What's left only knows its section (AID matches
+ * the target `<body aid="…">`), so it lands on `#section-N`'s top. */
 function rewriteKindlePosRefs(html: string, aidMap: Map<string, number>): string {
   if (aidMap.size === 0) return html;
   return html.replace(
@@ -247,6 +246,7 @@ function splitIntoSections(html: string): { sectionedHtml: string; sections: Sec
   let totalChars = 0;
   const sections: Section[] = [];
   const sectionedParts: string[] = [];
+  const fromToc = tocLabels(parts);
   parts.forEach((body, i) => {
     const id = `section-${i + 1}`;
     let rawLabel = '';
@@ -257,7 +257,7 @@ function splitIntoSections(html: string): { sectionedHtml: string; sections: Sec
       const hm = headingLabelRe.exec(body);
       rawLabel = hm ? hm[2] : '';
     }
-    const label = rawLabel.replace(/<[^>]*>/g, '').trim() || id;
+    const label = rawLabel.replace(/<[^>]*>/g, '').trim() || fromToc.get(i) || id;
     const aidMatch = bodyAidRe.exec(body);
     if (aidMatch) {
       aidMap.set(aidMatch[1].toUpperCase(), i + 1);

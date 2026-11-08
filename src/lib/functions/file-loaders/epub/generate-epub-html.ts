@@ -9,6 +9,7 @@ import type { Section } from '../../../data/database/books-db/versions/v3/books-
 import buildDummyBookImage from '../utils/build-dummy-book-image';
 import clearAllBadImageRef from '../utils/clear-all-bad-image-ref';
 import fixXHtmlHref from '../utils/fix-xhtml-href';
+import { indexBookFiles, renameRepeatedIds, resolveBookHref, type BookFile } from './book-links';
 import { importHTMLFixMode$, restrictImportFixToAnchor$ } from '$lib/data/store';
 import { ImportHTMLFixMode } from '$lib/data/import-html-fix-mode';
 import { getCharacterCount } from '$lib/functions/get-character-count';
@@ -189,6 +190,7 @@ export default function generateEpubHtml(
   let currentMainChapterIndex = 0;
   let previousCharacterCount = 0;
   let currentCharCount = 0;
+  const bookFiles: (BookFile & { el: HTMLElement })[] = [];
 
   itemRefs.forEach((item) => {
     let itemIdRef = item['@_idref'];
@@ -277,6 +279,7 @@ export default function generateEpubHtml(
     childWrapperDiv.appendChild(childHtmlDiv);
 
     result.appendChild(childWrapperDiv);
+    bookFiles.push({ href: htmlHref, wrapperId: childWrapperDiv.id, el: childWrapperDiv });
 
     const elementCharCount = countForElement(childWrapperDiv);
 
@@ -337,7 +340,7 @@ export default function generateEpubHtml(
 
   clearAllBadImageRef(result);
   fixXHtmlHref(result);
-  flattenAnchorHref(result);
+  linkBookFiles(bookFiles);
 
   return {
     element: result,
@@ -358,11 +361,22 @@ function countForElement(containerEl: Node) {
   return characterCount;
 }
 
-function flattenAnchorHref(el: HTMLElement) {
-  Array.from(el.getElementsByTagName('a')).forEach((tag) => {
-    const oldHref = tag.getAttribute('href');
-    if (!oldHref) return;
-    tag.setAttribute('href', `#${oldHref.replace(/.+#/, '')}`);
+function linkBookFiles(files: (BookFile & { el: HTMLElement })[]) {
+  const idEls = files.map((f) => Array.from(f.el.querySelectorAll<HTMLElement>('[id]')));
+  const renamed = renameRepeatedIds(idEls.map((els) => els.map((el) => el.id)));
+  idEls.forEach((els, i) =>
+    els.forEach((el) => {
+      const next = renamed[i].get(el.id);
+      if (next) el.id = next;
+    })
+  );
+  const byHref = indexBookFiles(files);
+  files.forEach((f, i) => {
+    Array.from(f.el.getElementsByTagName('a')).forEach((tag) => {
+      const oldHref = tag.getAttribute('href');
+      if (!oldHref) return;
+      tag.setAttribute('href', resolveBookHref(oldHref, i, files, byHref, renamed));
+    });
   });
 }
 
