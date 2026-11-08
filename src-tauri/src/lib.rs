@@ -371,6 +371,7 @@ fn get_data_paths(fs_root: Option<String>) -> serde_json::Value {
     "fsRootExists": effective_root.exists(),
     "defaultFsRoot": default_root.to_string_lossy(),
     "isDefaultFsRoot": effective_root == default_root,
+    "fsRootOverlapsInstall": install_dir().is_some_and(|i| overlaps_install(&effective_root, &i)),
   })
 }
 
@@ -449,6 +450,34 @@ fn move_directory(from: String, to: String) -> Result<(), String> {
 }
 
 fn move_directory_impl(from: String, to: String) -> Result<(), String> {
+  move_directory_with(from, to, install_dir().as_deref())
+}
+
+/// The folder app.exe runs from — where the installer also put uninstall.exe.
+fn install_dir() -> Option<std::path::PathBuf> {
+  std::env::current_exe().ok()?.parent().map(canonical_ish)
+}
+
+/// `root` and the install folder overlap: one is the other or contains it.
+/// People pick the install folder as their library (it's the obvious
+/// "AutoBook" folder), and then the library and the program share a home.
+fn overlaps_install(root: &std::path::Path, install: &std::path::Path) -> bool {
+  let root = canonical_ish(root);
+  install.starts_with(&root) || root.starts_with(install)
+}
+
+/// Whether `path` overlaps the install folder — checked before it becomes the
+/// library root.
+#[tauri::command]
+fn library_root_overlaps_install(path: String) -> bool {
+  install_dir().is_some_and(|i| overlaps_install(std::path::Path::new(&path), &i))
+}
+
+fn move_directory_with(
+  from: String,
+  to: String,
+  install: Option<&std::path::Path>,
+) -> Result<(), String> {
   let from_path = std::path::PathBuf::from(&from);
   let to_path = std::path::PathBuf::from(&to);
   if !from_path.exists() {
@@ -484,14 +513,43 @@ fn move_directory_impl(from: String, to: String) -> Result<(), String> {
     std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
   }
 
-  if std::fs::rename(&from_path, &to_path).is_ok() {
+  // A library that is (or contains) the install folder can't move as one
+  // folder: app.exe is running and locked, so the rename fails, the copy
+  // fallback's remove_dir_all deletes books until it hits app.exe, and what
+  // made it across includes a copy of the program. Move the library's own
+  // entries one by one instead and leave the program — and the folder that
+  // holds it — where the installer and updater expect them.
+  if let Some(install) = install.filter(|i| i.starts_with(&from_c)) {
+    std::fs::create_dir_all(&to_path).map_err(|e| e.to_string())?;
+    for entry in std::fs::read_dir(&from_c).map_err(|e| e.to_string())? {
+      let entry = entry.map_err(|e| e.to_string())?;
+      let src = entry.path();
+      let program_file = src.parent() == Some(install)
+        && entry.file_type().map(|t| t.is_file()).unwrap_or(false)
+        && src.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe"));
+      if install.starts_with(&src) || program_file {
+        continue;
+      }
+      move_entry(&src, &to_path.join(entry.file_name())).map_err(|e| e.to_string())?;
+    }
     return Ok(());
   }
 
+  move_entry(&from_path, &to_path).map_err(|e| e.to_string())
+}
+
+fn move_entry(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+  if std::fs::rename(from, to).is_ok() {
+    return Ok(());
+  }
   // Cross-volume or locked — fall back to copy + remove.
-  copy_dir_recursive(&from_path, &to_path).map_err(|e| e.to_string())?;
-  std::fs::remove_dir_all(&from_path).map_err(|e| e.to_string())?;
-  Ok(())
+  if from.is_dir() {
+    copy_dir_recursive(from, to)?;
+    std::fs::remove_dir_all(from)
+  } else {
+    std::fs::copy(from, to)?;
+    std::fs::remove_file(from)
+  }
 }
 
 fn copy_dir_recursive(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
@@ -611,6 +669,36 @@ mod move_directory_tests {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
+  }
+
+  /// Library picked as the install folder (E:\AutoBook held app.exe and
+  /// uninstall.exe next to the books): moving it must take the books and
+  /// leave the program, not drag app.exe along or delete the folder.
+  #[test]
+  fn leaves_the_program_behind_when_the_library_is_the_install_folder() {
+    let root = tmp("install");
+    let src = root.join("AutoBook");
+    std::fs::create_dir_all(src.join("Book A")).unwrap();
+    std::fs::write(src.join("Book A").join("bookdata.zip"), b"x").unwrap();
+    std::fs::write(src.join("app.exe"), b"exe").unwrap();
+    std::fs::write(src.join("uninstall.exe"), b"exe").unwrap();
+    let dst = root.join("Library");
+
+    move_directory_with(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+      Some(&canonical_ish(&src)),
+    )
+    .unwrap();
+
+    assert!(dst.join("Book A").join("bookdata.zip").exists());
+    assert!(!src.join("Book A").exists());
+    assert!(src.join("app.exe").exists() && src.join("uninstall.exe").exists());
+    assert!(!dst.join("app.exe").exists() && !dst.join("uninstall.exe").exists());
+    assert!(overlaps_install(&src, &canonical_ish(&src)));
+    assert!(overlaps_install(&root, &canonical_ish(&src)));
+    assert!(!overlaps_install(&dst, &canonical_ish(&src)));
+    let _ = std::fs::remove_dir_all(&root);
   }
 
   /// The regression that motivated the guard: picking a subfolder of the
@@ -735,6 +823,7 @@ pub fn run() {
       default_fs_root,
       pick_user_dir,
       move_directory,
+      library_root_overlaps_install,
       kindle::find_kindle_books,
       koreader::read_koreader,
       mobi_parser::parse_mobi,

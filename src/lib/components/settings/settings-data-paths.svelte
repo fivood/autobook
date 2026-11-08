@@ -25,6 +25,7 @@
     fsRootExists: boolean;
     defaultFsRoot: string;
     isDefaultFsRoot: boolean;
+    fsRootOverlapsInstall: boolean;
   }
 
   let paths: DataPaths | undefined;
@@ -95,6 +96,11 @@
       if (!picked) return;
       const nextRoot = picked;
       if (nextRoot === paths.fsRoot) return;
+      const { invoke } = await import('@tauri-apps/api/core');
+      if (await invoke<boolean>('library_root_overlaps_install', { path: nextRoot })) {
+        message = tImmediate('dataPaths.overlapsInstallPick');
+        return;
+      }
       await applyFsRoot(nextRoot, paths.fsRoot, paths.fsRootExists);
     } catch (err: any) {
       message = tImmediate('dataPaths.pickFail', { err: err?.message || err });
@@ -255,6 +261,9 @@
             </button>
           {/if}
         </div>
+        {#if paths.fsRootOverlapsInstall}
+          <p class="hint" style="color:var(--danger-color);">{$t('dataPaths.overlapsInstall')}</p>
+        {/if}
         <p class="hint">{$t('dataPaths.section.fs.hint')}</p>
       </div>
 

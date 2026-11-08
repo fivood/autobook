@@ -910,6 +910,8 @@ export default {
   'dataPaths.section.ui.label': 'UI 设置 / token / API key',
   'dataPaths.section.ui.hint': '「数据 → 重置 UI 设置」可单独清此处，不影响书库',
   'dataPaths.section.fs.label': '书库文件夹（本地磁盘副本）',
+  'dataPaths.overlapsInstall': '书库文件夹和程序安装在同一个位置。建议点「更改文件夹…」把书移到别处——只会移动书，程序文件留在原处。',
+  'dataPaths.overlapsInstallPick': '这个文件夹和程序的安装位置重叠，书库不能放在这里，请另选一个文件夹',
   'dataPaths.section.fs.hint': '「自动导入导出」把 IndexedDB 里的书镜像到这里。选自己的文件夹后可以放外挂盘 / 云盘同步目录',
   'dataPaths.section.fs.notCreated': '目录还未创建',
   'dataPaths.section.fs.metaDefault': '默认位置 · {status}',

@@ -873,6 +873,8 @@ export default {
   'dataPaths.section.ui.label': 'UI 設定 ／ トークン ／ API キー',
   'dataPaths.section.ui.hint': '「データ → UI 設定をリセット」でここだけ消去可（ライブラリには影響しません）',
   'dataPaths.section.fs.label': 'ライブラリフォルダ（ディスク上のコピー）',
+  'dataPaths.overlapsInstall': 'ライブラリのフォルダーがアプリのインストール先と同じです。「フォルダを変更…」で本を別の場所へ移してください。移るのは本だけで、プログラムのファイルはそのまま残ります。',
+  'dataPaths.overlapsInstallPick': 'このフォルダーはアプリのインストール先と重なっているため、ライブラリには使えません。別のフォルダーを選んでください。',
   'dataPaths.section.fs.hint': '「自動インポート／エクスポート」で IndexedDB のライブラリをここへ複製します。外付けドライブやクラウド同期フォルダを指定することもできます',
   'dataPaths.section.fs.notCreated': 'ディレクトリ未作成',
   'dataPaths.section.fs.metaDefault': 'デフォルトの場所 · {status}',

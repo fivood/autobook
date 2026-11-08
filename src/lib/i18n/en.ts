@@ -869,6 +869,8 @@ export default {
   'dataPaths.section.ui.label': 'UI settings / tokens / API keys',
   'dataPaths.section.ui.hint': '"Data → Reset UI settings" clears this alone without touching the library',
   'dataPaths.section.fs.label': 'Library folder (on-disk copy)',
+  'dataPaths.overlapsInstall': 'Your library folder is also where the app is installed. Use “Change folder…” to move the books elsewhere — only the books move; the program files stay put.',
+  'dataPaths.overlapsInstallPick': "That folder overlaps the app's install location, so the library can't go there. Pick another folder.",
   'dataPaths.section.fs.hint': '"Auto import/export" mirrors your IndexedDB library here. Point this at an external drive or a cloud sync folder if you want.',
   'dataPaths.section.fs.notCreated': 'Directory not created yet',
   'dataPaths.section.fs.metaDefault': 'Default location · {status}',
