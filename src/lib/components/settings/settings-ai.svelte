@@ -21,8 +21,10 @@
     aiGlossEnabled$,
     aiLocalBaseUrl$,
     aiLocalModel$,
+    aiMaxTokens$,
     aiModel$,
     aiProvider$,
+    aiTimeoutSec$,
     qwenMtApiKey$,
     qwenMtBaseUrl$,
     qwenMtModel$,
@@ -40,6 +42,7 @@
     probeLocalModels,
     resolveLocalModel
   } from '$lib/data/ai/local-model';
+  import { hasCloudCredentials } from '$lib/data/ai/endpoint';
   import { t } from '$lib/i18n';
 
   let probing = false;
@@ -79,7 +82,9 @@
   $: autoPick = pickLocal(0, $localProbe$, $aiLocalModel$);
   // What each feature would actually use right now, so the effect of a change
   // is visible here instead of only at the point of use.
-  $: glossModel = pickLocal(1.5, $localProbe$, $aiLocalModel$) || (($aiApiKey$ && $aiModel$) || '');
+  $: glossModel =
+    pickLocal(1.5, $localProbe$, $aiLocalModel$) ||
+    (hasCloudCredentials($aiProvider$, $aiApiKey$, $aiBaseUrl$) ? $aiModel$ : '');
 </script>
 
 <div class="text-sm">
@@ -157,7 +162,14 @@
 
   <label class="mb-3 block">
     <span class="text-xs text-muted">{$t('settings.ai.apiKey')}</span>
-    <input type="password" class={inputClasses} bind:value={$aiApiKey$} spellcheck="false" />
+    <input
+      type="password"
+      class={inputClasses}
+      bind:value={$aiApiKey$}
+      spellcheck="false"
+      autocomplete="off"
+      placeholder={$aiProvider$ === 'anthropic' ? 'sk-ant-...' : $t('ai.keyPlaceholder')}
+    />
   </label>
 
   <label class="mb-3 block">
@@ -167,8 +179,27 @@
 
   <label class="mb-3 block">
     <span class="text-xs text-muted">{$t('settings.ai.baseUrl')}</span>
-    <input type="text" class={inputClasses} bind:value={$aiBaseUrl$} spellcheck="false" />
+    <input
+      type="text"
+      class={inputClasses}
+      bind:value={$aiBaseUrl$}
+      spellcheck="false"
+      title={$t('ai.baseUrlTooltip')}
+    />
   </label>
+
+  <p class="mb-3 text-xs text-muted leading-relaxed">{$t('ai.privacyNote')}</p>
+
+  <div class="mb-3 grid gap-3 sm:grid-cols-2">
+    <label class="block">
+      <span class="text-xs text-muted">{$t('settings.ai.maxTokens')}</span>
+      <input type="number" class={inputClasses} min="256" max="32000" step="256" bind:value={$aiMaxTokens$} />
+    </label>
+    <label class="block">
+      <span class="text-xs text-muted">{$t('settings.ai.timeoutSec')}</span>
+      <input type="number" class={inputClasses} min="30" max="900" step="10" bind:value={$aiTimeoutSec$} />
+    </label>
+  </div>
 
   <!-- ── Per-feature switches ──────────────────────────────────────── -->
   <h4 class="mb-1 mt-5 font-medium">{$t('settings.ai.featuresHeading')}</h4>
@@ -191,6 +222,7 @@
   {/if}
 
   <p class="mt-4 text-xs text-muted leading-relaxed">{$t('settings.ai.spoilerNote')}</p>
+  <p class="mt-2 text-xs text-muted leading-relaxed">{$t('ai.localHint')}</p>
 
   <!-- ── Translation workbench defaults ───────────────────────────── -->
   <h4 class="mb-1 mt-5 font-medium">{$t('settings.translate.heading')}</h4>
@@ -256,7 +288,7 @@
   </label>
   <label class="mb-3 block">
     <span class="text-xs text-muted">{$t('settings.ai.qwenMtApiKey')}</span>
-    <input type="password" class={inputClasses} bind:value={$qwenMtApiKey$} spellcheck="false" />
+    <input type="password" class={inputClasses} bind:value={$qwenMtApiKey$} spellcheck="false" autocomplete="off" />
   </label>
   <label class="mb-3 block">
     <span class="text-xs text-muted">{$t('settings.ai.qwenMtModel')}</span>

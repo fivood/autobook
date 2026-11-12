@@ -39,6 +39,9 @@ windows = { version = "0.58", features = [
   # proxy.rs reads the system proxy — the only source a GUI-launched exe sees,
   # since proxy clients export HTTPS_PROXY into the shell only.
   "Win32_System_Registry",
+  # secrets.rs keeps API keys in Credential Manager, not in localStorage.
+  "Win32_Security_Credentials",
+  "Win32_Foundation",
 ] }
 tokio = { version = "1", features = ["sync", "rt", "time", "macros", "process", "net", "io-util"] }
 reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }

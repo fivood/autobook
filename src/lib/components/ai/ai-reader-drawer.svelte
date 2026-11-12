@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, tick } from 'svelte';
+  import { createEventDispatcher, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
   import {
     faTimes,
@@ -16,11 +16,21 @@
   import {
     aiApiKey$,
     aiBaseUrl$,
+    aiMaxTokens$,
     aiModel$,
     aiProvider$,
-    aiSpoilerSafeTitles$
+    aiSpoilerSafeTitles$,
+    aiTimeoutSec$
   } from '$lib/data/store';
   import { streamChat, type AiMessage, type AiProvider } from '$lib/data/ai/ai-client';
+  import { hasCloudCredentials, resolveEndpoint } from '$lib/data/ai/endpoint';
+  import { probeLocalModels } from '$lib/data/ai/local-model';
+  import {
+    clampInt,
+    estimateTokens,
+    ollamaContextFor,
+    trimHistory
+  } from '$lib/data/ai/chat-budget';
   import {
     buildBookTextIndex,
     retrieveSpoilerSafe,
@@ -56,6 +66,36 @@
   let logEl: HTMLDivElement;
   let index: BookTextIndex | undefined;
   let showSettings = false;
+  /** i18n key of the notice shown when a question can't be sent yet. */
+  let configNotice = '';
+  /** What answered (or would answer): shown so a fallback to local is visible. */
+  let endpointLabel = '';
+
+  /**
+   * Below this a local model is not offered for the assistant: it has to
+   * follow a multi-rule system prompt over ~8k chars of retrieved text, and
+   * smaller models ignore the spoiler rules. An explicit choice in settings
+   * still wins (resolveLocalModel honours it).
+   */
+  const LOCAL_MIN_BILLIONS = 7;
+
+  function pickEndpoint() {
+    const ep = resolveEndpoint('prefer-cloud', LOCAL_MIN_BILLIONS);
+    endpointLabel = ep
+      ? ep.isLocal
+        ? tImmediate('ai.endpointLocal', { model: ep.label })
+        : ep.label
+      : '';
+    return ep;
+  }
+
+  onMount(() => {
+    probeLocalModels()
+      .catch(() => {
+        // Folded into localProbe$; no local runtime just means no fallback.
+      })
+      .then(pickEndpoint);
+  });
 
   const dispatch = createEventDispatcher<{ close: void }>();
 
@@ -64,8 +104,11 @@
       ? buildBookTextIndex(bookId, bookTitle, elementHtml)
       : undefined;
 
-  $: hasConfig = !!$aiApiKey$ && !!$aiModel$;
   $: provider = ($aiProvider$ as AiProvider) || 'anthropic';
+  // Re-resolve whenever the cloud fields change, so the label and the notice
+  // follow what is typed in the settings panel.
+  $: $aiApiKey$, $aiBaseUrl$, $aiModel$, $aiProvider$, pickEndpoint();
+  $: if (configNotice && endpointLabel) configNotice = '';
 
   async function scrollToBottom() {
     await tick();
@@ -86,37 +129,21 @@
     aiSpoilerSafeTitles$.next(next);
   }
 
+  /** Written in the UI language, so the model answers in it — and so the
+   *  refusal it is told to quote reads naturally to this reader. */
   function buildSystemPrompt(): string {
-    const progress = bookCharCount > 0 ? Math.round((exploredCharCount / bookCharCount) * 100) : 0;
-    if (!spoilerSafe) {
-      return [
-        `你是 AutoBook 的阅读助手。`,
-        `用户正在读《${bookTitle}》，目前的阅读进度约为 ${progress}%。`,
-        `请基于下方书籍片段作答，可以结合全书内容和你的已有知识。`,
-        `中文回答，简洁、可引用具体段落。`
-      ].join('\n');
-    }
-    return [
-      `你是 AutoBook 的剧透安全阅读助手。`,
-      `用户正在读《${bookTitle}》，目前的阅读进度约为 ${progress}%。`,
-      `读者为这本书开了防剧透，不想提前知道后面的内容：`,
-      `1. 只基于下方"已读片段"作答；即使你从训练知识里了解这本书，也不要透露后续情节、未出场人物或伏笔的答案。`,
-      `2. 如果用户问的内容尚未在已读片段中出现，回答"目前还没读到，不能剧透"，不要编。`,
-      `3. 名字/术语/伏笔讨论时，只描述已读片段里出现过的部分。`,
-      `4. 中文回答，简洁、可引用具体段落。`
-    ].join('\n');
+    const pct = bookCharCount > 0 ? Math.round((exploredCharCount / bookCharCount) * 100) : 0;
+    return tImmediate(spoilerSafe ? 'ai.prompt.safe' : 'ai.prompt.open', { title: bookTitle, pct });
   }
 
   function buildContextBlock(query: string): string {
     if (!index) return '';
     // Same retrieval either way; with spoiler-safety off the cutoff simply
-    // sits at the end of the book, so the whole text is searchable.
-    const { topChunks, recentTail } = retrieveSpoilerSafe(
-      index,
-      query,
-      spoilerSafe ? exploredCharCount : bookCharCount,
-      bookCharCount
-    );
+    // sits at the end of the book, so the whole text is searchable. With it on
+    // and the length not measured yet (0), nothing counts as read: the gate
+    // used to fail open here and hand over the whole book.
+    const readRatio = !spoilerSafe ? 1 : bookCharCount > 0 ? exploredCharCount / bookCharCount : 0;
+    const { topChunks, recentTail } = retrieveSpoilerSafe(index, query, readRatio);
     const seen = new Set<number>();
     const collected: typeof topChunks = [];
     for (const c of [...recentTail, ...topChunks]) {
@@ -133,10 +160,16 @@
   async function send() {
     const q = input.trim();
     if (!q || streaming) return;
-    if (!hasConfig) {
+    const endpoint = pickEndpoint();
+    if (!endpoint) {
+      // Say what is missing rather than just popping the panel open: an empty
+      // model name used to surface as a failed request, or as nothing at all.
+      const credentialsOk = hasCloudCredentials(provider, $aiApiKey$, $aiBaseUrl$);
+      configNotice = credentialsOk && !$aiModel$.trim() ? 'ai.needModel' : 'ai.needConfig';
       showSettings = true;
       return;
     }
+    configNotice = '';
     input = '';
     messages = [...messages, { role: 'user', content: q }];
     await scrollToBottom();
@@ -144,29 +177,34 @@
     const ctx = buildContextBlock(q);
     // The heading has to match what was actually retrieved — calling the whole
     // book 「已读片段」 would invite the model to refuse on things it can see.
-    const ctxHeading = spoilerSafe ? '已读片段（截至当前阅读位置）' : '书籍片段';
-    const sys = `${buildSystemPrompt()}\n\n${ctxHeading}：\n${ctx}`;
+    const ctxHeading = tImmediate(spoilerSafe ? 'ai.prompt.headingSafe' : 'ai.prompt.headingOpen');
+    const sys = `${buildSystemPrompt()}\n\n${ctxHeading}\n${ctx}`;
 
-    const apiMessages: AiMessage[] = messages.map(({ role, content }) => ({ role, content }));
+    // Failed turns hold our own error text, and a reply stopped before its
+    // first token is empty — Anthropic rejects empty content with a 400, so
+    // one early Stop used to break every later question in the chat.
+    // History is capped (chat-budget.ts); the system prompt and retrieved
+    // context are rebuilt per question and always sent whole.
+    const apiMessages: AiMessage[] = trimHistory(
+      messages.filter((m) => !m.error && m.content.trim())
+    ).map(({ role, content }) => ({ role, content }));
+    const maxTokens = clampInt($aiMaxTokens$, 256, 32000, 4096);
+    const promptTokens =
+      estimateTokens(sys) + apiMessages.reduce((n, m) => n + estimateTokens(m.content), 0);
 
     messages = [...messages, { role: 'assistant', content: '' }];
     streaming = true;
     abortCtrl = new AbortController();
 
     try {
-      for await (const chunk of streamChat(
-        {
-          provider,
-          apiKey: $aiApiKey$,
-          baseUrl: $aiBaseUrl$,
-          model: $aiModel$
-        },
-        {
-          system: sys,
-          messages: apiMessages,
-          signal: abortCtrl.signal
-        }
-      )) {
+      for await (const chunk of streamChat(endpoint.opts, {
+        system: sys,
+        messages: apiMessages,
+        maxTokens,
+        silenceTimeoutMs: clampInt($aiTimeoutSec$, 30, 900, 180) * 1000,
+        contextTokens: ollamaContextFor(promptTokens, maxTokens),
+        signal: abortCtrl.signal
+      })) {
         messages = messages.map((m, i) =>
           i === messages.length - 1 ? { ...m, content: m.content + chunk } : m
         );
@@ -256,31 +294,36 @@
     <button
       type="button"
       class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
+      title={$t('dialog.close')}
       on:click={() => dispatch('close')}
     ><Fa icon={faTimes} /></button>
   </div>
 
   {#if showSettings}
     <div class="border-b border-current/10 px-4 py-3 text-sm">
+      {#if configNotice}
+        <p class="mb-2 text-danger" role="alert">{$t(configNotice)}</p>
+      {/if}
       <label class="mb-2 flex items-center gap-2">
-        Provider
+        {$t('settings.ai.provider')}
         <select
-          class="rounded border border-current/20 bg-transparent px-2 py-1"
+          class="min-w-0 flex-1 rounded border border-current/20 bg-transparent px-2 py-1"
           value={$aiProvider$}
           on:change={onProviderChange}
         >
-          <option value="anthropic" style="color:#000;">Anthropic</option>
-          <option value="openai" style="color:#000;">{$t('ai.providerOpenaiLabel')}</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="openai">{$t('ai.providerOpenaiLabel')}</option>
         </select>
       </label>
       <label class="mb-2 flex flex-col gap-1">
-        <span>API Key</span>
+        <span>{$t('settings.ai.apiKey')}</span>
         <input
           type="password"
           class="rounded border border-current/20 bg-transparent px-2 py-1"
           value={$aiApiKey$}
           on:input={onKeyInput}
           placeholder={provider === 'anthropic' ? 'sk-ant-...' : $t('ai.keyPlaceholder')}
+          autocomplete="off"
         />
       </label>
       <label class="mb-2 flex flex-col gap-1">
@@ -290,20 +333,22 @@
           class="rounded border border-current/20 bg-transparent px-2 py-1"
           value={$aiBaseUrl$}
           on:input={onBaseInput}
-          placeholder="https://openrouter.ai/api/v1 / http://localhost:11434/v1"
+          title={$t('ai.baseUrlTooltip')}
+          spellcheck="false"
         />
       </label>
       <label class="mb-2 flex flex-col gap-1">
-        <span>Model</span>
+        <span>{$t('settings.ai.model')}</span>
         <input
           type="text"
           class="rounded border border-current/20 bg-transparent px-2 py-1"
           value={$aiModel$}
           on:input={onModelInput}
-          placeholder={provider === 'anthropic' ? 'claude-sonnet-4-6' : 'gpt-4o / qwen2.5'}
+          spellcheck="false"
         />
       </label>
       <p class="text-xs opacity-50">{$t('ai.privacyNote')}</p>
+      <p class="mt-1 text-xs opacity-60">{$t('ai.localHint')}</p>
       <!-- These four inputs are the same stores the settings page writes, kept
            here only so a first-run user can start chatting without leaving the
            book. Everything else (local runtime, per-feature switches) lives in
@@ -319,6 +364,9 @@
       <div class="py-8 text-center text-sm text-muted">
         <p>{$t(spoilerSafe ? 'ai.emptyHint1' : 'ai.emptyHint1Open')}</p>
         <p class="mt-2 text-xs">{$t('ai.emptyHint2')}</p>
+        {#if endpointLabel}
+          <p class="mt-4 text-xs opacity-70">{$t('ai.usingModel', { model: endpointLabel })}</p>
+        {/if}
       </div>
     {/if}
     {#each messages as m, i (i)}
@@ -343,20 +391,19 @@
         class="flex-1 resize-none rounded border border-current/20 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-current/40"
         placeholder={$t('ai.inputPlaceholder')}
         on:keydown={handleKey}
-        disabled={streaming}
       />
       {#if streaming}
         <button
           type="button"
-          class="flex h-9 items-center gap-1 rounded px-3 text-sm"
-          style="background:rgba(180,80,80,0.85);color:#f0efe6;"
+          class="flex h-9 items-center gap-1 rounded border border-current/20 px-3 text-sm hover-soft-strong"
+          style="color:var(--danger-color);"
           on:click={stop}
         ><Fa icon={faStop} size="xs" /> {$t('ai.stop')}</button>
       {:else}
         <button
           type="button"
           class="flex h-9 items-center gap-1 rounded px-3 text-sm font-medium"
-          style="background:rgba(95,126,123,0.9);color:#f0efe6;"
+          style="background:var(--menu-background);color:var(--menu-foreground);"
           on:click={send}
           disabled={!input.trim()}
         ><Fa icon={faPaperPlane} size="xs" /> {$t('ai.send')}</button>

@@ -14,13 +14,23 @@ export type AiProvider = 'anthropic' | 'openai' | 'ollama';
  */
 const SILENCE_TIMEOUT_MS = 180_000;
 
+/**
+ * Wording of the timeout error. This module stays free of app imports so the
+ * node tests can load it; the root layout swaps in the i18n version at startup
+ * (`setAiTimeoutText`), which every caller that shows `err.message` picks up.
+ */
+let timeoutText = (label: string, seconds: number) =>
+  `${label} 在 ${seconds} 秒内没有任何响应。` +
+  '请检查模型服务是否在运行、地址是否正确；本地模型首次加载较慢时可以稍后重试。';
+
+export function setAiTimeoutText(fn: (label: string, seconds: number) => string) {
+  timeoutText = fn;
+}
+
 /** Thrown when SILENCE_TIMEOUT_MS elapses with nothing arriving. */
 export class AiTimeoutError extends Error {
   constructor(label: string, timeoutMs = SILENCE_TIMEOUT_MS) {
-    super(
-      `${label} 在 ${Math.round(timeoutMs / 1000)} 秒内没有任何响应。` +
-        '请检查模型服务是否在运行、地址是否正确；本地模型首次加载较慢时可以稍后重试。'
-    );
+    super(timeoutText(label, Math.round(timeoutMs / 1000)));
     this.name = 'AiTimeoutError';
   }
 }
@@ -87,8 +97,15 @@ export interface StreamRequest {
   messages: AiMessage[];
   maxTokens?: number;
   signal?: AbortSignal;
-  /** Override the silence timeout. Only the test for it passes this. */
+  /** Override the silence timeout (the reader assistant's setting, tests). */
   silenceTimeoutMs?: number;
+  /**
+   * Context window to ask a local Ollama model for. Ollama's default is a few
+   * thousand tokens and it silently drops the *start* of a longer prompt —
+   * the system prompt with the spoiler rules goes first. Ignored elsewhere:
+   * cloud and OpenAI-compatible servers size their own context.
+   */
+  contextTokens?: number;
 }
 
 export async function* streamChat(
@@ -124,7 +141,7 @@ export async function chatOnce(
           model: opts.model,
           stream: false,
           ...(req.jsonMode ? { format: 'json' } : {}),
-          options: { temperature: 0 },
+          options: { temperature: 0, ...(req.contextTokens ? { num_ctx: req.contextTokens } : {}) },
           messages: [{ role: 'system', content: req.system }, ...req.messages]
         }),
         signal: guard.signal
@@ -165,6 +182,7 @@ async function* streamOllama(
       body: JSON.stringify({
         model: opts.model,
         stream: true,
+        ...(req.contextTokens ? { options: { num_ctx: req.contextTokens } } : {}),
         messages: [{ role: 'system', content: req.system }, ...req.messages]
       }),
       signal: guard.signal
@@ -279,9 +297,11 @@ async function* streamOpenAi(
   const guard = silenceGuard(req.signal, 'OpenAI', req.silenceTimeoutMs);
   const res = await fetch(`${base}/chat/completions`, {
     method: 'POST',
+    // Local OpenAI-compatible servers (LM Studio, llama.cpp, Ollama's /v1)
+    // take no key; sending `Bearer ` with nothing after it trips some of them.
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${opts.apiKey}`
+      ...(opts.apiKey ? { authorization: `Bearer ${opts.apiKey}` } : {})
     },
     body: JSON.stringify({
       model: opts.model,

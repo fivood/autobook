@@ -24,13 +24,13 @@
     ocrModelCacheId,
     type OcrModelProfile
   } from '$lib/functions/file-loaders/pdf/ocr-options';
-  import { resolveEndpoint } from '$lib/data/ai/endpoint';
+  import { hasCloudCredentials, resolveEndpoint } from '$lib/data/ai/endpoint';
   import { probeLocalModels } from '$lib/data/ai/local-model';
   import { createComicStorage } from '$lib/data/translation/comic-storage';
   import { isOcrDownloaded } from '$lib/data/models-registry';
   import { pickDraftModel } from '$lib/data/translation/translation-model-registry';
   import { ComicAdapter, type OcrEngineLanguage } from 'translator-workbench';
-  import { aiApiKey$, aiModel$, aiProvider$, aiOcrCorrectEnabled$, database, ocrModelProfile$, translateBatchSegments$, translateChunkChars$, translateComicAutoOcr$, translateDraftSource$, translateLamaEndpoint$, translateLocalModel$, translateMaxSourceChars$, translateOcrLang$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
+  import { aiApiKey$, aiBaseUrl$, aiModel$, aiProvider$, aiOcrCorrectEnabled$, database, ocrModelProfile$, translateBatchSegments$, translateChunkChars$, translateComicAutoOcr$, translateDraftSource$, translateLamaEndpoint$, translateLocalModel$, translateMaxSourceChars$, translateOcrLang$, translateReviewSource$, translateTargetLang$ } from '$lib/data/store';
   import { DEFAULT_GLOSSARY_PROFILE_ID, getGlossaryProfile, getLatestTranslationJob, saveGlossaryProfile, saveTranslationJob, deleteTranslationJob } from '$lib/data/translation/translation-job-store';
   import { exportHtmlAsMarkdownChunks, extractGlossaryCandidates, translateInBatches } from 'translator-workbench';
   import { createJob, pendingSegments, recordTranslationResults, setJobStatus, validateTranslationJob } from 'translator-workbench';
@@ -148,7 +148,7 @@
   $: reviewIsCloud = reviewSource === 'cloud';
   $: cloudModel = ($aiModel$ || '').trim();
   $: cloudProvider = ($aiProvider$ || 'anthropic');
-  $: cloudReady = !!$aiApiKey$ && !!cloudModel;
+  $: cloudReady = !!cloudModel && hasCloudCredentials(cloudProvider, $aiApiKey$, $aiBaseUrl$);
   // Draft pass: ready when the generic cloud LLM or the translation-specialized
   // Qwen-MT draft provider is configured.
   $: draftReady = draftIsCloud ? (cloudReady || qwenMtDraftReady()) : !!selectedModel;

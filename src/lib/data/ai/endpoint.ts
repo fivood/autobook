@@ -36,16 +36,23 @@ export interface ResolvedEndpoint {
   isLocal: boolean;
 }
 
+/**
+ * Whether the cloud slot can authenticate. Anthropic and the official OpenAI
+ * endpoint need a key; an OpenAI-compatible server at a custom address (LM
+ * Studio, llama.cpp, Ollama's /v1) usually takes none, and asking for a dummy
+ * key there was just friction.
+ */
+export function hasCloudCredentials(provider: string, apiKey: string, baseUrl: string): boolean {
+  return !!apiKey.trim() || (provider === 'openai' && !!baseUrl.trim());
+}
+
 function cloudOpts(): AiClientOpts | undefined {
-  const apiKey = aiApiKey$.getValue();
-  const model = aiModel$.getValue();
-  if (!apiKey || !model) return undefined;
-  return {
-    provider: (aiProvider$.getValue() as AiProvider) || 'anthropic',
-    apiKey,
-    baseUrl: aiBaseUrl$.getValue(),
-    model
-  };
+  const provider = (aiProvider$.getValue() as AiProvider) || 'anthropic';
+  const apiKey = aiApiKey$.getValue().trim();
+  const baseUrl = aiBaseUrl$.getValue().trim();
+  const model = aiModel$.getValue().trim();
+  if (!model || !hasCloudCredentials(provider, apiKey, baseUrl)) return undefined;
+  return { provider, apiKey, baseUrl, model };
 }
 
 function localOpts(minBillions: number): AiClientOpts | undefined {

@@ -17,6 +17,7 @@ mod kindle;
 mod koreader;
 mod mobi_parser;
 mod proxy;
+mod secrets;
 mod winrt_tts;
 
 #[cfg(test)]
@@ -828,7 +829,9 @@ pub fn run() {
       koreader::read_koreader,
       mobi_parser::parse_mobi,
       calibre_converter::check_calibre,
-      calibre_converter::convert_with_calibre
+      calibre_converter::convert_with_calibre,
+      secrets::secret_get,
+      secrets::secret_set
     ])
     .setup(|app| {
       // tauri.conf.json's title is a hand-typed string nobody remembers to

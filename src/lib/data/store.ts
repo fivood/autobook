@@ -46,7 +46,7 @@ import {
   type HighlightSlotStyle
 } from '$lib/data/highlight-color';
 import type { HighlightSlot } from '$lib/data/database/books-db/versions/books-db';
-import { map } from 'rxjs';
+import { distinctUntilChanged, map, skip } from 'rxjs';
 import { BookReaderAvailableKeybind, type BookReaderKeybindMap } from './book-reader-keybind';
 import { DatabaseService } from './database/books-db/database.service';
 import { createBooksDb } from './database/books-db/factory';
@@ -66,6 +66,7 @@ import { ViewMode } from './view-mode';
 import type { WritingMode } from './writing-mode';
 import { writableSetLocalStorageSubject } from './internal/writable-set-local-storage-subject';
 import { writableStringLocalStorageSubject } from './internal/writable-string-local-storage-subject';
+import { writableSecretSubject } from './internal/writable-secret-subject';
 import type { OcrModelProfile } from '$lib/functions/file-loaders/pdf/ocr-options';
 
 export const theme$ = writableStringLocalStorageSubject()('theme', 'sage-green-theme');
@@ -89,14 +90,32 @@ export const highlightCustomColors$ = writableStringLocalStorageSubject()(
   DEFAULT_CUSTOM_COLORS.join(',')
 );
 export const aiProvider$ = writableStringLocalStorageSubject()('aiProvider', 'anthropic');
-export const aiApiKey$ = writableStringLocalStorageSubject()('aiApiKey', '');
+// The model used to default to 'claude-sonnet-4-6', which went stale and was
+// still sent after switching to an OpenAI-compatible provider. There is no
+// default now; a user who only ever filled in a key was relying on it, so it
+// is written down once for them instead of breaking their setup.
+if (
+  typeof localStorage !== 'undefined' &&
+  localStorage.getItem('aiModel') === null &&
+  localStorage.getItem('aiApiKey') &&
+  (localStorage.getItem('aiProvider') ?? 'anthropic') === 'anthropic'
+) {
+  localStorage.setItem('aiModel', 'claude-sonnet-4-6');
+}
+export const aiApiKey$ = writableSecretSubject('aiApiKey');
 export const aiBaseUrl$ = writableStringLocalStorageSubject()('aiBaseUrl', '');
-export const aiModel$ = writableStringLocalStorageSubject()('aiModel', 'claude-sonnet-4-6');
+export const aiModel$ = writableStringLocalStorageSubject()('aiModel', '');
+// A model name only means something to the provider it was typed for.
+aiProvider$.pipe(distinctUntilChanged(), skip(1)).subscribe(() => aiModel$.next(''));
+/** Reply length cap for the reader assistant, in tokens. */
+export const aiMaxTokens$ = writableNumberLocalStorageSubject()('aiMaxTokens', 4096);
+/** Seconds of complete silence before the reader assistant gives up. */
+export const aiTimeoutSec$ = writableNumberLocalStorageSubject()('aiTimeoutSec', 180);
 /** Qwen-MT (阿里云百炼) translation-specialized draft provider. Separate from
  * the generic LLM config — the draft pass uses it, the review pass stays on
  * the general model. */
 export const qwenMtBaseUrl$ = writableStringLocalStorageSubject()('qwenMtBaseUrl', '');
-export const qwenMtApiKey$ = writableStringLocalStorageSubject()('qwenMtApiKey', '');
+export const qwenMtApiKey$ = writableSecretSubject('qwenMtApiKey');
 export const qwenMtModel$ = writableStringLocalStorageSubject()('qwenMtModel', 'qwen-mt-plus');
 // Local runtime (Ollama and anything speaking its /api surface). Kept separate
 // from the cloud endpoint above so a user can have both configured and let each

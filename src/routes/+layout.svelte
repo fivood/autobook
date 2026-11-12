@@ -28,6 +28,11 @@
   import { startSyncLoop } from '$lib/data/sync/sync-manager';
   import { availableThemes } from '$lib/data/theme-option';
   import { highlightSlotStyles } from '$lib/data/highlight-color';
+  import { setAiTimeoutText } from '$lib/data/ai/ai-client';
+  import { tImmediate } from '$lib/i18n';
+  // ai-client can't import i18n (its node tests would break); every AI call
+  // site shows err.message, so translating it here covers all of them.
+  setAiTimeoutText((label, seconds) => tImmediate('ai.timeout', { label, seconds }));
   import {
     FORMAT_HUE,
     FORMAT_SATURATION_SCALE,

@@ -15,6 +15,7 @@ import {
   type TranslationResult
 } from 'translator-workbench';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
+import { hasCloudCredentials } from '$lib/data/ai/endpoint';
 import { aiApiKey$, aiBaseUrl$, aiLocalBaseUrl$, aiModel$, aiProvider$, qwenMtApiKey$, qwenMtBaseUrl$, qwenMtModel$ } from '$lib/data/store';
 import { QwenMtProvider } from '$lib/data/translation/qwen-mt-provider';
 import { tImmediate } from '$lib/i18n';
@@ -258,9 +259,10 @@ export function cloudTranslationModel(): string {
 }
 
 export function cloudTranslationReady(): boolean {
-  const apiKey = aiApiKey$.getValue().trim();
-  const model = aiModel$.getValue().trim();
-  return !!apiKey && !!model;
+  return (
+    !!aiModel$.getValue().trim() &&
+    hasCloudCredentials(aiProvider$.getValue(), aiApiKey$.getValue(), aiBaseUrl$.getValue())
+  );
 }
 
 /** Whether the Qwen-MT draft provider is configured (base URL + key + model). */

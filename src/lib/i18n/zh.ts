@@ -756,8 +756,8 @@ export default {
   'ai.settings': '设置',
   'ai.clearChat': '清空对话',
   'ai.providerOpenaiLabel': 'OpenAI 兼容（含 OpenRouter / Ollama）',
-  'ai.baseUrlLabel': 'Base URL（OpenAI 兼容时填，留空用官方）',
-  'ai.privacyNote': '仅本地保存。Anthropic 在浏览器中直连用了 dangerous-direct-browser-access 请求头。',
+  'ai.baseUrlLabel': "Base URL（留空用官方地址）",
+  'ai.privacyNote': "API Key 存在 Windows 凭据管理器里（按当前 Windows 用户加密，不进应用数据文件夹）；其余设置只存在本机。Anthropic 直连用了 dangerous-direct-browser-access 请求头。",
   'ai.moreInSettings': '本地模型、功能开关等完整配置见「设置 → AI」',
 
   // Reader-side settings drawer
@@ -774,6 +774,19 @@ export default {
   'ai.send': '发送',
   'ai.requestFailed': '[请求失败] {err}',
   'ai.emptyContext': '（已读片段为空）',
+  'ai.prompt.open': "你是 AutoBook 的阅读助手。\n用户正在读《{title}》，目前的阅读进度约为 {pct}%。\n请基于下方书籍片段作答，可以结合全书内容和你的已有知识。\n用中文回答，简洁、可引用具体段落。",
+  'ai.prompt.safe': "你是 AutoBook 的剧透安全阅读助手。\n用户正在读《{title}》，目前的阅读进度约为 {pct}%。\n读者为这本书开了防剧透，不想提前知道后面的内容：\n1. 只基于下方\"已读片段\"作答；即使你从训练知识里了解这本书，也不要透露后续情节、未出场人物或伏笔的答案。\n2. 如果用户问的内容尚未在已读片段中出现，回答\"目前还没读到，不能剧透\"，不要编。\n3. 名字/术语/伏笔讨论时，只描述已读片段里出现过的部分。\n4. 用中文回答，简洁、可引用具体段落。",
+  'ai.prompt.headingSafe': "已读片段（截至当前阅读位置）：",
+  'ai.prompt.headingOpen': "书籍片段：",
+  'ai.needModel': "请先填写模型名。切换服务商后模型名会清空，需要重新填写。",
+  'ai.needConfig': "还没有可用的模型：填写云端 API Key 和模型名，或在「设置 → AI」里接入 7B 以上的本地模型。",
+  'ai.endpointLocal': "本地 · {model}",
+  'ai.usingModel': "当前由 {model} 回答",
+  'ai.localHint': "没配云端时会改用本地模型。每次提问带约 6–11 千字书籍片段和最多 6 千字对话记录，中文约 8–18K tokens：本地模型建议 7B 起、14B 以上更稳（小模型常守不住防剧透规则），上下文至少 16K。经 Ollama 使用时会按需自动设置上下文长度；走 OpenAI 兼容地址时请在服务端自行调大。",
+  'ai.baseUrlTooltip': "Anthropic：https://api.anthropic.com（不带 /v1，应用会自动补上）\nOpenAI 兼容：https://api.openai.com/v1、https://openrouter.ai/api/v1、http://127.0.0.1:11434/v1（Ollama）\n留空则用所选服务商的官方地址",
+  'ai.timeout': "{label} 在 {seconds} 秒内没有任何响应。请检查模型服务是否在运行、地址是否正确；本地模型首次加载较慢时可以稍后重试。",
+  'settings.ai.maxTokens': "阅读助手单次回答上限（tokens，256–32000）",
+  'settings.ai.timeoutSec': "阅读助手无响应超时（秒，30–900）",
 
   // Page <title>s
   'pageTitle.home': '首页',
@@ -1539,7 +1552,7 @@ export default {
   // Comic overlay, AI drawer, Kokoro loading, image gallery, notebook dialogs
   'comicOverlay.count': '{n} 段译文',
   'comicOverlay.manualCount': ' · {n} 手动',
-  'ai.keyPlaceholder': 'sk-... 或 ollama 任意',
+  'ai.keyPlaceholder': "sk-...（本地服务可留空）",
   'kokoro.status.loading': '正在加载 Kokoro ({model})…',
   'kokoro.status.downloadingFile': '下载 {file}…',
   'kokoro.status.downloading': '正在下载模型…',
