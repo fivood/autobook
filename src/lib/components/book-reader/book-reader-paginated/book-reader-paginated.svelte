@@ -22,6 +22,7 @@
   import { getCharacterCount } from '$lib/functions/get-character-count';
   import { getParagraphNodes } from '../get-paragraph-nodes';
   import { getExternalTargetElement, isMobile$ } from '$lib/functions/utils';
+  import { isTypingTarget } from '$lib/functions/is-typing-target';
   import { faBookmark, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import {
     BehaviorSubject,
@@ -751,6 +752,7 @@
     if (
       !concretePageManager ||
       $skipKeyDownListener$ ||
+      isTypingTarget(ev.target) ||
       ev.altKey ||
       ev.ctrlKey ||
       ev.shiftKey ||

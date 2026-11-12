@@ -19,6 +19,7 @@
  */
 
 import { fontSize$, skipKeyDownListener$, FONT_SIZE_DEFAULT } from '$lib/data/store';
+import { isTypingTarget } from '$lib/functions/is-typing-target';
 import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-number-local-storage-subject';
 
 /** Image zoom level for PDF / CBZ pages. Lives here rather than inside
@@ -70,13 +71,6 @@ export function resetImageZoom() {
   bookImageScale$.next(1);
 }
 
-/** True while the event came from somewhere the user is typing — Ctrl+`-` in a
- *  note editor or the settings font field must stay a text edit. */
-function isTyping(target: EventTarget | null) {
-  const el = target as HTMLElement | null;
-  return !!el?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
-}
-
 /**
  * Wire the zoom gestures. Returns the teardown.
  *
@@ -102,7 +96,7 @@ export function attachReaderZoom(imageMode: () => boolean) {
 
   const onKeydown = (ev: KeyboardEvent) => {
     if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
-    if (skipKeyDownListener$.getValue() || isTyping(ev.target)) return;
+    if (skipKeyDownListener$.getValue() || isTypingTarget(ev.target)) return;
     // `=` and `+` share a key, and the numpad reports `Add` / `Subtract`.
     const delta =
       ev.key === '=' || ev.key === '+' ? 1 : ev.key === '-' || ev.key === '_' ? -1 : 0;

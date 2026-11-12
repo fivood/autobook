@@ -121,5 +121,20 @@ export async function connect({ port = DEFAULT_PORT, timeoutMs = 0 } = {}) {
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...at });
   }
 
-  return { evaluate, evaluateThroughNavigation, waitFor, screenshot, click, close: () => ws.close() };
+  /**
+   * Real keystrokes into whatever has focus, one keyDown/keyUp per character.
+   * `el.value = …` or `Input.insertText` fire no keydown, so they can't catch
+   * a window-level shortcut handler stealing keys mid-typing. ASCII only.
+   */
+  async function type(text) {
+    for (const ch of text) {
+      const upper = ch.toUpperCase();
+      const code = ch === ' ' ? 'Space' : /[a-z]/i.test(ch) ? `Key${upper}` : '';
+      const key = { key: ch, code, windowsVirtualKeyCode: upper.charCodeAt(0) };
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', text: ch, ...key });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', ...key });
+    }
+  }
+
+  return { evaluate, evaluateThroughNavigation, waitFor, screenshot, click, type, close: () => ws.close() };
 }

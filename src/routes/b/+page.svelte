@@ -315,6 +315,7 @@
     getWeightedAverage
   } from '$lib/functions/utils';
   import { onKeydownReader } from './on-keydown-reader';
+  import { isTypingTarget } from '$lib/functions/is-typing-target';
   import { onDestroy, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
   import {
@@ -1981,6 +1982,9 @@ ${$t('reader.ttsFailed.hint')}`
   }
 
   function onKeydown(ev: KeyboardEvent) {
+    // Keys typed into the AI drawer, a memo, the search box… are text, not
+    // shortcuts — this handler blurs whatever it acts on.
+    if (isTypingTarget(ev.target)) return;
     // Ctrl+F is the one search shortcut everyone already knows; the keybind
     // map below only does bare keys, so it is handled ahead of it.
     if (

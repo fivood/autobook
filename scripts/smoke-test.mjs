@@ -30,6 +30,9 @@ function fail(name, detail) {
 }
 
 async function scenario(name, fn) {
+  // SMOKE_ONLY=<substring> runs just the matching scenarios — for the
+  // revert-the-fix self-check without sitting through the whole suite.
+  if (process.env.SMOKE_ONLY && !name.includes(process.env.SMOKE_ONLY)) return;
   try {
     const detail = await fn();
     ok(name, detail);
@@ -94,7 +97,8 @@ async function snapshotSettings() {
       'ttsStartStrategy',
       'ttsPositions',
       'statisticsEnabled',
-      'activeFolderFilter'
+      'activeFolderFilter',
+      'autoScrollMultiplier'
     ];
     const out = {};
     for (const k of keys) out[k] = localStorage.getItem(k);
@@ -1201,6 +1205,43 @@ async function caretStartSurvivesReload(bookId) {
   return `光标点在第66段：打字机从那段打，停在 ${stopped}；重开后朗读从 ${spoken} 接上`;
 }
 
+/**
+ * Regression (1.56.1): typing in the AI drawer lost the caret mid-word. The
+ * reader's window keydown treated b/r/a/d/n/m/space as shortcuts even inside
+ * a textarea — ran the action (bookmark, jump, chapter…) and then blurred the
+ * focused element, so the rest of the sentence went nowhere.
+ */
+async function aiDrawerKeepsFocusWhileTyping(bookId) {
+  await goto(`/b?id=${bookId}`, `!!document.querySelector('[aria-label="显示阅读器菜单"]')`);
+  const box = await session.evaluate(`(() => {
+    document.querySelector('[aria-label="显示阅读器菜单"]').click();
+    return ${after(
+      900,
+      `(() => {
+        const ai = document.querySelector('[aria-label="AI 助手"]');
+        if (!ai) return { ok: false, why: 'no AI button in the reader menu' };
+        ai.click();
+        return new Promise(r => setTimeout(() => {
+          const ta = document.querySelector('textarea');
+          if (!ta) return r({ ok: false, why: 'AI drawer has no textarea' });
+          const b = ta.getBoundingClientRect();
+          r({ ok: true, x: b.x + b.width / 2, y: b.y + b.height / 2 });
+        }, 1200));
+      })()`
+    )};
+  })()`);
+  if (!box.ok) throw new Error(box.why);
+  await session.click(box.x, box.y);
+  const typed = 'a bad dream, then a brave man ran';
+  await session.type(typed);
+  const out = await session.evaluate(
+    after(300, `({ tag: document.activeElement?.tagName, value: document.querySelector('textarea')?.value })`)
+  );
+  if (out.tag !== 'TEXTAREA') throw new Error(`focus went to ${out.tag}; box holds "${out.value}"`);
+  if (out.value !== typed) throw new Error(`box holds "${out.value}", expected "${typed}"`);
+  return `${typed.length} 个字符连续输入，焦点一直在输入框`;
+}
+
 // ----------------------------------------------------------------- run ----
 
 console.log('AutoBook smoke suite (real Tauri window via CDP)\n');
@@ -1256,6 +1297,7 @@ try {
   await scenario('续读：光标起点 → 停下 → 重开书后从停下那段接上', () =>
     caretStartSurvivesReload(bookId)
   );
+  await scenario('AI 助手：输入框里连续打字不丢焦点', () => aiDrawerKeepsFocusWhileTyping(bookId));
 } catch (err) {
   fail('suite setup', err.message);
 } finally {

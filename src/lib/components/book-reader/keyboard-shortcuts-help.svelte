@@ -5,6 +5,7 @@
   import { faTimes, faKeyboard } from '@fortawesome/free-solid-svg-icons';
   import { bookReaderKeybindMap$, ttsShortcut$ } from '$lib/data/store';
   import { BookReaderAvailableKeybind } from '$lib/data/book-reader-keybind';
+  import { isTypingTarget } from '$lib/functions/is-typing-target';
   import { t, locale$ } from '$lib/i18n';
 
   // Maps each keybind to its i18n key. The concrete label is resolved
@@ -67,11 +68,7 @@
     visible = false;
   }
   function onKeydown(e: KeyboardEvent) {
-    // ? key (Shift + /) — but only when not typing in an input
-    const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) {
-      return;
-    }
+    if (isTypingTarget(e.target)) return;
     if (e.key === '?' || (e.shiftKey && e.key === '/')) {
       e.preventDefault();
       visible = !visible;
