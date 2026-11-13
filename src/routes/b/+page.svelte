@@ -1251,8 +1251,16 @@ ${$t('reader.ttsFailed.hint')}`
     const target = elementForCharIndex(root, globalIdx);
     if (target) {
       const rect = target.getBoundingClientRect();
-      const vh = window.innerHeight || 0;
-      if (rect.top < vh * 0.2 || rect.bottom > vh * 0.7) {
+      // Vertical text runs along x, right to left. Testing top/bottom there
+      // was always true — every column spans most of the height — so each
+      // sentence re-centred, alternately on its <p> and on a ruby inside it,
+      // and the page (and the progress count) stepped a line forward and back.
+      const vertical = getComputedStyle(root).writingMode.startsWith('vertical');
+      const size = (vertical ? window.innerWidth : window.innerHeight) || 0;
+      const [lead, trail] = vertical
+        ? [size - rect.right, size - rect.left]
+        : [rect.top, rect.bottom];
+      if (lead < size * 0.2 || trail > size * 0.7) {
         target.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
     }
