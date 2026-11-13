@@ -660,6 +660,8 @@ export default {
   'reader.voiceMissing.title': 'No matching voice',
   'reader.voiceMissing.body': 'No {lang} voice is installed, so playback falls back to another one — most noticeably, numbers get read in that other language.\n\nSwitching the engine to Edge TTS gives you online voices for every language with nothing to install, or add a voice pack under Windows Settings → Time & language → Language.',
   'reader.ttsFailed.title': 'Read-aloud failed',
+  'reader.ttsNothingToRead.title': 'Nothing to read aloud',
+  'reader.ttsNothingToRead.body': 'This page has no text (a cover, an illustration or a comic page). Turn to a page with text and start again; with “Auto-continue at chapter end” on, pages like this are skipped automatically.',
   'reader.ttsFailed.hint': 'Try another engine or voice from the reader’s settings drawer. Connection errors on Edge TTS usually mean the proxy is not routing api.msedgeservices.com.',
   'reader.ai': 'AI assistant',
   'comicOverlay.translations': 'translations',

@@ -993,6 +993,23 @@
   /** Chapter the voice finished a section in — paginated 章止 stops at the
    *  section boundary that opens a new one. */
   let ttsChapterAtSectionEnd = -1;
+  /** Text-less sections skipped in a row by auto-continue; see onEnd. */
+  let ttsEmptySkips = 0;
+  const TTS_MAX_EMPTY_SKIPS = 8;
+  /** on() called by auto-continue rather than by the user. */
+  let ttsAutoResuming = false;
+  let ttsSpokeInRun = false;
+
+  // Outside the `$:` block that calls it: assigning ttsAutoResuming in there
+  // makes Svelte see a reactive cycle through autoReader.
+  function resumeTtsAfterAdvance() {
+    ttsAutoResuming = true;
+    try {
+      autoReader?.on();
+    } finally {
+      ttsAutoResuming = false;
+    }
+  }
 
   /**
    * Playback handover between the typewriter and the voice, through the one
@@ -1125,9 +1142,32 @@ ${$t('reader.ttsFailed.hint')}`
         }
       ]);
     };
-    autoReader.onEnd = () => {
-      if (!$ttsAutoAdvanceSection$) {
+    autoReader.onEnd = (nothingToRead = false) => {
+      // A section with no text (cover, illustration page, comic) used to make
+      // play a silent no-op that also stalled auto-continue. Skip past it when
+      // auto-continue is on, otherwise say why nothing happened — but only if
+      // nothing was read since the user pressed play: running into a blank
+      // back cover after the last chapter is a normal ending, not an error.
+      if (nothingToRead && !ttsAutoResuming) ttsSpokeInRun = false;
+      const stopHere = () => {
         forgetPlaybackCursor();
+        ttsEmptySkips = 0;
+        if (nothingToRead && !ttsSpokeInRun) {
+          dialogManager.dialogs$.next([
+            {
+              component: MessageDialog,
+              props: {
+                title: $t('reader.ttsNothingToRead.title'),
+                message: $t('reader.ttsNothingToRead.body')
+              }
+            }
+          ]);
+        }
+      };
+      // ponytail: fixed cap so an all-image book doesn't flip to its last page;
+      // make it smarter only if real books have longer runs of picture pages.
+      if (!$ttsAutoAdvanceSection$ || (nothingToRead && ++ttsEmptySkips > TTS_MAX_EMPTY_SKIPS)) {
+        stopHere();
         return;
       }
       const sectionAtEnd = currentSectionIndex;
@@ -1135,7 +1175,7 @@ ${$t('reader.ttsFailed.hint')}`
       // Svelte stores.
       setTimeout(() => {
         if (!pageManager || typeof pageManager.advanceToNextSection !== 'function') {
-          forgetPlaybackCursor();
+          stopHere();
           return;
         }
         // Must call as a method so `this` binds — otherwise the inner
@@ -1146,13 +1186,15 @@ ${$t('reader.ttsFailed.hint')}`
           ttsAwaitingSection = sectionAtEnd + 1;
           ttsChapterAtSectionEnd = chapterAtEnd;
         } else {
-          forgetPlaybackCursor();
+          stopHere();
         }
       }, 0);
     };
     autoReader.wasReaderEnabled$.subscribe((enabled) => {
       setPlaybackMode(enabled ? 'tts' : 'manual');
       if (enabled) {
+        ttsEmptySkips = 0;
+        ttsSpokeInRun = true;
         lastCountedSentenceStart = -1;
         const el = document.querySelector('.book-content') as HTMLElement | null;
         // Nothing to hide or reveal here any more — book-reader-continuous
@@ -1236,7 +1278,7 @@ ${$t('reader.ttsFailed.hint')}`
       }
       autoReader?.prepare();
       autoReader?.setPosition(0, 0);
-      autoReader?.on();
+      resumeTtsAfterAdvance();
     }, 300);
   }
 

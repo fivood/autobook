@@ -664,6 +664,8 @@ export default {
   'reader.voiceMissing.title': '利用できる音声がありません',
   'reader.voiceMissing.body': '{lang} の音声がインストールされていないため、別の音声で読み上げます——特に数字がその言語の読み方になります。\n\nEdge TTS エンジンに切り替えると各言語のオンライン音声をそのまま使えます。あるいは Windows の設定 → 時刻と言語 → 言語 から音声パックを追加してください。',
   'reader.ttsFailed.title': '読み上げに失敗しました',
+  'reader.ttsNothingToRead.title': '読み上げる文字がありません',
+  'reader.ttsNothingToRead.body': 'このページには文字がありません（表紙・挿絵・漫画など）。本文のあるページで読み上げを始めてください。「章末で自動継続」をオンにすると、こうしたページは自動で飛ばします。',
   'reader.ttsFailed.hint': 'リーダーの設定ドロワーからエンジンか音声を変えてみてください。Edge TTS の接続エラーは、プロキシが api.msedgeservices.com を通していないことがほとんどです。',
   'reader.ai': 'AI アシスタント',
   'comicOverlay.translations': '翻訳',

@@ -103,7 +103,8 @@ export abstract class BlobAutoReader implements AutoReader {
 
   onBoundary?: (charIndex: number) => void;
 
-  onEnd?: () => void;
+  /** `nothingToRead`: started on a section with no sentences (cover, illustration, comic page). */
+  onEnd?: (nothingToRead?: boolean) => void;
 
   onError?: (message: string) => void;
 
@@ -243,7 +244,10 @@ export abstract class BlobAutoReader implements AutoReader {
       return;
     }
     if (!this.sentences.length) this.prepare();
-    if (!this.sentences.length) return;
+    if (!this.sentences.length) {
+      this.onEnd?.(true);
+      return;
+    }
     this.enabled$.next(true);
     this.speakNext();
   }

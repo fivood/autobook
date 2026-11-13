@@ -56,7 +56,8 @@ export class AutoReaderContinuous implements AutoReader {
 
   onError?: (message: string) => void;
 
-  onEnd?: () => void;
+  /** `nothingToRead`: started on a section with no sentences (cover, illustration, comic page). */
+  onEnd?: (nothingToRead?: boolean) => void;
 
   constructor(destroy$: Observable<void>) {
     this.enabled$.subscribe((v) => this.wasReaderEnabled$.next(v));
@@ -231,7 +232,10 @@ export class AutoReaderContinuous implements AutoReader {
   on() {
     if (!this.synth) return;
     if (!this.sentences.length) this.prepare();
-    if (!this.sentences.length) return;
+    if (!this.sentences.length) {
+      this.onEnd?.(true);
+      return;
+    }
     this.reportMissingVoiceOnce();
     this.enabled$.next(true);
     this.speakNext();
