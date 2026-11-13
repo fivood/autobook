@@ -197,18 +197,36 @@ fn webview_indexeddb_dirs() -> Vec<std::path::PathBuf> {
 
 fn webview_subdir_paths(rel: &str) -> Vec<std::path::PathBuf> {
   let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-  let root = std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/EBWebView");
-  let mut out = Vec::new();
-  if let Ok(entries) = std::fs::read_dir(&root) {
-    for entry in entries.flatten() {
-      let path = entry.path();
-      let target = path.join(rel);
-      if target.exists() {
-        out.push(target);
-      }
+  profile_subdir(&std::path::PathBuf::from(base).join("io.github.fukki.ebookreader").join("EBWebView"), rel)
+}
+
+/// `EBWebView` is WebView2's user-data folder and `Default` the profile right
+/// inside it, so `rel` (`Default/IndexedDB`) hangs straight off the root. This
+/// used to look one level deeper (`EBWebView/<x>/Default/…`), always came back
+/// empty, and both resets quietly deleted nothing.
+fn profile_subdir(webview_root: &std::path::Path, rel: &str) -> Vec<std::path::PathBuf> {
+  // Component by component: a `/` joined in verbatim reaches explorer (打开文件夹) as-is.
+  let target = rel.split('/').fold(webview_root.to_path_buf(), |p, c| p.join(c));
+  if target.exists() { vec![target] } else { Vec::new() }
+}
+
+#[cfg(test)]
+mod profile_subdir_tests {
+  use super::profile_subdir;
+
+  #[test]
+  fn finds_dirs_in_a_real_webview2_layout() {
+    let root = std::env::temp_dir().join(format!("autobook_ebwebview_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for d in ["Default/IndexedDB", "Default/Local Storage", "Crashpad/reports", "GrShaderCache"] {
+      std::fs::create_dir_all(root.join(d)).unwrap();
     }
+    assert_eq!(profile_subdir(&root, "Default/IndexedDB"), vec![root.join("Default").join("IndexedDB")]);
+    assert_eq!(profile_subdir(&root, "Default/Local Storage"), vec![root.join("Default").join("Local Storage")]);
+    assert!(profile_subdir(&root, "Default/Nope").is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(profile_subdir(&root, "Default/IndexedDB").is_empty());
   }
-  out
 }
 
 /// Runs before the WebView2 process is spawned. Removes Local Storage if the
