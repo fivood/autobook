@@ -758,6 +758,7 @@ export default {
   'ai.providerOpenaiLabel': 'OpenAI 兼容（含 OpenRouter / Ollama）',
   'ai.baseUrlLabel': "Base URL（留空用官方地址）",
   'ai.privacyNote': "API Key 存在 Windows 凭据管理器里（按当前 Windows 用户加密，不进应用数据文件夹）；其余设置只存在本机。Anthropic 直连用了 dangerous-direct-browser-access 请求头。",
+  'ai.keyPlaintext': "API Key 没能存进 Windows 凭据管理器，目前以明文存在应用数据文件夹里。下次启动应用会再试一次；一直这样的话，请检查凭据管理器服务是否被禁用。",
   'ai.moreInSettings': '本地模型、功能开关等完整配置见「设置 → AI」',
 
   // Reader-side settings drawer
@@ -934,7 +935,8 @@ export default {
   'dataPaths.pickFail': '选择文件夹失败：{err}',
   'dataPaths.migrate.title': '搬移旧书库？',
   'dataPaths.migrate.body': '把 {from} 里已有的数据搬到 {to} 吗？\n\n选「否」只切换写入位置，旧文件夹保留在原地不动。',
-  'dataPaths.migrateFail': '搬移失败：{err}',
+  'dataPaths.migrateFail': '搬移失败，书库仍在原来的位置：{err}',
+  'dataPaths.migrateLeftovers': '书已经全部搬到新位置，但旧文件夹里有些文件删不掉（可能正被其他程序占用），可以稍后手动清理：{from}',
   'dataPaths.meta.idb': 'IndexedDB · {size} · {n} profile',
   'dataPaths.meta.localStorage': 'localStorage · WebView2 用户目录',
   'dataPaths.clearConfirm': '⚠ 即将清除全部本地数据：\n\n• 所有书籍内容\n• 所有高亮 / 笔记本 / 标签 / 文件夹\n• 阅读统计 / 阅读时长 / 完成记录\n• 所有 UI 设置 / 主题 / 同步 token / API key\n\n此操作不可恢复。Documents/AutoBook 文件夹里同步过的副本不会被删，但 IndexedDB 主存储会彻底清空。继续？',

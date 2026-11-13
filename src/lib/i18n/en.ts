@@ -624,6 +624,7 @@ export default {
   'ai.providerOpenaiLabel': 'OpenAI-compatible (incl. OpenRouter / Ollama)',
   'ai.baseUrlLabel': "Base URL (leave blank for the official one)",
   'ai.privacyNote': "The API key is kept in Windows Credential Manager (encrypted for your Windows user, not in the app's data folder); other settings stay on this machine. Direct Anthropic calls use the dangerous-direct-browser-access header.",
+  'ai.keyPlaintext': "The API key couldn't be saved to Windows Credential Manager, so it is currently stored as plain text in the app's data folder. The app tries again on its next start; if this keeps happening, check that the Credential Manager service isn't disabled.",
   'ai.moreInSettings': 'Local runtime and per-feature switches live in Settings → AI',
 
   // Reader-side settings drawer
@@ -893,7 +894,8 @@ export default {
   'dataPaths.pickFail': 'Folder picker failed: {err}',
   'dataPaths.migrate.title': 'Move existing library?',
   'dataPaths.migrate.body': 'Move data from {from} to {to}?\n\nChoose "No" to just switch where new data is written — the old folder stays as-is.',
-  'dataPaths.migrateFail': 'Move failed: {err}',
+  'dataPaths.migrateFail': 'Move failed; the library stays where it was: {err}',
+  'dataPaths.migrateLeftovers': "All books reached the new folder, but some files in the old one couldn't be deleted (another program may be using them). You can remove them later: {from}",
   'dataPaths.meta.idb': 'IndexedDB · {size} · {n} profile(s)',
   'dataPaths.meta.localStorage': 'localStorage · WebView2 user directory',
   'dataPaths.clearConfirm': "⚠ About to clear all local data:\n\n• All book content\n• All highlights / notebook / tags / folders\n• Reading stats / reading time / completion records\n• All UI settings / themes / sync tokens / API keys\n\nThis cannot be undone. Copies synced to Documents/AutoBook are preserved, but the IndexedDB main store is fully wiped. Continue?",

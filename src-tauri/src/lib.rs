@@ -439,8 +439,13 @@ fn is_granted_root(p: &str, roots: &[std::path::PathBuf]) -> bool {
 /// copy + remove. `to` may be an empty existing directory — that's the normal
 /// case when the frontend's folder picker returned an already-created folder.
 /// Refuses to clobber a target that already contains files.
+///
+/// `Err` means the library is still whole at `from` (anything moved so far is
+/// moved back), so the caller must keep the old root: switching anyway is how
+/// half a library went missing. `Ok(false)` means everything reached `to` but
+/// some of `from` couldn't be deleted — leftovers, not lost books.
 #[tauri::command]
-fn move_directory(from: String, to: String) -> Result<(), String> {
+fn move_directory(from: String, to: String) -> Result<bool, String> {
   let roots = granted_roots(false);
   for p in [&from, &to] {
     if !is_granted_root(p, &roots) {
@@ -450,7 +455,7 @@ fn move_directory(from: String, to: String) -> Result<(), String> {
   move_directory_impl(from, to)
 }
 
-fn move_directory_impl(from: String, to: String) -> Result<(), String> {
+fn move_directory_impl(from: String, to: String) -> Result<bool, String> {
   move_directory_with(from, to, install_dir().as_deref())
 }
 
@@ -478,7 +483,7 @@ fn move_directory_with(
   from: String,
   to: String,
   install: Option<&std::path::Path>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
   let from_path = std::path::PathBuf::from(&from);
   let to_path = std::path::PathBuf::from(&to);
   if !from_path.exists() {
@@ -487,7 +492,7 @@ fn move_directory_with(
   let from_c = canonical_ish(&from_path);
   let to_c = canonical_ish(&to_path);
   if from_c == to_c {
-    return Ok(());
+    return Ok(true);
   }
   // Nothing stops the folder picker from returning a subfolder of the current
   // library root, and that case is quietly catastrophic: Windows refuses to
@@ -522,8 +527,12 @@ fn move_directory_with(
   // holds it — where the installer and updater expect them.
   if let Some(install) = install.filter(|i| i.starts_with(&from_c)) {
     std::fs::create_dir_all(&to_path).map_err(|e| e.to_string())?;
-    for entry in std::fs::read_dir(&from_c).map_err(|e| e.to_string())? {
-      let entry = entry.map_err(|e| e.to_string())?;
+    let entries: Vec<_> = std::fs::read_dir(&from_c)
+      .and_then(|rd| rd.collect::<std::io::Result<_>>())
+      .map_err(|e| e.to_string())?;
+    let mut moved: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
+    let mut clean = true;
+    for entry in entries {
       let src = entry.path();
       let program_file = src.parent() == Some(install)
         && entry.file_type().map(|t| t.is_file()).unwrap_or(false)
@@ -531,26 +540,58 @@ fn move_directory_with(
       if install.starts_with(&src) || program_file {
         continue;
       }
-      move_entry(&src, &to_path.join(entry.file_name())).map_err(|e| e.to_string())?;
+      let dst = to_path.join(entry.file_name());
+      match move_entry(&src, &dst) {
+        Ok(c) => {
+          clean &= c;
+          moved.push((src, dst));
+        }
+        Err(e) => {
+          let name = entry.file_name().to_string_lossy().into_owned();
+          let stuck: Vec<_> = moved
+            .iter()
+            .rev()
+            .filter(|(s, d)| move_entry(d, s).is_err())
+            .map(|(_, d)| d.to_string_lossy().into_owned())
+            .collect();
+          if stuck.is_empty() {
+            let _ = std::fs::remove_dir(&to_path);
+            return Err(format!("搬到「{name}」时失败，已搬过去的都已移回原处，书库没有变：{e}"));
+          }
+          return Err(format!(
+            "搬到「{name}」时失败：{e}。有 {} 项没能移回，仍在新位置：{}",
+            stuck.len(),
+            stuck.join("、")
+          ));
+        }
+      }
     }
-    return Ok(());
+    return Ok(clean);
   }
 
   move_entry(&from_path, &to_path).map_err(|e| e.to_string())
 }
 
-fn move_entry(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+/// `Ok(true)`: moved. `Ok(false)`: all of it reached `to`, but `from` could
+/// only be partly deleted. `Err`: `from` is untouched and no partial copy is
+/// left at `to`.
+fn move_entry(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<bool> {
   if std::fs::rename(from, to).is_ok() {
-    return Ok(());
+    return Ok(true);
   }
   // Cross-volume or locked — fall back to copy + remove.
-  if from.is_dir() {
-    copy_dir_recursive(from, to)?;
-    std::fs::remove_dir_all(from)
+  let copied = if from.is_dir() {
+    copy_dir_recursive(from, to)
   } else {
-    std::fs::copy(from, to)?;
-    std::fs::remove_file(from)
+    std::fs::copy(from, to).map(|_| ())
+  };
+  if let Err(e) = copied {
+    // Best effort: a failed cleanup only leaves a stray partial copy beside
+    // an intact original.
+    let _ = if to.is_dir() { std::fs::remove_dir_all(to) } else { std::fs::remove_file(to) };
+    return Err(e);
   }
+  Ok(if from.is_dir() { std::fs::remove_dir_all(from) } else { std::fs::remove_file(from) }.is_ok())
 }
 
 fn copy_dir_recursive(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
@@ -699,6 +740,42 @@ mod move_directory_tests {
     assert!(overlaps_install(&src, &canonical_ish(&src)));
     assert!(overlaps_install(&root, &canonical_ish(&src)));
     assert!(!overlaps_install(&dst, &canonical_ish(&src)));
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// One entry that can't move (a file held open without sharing — what an
+  /// antivirus scan or another reader does) must not leave the library split:
+  /// what already moved goes back, and the error says the library is unchanged.
+  #[cfg(windows)]
+  #[test]
+  fn a_failed_entry_moves_the_others_back() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let root = tmp("rollback");
+    let src = root.join("AutoBook");
+    std::fs::create_dir_all(src.join("A book")).unwrap();
+    std::fs::write(src.join("A book").join("bookdata.zip"), b"x").unwrap();
+    std::fs::create_dir_all(src.join("Z locked")).unwrap();
+    std::fs::write(src.join("Z locked").join("bookdata.zip"), b"y").unwrap();
+    std::fs::write(src.join("app.exe"), b"exe").unwrap();
+    let lock = std::fs::OpenOptions::new()
+      .read(true)
+      .share_mode(0)
+      .open(src.join("Z locked").join("bookdata.zip"))
+      .unwrap();
+    let dst = root.join("Library");
+
+    let err = move_directory_with(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+      Some(&canonical_ish(&src)),
+    )
+    .unwrap_err();
+    drop(lock);
+
+    assert!(err.contains("没有变"), "unexpected error: {err}");
+    assert!(src.join("A book").join("bookdata.zip").exists());
+    assert!(src.join("Z locked").join("bookdata.zip").exists());
+    assert!(!dst.join("A book").exists() && !dst.join("Z locked").exists());
     let _ = std::fs::remove_dir_all(&root);
   }
 

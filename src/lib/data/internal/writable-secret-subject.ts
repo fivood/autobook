@@ -3,6 +3,19 @@ import { invoke } from '@tauri-apps/api/core';
 import { writableSubject } from '$lib/functions/svelte/store';
 
 /**
+ * Names whose value currently sits in plaintext localStorage because the
+ * credential store refused it. The settings text promises Credential Manager;
+ * this is what lets the UI take that back instead of only a console line the
+ * release build writes nowhere.
+ */
+export const plaintextSecrets$ = writableSubject<string[]>([]);
+
+function markPlaintext(name: string, plaintext: boolean) {
+  const rest = plaintextSecrets$.getValue().filter((n) => n !== name);
+  plaintextSecrets$.next(plaintext ? [...rest, name] : rest);
+}
+
+/**
  * A string setting kept in the OS credential store (src-tauri/src/secrets.rs)
  * instead of localStorage, for API keys.
  *
@@ -23,10 +36,12 @@ export function writableSecretSubject(name: string) {
     try {
       await invoke('secret_set', { name, value });
       localStorage.removeItem(name);
+      markPlaintext(name, false);
     } catch (err) {
       console.warn(`[secrets] ${name}: credential store unavailable, kept in localStorage`, err);
       if (value) localStorage.setItem(name, value);
       else localStorage.removeItem(name);
+      markPlaintext(name, !!value);
     }
   };
 

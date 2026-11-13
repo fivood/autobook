@@ -43,6 +43,7 @@
     resolveLocalModel
   } from '$lib/data/ai/local-model';
   import { hasCloudCredentials } from '$lib/data/ai/endpoint';
+  import { plaintextSecrets$ } from '$lib/data/internal/writable-secret-subject';
   import { t } from '$lib/i18n';
 
   let probing = false;
@@ -188,7 +189,11 @@
     />
   </label>
 
-  <p class="mb-3 text-xs text-muted leading-relaxed">{$t('ai.privacyNote')}</p>
+  {#if $plaintextSecrets$.length}
+    <p class="mb-3 text-xs leading-relaxed" style="color:var(--danger-color);" role="alert">{$t('ai.keyPlaintext')}</p>
+  {:else}
+    <p class="mb-3 text-xs text-muted leading-relaxed">{$t('ai.privacyNote')}</p>
+  {/if}
 
   <div class="mb-3 grid gap-3 sm:grid-cols-2">
     <label class="block">

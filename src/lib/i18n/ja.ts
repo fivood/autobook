@@ -628,6 +628,7 @@ export default {
   'ai.providerOpenaiLabel': 'OpenAI 互換（OpenRouter / Ollama を含む）',
   'ai.baseUrlLabel': "Base URL（空欄で公式アドレス）",
   'ai.privacyNote': "API Key は Windows 資格情報マネージャーに保存されます（Windows ユーザー単位で暗号化、アプリのデータフォルダには入りません）。その他の設定はこの PC にのみ保存。Anthropic への直接呼び出しは dangerous-direct-browser-access ヘッダを使用。",
+  'ai.keyPlaintext': "API Key を Windows 資格情報マネージャーに保存できなかったため、現在はアプリのデータフォルダに平文で保存されています。次回起動時に再試行します。毎回こうなる場合は、資格情報マネージャーのサービスが無効になっていないか確認してください。",
   'ai.moreInSettings': 'ローカルモデルや機能スイッチは「設定 → AI」にあります',
 
   // Reader-side settings drawer
@@ -897,7 +898,8 @@ export default {
   'dataPaths.pickFail': 'フォルダ選択に失敗：{err}',
   'dataPaths.migrate.title': '既存のライブラリを移動しますか？',
   'dataPaths.migrate.body': '{from} のデータを {to} へ移しますか？\n\n「いいえ」を選ぶと書き込み先だけを切り替え、旧フォルダはそのまま残ります。',
-  'dataPaths.migrateFail': '移動に失敗：{err}',
+  'dataPaths.migrateFail': '移動に失敗しました。ライブラリは元の場所のままです：{err}',
+  'dataPaths.migrateLeftovers': '本はすべて新しいフォルダへ移りましたが、旧フォルダの一部のファイルを削除できませんでした（他のプログラムが使用中の可能性があります）。後で手動で削除できます：{from}',
   'dataPaths.meta.idb': 'IndexedDB · {size} · {n} プロファイル',
   'dataPaths.meta.localStorage': 'localStorage · WebView2 ユーザーディレクトリ',
   'dataPaths.clearConfirm': '⚠ すべてのローカルデータを削除します：\n\n• すべての書籍内容\n• すべてのハイライト ／ ノート ／ タグ ／ フォルダ\n• 読書統計 ／ 読書時間 ／ 読了記録\n• すべての UI 設定 ／ テーマ ／ 同期トークン ／ API キー\n\nこの操作は取り消せません。Documents/AutoBook に同期されたコピーは削除されませんが、IndexedDB のメインストアは完全に消去されます。続行しますか？',

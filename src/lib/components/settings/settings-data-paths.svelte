@@ -110,9 +110,10 @@
   }
 
   async function applyFsRoot(nextRoot: string, prevRoot: string, prevExists: boolean) {
-    // Two decoupled steps: (1) switch where new data is written, (2) optional
-    // one-shot migration of the old folder. Switching happens first and always
-    // succeeds; a failed migration leaves the root switched with an error toast.
+    // Optional one-shot migration of the old folder, then the switch. A failed
+    // move keeps the old root: move_directory rolls back what it moved, so the
+    // books are all still there — switching anyway showed a library missing
+    // whatever hadn't made it across.
     const oldHasData = prevExists && !(await isDirEmpty(prevRoot));
     let wantMove = false;
 
@@ -143,11 +144,14 @@
         // '' in the store means "default", but as a path it is the process's
         // working directory: restoring the default used to copy the library
         // there and then delete the original.
-        await invoke('move_directory', { from: prevRoot, to: nextRoot || paths?.defaultFsRoot });
+        const clean = await invoke<boolean>('move_directory', {
+          from: prevRoot,
+          to: nextRoot || paths?.defaultFsRoot
+        });
+        if (!clean) message = tImmediate('dataPaths.migrateLeftovers', { from: prevRoot });
       } catch (err: any) {
-        // Report the failure but continue: the user picked a new folder, we
-        // owe them the switch even if the data-move step didn't work.
         message = tImmediate('dataPaths.migrateFail', { err: err?.message || err });
+        return;
       }
     }
 

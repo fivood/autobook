@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount, tick } from 'svelte';
+  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
   import {
     faTimes,
@@ -25,6 +25,7 @@
   import { streamChat, type AiMessage, type AiProvider } from '$lib/data/ai/ai-client';
   import { hasCloudCredentials, resolveEndpoint } from '$lib/data/ai/endpoint';
   import { probeLocalModels } from '$lib/data/ai/local-model';
+  import { plaintextSecrets$ } from '$lib/data/internal/writable-secret-subject';
   import {
     clampInt,
     estimateTokens,
@@ -88,6 +89,11 @@
       : '';
     return ep;
   }
+
+  // Closing the drawer (its button or any click outside it) destroys this
+  // component; without this the request ran on — still billed, local GPU
+  // still busy — with nowhere left to show the answer.
+  onDestroy(() => abortCtrl?.abort());
 
   onMount(() => {
     probeLocalModels()
@@ -347,7 +353,11 @@
           spellcheck="false"
         />
       </label>
-      <p class="text-xs opacity-50">{$t('ai.privacyNote')}</p>
+      {#if $plaintextSecrets$.includes('aiApiKey')}
+        <p class="text-xs" style="color:var(--danger-color);" role="alert">{$t('ai.keyPlaintext')}</p>
+      {:else}
+        <p class="text-xs opacity-50">{$t('ai.privacyNote')}</p>
+      {/if}
       <p class="mt-1 text-xs opacity-60">{$t('ai.localHint')}</p>
       <!-- These four inputs are the same stores the settings page writes, kept
            here only so a first-run user can start chatting without leaving the
