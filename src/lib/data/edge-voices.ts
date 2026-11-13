@@ -16,6 +16,26 @@
  * not listed here.
  */
 
+const DEFAULT_BY_LANG = {
+  zh: 'zh-CN-XiaoxiaoNeural',
+  ja: 'ja-JP-NanamiNeural',
+  en: 'en-US-EmmaMultilingualNeural'
+} as const;
+
+/**
+ * The voice for a language slot the user has not set. The engine-wide
+ * pre-slot voice (`ttsEdgeVoiceId$`, default Xiaoxiao) only stands in when it
+ * can speak that language: a zh voice handed a Japanese book reads the kanji
+ * in Chinese and drops most of the kana (measured: 42 KB of audio where
+ * Nanami produced 74 KB for the same sentence). Multilingual voices speak
+ * anything, so they always qualify.
+ */
+export function edgeFallbackVoice(lang: keyof typeof DEFAULT_BY_LANG, legacy: string): string {
+  return legacy.toLowerCase().startsWith(`${lang}-`) || /Multilingual/i.test(legacy)
+    ? legacy
+    : DEFAULT_BY_LANG[lang];
+}
+
 export interface EdgeVoice {
   id: string;
   label: string;

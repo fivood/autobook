@@ -22,6 +22,8 @@
 
 import { BlobAutoReader } from './auto-reader-blob-base';
 import { ttsEdgeProxyUrl$, ttsEdgeVoiceId$ } from '$lib/data/store';
+import { edgeFallbackVoice } from '$lib/data/edge-voices';
+import { langSlotOf } from '$lib/data/tts/voice-by-lang';
 
 const DEFAULT_VOICE = 'zh-CN-XiaoxiaoNeural';
 
@@ -29,7 +31,7 @@ export class AutoReaderEdge extends BlobAutoReader {
   protected readonly engineKey = 'edge';
 
   protected legacyVoiceId() {
-    return ttsEdgeVoiceId$.getValue();
+    return edgeFallbackVoice(langSlotOf(this._lang), ttsEdgeVoiceId$.getValue());
   }
 
   protected readonly synthesisHonorsRate = true;

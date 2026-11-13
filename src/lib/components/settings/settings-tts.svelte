@@ -7,7 +7,7 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
   import { hasSystemSapi, isTauri } from '$lib/data/env';
-  import { getEdgeVoiceGroups, getEdgeVoiceIds } from '$lib/data/edge-voices';
+  import { edgeFallbackVoice, getEdgeVoiceGroups, getEdgeVoiceIds } from '$lib/data/edge-voices';
   import {
     getDefaultKokoroVoice,
     getKokoroVoiceGroups,
@@ -73,7 +73,12 @@
   // slot the user has not set, which is what keeps upgrades silent.
   $: webVoice = pickVoice($ttsVoiceByLang$, 'web', activeLang, $readerVoiceUri$);
   $: sapiVoice = pickVoice($ttsVoiceByLang$, 'sapi', activeLang, $ttsSapiVoiceId$);
-  $: edgeVoice = pickVoice($ttsVoiceByLang$, 'edge', activeLang, $ttsEdgeVoiceId$);
+  $: edgeVoice = pickVoice(
+    $ttsVoiceByLang$,
+    'edge',
+    activeLang,
+    edgeFallbackVoice(activeLang, $ttsEdgeVoiceId$)
+  );
   $: kokoroVoice = pickVoice($ttsVoiceByLang$, 'kokoro', activeLang, $kokoroVoiceId$);
 
   /** Clearing a slot has to clear the legacy store with it — otherwise the
