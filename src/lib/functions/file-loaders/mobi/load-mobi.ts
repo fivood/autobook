@@ -12,6 +12,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
+import { detectLanguage } from '$lib/functions/file-loaders/detect-language';
 import { tocLabels } from './mobi-toc-labels';
 
 interface ParsedMobiImage {
@@ -279,15 +280,6 @@ function splitIntoSections(html: string): { sectionedHtml: string; sections: Sec
   return { sectionedHtml: rewriteKindlePosRefs(joined, aidMap), sections };
 }
 
-function languageHint(lang: string | null): string {
-  if (!lang) return 'zh';
-  const l = lang.toLowerCase();
-  if (l.includes('jp') || l.includes('japan')) return 'ja';
-  if (l.includes('zh') || l.includes('chin')) return 'zh';
-  if (l.includes('en')) return 'en';
-  return 'zh';
-}
-
 async function tryCalibConvert(file: File, lastBookModified: number): Promise<LoadData | null> {
   try {
     const hasCalibre = await invoke<boolean>('check_calibre');
@@ -365,7 +357,10 @@ async function nativeParse(file: File, lastBookModified: number): Promise<LoadDa
   const fallbackTitle = file.name;
   return {
     title: parsed.title || fallbackTitle,
-    language: languageHint(parsed.language),
+    // The Rust side never fills `language` (EXTH 524 is unread), and the old
+    // fallback here was a flat 'zh' — every Japanese AZW3 was read aloud by
+    // the Chinese voice slot. Guess from the text like txt/md/epub do.
+    language: detectLanguage(cleaned.slice(0, 40000).replace(/<[^>]*>/g, '')),
     styleSheet: '.mobi-section, .mobi-section * { font-family: inherit !important; }',
     elementHtml: sectionedHtml,
     blobs,
