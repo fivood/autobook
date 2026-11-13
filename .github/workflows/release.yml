@@ -24,17 +24,27 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - platform: windows-latest
+          - name: windows
+            platform: windows-latest
             # NSIS only — WiX/MSI bundling fails when fileAssociations are
             # declared (Tauri 2 known issue); NSIS is the recommended installer
             # and what latest.json points at via updaterJsonPreferNsis.
             args: '--bundles nsis,updater'
-          - platform: macos-latest
-            # Apple Silicon only (macos-latest is arm64). No Apple certificate:
-            # the app is ad-hoc signed (bundle.macOS.signingIdentity "-") and
-            # users clear Gatekeeper themselves — see README. The `app` bundle
-            # is what produces the updater's .app.tar.gz.
-            args: '--bundles app,dmg'
+          # macOS: one build per arch (darwin-aarch64 / darwin-x86_64 in
+          # latest.json; tauri-action suffixes the .app.tar.gz with the arch so
+          # the two don't collide). Intel is cross-compiled on the arm64
+          # runner. No Apple certificate: the app is ad-hoc signed
+          # (bundle.macOS.signingIdentity "-") and users clear Gatekeeper
+          # themselves — see README. The `app` bundle is what produces the
+          # updater's .app.tar.gz.
+          - name: mac-arm
+            platform: macos-latest
+            target: aarch64-apple-darwin
+            args: '--target aarch64-apple-darwin --bundles app,dmg'
+          - name: mac-intel
+            platform: macos-latest
+            target: x86_64-apple-darwin
+            args: '--target x86_64-apple-darwin --bundles app,dmg'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -47,10 +57,13 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
+          key: ${{ matrix.name }}
 
       - run: npm ci --no-audit --no-fund
 
@@ -100,9 +113,10 @@ jobs:
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: autobook-${{ matrix.platform }}
+          name: autobook-${{ matrix.name }}
+          # `--target` builds land under target/<triple>/release.
           path: |
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/macos/*.app.tar.gz*
-            src-tauri/target/release/bundle/nsis/*.exe*
+            src-tauri/target/**/release/bundle/dmg/*.dmg
+            src-tauri/target/**/release/bundle/macos/*.app.tar.gz*
+            src-tauri/target/**/release/bundle/nsis/*.exe*
           if-no-files-found: error
