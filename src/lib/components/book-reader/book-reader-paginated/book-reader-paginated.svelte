@@ -21,6 +21,7 @@
   import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
   import { getCharacterCount } from '$lib/functions/get-character-count';
   import { getParagraphNodes } from '../get-paragraph-nodes';
+  import { textNodesUnder } from '../book-highlight/highlight-renderer';
   import { getExternalTargetElement, isMobile$ } from '$lib/functions/utils';
   import { isTypingTarget } from '$lib/functions/is-typing-target';
   import { faBookmark, faSpinner } from '@fortawesome/free-solid-svg-icons';
@@ -156,6 +157,8 @@
     id: string;
     innerHTML: string;
     charCount: number;
+    /** Book-global raw-text offset (the highlight basis) of its first character. */
+    textStart: number;
   }
 
   let sections: SectionInfo[] = [];
@@ -169,6 +172,8 @@
   let allowDisplay = false;
 
   let displayedHtml = '';
+
+  let displayedTextStart = 0;
 
   let previousIntendedCount = 0;
 
@@ -276,11 +281,21 @@
     if (browser) {
       const tempContainer = document.createElement('div');
       tempContainer.innerHTML = htmlContent;
-      sections = Array.from(tempContainer.children).map((section) => ({
-        id: section.id,
-        innerHTML: section.innerHTML,
-        charCount: getSectionCharCount(section)
-      }));
+      const textNodes = textNodesUnder(tempContainer);
+      let p = 0;
+      let textStart = 0;
+      sections = Array.from(tempContainer.children).map((section) => {
+        while (p < textNodes.length && section.compareDocumentPosition(textNodes[p]) & Node.DOCUMENT_POSITION_PRECEDING) {
+          textStart += textNodes[p].length;
+          p += 1;
+        }
+        return {
+          id: section.id,
+          innerHTML: section.innerHTML,
+          charCount: getSectionCharCount(section),
+          textStart
+        };
+      });
       sectionIndex$.next(0);
     }
   }
@@ -541,6 +556,7 @@
   });
 
   currentSection$.pipe(takeUntil(destroy$)).subscribe((html) => {
+    const textStart = sections[sectionIndex$.getValue()]?.textStart ?? 0;
     const nestAnimationFrame = (fn: () => void, count: number) => {
       if (count === 0) {
         fn();
@@ -552,6 +568,7 @@
     // 2x for loading screen to render
     nestAnimationFrame(() => {
       displayedHtml = html;
+      displayedTextStart = textStart;
     }, 2);
   });
 
@@ -867,7 +884,13 @@
   use:swipe={{ timeframe: 500, minSwipeDistance: $swipeThreshold$, touchAction: 'pan-y' }}
   on:swipe={onSwipe}
 >
-  <div class="book-content-container" id={currentSectionId || null} bind:this={contentEl} use:pdfPageShell>
+  <div
+    class="book-content-container"
+    id={currentSectionId || null}
+    data-text-start={displayedTextStart}
+    bind:this={contentEl}
+    use:pdfPageShell
+  >
     <HtmlRenderer html={displayedHtml} on:load={onHtmlLoad} />
   </div>
 </div>

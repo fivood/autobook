@@ -1706,7 +1706,8 @@ async function tocStartMatchesFooter(bookId) {
  * Regression (1.59.0 usage test): the notebook's 跳转 opened the book with the
  * highlight a screen away — x=1280 in a 1280px vertical window. The mark was
  * scrolled into view, then the saved bookmark restored over it. Needs a saved
- * position elsewhere to show. Scroll mode only: paginated renders no marks.
+ * position elsewhere to show. Scroll mode only: it finds the offset in the DOM,
+ * which in paginated mode holds one chapter (highlightsUseBookOffsets covers that).
  */
 async function highlightJumpLandsOnScreen(bookId) {
   const out = [];
@@ -1758,6 +1759,121 @@ async function highlightJumpLandsOnScreen(bookId) {
     out.push(`${wm} x=${r.l}`);
   }
   return `高亮在屏幕内：${out.join('，')}`;
+}
+
+/**
+ * Regression (2026-11-14): the paginated reader drew no highlights past the
+ * first chapter, and one made there was stored counted from the chapter start,
+ * so it then showed in neither mode. The notebook 跳转 landed but had no mark
+ * to flash. Offsets are counted from the stored book, not the DOM, which in
+ * paginated mode holds only the current chapter.
+ */
+async function highlightsUseBookOffsets(bookId) {
+  const bookOffset = (needle) => session.evaluate(js`(async () => {
+    const db = await new Promise((r) => { const q = indexedDB.open('books'); q.onsuccess = () => r(q.result); });
+    const book = await new Promise((r) => { const g = db.transaction('data').objectStore('data').get(${bookId}); g.onsuccess = () => r(g.result); });
+    const root = new DOMParser().parseFromString(book.elementHtml, 'text/html').body;
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let off = 0, n;
+    while ((n = w.nextNode())) {
+      if (n.parentElement.closest('rt, script, style, [aria-hidden], [hidden]')) continue;
+      const i = n.data.indexOf(${needle});
+      if (i >= 0) return off + i;
+      off += n.data.length;
+    }
+    return -1;
+  })()`);
+  const storedHighlights = () => session.evaluate(js`new Promise((r) => {
+    const q = indexedDB.open('books');
+    q.onsuccess = () => {
+      const g = q.result.transaction('highlight').objectStore('highlight').getAll();
+      g.onsuccess = () => r(g.result.filter((h) => h.dataId === ${bookId}));
+    };
+  })`);
+  const dropHighlights = () => session.evaluate(js`new Promise((r) => {
+    const q = indexedDB.open('books');
+    q.onsuccess = () => {
+      const tx = q.result.transaction('highlight', 'readwrite');
+      tx.objectStore('highlight').openCursor().onsuccess = (ev) => {
+        const c = ev.target.result;
+        if (!c) return;
+        if (c.value.dataId === ${bookId}) c.delete();
+        c.continue();
+      };
+      tx.oncomplete = () => r(1);
+    };
+  })`);
+
+  await dropHighlights();
+  const at70 = await bookOffset('第70段');
+  const at72 = await bookOffset('第72段');
+  if (at70 < 0 || at72 < 0) throw new Error('第70段/第72段 not in the stored book');
+  const hlId = await session.evaluate(js`new Promise((r) => {
+    const q = indexedDB.open('books');
+    q.onsuccess = () => {
+      const now = Date.now();
+      const tx = q.result.transaction(['highlight', 'bookmark'], 'readwrite');
+      tx.objectStore('bookmark').put({ dataId: ${bookId}, exploredCharCount: 40, progress: 0, lastBookmarkModified: now });
+      const a = tx.objectStore('highlight').add({ dataId: ${bookId}, bookTitle: '', startOffset: ${at70}, endOffset: ${at70 + 5},
+        text: '第70段。', memo: '', color: '1', createdAt: now, lastModified: now });
+      a.onsuccess = () => r(a.result);
+    };
+  })`);
+
+  try {
+    await goto(`/b?id=${bookId}&hl=${hlId}`, READER_READY);
+    const jump = await session.evaluate(js`new Promise((done) => {
+      let flashed = false;
+      const poll = setInterval(() => {
+        if (document.querySelector('mark.hl-flash[data-hl-id="' + ${hlId} + '"]')) flashed = true;
+      }, 100);
+      setTimeout(() => {
+        clearInterval(poll);
+        const m = document.querySelector('mark[data-hl-id="' + ${hlId} + '"]');
+        const b = m && m.getBoundingClientRect();
+        done({
+          flashed,
+          text: m ? m.textContent : null,
+          onScreen: !!b && b.left >= 0 && b.right <= innerWidth && b.top >= 0 && b.bottom <= innerHeight
+        });
+      }, 4000);
+    })`);
+    if (jump.text !== '第70段。') throw new Error(`the 第70段 highlight drew as ${JSON.stringify(jump.text)}`);
+    if (!jump.onScreen) throw new Error('the 跳转 landed with the highlight off screen');
+    if (!jump.flashed) throw new Error('the jumped-to highlight never flashed');
+
+    const made = await session.evaluate(`(() => {
+      const p = [...document.querySelectorAll('.book-content p')].find((p) => p.textContent.startsWith('第72段'));
+      if (!p) return { ok: false, why: '第72段 is not in the DOM next to 第70段' };
+      const tn = [...p.childNodes].find((x) => x.nodeType === 3);
+      const r = document.createRange();
+      r.setStart(tn, 0);
+      r.setEnd(tn, 5);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      const box = p.getBoundingClientRect();
+      p.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: Math.round(box.left + 20), clientY: Math.round(box.top + 5) }));
+      return new Promise((done) => setTimeout(() => {
+        const swatch = document.querySelector('.menu-toolbar button');
+        if (!swatch) return done({ ok: false, why: 'the selection menu did not open' });
+        swatch.click();
+        done({ ok: true });
+      }, 400));
+    })()`);
+    if (!made.ok) throw new Error(made.why);
+    await pause(1200);
+    const fresh = (await storedHighlights()).find((h) => h.id !== hlId);
+    if (!fresh) throw new Error('the new highlight was not stored');
+    if (fresh.startOffset !== at72) {
+      throw new Error(`第72段 stored at ${fresh.startOffset}, the book has it at ${at72}`);
+    }
+    const drawn = await session.evaluate(js`document.querySelector('mark[data-hl-id="' + ${fresh.id} + '"]')?.textContent ?? null`);
+    if (drawn !== '第72段。') throw new Error(`the new highlight drew as ${JSON.stringify(drawn)}`);
+    return `跳到第70段并闪烁；新高亮存在全书偏移 ${at72}`;
+  } finally {
+    await dropHighlights();
+  }
 }
 
 /**
@@ -1905,6 +2021,7 @@ try {
     ['进度：反复打开→离开，书签不往回退', positionHoldsAcrossReopen],
     ['目录：章首位置和页脚同一口径', tocStartMatchesFooter],
     ['笔记跳转：横排/竖排高亮都落在屏幕内', highlightJumpLandsOnScreen, { modes: SCROLL }],
+    ['高亮：按全书偏移存取，分页也画得出、跳转会闪', highlightsUseBookOffsets],
     ['设置抽屉：V 不在后台朗读，Esc 关闭并还焦点', settingsDrawerOwnsItsKeys],
     ['书库：右键删除→取消后回到普通模式', deleteCancelLeavesSelectMode, { modes: ONCE }],
     ['书库：没搜到时不显示导入提示', searchMissIsNotAnEmptyLibrary, { modes: ONCE }]

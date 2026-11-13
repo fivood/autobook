@@ -14,12 +14,24 @@ export function textNodesUnder(root: Node): Text[] {
   return result;
 }
 
+/**
+ * Book-global raw-text offset of the container's first character. Highlight
+ * offsets count over the whole book; the paginated reader only has the current
+ * section in the DOM, so it marks where that section starts. Counting from 0
+ * there drew nothing on any page past the first section and stored new
+ * highlights section-relative.
+ */
+function textBase(container: HTMLElement): number {
+  const el = container.closest('[data-text-start]') ?? container.querySelector('[data-text-start]');
+  return Number(el?.getAttribute('data-text-start')) || 0;
+}
+
 export function rangeToOffsets(
   container: HTMLElement,
   range: Range
 ): { start: number; end: number } | undefined {
   const nodes = textNodesUnder(container);
-  let offset = 0;
+  let offset = textBase(container);
   let start = -1;
   let end = -1;
   for (const node of nodes) {
@@ -68,7 +80,7 @@ function applyHighlightsToDOM(
   }
 
   const ops: WrapOp[] = [];
-  let offset = 0;
+  let offset = textBase(container);
   let hlIdx = 0;
 
   for (const node of textNodes) {

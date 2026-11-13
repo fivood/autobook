@@ -836,6 +836,8 @@
     });
   }
 
+  // Also re-run on the paginated reader's contentChange (forwarded only from
+  // it): each section load replaces the DOM and drops the marks.
   $: scheduleHighlightRender($hlStore$);
 
   /**
@@ -3196,6 +3198,7 @@ ${$t('reader.ttsFailed.hint')}`
     bind:showCustomReadingPoint
     on:bookmark={bookmarkPage}
     on:trackerPause={() => pauseTracker(true)}
+    on:contentChange={() => scheduleHighlightRender($hlStore$)}
   />
   {$initBookmarkData$ ?? ''}
   {$setBackgroundColor$ ?? ''}

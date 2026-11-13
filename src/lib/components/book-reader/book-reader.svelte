@@ -391,6 +391,7 @@
       {language}
       bind:showCustomReadingPoint
       on:contentChange={(ev) => contentEl$.next(ev.detail)}
+      on:contentChange
       on:bookmark
       on:trackerPause
     />
