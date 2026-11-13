@@ -6,7 +6,7 @@
   import { bookReaderKeybindMap$, ttsShortcut$ } from '$lib/data/store';
   import { BookReaderAvailableKeybind } from '$lib/data/book-reader-keybind';
   import { isTypingTarget } from '$lib/functions/is-typing-target';
-  import { t, locale$ } from '$lib/i18n';
+  import { t } from '$lib/i18n';
 
   // Maps each keybind to its i18n key. The concrete label is resolved
   // reactively via $t inside the row builder so a locale switch redraws.
@@ -39,26 +39,32 @@
 
   let visible = false;
 
-  // Group binds by action so the same action's multiple key codes (case
-  // variants like KeyB + b) collapse into a single row.
-  // Depend on $locale$ so a locale switch re-runs the sort with the new
-  // labels; without this the initial ordering (built when the component
-  // first rendered) would stay pinned to the original locale.
-  $: rows = (() => {
-    void $locale$;
-    const byAction = new Map<BookReaderAvailableKeybind, Set<string>>();
+  const A = BookReaderAvailableKeybind;
+  /**
+   * Fixed groups in a fixed order. The rows used to be sorted by label, which
+   * put 上一页 and 下一页 seven rows apart (and 上一章 N / 下一章 M too) — the
+   * pairs you look for together were the ones the sort split up.
+   */
+  const GROUPS: { titleKey: string; actions: BookReaderAvailableKeybind[] }[] = [
+    { titleKey: 'shortcuts.group.move', actions: [A.PREV_PAGE, A.NEXT_PAGE, A.PREV_CHAPTER, A.NEXT_CHAPTER] },
+    {
+      titleKey: 'shortcuts.group.play',
+      actions: [A.AUTO_READER_TOGGLE, A.AUTO_SCROLL_TOGGLE, A.AUTO_SCROLL_INCREASE, A.AUTO_SCROLL_DECREASE]
+    },
+    { titleKey: 'shortcuts.group.place', actions: [A.BOOKMARK, A.JUMP_TO_BOOKMARK, A.SET_READING_POINT] },
+    { titleKey: 'shortcuts.group.timer', actions: [A.TOGGLE_TRACKING, A.TOGGLE_TRACKING_FREEZE] }
+  ];
+
+  // Same action's key codes (KeyB + b) collapse into one row.
+  $: keysByAction = (() => {
+    const byAction = new Map<BookReaderAvailableKeybind, string[]>();
     for (const [code, action] of Object.entries($bookReaderKeybindMap$)) {
-      const keys = byAction.get(action) || new Set<string>();
-      keys.add(pretty(code));
+      const keys = byAction.get(action) || [];
+      const key = pretty(code);
+      if (!keys.includes(key)) keys.push(key);
       byAction.set(action, keys);
     }
-    return Array.from(byAction.entries())
-      .map(([action, keys]) => ({
-        action,
-        label: $t(ACTION_LABEL_KEYS[action] || action),
-        keys: Array.from(keys).filter((k, i, arr) => arr.indexOf(k) === i)
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label, $locale$));
+    return byAction;
   })();
 
   function open() {
@@ -106,17 +112,38 @@
     </div>
     <div class="body">
       <table>
+        {#each GROUPS as group (group.titleKey)}
+          <tbody>
+            <tr><th colspan="2">{$t(group.titleKey)}</th></tr>
+            {#each group.actions.filter((action) => keysByAction.has(action)) as action (action)}
+              <tr>
+                <td class="action">{$t(ACTION_LABEL_KEYS[action])}</td>
+                <td class="keys">
+                  {#each keysByAction.get(action) || [] as k (k)}
+                    <kbd>{k}</kbd>
+                  {/each}
+                </td>
+              </tr>
+            {/each}
+            {#if group.titleKey === 'shortcuts.group.move'}
+              <!-- Fixed keys from book-reader-paginated, not remappable. -->
+              <tr>
+                <td class="action">{$t('shortcuts.arrows.action')}</td>
+                <td class="keys"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></td>
+              </tr>
+            {/if}
+          </tbody>
+        {/each}
         <tbody>
-          {#each rows as r (r.action)}
-            <tr>
-              <td class="action">{r.label}</td>
-              <td class="keys">
-                {#each r.keys as k (k)}
-                  <kbd>{k}</kbd>
-                {/each}
-              </td>
-            </tr>
-          {/each}
+          <tr><th colspan="2">{$t('shortcuts.group.view')}</th></tr>
+          <tr>
+            <td class="action">{$t('shortcuts.search.action')}</td>
+            <td class="keys"><kbd>Ctrl F</kbd></td>
+          </tr>
+          <tr>
+            <td class="action">{$t('shortcuts.header.action')}</td>
+            <td class="keys"><kbd>{$t('shortcuts.header.how')}</kbd></td>
+          </tr>
           {#if $ttsShortcut$}
             <tr>
               <td class="action">{$t('shortcuts.tts.action')}</td>
@@ -234,6 +261,16 @@
     vertical-align: top;
     border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent);
     font-size: 0.85rem;
+  }
+  th {
+    padding: 0.9rem 0.25rem 0.3rem;
+    text-align: left;
+    font-size: 0.8rem;
+    font-weight: 600;
+    opacity: 0.65;
+  }
+  tbody:first-of-type th {
+    padding-top: 0.2rem;
   }
   td.action {
     width: 65%;

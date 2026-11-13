@@ -424,6 +424,13 @@ async function bookmarkAtStart(bookId) {
 /** Regression: TTS drove the typewriter reveal, so the text was hidden and the
  *  page could not be scrolled by hand (1.38.0). */
 async function ttsLeavesTextAlone(bookId) {
+  // Pinned like the other voice scenarios: left to the machine's engine, a
+  // custom HTTP endpoint never spoke within the window and this went red.
+  await session.evaluate(`(() => {
+    localStorage.setItem('ttsEngine', 'sapi');
+    localStorage.setItem('ttsStartStrategy', 'selection');
+    return 1;
+  })()`);
   await goto(`/b?id=${bookId}`, `!!document.querySelector('[title^="开始朗读"]')`);
   await session.waitFor(`!!document.querySelector('[title^="开始朗读"]')`, {
     label: 'the reader chrome'

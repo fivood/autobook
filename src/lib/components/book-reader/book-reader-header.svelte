@@ -29,14 +29,13 @@
   import { isTauri } from '$lib/data/env';
   import { customReadingPointEnabled$, viewMode$, windowAlwaysOnTop$ } from '$lib/data/store';
   import { ViewMode } from '$lib/data/view-mode';
-  import { activateOnKeyup, isMobile$, isOnOldUrl } from '$lib/functions/utils';
+  import { activateOnKeyup, isOnOldUrl } from '$lib/functions/utils';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
   import { t } from '$lib/i18n';
 
   export let hasChapterData: boolean;
   export let hasText: boolean;
-  export let autoScrollMultiplier: number;
   export let hasCustomReadingPoint: boolean;
   export let showFullscreenButton: boolean;
   export let isBookmarkScreen: boolean;
@@ -126,7 +125,7 @@
       labelKey: 'reader.customReadingPoint.set',
       icon: faCrosshairs,
       title: '',
-      titleKey: 'reader.customReadingPoint.set'
+      titleKey: 'reader.customReadingPoint.setTitle'
     },
     resetCustomReadingPoint: {
       routeId: '',
@@ -138,25 +137,15 @@
     }
   };
 
-  // Two faces of one toggle, handled here rather than dispatched: the menu has
-  // no checked state, so the label says what choosing it will do.
-  const pin = {
-    pinWindow: {
-      routeId: '',
-      label: 'reader:pinWindow',
-      labelKey: 'reader.alwaysOnTop.on',
-      icon: faThumbtack,
-      title: '',
-      titleKey: 'reader.alwaysOnTop.on'
-    },
-    unpinWindow: {
-      routeId: '',
-      label: 'reader:unpinWindow',
-      labelKey: 'reader.alwaysOnTop.off',
-      icon: faThumbtack,
-      title: '',
-      titleKey: 'reader.alwaysOnTop.off'
-    }
+  // Handled here rather than dispatched. One row with a tick: it used to swap
+  // between 窗口置顶 and 取消置顶, which read as two different commands.
+  const pinWindow = {
+    routeId: '',
+    label: 'reader:pinWindow',
+    labelKey: 'reader.alwaysOnTop.on',
+    icon: faThumbtack,
+    title: '',
+    titleKey: 'reader.alwaysOnTop.on'
   };
 
   function dispatchOverflow(label: string) {
@@ -166,8 +155,10 @@
       dispatch('jumpClick');
     } else if (label === mergeEntries.DOMAIN_HINT.label) {
       dispatch('domainHintClick');
-    } else if (label === pin.pinWindow.label || label === pin.unpinWindow.label) {
-      $windowAlwaysOnTop$ = label === pin.pinWindow.label;
+    } else if (label === pinWindow.label) {
+      $windowAlwaysOnTop$ = !$windowAlwaysOnTop$;
+    } else if (label === mergeEntries.TRANSLATE.label) {
+      dispatch('translateClick');
     } else {
       const event = (Object.keys(overflow) as (keyof typeof overflow)[]).find(
         (key) => overflow[key].label === label
@@ -183,38 +174,60 @@
     icon: IconDefinition;
     title: string;
     titleKey?: string;
+    group?: string;
+    checked?: boolean;
   }[] = [];
 
   $: isOldUrl = browser && isOnOldUrl(window);
 
   // The bar keeps what gets reached for mid-book; the overflow takes what is
-  // reached once a book or once a session. 完成本书 used to be a permanent
-  // icon and the reading point had a popover of its own, while this menu held
-  // only 统计 and 跳转. In-book actions come first, leaving the book last.
+  // reached once a book or once a session, in three groups: finding a place,
+  // this book, and the window / leaving the book. 翻译工作台 sat on the bar
+  // between 全屏 and 更多, where nothing said that it leaves the book.
   $: {
     const items = [];
+    const find = { group: 'find' };
+    const book = { group: 'book' };
+    const leave = { group: 'leave' };
 
     if (hasText) {
-      items.push(overflow.searchClick);
-      items.push(mergeEntries.JUMP_TO_POSITION);
+      items.push({ ...overflow.searchClick, ...find });
+      items.push({ ...mergeEntries.JUMP_TO_POSITION, ...find });
     }
 
     if ($customReadingPointEnabled$ || $viewMode$ === ViewMode.Paginated) {
-      if (hasCustomReadingPoint) items.push(overflow.showCustomReadingPoint);
-      items.push(overflow.setCustomReadingPoint);
-      if (hasCustomReadingPoint) items.push(overflow.resetCustomReadingPoint);
+      if (hasCustomReadingPoint) items.push({ ...overflow.showCustomReadingPoint, ...book });
+      items.push({ ...overflow.setCustomReadingPoint, ...book });
+      if (hasCustomReadingPoint) items.push({ ...overflow.resetCustomReadingPoint, ...book });
     }
 
     if (textEditable) {
-      items.push(overflow.editTextClick);
+      items.push({ ...overflow.editTextClick, ...book });
     }
+
+    items.push({ ...overflow.completeBook, ...book });
 
     if (isTauri()) {
-      items.push($windowAlwaysOnTop$ ? pin.unpinWindow : pin.pinWindow);
+      items.push({ ...pinWindow, ...leave, checked: $windowAlwaysOnTop$ });
     }
-
-    items.push(overflow.completeBook);
-    items.push(isOldUrl ? mergeEntries.DOMAIN_HINT : mergeEntries.STATISTICS);
+    // Same dispatch labels as the page entries, named for what they open from
+    // here: statistics filtered to this book, the workbench on this book.
+    items.push(
+      isOldUrl
+        ? { ...mergeEntries.DOMAIN_HINT, ...leave }
+        : {
+            ...mergeEntries.STATISTICS,
+            labelKey: 'reader.bookStatistics',
+            titleKey: 'reader.bookStatistics',
+            ...leave
+          }
+    );
+    items.push({
+      ...mergeEntries.TRANSLATE,
+      labelKey: 'reader.translateBook',
+      titleKey: 'menu.translate.title',
+      ...leave
+    });
 
     menuItems = items;
   }
@@ -292,16 +305,6 @@
         <Fa icon={faRotateLeft} />
       </div>
     {/if}
-    {#if $viewMode$ === ViewMode.Continuous && !$isMobile$ && hasReadableText}
-      <div
-        class="flex items-center px-4 text-xl xl:px-3 xl:text-lg"
-        aria-label={$t('reader.autoScrollSpeed')} title={$t('reader.autoScrollSpeed')}
-      >
-        <!-- Same unit as the typewriter pill; 「6x」 read as a multiplier of
-             something, and looked like a button besides. -->
-        {$t('typewriter.speedUnit', { n: autoScrollMultiplier })}
-      </div>
-    {/if}
   </div>
 
   {#if bookTitle}
@@ -326,16 +329,6 @@
         <Fa icon={faExpand} />
       </div>
     {/if}
-    <div
-      tabindex="0"
-      role="button"
-      aria-label={$t('menu.translate.title')} title={$t('menu.translate.title')}
-      class={baseIconClasses}
-      on:click={() => dispatch('translateClick')}
-      on:keyup={activateOnKeyup}
-    >
-      <Fa icon={mergeEntries.TRANSLATE.icon} />
-    </div>
     <MergedHeaderIcon
       alwaysCollapse
       disableRouteNavigation
@@ -355,6 +348,9 @@
            the same sliders icon the statistics page uses for its own drawer. -->
       <Fa icon={faSliders} />
     </div>
+    <!-- 书库 leaves the book; the rule keeps it from reading as one more
+         in-book tool next to 设置. -->
+    <div class="mx-1 h-5 w-px shrink-0 self-center bg-current/30"></div>
     <div
       tabindex="0"
       role="button"

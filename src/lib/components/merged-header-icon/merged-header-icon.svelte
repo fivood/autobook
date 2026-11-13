@@ -2,6 +2,7 @@
   import Fa from 'svelte-fa';
   import { createEventDispatcher } from 'svelte';
   import { goto } from '$app/navigation';
+  import { faCheck } from '@fortawesome/free-solid-svg-icons';
   import { page } from '$app/stores';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import Popover from '$lib/components/popover/popover.svelte';
@@ -27,6 +28,10 @@
     icon: (typeof mergeEntries.MANAGE)['icon'];
     title: string;
     titleKey?: string;
+    /** Entries in a different group from the one before get a divider. */
+    group?: string;
+    /** Set for a toggle: the row shows a tick instead of rewording itself. */
+    checked?: boolean;
   };
   export let leavePageLink = '';
   export let items: Entry[] = [mergeEntries.MANAGE, mergeEntries.SETTINGS];
@@ -113,16 +118,26 @@
       <!-- Sized to the longest entry, floor of the old fixed width: the
            reader's overflow now carries labels like "Reset reading point". -->
       <div class="menu-list min-w-32 w-max" slot="content">
-        {#each actionItems as actionItem (actionItem.label)}
+        <!-- Each row carries the icon its entry already had: a plain column of
+             words gave the eye nothing to land on. -->
+        {#each actionItems as actionItem, i (actionItem.label)}
+          {#if i > 0 && actionItem.group !== actionItems[i - 1].group}
+            <div class="mx-2 my-1 h-px bg-current/20" role="separator"></div>
+          {/if}
           <div
             tabindex="0"
             role="button"
             class="menu-item"
             title={actionItem.titleKey ? $t(actionItem.titleKey) : actionItem.title}
+            aria-pressed={actionItem.checked}
             on:click={() => handleActionMenuItem(actionItem.label)}
             on:keyup={activateOnKeyup}
           >
-            {actionItem.labelKey ? $t(actionItem.labelKey) : actionItem.label}
+            <Fa icon={actionItem.icon} fw class="opacity-70" />
+            <span class="grow">{actionItem.labelKey ? $t(actionItem.labelKey) : actionItem.label}</span>
+            {#if actionItem.checked !== undefined}
+              <Fa icon={faCheck} fw class={actionItem.checked ? '' : 'invisible'} />
+            {/if}
           </div>
         {/each}
       </div>

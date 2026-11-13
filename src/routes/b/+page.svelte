@@ -2981,7 +2981,6 @@ ${$t('reader.ttsFailed.hint')}`
           (!isPaginated && customReadingPointLeft > -1 && customReadingPointTop > -1))
       )}
       showFullscreenButton={fullscreenManager.fullscreenEnabled}
-      autoScrollMultiplier={$multiplier$}
       bookTitle={$rawBookData$?.title ?? ''}
       {hasBookmarkData}
       bind:isBookmarkScreen
@@ -3379,7 +3378,8 @@ ${$t('reader.ttsFailed.hint')}`
     {#if showTrackerIcon}
       <div
         role="button"
-        title={$t('readerFooter.statsMenu')}
+        title={($isTrackerPaused$ ? $t('readerFooter.statsMenuPaused') : $t('readerFooter.statsMenu')) +
+          (frozenPosition > -1 ? $t('readerFooter.statsFrozen') : '')}
         class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
         class:text-danger={$isTrackerPaused$}
         class:animate-pulse={frozenPosition > -1}

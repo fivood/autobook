@@ -187,6 +187,23 @@
 
     return action.icon;
   }
+
+  function getActionLabelKey(
+    action: { event: string; titleKey: string },
+    trackerPaused: boolean,
+    frozen: boolean
+  ) {
+    switch (action.event) {
+      case 'toggleTracker':
+        return trackerPaused ? 'tracker.short.start' : 'tracker.short.pause';
+      case 'updateCurrentLocation':
+        return 'tracker.short.update';
+      case 'freezeCurrentLocation':
+        return frozen ? 'tracker.short.unlock' : 'tracker.short.lock';
+      default:
+        return action.titleKey;
+    }
+  }
 </script>
 
 <div class="flex items-center justify-between min-h-[60px] px-4">
@@ -270,16 +287,17 @@
         {#if statistic.id === '当前会话'}
           {#each actions as action (action.event)}
             {#if action.event !== 'saveStatistics' || (action.event === 'saveStatistics' && canSaveStatistics)}
-              <div
-                tabindex="0"
-                role="button"
-                class="ml-4 hover-danger"
+              <!-- Worded: ▶ ⟳ ⟲ alone left three unrelated actions to the
+                   tooltip, and ⟲ (lock the counted position) read as undo. -->
+              <button
+                type="button"
+                class="ml-3 flex items-center gap-1.5 rounded border border-current/30 px-2 py-0.5 text-sm hover-soft"
                 title={$t(action.titleKey)}
                 on:click={() => executeAction(action.event)}
-                on:keyup={activateOnKeyup}
               >
                 <Fa icon={getActionIcon(action, wasTrackerPaused)} />
-              </div>
+                {$t(getActionLabelKey(action, wasTrackerPaused, frozenPosition > -1))}
+              </button>
             {/if}
           {/each}
         {/if}

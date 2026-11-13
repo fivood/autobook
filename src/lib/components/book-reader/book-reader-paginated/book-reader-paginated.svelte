@@ -760,13 +760,13 @@
       ev.repeat
     )
       return;
+    // Arrows only. A / D also turned pages (from the upstream baseline) while
+    // being the typewriter's faster / slower keys, so one press did both.
     switch (ev.code) {
       case 'ArrowLeft':
-      case 'KeyA':
         concretePageManager[verticalMode ? 'nextPage' : 'prevPage']();
         break;
       case 'ArrowRight':
-      case 'KeyD':
         concretePageManager[verticalMode ? 'prevPage' : 'nextPage']();
         break;
       case 'ArrowUp':

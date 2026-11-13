@@ -2,12 +2,12 @@
   import { browser } from '$app/environment';
   import Fa from 'svelte-fa';
   import {
-    faForward,
+    faHand,
     faICursor,
+    faInfinity,
     faMinus,
     faPause,
     faPlus,
-    faRotateRight,
     faVolumeHigh
   } from '@fortawesome/free-solid-svg-icons';
   import type { AutoReader, AutoScroller } from '$lib/components/book-reader/types';
@@ -126,7 +126,13 @@
        the hidden speeds; a hidden one stays pointer-events-none until then
        (CLAUDE.md: no invisible-but-clickable controls). Each speed pill sits
        flush against its button so the pointer can cross from one to the
-       other without the preview dropping. -->
+       other without the preview dropping.
+
+       Buttons don't take focus from a mouse press (mousedown preventDefault):
+       a clicked button kept focus, group-focus-within then held every hidden
+       pill fully shown until something else was clicked, and the same dock
+       looked different after a click than after Space / V. Tab still
+       focuses them, which is what focus-within is for. -->
   <div
     class="group pointer-events-none fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2 transition-opacity duration-300"
     style="writing-mode: horizontal-tb;"
@@ -140,6 +146,7 @@
     <!-- 章止 stops whichever engine is playing, so it shows while either does. -->
     <button
       type="button"
+      on:mousedown|preventDefault
       title={$autoScrollStopAtChapter$
         ? $t('typewriter.chapterStop.tooltipOn')
         : $t('typewriter.chapterStop.tooltipOff')}
@@ -153,7 +160,9 @@
       class:group-focus-within:opacity-100={!playing}
       class:group-focus-within:pointer-events-auto={!playing}
     >
-      <Fa icon={$autoScrollStopAtChapter$ ? faRotateRight : faForward} />
+      <!-- Not ▶▶: that is the universal "skip ahead" and made the pill look
+           like a jump to the next chapter. -->
+      <Fa icon={$autoScrollStopAtChapter$ ? faHand : faInfinity} />
       <span
         >{$autoScrollStopAtChapter$
           ? $t('typewriter.chapterStop.on')
@@ -176,6 +185,7 @@
         >
           <button
             type="button"
+            on:mousedown|preventDefault
             title={$t('tts.rateSlower')}
             on:click={() => setRate($readerRate$ - 0.1)}
             class="dock-focus hover-menu-inverted flex h-8 w-8 items-center justify-center rounded-full"
@@ -185,6 +195,7 @@
           <span class="min-w-[2.75rem] text-center text-sm tabular-nums">{$readerRate$}×</span>
           <button
             type="button"
+            on:mousedown|preventDefault
             title={$t('tts.rateFaster')}
             on:click={() => setRate($readerRate$ + 0.1)}
             class="dock-focus hover-menu-inverted flex h-8 w-8 items-center justify-center rounded-full"
@@ -194,6 +205,7 @@
         </div>
         <button
           type="button"
+          on:mousedown|preventDefault
           title={speaking ? $t('tts.pause') : $t('tts.play')}
           on:click={toggleTts}
           class="dock-focus pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full"
@@ -232,6 +244,7 @@
         >
           <button
             type="button"
+            on:mousedown|preventDefault
             title={$t('typewriter.slower')}
             on:click={() => setMultiplier($multiplier$ - 1)}
             class="dock-focus hover-menu-inverted flex h-8 w-8 items-center justify-center rounded-full"
@@ -243,6 +256,7 @@
           >
           <button
             type="button"
+            on:mousedown|preventDefault
             title={$t('typewriter.faster')}
             on:click={() => setMultiplier($multiplier$ + 1)}
             class="dock-focus hover-menu-inverted flex h-8 w-8 items-center justify-center rounded-full"
@@ -252,6 +266,7 @@
         </div>
         <button
           type="button"
+          on:mousedown|preventDefault
           title={typing ? $t('typewriter.pause') : $t('typewriter.play')}
           on:click={() => autoScroller?.toggle()}
           class="dock-focus pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full"

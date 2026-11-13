@@ -128,13 +128,19 @@
   }
 </script>
 
-<div class="flex justify-between p-4">
-  <div>{$t('toc.chapterProgress', { chars: currentChapterCharacterProgress, pct: currentChapterProgress })}</div>
+<!-- Header like the other drawers. It used to open on a bare
+     「章节进度: 0 / 1681」 and a column of numbers nobody had named. -->
+<div class="flex items-center gap-2 border-b border-current/10 px-4 py-3">
+  <h2 class="text-lg font-medium">{$t('toc.title')}</h2>
+  <span class="text-sm text-muted">
+    {$t('toc.chapterProgress', { chars: currentChapterCharacterProgress, pct: currentChapterProgress })}
+  </span>
+  <div class="flex-1" />
   <div
     tabindex="0"
     role="button"
     title={$t('toc.close')}
-    class="flex items-end md:items-center"
+    class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
     on:click={closeTocMenu}
     on:keyup={activateOnKeyup}
   >
@@ -142,8 +148,12 @@
   </div>
 </div>
 <div class="flex-1 overflow-auto p-4">
+  <div class="flex justify-between text-xs text-muted">
+    <div>{$t('toc.chapterColumn')}</div>
+    <div>{$t('toc.startColumn')}</div>
+  </div>
   {#each chapters as chapter (chapter.reference)}
-    <div class="my-6 flex justify-between">
+    <div class="my-6 flex justify-between" class:font-semibold={chapter === currentChapter}>
       <div
         tabindex="0"
         role="button"

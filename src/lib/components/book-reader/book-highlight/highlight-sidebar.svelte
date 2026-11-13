@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition';
   import { quintInOut } from 'svelte/easing';
   import Fa from 'svelte-fa';
-  import { faTrash, faPen } from '@fortawesome/free-solid-svg-icons';
+  import { faTrash, faPen, faTimes } from '@fortawesome/free-solid-svg-icons';
   import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
   import type { Section } from '$lib/data/database/books-db/versions/books-db';
   import { clickOutside } from '$lib/functions/use-click-outside';
@@ -66,14 +66,23 @@
 </script>
 
 <div
-  class="writing-horizontal-tb fixed top-0 left-0 z-[60] flex h-full w-full max-w-md flex-col"
+  class="writing-horizontal-tb fixed top-0 left-0 z-[60] flex h-full w-full max-w-md flex-col border-r border-current/10 shadow-2xl"
   style="color:var(--font-color);background:var(--background-color);"
   in:fly|local={{ x: -100, duration: 100, easing: quintInOut }}
   use:clickOutside={() => dispatch('close')}
 >
-  <div class="flex items-center justify-between border-b border-current/10 px-4 py-3">
+  <!-- Same header as the other drawers: title, then ×. This one alone had no
+       way to close it except clicking somewhere else. -->
+  <div class="flex items-center gap-2 border-b border-current/10 px-4 py-3">
     <h2 class="text-lg font-medium">{$t('highlight.sidebar.title')}</h2>
     <span class="text-sm text-muted">{$t('highlight.sidebar.count', { n: highlights.length })}</span>
+    <div class="flex-1" />
+    <button
+      type="button"
+      class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
+      title={$t('readerSettings.close')}
+      on:click={() => dispatch('close')}
+    ><Fa icon={faTimes} /></button>
   </div>
 
   <div class="flex-1 overflow-y-auto px-4 py-2">
