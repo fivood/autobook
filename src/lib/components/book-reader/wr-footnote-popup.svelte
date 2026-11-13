@@ -14,6 +14,7 @@
    */
   import { onDestroy, tick } from 'svelte';
   import { footnote$ } from './footnote';
+  import { t } from '$lib/i18n';
 
   const MARKER = '.book-content span.reader_footer_note';
   const GAP = 8;
@@ -25,9 +26,11 @@
   let top = 0;
   let fontSize = 16;
   let clicked = false;
+  let jump: (() => void) | undefined;
 
-  const sub = footnote$.subscribe(({ anchor, text: t }) => {
+  const sub = footnote$.subscribe(({ anchor, text: t, jump: j }) => {
     clicked = true;
+    jump = j;
     // The marker itself is usually shrunk (superscript, 0.75em); size off the
     // paragraph it sits in.
     place(anchor, t, anchor.closest('p,li,dd,div,blockquote') ?? anchor);
@@ -43,6 +46,7 @@
     const el = marker(ev.target);
     if (!el) return;
     clicked = false;
+    jump = undefined;
     place(el, el.dataset.wrFooternote ?? '');
   }
 
@@ -94,6 +98,16 @@
     style:font-size="{fontSize}px"
   >
     {text}
+    {#if clicked && jump}
+      <button
+        class="wr-note__jump"
+        on:click={() => {
+          const go = jump;
+          text = '';
+          go?.();
+        }}>{$t('footnote.jump')}</button
+      >
+    {/if}
   </div>
 {/if}
 
@@ -115,6 +129,18 @@
     line-height: 1.7;
     white-space: normal;
     pointer-events: none;
+  }
+  .wr-note__jump {
+    display: block;
+    margin-top: 0.4em;
+    margin-left: auto;
+    font-size: 0.85em;
+    color: var(--link-color, currentColor);
+    opacity: 0.85;
+  }
+  .wr-note__jump:hover {
+    opacity: 1;
+    text-decoration: underline;
   }
   .wr-note--clicked {
     max-height: 50vh;

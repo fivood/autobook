@@ -22,7 +22,7 @@ import { FuriganaStyle } from '../../data/furigana-style';
 import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
 import { pulseElement } from '$lib/functions/range-util';
 import { toggleImageGalleryPictureSpoiler$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
-import { footnote$, noteTextFor } from '$lib/components/book-reader/footnote';
+import { footnote$, mightBeNoteRef, noteTextFor } from '$lib/components/book-reader/footnote';
 
 export function reactiveElements(
   document: Document,
@@ -76,10 +76,10 @@ function anchorTagListener(document: Document, getBookHtml: () => string) {
           const target =
             el.closest('[id^="ttu-"]')?.querySelector(selector) ??
             contentEl.querySelector(selector) ??
-            findInBook(id);
+            (mightBeNoteRef(el) ? findInBook(id) : null);
           const text = target && noteTextFor(el, target);
           if (text) {
-            footnote$.next({ anchor: el, text });
+            footnote$.next({ anchor: el, text, jump: () => nextChapter$.next(id) });
           } else {
             nextChapter$.next(id);
           }

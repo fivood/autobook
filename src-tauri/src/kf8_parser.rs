@@ -584,6 +584,12 @@ fn parse_pos_link(html: &[u8], at: usize) -> Option<(usize, usize, usize)> {
 /// Value of attribute `name` in one tag (`<...>`), matched case-insensitively
 /// and only right after whitespace (so `aid` never matches inside `data-aid`).
 fn tag_attr<'a>(tag: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
+    tag_attr_span(tag, name).map(|(_, v, _)| &tag[v.0..v.1])
+}
+
+/// Where `tag_attr` found it: (start of the name, the value's range, end past
+/// the closing quote).
+fn tag_attr_span(tag: &[u8], name: &[u8]) -> Option<(usize, (usize, usize), usize)> {
     let skip_ws = |mut j: usize| {
         while j < tag.len() && tag[j].is_ascii_whitespace() {
             j += 1;
@@ -600,11 +606,26 @@ fn tag_attr<'a>(tag: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
         }
         let j = skip_ws(j + 1);
         if let Some(&q @ (b'"' | b'\'')) = tag.get(j) {
-            let v = &tag[j + 1..];
-            return v.iter().position(|&c| c == q).map(|e| &v[..e]);
+            let e = tag[j + 1..].iter().position(|&c| c == q)? + j + 1;
+            return Some((i, (j + 1, e), e + 1));
         }
     }
     None
+}
+
+/// Every `name=` attribute in `html`, tag by tag: (attr start, attr end, value).
+fn attrs_in(html: &[u8], name: &[u8]) -> Vec<(usize, usize, Vec<u8>)> {
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(lt) = find_from(html, b"<", from) {
+        let Some(gt) = find_from(html, b">", lt) else { break };
+        let tag = &html[lt..=gt];
+        if let Some((s, v, e)) = tag_attr_span(tag, name) {
+            out.push((lt + s, lt + e, tag[v.0..v.1].to_vec()));
+        }
+        from = gt + 1;
+    }
+    out
 }
 
 enum Anchor {
@@ -661,12 +682,8 @@ fn resolve_pos_links(
     // needs get `id--part`, so the link can't land on the first.
     let mut owner: std::collections::HashMap<Vec<u8>, usize> = Default::default();
     for (pi, part) in parts.iter().enumerate() {
-        let mut from = 0;
-        while let Some(at) = find_from(part, b" id=\"", from) {
-            from = at + 5;
-            if let Some(end) = find_from(part, b"\"", from) {
-                owner.entry(part[from..end].to_vec()).or_insert(pi);
-            }
+        for (_, _, v) in attrs_in(part, b"id") {
+            owner.entry(v).or_insert(pi);
         }
     }
     let unique = |v: &[u8], ti: usize| -> Vec<u8> {
@@ -679,7 +696,8 @@ fn resolve_pos_links(
     // Pass 1 on the untouched parts: (part, at, len, target id), plus per
     // part the attribute to find and the id to give that target.
     let mut edits: Vec<(usize, usize, usize, Vec<u8>)> = Vec::new();
-    let mut targets: Vec<std::collections::HashMap<Vec<u8>, Vec<u8>>> =
+    // Per part: (attribute, its value) → the id to give that target.
+    let mut targets: Vec<std::collections::HashMap<(&[u8], Vec<u8>), Vec<u8>>> =
         vec![Default::default(); parts.len()];
     for (pi, part) in parts.iter().enumerate() {
         let mut from = 0;
@@ -705,7 +723,7 @@ fn resolve_pos_links(
             } else {
                 unique(&value, ti)
             };
-            targets[ti].insert([b" ", attr, b"=\"", &value, b"\""].concat(), id.clone());
+            targets[ti].insert((attr, value), id.clone());
             edits.push((pi, at, len, id));
             from = at + len;
         }
@@ -716,17 +734,21 @@ fn resolve_pos_links(
         parts[pi].splice(at..at + len, href);
     }
     // Pass 3: give each target the id its links now use — a renamed `id`
-    // replaces the old one, `name` / `aid` targets gain one.
+    // replaces the old one, `name` / `aid` targets gain one. Found by parsing
+    // tags, not a literal ` id="…"`: an attribute after a newline/tab or in
+    // single quotes was missed, leaving a link already rewritten to `#id`
+    // with nothing carrying that id.
     for (pi, wanted) in targets.iter().enumerate() {
-        for (needle, id) in wanted {
-            let Some(at) = find_from(&parts[pi], needle, 0) else { continue };
-            let new_id = [b" id=\"".as_slice(), id, b"\""].concat();
-            if needle.starts_with(b" id=") {
-                if needle[..] != new_id[..] {
-                    parts[pi].splice(at..at + needle.len(), new_id);
+        for ((attr, value), id) in wanted {
+            let found = attrs_in(&parts[pi], attr).into_iter().find(|(_, _, v)| v == value);
+            let Some((at, end, _)) = found else { continue };
+            let new_id = [b"id=\"".as_slice(), id, b"\""].concat();
+            if *attr == b"id" {
+                if parts[pi][at..end] != new_id[..] {
+                    parts[pi].splice(at..end, new_id);
                 }
             } else {
-                parts[pi].splice(at..at, new_id);
+                parts[pi].splice(at..at, [new_id.as_slice(), b" "].concat());
             }
         }
     }
@@ -809,6 +831,30 @@ mod tests {
             parts[1],
             "<html><body><div id=\"aid-7\" aid=\"7\">x<p aid=\"8\">note</p></div></body></html>"
         );
+    }
+
+    /// Targets with a newline/tab before the attribute or single quotes: the
+    /// link is rewritten to `#id`, so the target must end up carrying it.
+    #[test]
+    fn targets_with_any_whitespace_and_quotes_get_their_id() {
+        let t: &[u8] = b"<html><body></body></html>";
+        let f0: &[u8] = b"<p id='n1'>a</p><a href=\"kindle:pos:fid:0001:off:0000000000\">x</a><a href=\"kindle:pos:fid:0002:off:0000000000\">y</a>";
+        let f1: &[u8] = b"<p\n id='n1'>note</p>";
+        let f2: &[u8] = b"<a\tname='m'>m</a>";
+        let raw = [t, f0, t, f1, f2].concat();
+        let s1 = (t.len() + f0.len()) as u32;
+        let tl = t.len() as u32;
+        let skels = [skel(0, tl, 1), skel(s1, tl, 2)];
+        let frags = [
+            frag(12, f0.len() as u32),
+            frag(s1 + 12, f1.len() as u32),
+            frag(s1 + 12 + f1.len() as u32, f2.len() as u32),
+        ];
+        let out = String::from_utf8(reassemble_with_fragments(&skels, &frags, &raw, &[], &[])).unwrap();
+        let parts: Vec<&str> = out.split("<mbp:pagebreak/>").filter(|s| !s.is_empty()).collect();
+        assert!(parts[0].contains("<a href=\"#n1--1\">x</a><a href=\"#m\">y</a>"), "{}", parts[0]);
+        assert!(parts[1].contains("<p\n id=\"n1--1\">note</p>"), "{}", parts[1]);
+        assert!(parts[1].contains("<a\tid=\"m\" name='m'>m</a>"), "{}", parts[1]);
     }
 
     #[test]

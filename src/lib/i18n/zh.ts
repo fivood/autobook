@@ -204,6 +204,7 @@ export default {
   'reader.ttsFailed.title': '朗读失败',
   'reader.ttsNothingToRead.title': '没有可朗读的文字',
   'reader.ttsNothingToRead.body': '这一页没有文字（比如封面、插图页或漫画）。翻到有正文的地方再开始朗读；打开「章末自动续读」会自动跳过这类页面。',
+  'footnote.jump': '跳到原文 →',
   'reader.ttsFailed.hint': '可在阅读页顶栏的设置里换个朗读引擎或音色；Edge TTS 报连接类错误多半是代理没走到 api.msedgeservices.com。',
   'reader.ai': 'AI 助手',
   'comicOverlay.translations': '段译文',

@@ -662,6 +662,7 @@ export default {
   'reader.ttsFailed.title': 'Read-aloud failed',
   'reader.ttsNothingToRead.title': 'Nothing to read aloud',
   'reader.ttsNothingToRead.body': 'This page has no text (a cover, an illustration or a comic page). Turn to a page with text and start again; with “Auto-continue at chapter end” on, pages like this are skipped automatically.',
+  'footnote.jump': 'Go to target →',
   'reader.ttsFailed.hint': 'Try another engine or voice from the reader’s settings drawer. Connection errors on Edge TTS usually mean the proxy is not routing api.msedgeservices.com.',
   'reader.ai': 'AI assistant',
   'comicOverlay.translations': 'translations',

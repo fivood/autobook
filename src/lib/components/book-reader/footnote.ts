@@ -7,7 +7,12 @@ import { Subject } from 'rxjs';
  * threw the reader dozens of chapters ahead — past spoilers — with only the
  * browser's back gesture, which this reader doesn't have, to return.
  */
-export const footnote$ = new Subject<{ anchor: Element; text: string }>();
+export const footnote$ = new Subject<{
+  anchor: Element;
+  text: string;
+  /** Jump to the target anyway — the way out when a link was misread as a note. */
+  jump?: () => void;
+}>();
 
 // A note link's visible text: 1, [12], (3), ［注2］, ★, [☆], *, ※, †…
 const MARKER_TEXT =
@@ -36,6 +41,10 @@ const NOTE_BODY = [
 ].join(',');
 
 const INLINE = /^(a|span|sup|sub|small|em|i|b|strong|code)$/i;
+// Print page markers. An index's page-number links ("23") look exactly like
+// note markers, but their target is an empty span mid-paragraph, so the
+// "note" became the whole paragraph and the link never jumped.
+const PAGEBREAK = '[epub\\:type~="pagebreak"],[role="doc-pagebreak"]';
 const HEADING = 'h1,h2,h3,h4,h5,h6';
 // Longer than this and the "note" is really a section someone linked to.
 const MAX_NOTE_CHARS = 2000;
@@ -53,6 +62,17 @@ function isNoteRef(a: Element) {
     (text.length <= 8 && (!!a.closest('sup') || !!a.querySelector('sup'))) ||
     looksLikeNoteMarker(text)
   );
+}
+
+/**
+ * Could `noteTextFor` call this a note at all? Every path to "yes" goes through
+ * a note-ish link (class/epub:type/marker) or a short one (`linksBack`, `<sup>`
+ * refs: ≤ 8 chars), so anything else — a TOC entry, a "see chapter 3" — can
+ * skip the lookup. The paginated reader's lookup for a target outside the
+ * current chapter parses the whole book, which a long link never needs.
+ */
+export function mightBeNoteRef(a: Element): boolean {
+  return isNoteRef(a) || (a.textContent || '').trim().length <= 8;
 }
 
 /**
@@ -118,6 +138,7 @@ export function noteTextFor(a: Element, target: Element): string | null {
   // Back-links inside a note body lead to the reference; as refs they would
   // pop up the "[1]" they point at.
   if (a.parentElement?.closest(NOTE_BODY)) return null;
+  if (target.matches(PAGEBREAK)) return null;
 
   // A bare `<a id>` dropped in front of the note text: the note is its block.
   const block = INLINE.test(target.tagName)

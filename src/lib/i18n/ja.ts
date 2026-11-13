@@ -666,6 +666,7 @@ export default {
   'reader.ttsFailed.title': '読み上げに失敗しました',
   'reader.ttsNothingToRead.title': '読み上げる文字がありません',
   'reader.ttsNothingToRead.body': 'このページには文字がありません（表紙・挿絵・漫画など）。本文のあるページで読み上げを始めてください。「章末で自動継続」をオンにすると、こうしたページは自動で飛ばします。',
+  'footnote.jump': 'リンク先へ移動 →',
   'reader.ttsFailed.hint': 'リーダーの設定ドロワーからエンジンか音声を変えてみてください。Edge TTS の接続エラーは、プロキシが api.msedgeservices.com を通していないことがほとんどです。',
   'reader.ai': 'AI アシスタント',
   'comicOverlay.translations': '翻訳',
