@@ -633,9 +633,13 @@
     if (contextMenuStartedSelectMode) selectMode = false;
   }
 
-  function runFromContextMenu(action: () => void) {
+  /** `keepSelection`: the action reads the selection after it returns (导出's dialog). */
+  async function runFromContextMenu(action: () => unknown, keepSelection = false) {
     contextMenu = null;
-    action();
+    await action();
+    // Awaited so a 取消 in the action's own confirm counts as the end too:
+    // 删除 → 取消 used to leave 「已选 1 本」 and the batch bar behind.
+    if (!keepSelection && contextMenuStartedSelectMode) selectMode = false;
   }
 
   function selectionToStatistics() {
@@ -1775,7 +1779,7 @@
         tabindex="0"
         role="button"
         class="menu-item"
-        on:click={() => runFromContextMenu(onReplicateData)}
+        on:click={() => runFromContextMenu(onReplicateData, true)}
         on:keyup={activateOnKeyup}
       >{$t('manager.exportMenu')}</div>
       <!-- Not storage-gated either; see the selection bar above. -->
@@ -1886,6 +1890,7 @@
           class="absolute right-2 top-1/2 -translate-y-1/2 text-xs opacity-50 hover:opacity-100"
           on:click={() => (searchQuery = '')}
           title={$t('library.search.clear')}
+          aria-label={$t('library.search.clear')}
         >✕</button>
       {/if}
     </div>
@@ -1908,6 +1913,17 @@
       on:cardContextMenu={(ev) => openContextMenu(ev.detail.id, ev.detail.x, ev.detail.y)}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />
+  {:else if debouncedSearchQuery.trim() && $filteredBookCards$.length}
+    <!-- Not the empty-library import prompt: the books are there, the search
+         just hides them. -->
+    <div class="mt-20 flex flex-col items-center gap-3 text-sm text-muted">
+      <span>{$t('library.search.noMatch')}</span>
+      <button
+        type="button"
+        class="rounded border border-current/20 px-3 py-1 hover-soft"
+        on:click={() => (searchQuery = '')}
+      >{$t('library.search.clear')}</button>
+    </div>
   {:else if $activeFolderFilter$ === ARCHIVED_FILTER}
     <div class="mt-20 text-center text-sm text-muted">{$t('manager.emptyArchive')}</div>
   {:else if $activeFolderFilter$ !== 'all'}

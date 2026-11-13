@@ -751,6 +751,7 @@ export default {
   'manager.undo': '元に戻す',
   'library.search.placeholder': 'タイトルを検索…',
   'library.search.clear': '検索をクリア',
+  'library.search.noMatch': '一致する本が見つかりません',
   'library.quote.open': '『{title}』をこの一節から開く',
   'library.quote.shuffle': '別の一節',
 

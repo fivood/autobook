@@ -262,11 +262,15 @@ option {
   background: color-mix(in srgb, currentColor 6%, transparent);
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   border-radius: 0.4rem;
-  padding: 0.4rem 0.75rem;
+  padding: 0.4rem 1.75rem 0.4rem 0.75rem;
   color: inherit;
   outline: none;
   transition: border-color 0.12s ease, background 0.12s ease;
   font-size: 0.85rem;
+}
+/* The app draws its own clear button; Chromium's native one sat on top of it. */
+.library-search::-webkit-search-cancel-button {
+  display: none;
 }
 .library-search:focus {
   background: color-mix(in srgb, currentColor 10%, transparent);

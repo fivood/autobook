@@ -168,6 +168,7 @@ export default {
   'manager.undo': '撤销',
   'library.search.placeholder': '搜索书名…',
   'library.search.clear': '清空搜索',
+  'library.search.noMatch': '没有找到匹配的书',
   'library.quote.open': '打开《{title}》，跳到这一段',
   'library.quote.shuffle': '换一段',
 

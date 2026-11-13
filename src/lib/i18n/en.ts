@@ -747,6 +747,7 @@ export default {
   'manager.undo': 'Undo',
   'library.search.placeholder': 'Search titles…',
   'library.search.clear': 'Clear search',
+  'library.search.noMatch': 'No books match your search',
   'library.quote.open': 'Open “{title}” at this passage',
   'library.quote.shuffle': 'Another passage',
 
