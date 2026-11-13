@@ -475,6 +475,7 @@
 
     if (scrollWhenReady) {
       scrollWhenReady = false;
+      let restoreScrolled = false;
 
       bookmarkData
         .then((data) => {
@@ -483,12 +484,23 @@
           }
 
           prevIntendedCharCount = data.exploredCharCount || 0;
+          const before = verticalMode ? window.scrollX : window.scrollY;
           bookmarkManager.scrollToBookmark(data, customReadingPointScrollOffset);
+          restoreScrolled = (verticalMode ? window.scrollX : window.scrollY) !== before;
         })
         .finally(() => {
           if (autoBookmark) {
+            // Swallow the restore's own scroll event — but only if there was
+            // one. With no bookmark (or one at the top) nothing scrolls, and an
+            // unconditional skip(1) ate the reader's first jump instead (TOC,
+            // n/m, an in-book link), so it was never saved if the window then
+            // closed.
             fromEvent(window, 'scroll')
-              .pipe(skip(1), debounceTime(autoBookmarkTime * 1000), takeUntil(destroy$))
+              .pipe(
+                skip(restoreScrolled ? 1 : 0),
+                debounceTime(autoBookmarkTime * 1000),
+                takeUntil(destroy$)
+              )
               .subscribe(() => {
                 dispatch('bookmark');
               });
