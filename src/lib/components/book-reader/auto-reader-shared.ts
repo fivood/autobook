@@ -207,6 +207,7 @@ export function extractText(root: HTMLElement, { speech = false } = {}): string 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   const parts: string[] = [];
   const markerCache = new Map<Element, boolean>();
+  const rubyCache = new Map<Element, boolean>();
   let node: Node | null = walker.nextNode();
   while (node) {
     const parent = node.parentElement;
@@ -214,14 +215,41 @@ export function extractText(root: HTMLElement, { speech = false } = {}): string 
       const tag = parent.tagName;
       if (tag !== 'SCRIPT' && tag !== 'STYLE') {
         const text = node.textContent || '';
-        parts.push(
-          speech && insideNoteMarker(parent, root, markerCache) ? ' '.repeat(text.length) : text
-        );
+        const silent =
+          speech &&
+          (insideNoteMarker(parent, root, markerCache) || silentInRuby(parent, rubyCache));
+        parts.push(silent ? ' '.repeat(text.length) : text);
       }
     }
     node = walker.nextNode();
   }
   return parts.join('');
+}
+
+// ---- ruby ----------------------------------------------------------------
+//
+// A plain text walk reads both halves of furigana: 「東京とうきょう」, and with
+// per-character ruby 「東とう京きょう」. Speech keeps one half per <ruby>,
+// blanking the other to spaces (same length, like note markers; measured: Edge
+// adds no pause for them). A kana <rt> is the author's reading and beats the
+// engine's guess at the kanji (本気→まじ, names), so it is what gets spoken;
+// an <rt> without kana is emphasis dots (﹅) and the base is spoken instead.
+// <rp> brackets are never spoken.
+
+const KANA = /[ぁ-ヿ]/;
+
+function silentInRuby(el: Element, cache: Map<Element, boolean>): boolean {
+  const ruby = el.closest('ruby');
+  if (!ruby) return false;
+  if (el.closest('rp')) return true;
+  let speakReading = cache.get(ruby);
+  if (speakReading === undefined) {
+    speakReading = Array.from(ruby.getElementsByTagName('rt')).some((rt) =>
+      KANA.test(rt.textContent || '')
+    );
+    cache.set(ruby, speakReading);
+  }
+  return !!el.closest('rt') !== speakReading;
 }
 
 // ---- note markers --------------------------------------------------------
