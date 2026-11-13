@@ -138,10 +138,19 @@ export async function connect({ port = DEFAULT_PORT, timeoutMs = 0 } = {}) {
     }
   }
 
-  /** One named key (`ArrowRight`, `Escape`…) as a real keystroke. */
+  /**
+   * One named key (`ArrowRight`, `Escape`…) or letter as a real keystroke.
+   * `modifiers` is CDP's bitmask: 1 Alt, 2 Ctrl, 4 Meta, 8 Shift.
+   */
   const NAMED_KEYS = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Escape: 27, Enter: 13 };
-  async function press(name) {
-    const key = { key: name, code: name, windowsVirtualKeyCode: NAMED_KEYS[name] };
+  async function press(name, modifiers = 0) {
+    const letter = /^[a-z]$/i.test(name);
+    const key = {
+      key: name,
+      code: letter ? `Key${name.toUpperCase()}` : name,
+      windowsVirtualKeyCode: letter ? name.toUpperCase().charCodeAt(0) : NAMED_KEYS[name],
+      modifiers
+    };
     if (!key.windowsVirtualKeyCode) throw new Error(`press(): unknown key ${name}`);
     await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...key });
     await send('Input.dispatchKeyEvent', { type: 'keyUp', ...key });

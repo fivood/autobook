@@ -270,6 +270,7 @@ async function snapshotSettings() {
     // says nothing about the actual cause.
     const keys = [
       'viewMode',
+      'writingMode',
       'fsRoot',
       'lastStorageSource',
       'ttsEngine',
@@ -1661,6 +1662,207 @@ try {
   process.exit(1);
 }
 
+/** The footer's position, e.g. 「896 / 2688 33.33%」 → 896. */
+const FOOTER_COUNT = `(() => {
+  const t = [...document.querySelectorAll('*')]
+    .map((e) => e.childNodes.length === 1 && e.textContent.trim())
+    .find((t) => t && /^\\d+ \\/ \\d+/.test(t));
+  return t ? Number(t.split(' ')[0]) : null;
+})()`;
+
+/**
+ * Regression (1.59.0 usage test): the TOC said 第2章 starts at 1032 while the
+ * footer at that very spot read 896. TXT / MD / MOBI sections counted every
+ * code point, the reader counts letters and ideographs only; the test book's
+ * 「。」 and 「，」 are enough to pull the two apart.
+ */
+async function tocStartMatchesFooter(bookId) {
+  await forgetBookmark(bookId);
+  await goto(`/b?id=${bookId}`, READER_READY);
+  await session.waitFor(laidOut(), { label: 'the book to lay out' });
+  await pause(800);
+  await session.evaluate(`(() => { document.activeElement?.blur?.(); return 1; })()`);
+  await session.press('m');
+  await pause(2000);
+  const footer = await session.evaluate(FOOTER_COUNT);
+  await showReaderMenu('打开目录');
+  await session.evaluate(`(() => {
+    [...document.querySelectorAll('[title="打开目录"]')].find(e => e.getBoundingClientRect().width > 0).click();
+    return 1;
+  })()`);
+  await pause(900);
+  const toc = await session.evaluate(`(() => {
+    const e = [...document.querySelectorAll('[title^="跳转到"]')].find((e) => e.title.includes('第2章'));
+    return e ? Number(e.nextElementSibling.textContent.trim()) : null;
+  })()`);
+  await session.press('Escape');
+  await pause(500);
+  if (footer === null || toc === null) throw new Error(`footer ${footer}, TOC ${toc}`);
+  if (footer !== toc) throw new Error(`第2章 starts at ${toc} in the TOC, footer reads ${footer} there`);
+  return `第2章：目录 ${toc} = 页脚 ${footer}`;
+}
+
+/**
+ * Regression (1.59.0 usage test): the notebook's 跳转 opened the book with the
+ * highlight a screen away — x=1280 in a 1280px vertical window. The mark was
+ * scrolled into view, then the saved bookmark restored over it. Needs a saved
+ * position elsewhere to show. Scroll mode only: paginated renders no marks.
+ */
+async function highlightJumpLandsOnScreen(bookId) {
+  const out = [];
+  for (const wm of ['horizontal-tb', 'vertical-rl']) {
+    await session.evaluate(js`(() => { localStorage.setItem('writingMode', ${wm}); return 1; })()`);
+    // Not laidOut(): vertical text scrolls sideways, scrollHeight never grows.
+    const textIn = `document.querySelectorAll('.book-content p').length > 20`;
+    await goto(`/b?id=${bookId}`, READER_READY);
+    await session.waitFor(textIn, { label: 'the book to lay out' });
+    await pause(800);
+    const hlId = await session.evaluate(js`(async () => {
+      const root = document.querySelector('.book-content');
+      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let off = 0, n, start = -1;
+      while ((n = w.nextNode())) {
+        if (n.parentElement.closest('rt, [aria-hidden], [hidden]')) continue;
+        const i = n.data.indexOf('第70段');
+        if (i >= 0) { start = off + i; break; }
+        off += n.data.length;
+      }
+      if (start < 0) return 0;
+      const db = await new Promise((r) => { const q = indexedDB.open('books'); q.onsuccess = () => r(q.result); });
+      const now = Date.now();
+      return new Promise((r) => {
+        const tx = db.transaction(['highlight', 'bookmark'], 'readwrite');
+        tx.objectStore('bookmark').put({ dataId: ${bookId}, exploredCharCount: 40, progress: 0, lastBookmarkModified: now });
+        const q = tx.objectStore('highlight').add({ dataId: ${bookId}, bookTitle: '', startOffset: start, endOffset: start + 5,
+          text: '第70段。', memo: '', color: '1', createdAt: now, lastModified: now });
+        q.onsuccess = () => r(q.result);
+      });
+    })()`);
+    if (!hlId) throw new Error('could not place the test highlight');
+    await goto(`/b?id=${bookId}&hl=${hlId}`, READER_READY);
+    await pause(3000);
+    const r = await session.evaluate(js`(() => {
+      const m = document.querySelector('mark[data-hl-id="' + ${hlId} + '"]');
+      if (!m) return null;
+      const b = m.getBoundingClientRect();
+      return { l: Math.round(b.left), r: Math.round(b.right), t: Math.round(b.top), b: Math.round(b.bottom), w: innerWidth, h: innerHeight };
+    })()`);
+    await session.evaluate(js`new Promise((r) => {
+      const q = indexedDB.open('books');
+      q.onsuccess = () => { const tx = q.result.transaction('highlight', 'readwrite'); tx.objectStore('highlight').delete(${hlId}); tx.oncomplete = () => r(1); };
+    })`);
+    if (!r) throw new Error(`${wm}: the highlight was not rendered`);
+    if (r.l < 0 || r.r > r.w || r.t < 0 || r.b > r.h) {
+      throw new Error(`${wm}: highlight at x ${r.l}–${r.r}, y ${r.t}–${r.b} in a ${r.w}×${r.h} window`);
+    }
+    out.push(`${wm} x=${r.l}`);
+  }
+  return `高亮在屏幕内：${out.join('，')}`;
+}
+
+/**
+ * Regression (1.59.0 usage test): with the reading-settings drawer open, Esc
+ * did nothing and V started the voice behind it. Pinned to SAPI so a missed
+ * block actually starts speaking (see ttsLeavesTextAlone).
+ */
+async function settingsDrawerOwnsItsKeys(bookId) {
+  await session.evaluate(`(() => { localStorage.setItem('ttsEngine', 'sapi'); return 1; })()`);
+  await goto(`/b?id=${bookId}`, READER_READY);
+  await session.waitFor(laidOut(), { label: 'the book to lay out' });
+  await pause(800);
+  await showReaderMenu('设置（不离开本书）');
+  await session.evaluate(`(() => { document.querySelector('[aria-label="设置（不离开本书）"]').click(); return 1; })()`);
+  await session.waitFor(`!!document.querySelector('[data-reader-panel] button')`, { label: 'the settings drawer' });
+  await session.evaluate(`(() => {
+    const b = [...document.querySelectorAll('[data-reader-panel] button')].find((b) => b.getBoundingClientRect().width > 0 && !b.title);
+    b.focus();
+    return 1;
+  })()`);
+  await session.press('v');
+  await pause(2500);
+  const speaking = await session.evaluate(`!!document.querySelector('[title^="暂停朗读"]')`);
+  if (speaking) {
+    await session.evaluate(`(() => { document.querySelector('[title^="暂停朗读"]').click(); return 1; })()`);
+    throw new Error('V started the voice behind the settings drawer');
+  }
+  await session.press('Escape');
+  await pause(800);
+  const after = await session.evaluate(`({
+    open: !!document.querySelector('[data-reader-panel]'),
+    focus: document.activeElement?.getAttribute('aria-label')
+  })`);
+  if (after.open) throw new Error('Esc did not close the settings drawer');
+  if (after.focus !== '设置（不离开本书）') throw new Error(`focus went to ${after.focus}, not the settings button`);
+  // Esc leaves the header up (that is where focus went), and an open header
+  // sits on the tap strip that opens it — the covered-controls check would
+  // flag that, so end on the library instead.
+  await goto('/manage', MANAGE_READY);
+  return 'V 不朗读，Esc 关抽屉、焦点回到设置按钮';
+}
+
+/**
+ * Regression (1.59.0 usage test): right-click a book → 删除 → 取消 left the
+ * library in multi-select (「已选 1 本」), so the next click ticked a book
+ * instead of opening it. Closing the menu with Esc already worked.
+ */
+async function deleteCancelLeavesSelectMode() {
+  await session.evaluate(`(() => { localStorage.setItem('activeFolderFilter', 'all'); return 1; })()`);
+  await goto('/manage', MANAGE_READY);
+  await pause(800);
+  const opened = await session.evaluate(js`(() => {
+    const card = [...document.querySelectorAll('[title]')].find((e) => e.title.startsWith(${TEST_TITLE}));
+    if (!card) return false;
+    const r = card.getBoundingClientRect();
+    card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 5, clientY: r.top + 5 }));
+    return true;
+  })()`);
+  if (!opened) throw new Error('the test book is not on the shelf');
+  await pause(500);
+  await session.evaluate(`(() => {
+    [...document.querySelectorAll('[role=button]')].find((b) => b.textContent.trim() === '删除').click();
+    return 1;
+  })()`);
+  await pause(700);
+  const canceled = await session.evaluate(`(() => {
+    const b = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '取消');
+    if (b) b.click();
+    return !!b;
+  })()`);
+  if (!canceled) throw new Error('no confirm dialog after 删除');
+  await pause(700);
+  const out = await session.evaluate(js`({
+    select: !!document.querySelector('.book-grid-item.select-mode'),
+    book: [...document.querySelectorAll('[title]')].some((e) => e.title.startsWith(${TEST_TITLE}))
+  })`);
+  if (!out.book) throw new Error('取消 deleted the book anyway');
+  if (out.select) throw new Error('取消 left the library in multi-select');
+  return '书还在，回到普通模式';
+}
+
+/**
+ * Regression (1.59.0 usage test): a search with no hits showed the empty
+ * library's big 「点击添加书籍」 — pushing import on a library that has books.
+ */
+async function searchMissIsNotAnEmptyLibrary() {
+  await session.evaluate(`(() => { localStorage.setItem('activeFolderFilter', 'all'); return 1; })()`);
+  await goto('/manage', MANAGE_READY);
+  await pause(800);
+  const out = await session.evaluate(`(async () => {
+    const box = document.querySelector('input.library-search');
+    box.value = 'zz-no-such-book-zz';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 600));
+    const text = document.body.innerText;
+    const res = { importPrompt: text.includes('点击添加书籍'), noMatch: text.includes('没有找到匹配的书') };
+    box.value = '';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    return res;
+  })()`);
+  if (out.importPrompt) throw new Error('a search miss shows the empty-library import prompt');
+  if (!out.noMatch) throw new Error('no 「没有找到匹配的书」 message');
+  return '没搜到时提示「没有找到匹配的书」';
+}
+
 let snap;
 let bookId = 0;
 try {
@@ -1700,7 +1902,12 @@ try {
     ['输入框：AI 助手里打字不触发快捷键、不翻页', aiDrawerKeepsFocusWhileTyping],
     ['目录：条目在蒙版之上，点了能跳', tocEntriesAreClickable],
     ['进度：搜索/目录/m 键跳转后直接关窗也不丢', jumpSurvivesReload],
-    ['进度：反复打开→离开，书签不往回退', positionHoldsAcrossReopen]
+    ['进度：反复打开→离开，书签不往回退', positionHoldsAcrossReopen],
+    ['目录：章首位置和页脚同一口径', tocStartMatchesFooter],
+    ['笔记跳转：横排/竖排高亮都落在屏幕内', highlightJumpLandsOnScreen, { modes: SCROLL }],
+    ['设置抽屉：V 不在后台朗读，Esc 关闭并还焦点', settingsDrawerOwnsItsKeys],
+    ['书库：右键删除→取消后回到普通模式', deleteCancelLeavesSelectMode, { modes: ONCE }],
+    ['书库：没搜到时不显示导入提示', searchMissIsNotAnEmptyLibrary, { modes: ONCE }]
   ];
 
   for (const m of MODES) {
