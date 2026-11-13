@@ -91,9 +91,9 @@
   $: currentChapterTitle = book ? book.chapters[chapterIdx]?.title || '' : '';
   $: progressPct = total > 0 ? Math.round((revealed / total) * 100) : 0;
 
-  /** Per-segment render state: reveal slice + a small lookahead of pending
-   * text after the cursor so the reader can see "what's about to appear"
-   * (dimmed). Limits the lookahead window so very long paragraphs don't
+  /** Per-segment render state: reveal slice + a lookahead of pending text
+   * after the cursor, laid out but hidden so lines don't reflow as it
+   * reveals. Limits the lookahead window so very long paragraphs don't
    * dump the entire chapter on screen. */
   $: visibleSegments = book
     ? book.segments
@@ -101,7 +101,10 @@
         .map((seg) => {
           const len = seg.text.length;
           if (seg.endChar <= revealed) return { seg, cut: len, pendingEnd: len, hasCursor: false };
-          if (seg.startChar >= revealed) {
+          // `>` not `>=`: a seek landing exactly on a segment start (TOC jump,
+          // restart) still needs the caret there, or requestScrollToCursor
+          // finds nothing and leaves the view parked over hidden text.
+          if (seg.startChar > revealed) {
             return {
               seg,
               cut: 0,
@@ -191,6 +194,7 @@
     immersive = savedImmersive === '1';
     const savedMode = localStorage.getItem(READMODE_KEY);
     readMode = savedMode === 'scroll' ? 'scroll' : 'typewriter';
+    prefsLoaded = true;
     recents = listRecent();
     getDeviceId();
     startSyncLoop();
@@ -295,7 +299,10 @@
   $: if (engine) engine.setSpeed(speed);
   $: if (engine) engine.setStopAtChapter(stopAtChapter);
 
-  $: if (browser()) {
+  // Reactive blocks run at component init, before onMount — unguarded, this
+  // wrote the defaults over every saved pref before they were read back.
+  let prefsLoaded = false;
+  $: if (browser() && prefsLoaded) {
     localStorage.setItem(SPEED_KEY, String(speed));
     localStorage.setItem(STOP_KEY, stopAtChapter ? '1' : '0');
     localStorage.setItem(RESUME_KEY, autoResumeOnVisible ? '1' : '0');
@@ -1490,7 +1497,7 @@
     -webkit-overflow-scrolling: touch;
     /* Tap-to-toggle picks up clicks but text selection is unlikely in the
        reveal area (only revealed text is selectable normal; pending text
-       has opacity 0.12 and won't normally be selected mid-reveal). */
+       is visibility:hidden and can't be selected). */
     user-select: none;
     -webkit-user-select: none;
   }

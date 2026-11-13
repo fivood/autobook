@@ -77,7 +77,7 @@
 </script>
 
 {#if seg.ruleBefore}<span class="md-rule" class:pending={cut === 0} />{/if}{#each images as url}
-  <img class="seg-img" src={url} alt="" loading="lazy" />
+  <img class="seg-img" class:pending={cut === 0 && !hasCursor} src={url} alt="" loading="lazy" />
 {/each}{#each parts as part}{#if part.kind === 'cursor'}<span
       class="cursor"
       bind:this={cursorEl}
@@ -102,9 +102,11 @@
     >{/if}{/each}
 
 <style>
-  /* Look-ahead text: there, but only just, so the eye stays on the caret. */
+  /* Look-ahead text: laid out but invisible. Even 0.12 opacity was caught in
+     peripheral vision and spoiled what came next; visibility (not display)
+     keeps the space so lines don't reflow as characters arrive. */
   .pending {
-    opacity: 0.12;
+    visibility: hidden;
   }
   .cursor {
     display: inline-block;

@@ -39,7 +39,7 @@
   class:md-code-end={kind === 'code' && arg.includes('e')}
   class:md-row={kind === 'row' || kind === 'thead'}
   class:md-thead={kind === 'thead'}
-  class:unrevealed={markdown && cut === 0}
+  class:unrevealed={markdown && cut === 0 && !hasCursor}
   data-seg-start={anchor ? seg.startChar : undefined}
   data-kind={kind || undefined}
   data-depth={depth || undefined}
@@ -142,13 +142,9 @@
   }
 
   /* Bullets, rules, bars and boxes wait with their text: a block typing
-     hasn't reached is dimmed whole, and its look-ahead text is let off its
-     own dimming so it isn't faded twice. */
+     hasn't reached is hidden whole (space kept, like its text). */
   .unrevealed {
-    opacity: 0.12;
-  }
-  .unrevealed :global(.pending) {
-    opacity: 1;
+    visibility: hidden;
   }
 
   /* One box per fence: lines butt together, the box's padding and corners
