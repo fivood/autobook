@@ -521,7 +521,10 @@
 
     recents = listRecent();
     await tick();
-    requestScrollToCursor();
+    // Scroll mode has no caret to scroll to; without this a book opened in
+    // scroll mode showed its first page, and the first swipe saved that.
+    if (readMode === 'scroll') requestScrollToRevealed();
+    else requestScrollToCursor();
   }
 
   let persistTimer: ReturnType<typeof setTimeout> | undefined;
@@ -672,16 +675,21 @@
     // Find the first segment whose endChar > revealed (i.e. the one
     // currently being read), then look up its rendered element by data
     // attribute and bring it into view.
-    const idx = book.segments.findIndex((seg) => seg.endChar > revealed);
-    if (idx < 0) return;
-    const startChar = book.segments[idx].startChar;
-    const target = viewport.querySelector(`[data-seg-start="${startChar}"]`);
+    const seg = book.segments.find((s) => s.endChar > revealed);
+    if (!seg) return;
+    const target = viewport.querySelector<HTMLElement>(`[data-seg-start="${seg.startChar}"]`);
     if (!target) return;
-    const r = (target as HTMLElement).getBoundingClientRect();
-    const vp = viewport.getBoundingClientRect();
-    const top = r.top - vp.top + viewport.scrollTop;
-    viewport.scrollTo({ top: Math.max(0, top - 16), behavior: 'instant' as ScrollBehavior });
+    const frac = seg.text.length ? (revealed - seg.startChar) / seg.text.length : 0;
+    const y = target.offsetTop - viewport.offsetTop + frac * target.offsetHeight;
+    viewport.scrollTo({ top: Math.max(0, y - SCROLL_PROBE), behavior: 'instant' as ScrollBehavior });
   }
+
+  /** Scroll mode maps a character to a height inside its segment, both ways
+   * through the same line SCROLL_PROBE px below the viewport top, so a round
+   * trip (mode switch, reopen) lands on the character it left. Positions are
+   * offsetTop minus the viewport's own: the segments' offsetParent is
+   * .reader, so raw offsetTop was off by the top bar's height. */
+  const SCROLL_PROBE = 16;
 
   /** Recompute `revealed` from current scroll position in scroll mode.
    * Finds the segment whose rendered top crossed the viewport top and
@@ -692,23 +700,24 @@
     scrollModeRaf = requestAnimationFrame(() => {
       scrollModeRaf = 0;
       if (!viewport || !book) return;
-      const vpTop = viewport.scrollTop;
+      const probe = viewport.scrollTop + SCROLL_PROBE;
+      const base = viewport.offsetTop;
       const wraps = viewport.querySelectorAll<HTMLElement>('[data-seg-start]');
       let bestSeg: HTMLElement | undefined;
       for (const w of wraps) {
-        if (w.offsetTop > vpTop + 12) break;
+        if (w.offsetTop - base > probe) break;
         bestSeg = w;
       }
       if (!bestSeg) return;
       const startChar = +(bestSeg.dataset.segStart || 0);
-      // Approximate how far into this segment the reader is. The
-      // segment's rendered height maps linearly to its char length;
-      // we sample how much of the segment is above the viewport top.
-      const segHeight = bestSeg.getBoundingClientRect().height || 1;
-      const segOffsetIntoView = Math.max(0, vpTop - bestSeg.offsetTop);
+      // The segment's rendered height maps linearly to its char length.
+      const segHeight = bestSeg.offsetHeight || 1;
+      const frac = Math.min(1, Math.max(0, (probe - (bestSeg.offsetTop - base)) / segHeight));
       const seg = book.segments.find((s) => s.startChar === startChar);
       const segChars = seg ? seg.text.length : 0;
-      const into = Math.floor((segOffsetIntoView / segHeight) * segChars);
+      // round, not floor: scrollTop snaps to device pixels, and floor turned
+      // that sub-pixel loss into a character lost on every round trip.
+      const into = Math.round(frac * segChars);
       const nextRevealed = Math.min(total, startChar + into);
       if (nextRevealed !== revealed) {
         revealed = nextRevealed;
