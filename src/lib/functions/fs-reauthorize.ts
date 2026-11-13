@@ -19,6 +19,7 @@
 
 import { isTauri } from '$lib/data/env';
 import { dictFolderPath$, fsRoot$, obsidianVaultPath$ } from '$lib/data/store';
+import { tImmediate } from '$lib/i18n';
 
 export type ReauthId = 'library' | 'vault' | 'dict';
 
@@ -69,9 +70,19 @@ export async function findUnreachableUserDirs(): Promise<ReauthTarget[]> {
   return found;
 }
 
-/** Persist a freshly re-picked folder to whichever setting it belongs to. */
-export function applyReauthorizedPath(id: ReauthId, path: string) {
-  if (id === 'library') fsRoot$.next(path);
-  else if (id === 'vault') obsidianVaultPath$.next(path);
+/**
+ * Persist a freshly re-picked folder to whichever setting it belongs to.
+ * Throws if a library folder overlaps the install folder — the same check
+ * Settings → Data makes, since a library there gets the program moved or
+ * deleted along with the books.
+ */
+export async function applyReauthorizedPath(id: ReauthId, path: string) {
+  if (id === 'library') {
+    const { invoke } = await import('@tauri-apps/api/core');
+    if (await invoke<boolean>('library_root_overlaps_install', { path })) {
+      throw new Error(tImmediate('dataPaths.overlapsInstallPick'));
+    }
+    fsRoot$.next(path);
+  } else if (id === 'vault') obsidianVaultPath$.next(path);
   else dictFolderPath$.next(path);
 }

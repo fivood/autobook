@@ -26,7 +26,7 @@
         defaultPath: target.path
       });
       if (!picked) return;
-      applyReauthorizedPath(target.id, picked);
+      await applyReauthorizedPath(target.id, picked);
       // New array and new object: mutating in place and reassigning the same
       // reference leaves the keyed each block showing the old path when the
       // user picks a different folder than the one that broke.
