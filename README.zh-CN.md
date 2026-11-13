@@ -55,6 +55,19 @@
 
 首次安装 SmartScreen 提示「未知发布者」，点「更多信息 → 仍要运行」。之后的更新由应用内 updater 静默应用。
 
+### macOS（预览，仅 Apple Silicon）
+
+下载 `AutoBook_<ver>_aarch64.dmg`，把 AutoBook 拖进「应用程序」。安装包没有 Apple 签名，第一次打开会被 Gatekeeper 拦下，二选一放行：
+
+- 双击打开一次（被拦），再到「系统设置 → 隐私与安全性」底部点「仍要打开」。macOS 14 及更早也可以在「应用程序」里右键 AutoBook →「打开」
+- 或在终端执行：
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/AutoBook.app
+  ```
+
+一定要先拖进「应用程序」再打开——直接在 dmg 里或「下载」里运行的话，系统会把它放在只读的临时位置，应用内更新装不上。之后的更新照样由应用内 updater 完成，不用再放行。没有 SAPI 系统语音引擎，朗读用「Web Speech」（即 macOS 系统语音）或 Edge TTS。
+
 ## 数据
 
 | 内容 | 位置 |

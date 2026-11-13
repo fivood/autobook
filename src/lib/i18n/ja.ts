@@ -609,7 +609,7 @@ export default {
   'fileEditor.saved': '保存しました',
   'fileEditor.saveFailed': '保存に失敗しました：{error}',
   'fileEditor.loadFailed': 'ファイルを読み込めませんでした：{error}',
-  'fileEditor.noFile': '開いているファイルはありません。エクスプローラーで .md ファイルをダブルクリックすると、ここで編集できます。',
+  'fileEditor.noFile': '開いているファイルはありません。ファイルマネージャーで .md ファイルをダブルクリックすると、ここで編集できます。',
   'fileEditor.keepEditing': '編集を続ける',
   'fileEditor.discard': '変更を破棄',
   'fileEditor.leaveConfirm': '未保存の変更があります。移動すると失われます。',
@@ -627,8 +627,8 @@ export default {
   'ai.clearChat': '会話をクリア',
   'ai.providerOpenaiLabel': 'OpenAI 互換（OpenRouter / Ollama を含む）',
   'ai.baseUrlLabel': "Base URL（空欄で公式アドレス）",
-  'ai.privacyNote': "API Key は Windows 資格情報マネージャーに保存されます（Windows ユーザー単位で暗号化、アプリのデータフォルダには入りません）。その他の設定はこの PC にのみ保存。Anthropic への直接呼び出しは dangerous-direct-browser-access ヘッダを使用。",
-  'ai.keyPlaintext': "API Key を Windows 資格情報マネージャーに保存できなかったため、現在はアプリのデータフォルダに平文で保存されています。次回起動時に再試行します。毎回こうなる場合は、資格情報マネージャーのサービスが無効になっていないか確認してください。",
+  'ai.privacyNote': "API Key はシステムの資格情報ストア（Windows 資格情報マネージャー / macOS キーチェーン）に保存されます（ユーザー単位で暗号化、アプリのデータフォルダには入りません）。その他の設定はこの PC にのみ保存。Anthropic への直接呼び出しは dangerous-direct-browser-access ヘッダを使用。",
+  'ai.keyPlaintext': "API Key をシステムの資格情報ストア（Windows 資格情報マネージャー / macOS キーチェーン）に保存できなかったため、現在はアプリのデータフォルダに平文で保存されています。次回起動時に再試行します。毎回こうなる場合は、Windows では資格情報マネージャーのサービスが無効になっていないか、macOS ではキーチェーンの確認で「常に許可」を選んだか確認してください。",
   'ai.moreInSettings': 'ローカルモデルや機能スイッチは「設定 → AI」にあります',
 
   // Reader-side settings drawer
@@ -881,7 +881,7 @@ export default {
   'dataPaths.clearFail': '削除失敗：{err}',
   'dataPaths.copy': 'コピー',
   'dataPaths.copyPath': 'パスをコピー',
-  'dataPaths.openInExplorer': 'エクスプローラーで開く',
+  'dataPaths.openInExplorer': 'フォルダを開く',
   'dataPaths.refresh': '再読み込み',
   'dataPaths.refreshTooltip': 'サイズを再取得',
   'dataPaths.clearAll': 'すべてのローカルデータを削除して再起動',

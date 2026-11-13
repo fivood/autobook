@@ -605,7 +605,7 @@ export default {
   'fileEditor.saved': 'Saved',
   'fileEditor.saveFailed': 'Save failed: {error}',
   'fileEditor.loadFailed': 'Could not read the file: {error}',
-  'fileEditor.noFile': 'No file open. Double-click a .md file in Explorer to edit it here.',
+  'fileEditor.noFile': 'No file open. Double-click a .md file in your file manager to edit it here.',
   'fileEditor.keepEditing': 'Keep editing',
   'fileEditor.discard': 'Discard changes',
   'fileEditor.leaveConfirm': 'You have unsaved changes; leaving will lose them.',
@@ -623,8 +623,8 @@ export default {
   'ai.clearChat': 'Clear chat',
   'ai.providerOpenaiLabel': 'OpenAI-compatible (incl. OpenRouter / Ollama)',
   'ai.baseUrlLabel': "Base URL (leave blank for the official one)",
-  'ai.privacyNote': "The API key is kept in Windows Credential Manager (encrypted for your Windows user, not in the app's data folder); other settings stay on this machine. Direct Anthropic calls use the dangerous-direct-browser-access header.",
-  'ai.keyPlaintext': "The API key couldn't be saved to Windows Credential Manager, so it is currently stored as plain text in the app's data folder. The app tries again on its next start; if this keeps happening, check that the Credential Manager service isn't disabled.",
+  'ai.privacyNote': "The API key is kept in the system credential store (Windows Credential Manager / macOS Keychain, encrypted for your user, not in the app's data folder); other settings stay on this machine. Direct Anthropic calls use the dangerous-direct-browser-access header.",
+  'ai.keyPlaintext': "The API key couldn't be saved to the system credential store (Windows Credential Manager / macOS Keychain), so it is currently stored as plain text in the app's data folder. The app tries again on its next start; if this keeps happening, on Windows check that the Credential Manager service isn't disabled, and on macOS choose \"Always Allow\" when the Keychain prompt appears.",
   'ai.moreInSettings': 'Local runtime and per-feature switches live in Settings → AI',
 
   // Reader-side settings drawer
@@ -877,7 +877,7 @@ export default {
   'dataPaths.clearFail': 'Clear failed: {err}',
   'dataPaths.copy': 'Copy',
   'dataPaths.copyPath': 'Copy path',
-  'dataPaths.openInExplorer': 'Open in file explorer',
+  'dataPaths.openInExplorer': 'Open folder',
   'dataPaths.refresh': 'Refresh',
   'dataPaths.refreshTooltip': 'Re-read sizes',
   'dataPaths.clearAll': 'Clear all local data and restart',

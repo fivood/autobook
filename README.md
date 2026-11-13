@@ -55,6 +55,19 @@ Grab the installer from [Releases](https://github.com/fivood/autobook/releases/l
 
 First launch shows a SmartScreen "Unknown publisher" prompt — click **More info → Run anyway**. Updates apply silently via the built-in updater.
 
+### macOS (preview, Apple Silicon only)
+
+Download `AutoBook_<ver>_aarch64.dmg` and drag AutoBook into Applications. The app is not signed with an Apple certificate, so Gatekeeper blocks the first launch. Either:
+
+- Open it once (it gets blocked), then click **Open Anyway** at the bottom of **System Settings → Privacy & Security**. On macOS 14 and earlier, right-click AutoBook in Applications → **Open** also works.
+- Or run:
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/AutoBook.app
+  ```
+
+Move it to Applications before the first launch — run straight from the dmg or Downloads and macOS keeps it in a read-only temporary location where the updater cannot replace it. Later updates install through the built-in updater with no further prompts. There is no SAPI engine on macOS; read-aloud uses Web Speech (the macOS system voices) or Edge TTS.
+
 ## Data
 
 | What | Where |

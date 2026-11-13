@@ -742,7 +742,7 @@ export default {
   'fileEditor.saved': '已保存',
   'fileEditor.saveFailed': '保存失败：{error}',
   'fileEditor.loadFailed': '无法读取文件：{error}',
-  'fileEditor.noFile': '没有打开的文件。在资源管理器里双击 .md 文件即可在这里编辑。',
+  'fileEditor.noFile': '没有打开的文件。在文件管理器里双击 .md 文件即可在这里编辑。',
   'fileEditor.keepEditing': '继续编辑',
   'fileEditor.discard': '放弃修改',
   'fileEditor.leaveConfirm': '有未保存的修改，离开会丢失。',
@@ -760,8 +760,8 @@ export default {
   'ai.clearChat': '清空对话',
   'ai.providerOpenaiLabel': 'OpenAI 兼容（含 OpenRouter / Ollama）',
   'ai.baseUrlLabel': "Base URL（留空用官方地址）",
-  'ai.privacyNote': "API Key 存在 Windows 凭据管理器里（按当前 Windows 用户加密，不进应用数据文件夹）；其余设置只存在本机。Anthropic 直连用了 dangerous-direct-browser-access 请求头。",
-  'ai.keyPlaintext': "API Key 没能存进 Windows 凭据管理器，目前以明文存在应用数据文件夹里。下次启动应用会再试一次；一直这样的话，请检查凭据管理器服务是否被禁用。",
+  'ai.privacyNote': "API Key 存在系统凭据库里（Windows 凭据管理器 / macOS 钥匙串，按当前用户加密，不进应用数据文件夹）；其余设置只存在本机。Anthropic 直连用了 dangerous-direct-browser-access 请求头。",
+  'ai.keyPlaintext': "API Key 没能存进系统凭据库（Windows 凭据管理器 / macOS 钥匙串），目前以明文存在应用数据文件夹里。下次启动应用会再试一次；一直这样的话，Windows 上请检查凭据管理器服务是否被禁用，macOS 上请在弹出的钥匙串询问里点「始终允许」。",
   'ai.moreInSettings': '本地模型、功能开关等完整配置见「设置 → AI」',
 
   // Reader-side settings drawer
@@ -918,7 +918,7 @@ export default {
   'dataPaths.clearFail': '清除失败：{err}',
   'dataPaths.copy': '复制',
   'dataPaths.copyPath': '复制路径',
-  'dataPaths.openInExplorer': '在资源管理器打开',
+  'dataPaths.openInExplorer': '打开文件夹',
   'dataPaths.refresh': '刷新',
   'dataPaths.refreshTooltip': '重新读取大小',
   'dataPaths.clearAll': '清除全部本地数据并重启',
