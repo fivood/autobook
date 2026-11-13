@@ -1417,6 +1417,7 @@ export default {
   'translate.draft.resume': '下訳を再開',
   'translate.draft.pause': '中断して保存',
   'translate.draft.export': '下訳ファイルを書き出す',
+  'translate.draft.exportReviewed': '校正済みを書き出す',
   'translate.draft.viewOverlay': 'リーダーで訳文を見る',
   'translate.draft.exportChunks': 'Markdown 分割を書き出す',
   'translate.msg.createdFromBook': 'AutoBook の現在の本から翻訳ジョブを作成しました',
@@ -1430,6 +1431,7 @@ export default {
   'translate.msg.draftFailed': '下訳に失敗しましたが、チェックポイントは保存済みです。再開できます',
   'translate.msg.pausing': '現在のバッチ完了後に中断し、チェックポイントを保存します……',
   'translate.msg.exported': '下訳 {ext} を書き出しました',
+  'translate.msg.exportedReviewed': '校正済み {ext} を書き出しました',
   'translate.msg.exportedChunks': 'Markdown 分割を {n} 件書き出しました',
   'translate.precision.title': '推敲',
   'translate.precision.hint':

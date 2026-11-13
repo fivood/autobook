@@ -173,6 +173,12 @@
     review: 'translate.status.review',
     completed: 'translate.status.completed'
   };
+  // The review pass overwrites the draft in place, so once it has finished the
+  // only text there is to export is the reviewed one.
+  $: reviewed = jobStatus === 'completed';
+  // Draft pass done (or reviewed): starting it again would have nothing to do,
+  // so export takes the primary slot.
+  $: draftFinished = jobStatus === 'review' || reviewed;
   $: jobStatusLabel = !jobStatus
     ? $t('translate.status.idle')
     : JOB_STATUS_KEYS[jobStatus]
@@ -986,10 +992,10 @@
       const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: mime }));
       const anchor = globalThis.document.createElement('a');
       anchor.href = url;
-      anchor.download = `${translationDocument.title || 'translated'}.draft.${documentExtension}`;
+      anchor.download = `${translationDocument.title || 'translated'}.${reviewed ? 'reviewed' : 'draft'}.${documentExtension}`;
       anchor.click();
       URL.revokeObjectURL(url);
-      statusMessage = tImmediate('translate.msg.exported', { ext: documentExtension.toUpperCase() });
+      statusMessage = tImmediate(reviewed ? 'translate.msg.exportedReviewed' : 'translate.msg.exported', { ext: documentExtension.toUpperCase() });
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
     }
@@ -1329,17 +1335,24 @@
         </div>
       {/if}
       <div class="mt-4 flex flex-wrap items-center gap-2">
-        <button
-          class="rounded px-3 py-2 text-sm disabled:opacity-50"
-          style="background:var(--menu-background);color:var(--menu-foreground);"
-          disabled={busy || !draftReady}
-          on:click={startDraftTranslation}
-        >
-          {translationJob?.status === 'paused' || translationJob?.status === 'failed' ? $t('translate.draft.resume') : $t('translate.draft.start')}
-        </button>
+        {#if !draftFinished}
+          <button
+            class="rounded px-3 py-2 text-sm disabled:opacity-50"
+            style="background:var(--menu-background);color:var(--menu-foreground);"
+            disabled={busy || !draftReady}
+            on:click={startDraftTranslation}
+          >
+            {jobStatus === 'paused' || jobStatus === 'failed' ? $t('translate.draft.resume') : $t('translate.draft.start')}
+          </button>
+        {/if}
         <button class="rounded border border-current/40 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={!running} on:click={pauseTranslation}>{$t('translate.draft.pause')}</button>
         {#if translationDocument.format !== 'cbz' && translationDocument.format !== 'cbr'}
-          <button class="rounded border border-current/20 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={!translations.size || busy} on:click={exportDraft}>{$t('translate.draft.export')}</button>
+          <button
+            class="rounded px-3 py-2 text-sm disabled:opacity-50 {draftFinished ? '' : 'border border-current/20 hover-soft'}"
+            style={draftFinished ? 'background:var(--menu-background);color:var(--menu-foreground);' : ''}
+            disabled={!translations.size || busy}
+            on:click={exportDraft}
+          >{reviewed ? $t('translate.draft.exportReviewed') : $t('translate.draft.export')}</button>
         {:else}
           <button class="rounded border border-current/20 px-3 py-2 text-sm hover-soft disabled:opacity-50" disabled={!translations.size || busy} on:click={goToReaderForOverlay}>{$t('translate.draft.viewOverlay')}</button>
         {/if}

@@ -1415,6 +1415,7 @@ export default {
   'translate.draft.resume': 'Resume draft',
   'translate.draft.pause': 'Pause and save',
   'translate.draft.export': 'Export draft file',
+  'translate.draft.exportReviewed': 'Export reviewed translation',
   'translate.draft.viewOverlay': 'View translation in reader',
   'translate.draft.exportChunks': 'Export Markdown chunks',
   'translate.msg.createdFromBook': 'Created a translation job from the current AutoBook book',
@@ -1428,6 +1429,7 @@ export default {
   'translate.msg.draftFailed': 'Draft failed, checkpoint saved — resumable',
   'translate.msg.pausing': 'Pausing after the current batch, then saving the checkpoint…',
   'translate.msg.exported': 'Exported draft {ext}',
+  'translate.msg.exportedReviewed': 'Exported reviewed {ext}',
   'translate.msg.exportedChunks': 'Exported {n} Markdown chunks',
   'translate.precision.title': 'Review pass',
   'translate.precision.hint':
