@@ -2041,10 +2041,46 @@ ${$t('reader.ttsFailed.hint')}`
     }
   }
 
+  /**
+   * Esc closes the drawer on top — they had no key at all, only × or a click
+   * outside — and hands focus back to the header button that opened it.
+   */
+  function closeTopPanel(): boolean {
+    let opener = '';
+    if (settingsDrawerOpen) {
+      settingsDrawerOpen = false;
+      opener = tImmediate('reader.readingSettings');
+    } else if (aiDrawerOpen) {
+      aiDrawerOpen = false;
+      aiInitialInput = '';
+    } else if ($highlightSidebarOpen$ || $tocIsOpen$) {
+      if ($statisticsEnabled$ && !wasTrackerPaused) isTrackerPaused$.next(false);
+      highlightSidebarOpen$.next(false);
+      tocIsOpen$.next(false);
+    } else {
+      return false;
+    }
+    if (opener) {
+      showHeader = true;
+      tick().then(() =>
+        document.querySelector<HTMLElement>(`[aria-label="${CSS.escape(opener)}"]`)?.focus()
+      );
+    }
+    return true;
+  }
+
   function onKeydown(ev: KeyboardEvent) {
+    // Ahead of the typing guard: Esc from a field inside a drawer still closes it.
+    // The TOC sets skipKeyDownListener$ itself, like a dialog; other dialogs
+    // keep their own Esc.
+    if (ev.key === 'Escape' && (!$skipKeyDownListener$ || $tocIsOpen$) && closeTopPanel()) {
+      ev.preventDefault();
+      return;
+    }
     // Keys typed into the AI drawer, a memo, the search box… are text, not
-    // shortcuts — this handler blurs whatever it acts on.
-    if (isTypingTarget(ev.target)) return;
+    // shortcuts — this handler blurs whatever it acts on. With the settings
+    // drawer open, focus can sit on the page behind it and still mean the drawer.
+    if (isTypingTarget(ev.target) || settingsDrawerOpen) return;
     // Ctrl+F is the one search shortcut everyone already knows; the keybind
     // map below only does bare keys, so it is handled ahead of it.
     if (
@@ -3173,6 +3209,7 @@ ${$t('reader.ttsFailed.hint')}`
 
 {#if $tocIsOpen$ && $sectionData$}
   <div
+    data-reader-panel
     class="writing-horizontal-tb fixed top-0 left-0 z-[60] flex h-full w-full max-w-xl flex-col justify-between"
     style:color={$themeOption$?.fontColor}
     style:background-color={$backgroundColor$}

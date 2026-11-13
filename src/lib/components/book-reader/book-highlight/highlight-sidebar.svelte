@@ -69,6 +69,7 @@
 </script>
 
 <div
+  data-reader-panel
   class="writing-horizontal-tb fixed top-0 left-0 z-[60] flex h-full w-full max-w-md flex-col border-r border-current/10 shadow-2xl"
   style="color:var(--font-color);background:var(--background-color);"
   in:fly|local={{ x: -100, duration: 100, easing: quintInOut }}
