@@ -64,12 +64,16 @@
   .ch-para {
     margin: 0 0 1em;
     text-indent: 2em;
+    /* For SegmentBody: text after a block <img> is an anonymous block that
+       text-indent never reaches, so it re-applies this by hand. */
+    --para-indent: 2em;
     white-space: pre-wrap;
   }
 
   /* ---- Markdown: reads like a rendered document, not a novel ---- */
   .md {
     text-indent: 0;
+    --para-indent: 0;
   }
   .ch-title.md {
     text-align: left;

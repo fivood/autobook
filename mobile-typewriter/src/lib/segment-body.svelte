@@ -74,11 +74,14 @@
 
   $: parts = buildParts(seg, cut, pendingEnd, hasCursor);
   $: images = (seg.images ?? []).map((key) => imageUrls.get(key)).filter(Boolean) as string[];
+  // The markup below keeps no whitespace between tags: the parent paragraph
+  // is white-space: pre-wrap, so a newline around an <img> rendered as a
+  // stray space in front of the text.
 </script>
 
-{#if seg.ruleBefore}<span class="md-rule" class:pending={cut === 0} />{/if}{#each images as url}
-  <img class="seg-img" class:pending={cut === 0 && !hasCursor} src={url} alt="" loading="lazy" />
-{/each}{#each parts as part}{#if part.kind === 'cursor'}<span
+{#if seg.ruleBefore}<span class="md-rule" class:pending={cut === 0} />{/if}{#each images as url}<img
+    class="seg-img" class:pending={cut === 0 && !hasCursor} src={url} alt="" loading="lazy"
+  />{/each}{#each parts as part}{#if part.kind === 'cursor'}<span
       class="cursor"
       bind:this={cursorEl}
       class:cursor-on={cursorOn}
@@ -115,7 +118,9 @@
     margin: 0 1px;
     vertical-align: -0.15em;
     background: var(--accent);
-    opacity: 0;
+    /* Dim but present while paused: with unplayed text hidden, a pause on a
+       chapter start otherwise left nothing on screen marking the spot. */
+    opacity: 0.4;
   }
   .cursor-on {
     opacity: 0.85;
@@ -166,6 +171,9 @@
     max-height: 60vh;
     margin: 0.6em auto;
     object-fit: contain;
+  }
+  .seg-img + :not(.seg-img) {
+    margin-inline-start: var(--para-indent, 0);
   }
 
   /* Superscript number in place of the publisher's footnote glyph. Sized in
