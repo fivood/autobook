@@ -83,7 +83,15 @@ export class TtsHighlighter {
     if (!start || !end) return;
     try {
       const range = new Range();
-      range.setStart(start.node, start.offset);
+      // A sentence that opens on furigana starts at the reading: the kanji
+      // under it are blanked out of the speech text (silentInRuby in
+      // auto-reader-shared.ts), and trimming skips them. Widen to the whole
+      // <ruby> or the mark sits on 「とうきょう」 beside a bare 東京. Any node
+      // in the ruby, not just <rt>: an offset at the seam resolves to the end
+      // of the base text node.
+      const ruby = start.node.parentElement?.closest('ruby');
+      if (ruby) range.setStartBefore(ruby);
+      else range.setStart(start.node, start.offset);
       range.setEnd(end.node, end.offset);
       const HL: any = (window as any).Highlight;
       this.highlight = new HL(range);
