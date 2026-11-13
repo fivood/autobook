@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+    # Dry run: builds every platform but publishes nothing — the installers
+    # come back as run artifacts (see the last step). For trying out
+    # packaging changes without a release.
+    branches:
+      - 'mac/**'
   workflow_dispatch:
 
 permissions:
@@ -13,6 +18,10 @@ jobs:
   build-tauri:
     strategy:
       fail-fast: false
+      # One platform at a time. Each tauri-action run reads latest.json back
+      # from the release, adds its own platform and re-uploads it; two running
+      # at once and whichever finishes last drops the other's entry.
+      max-parallel: 1
       matrix:
         include:
           - platform: windows-latest
@@ -20,6 +29,12 @@ jobs:
             # declared (Tauri 2 known issue); NSIS is the recommended installer
             # and what latest.json points at via updaterJsonPreferNsis.
             args: '--bundles nsis,updater'
+          - platform: macos-latest
+            # Apple Silicon only (macos-latest is arm64). No Apple certificate:
+            # the app is ad-hoc signed (bundle.macOS.signingIdentity "-") and
+            # users clear Gatekeeper themselves — see README. The `app` bundle
+            # is what produces the updater's .app.tar.gz.
+            args: '--bundles app,dmg'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -70,10 +85,24 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: ${{ github.ref_name }}
+          # Empty off a tag: tauri-action then only builds. A branch dispatch
+          # used to pass the branch name here and try to publish a release
+          # called "desktop".
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseBody: ${{ steps.notes.outputs.notes }}
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
           updaterJsonPreferNsis: true
+
+      - name: Upload installers (dry run)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: autobook-${{ matrix.platform }}
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app.tar.gz*
+            src-tauri/target/release/bundle/nsis/*.exe*
+          if-no-files-found: error

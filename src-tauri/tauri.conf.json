@@ -42,6 +42,9 @@
         "installerHooks": "installer-hooks.nsh"
       }
     },
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "fileAssociations": [
       {
         "ext": [
