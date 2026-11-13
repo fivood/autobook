@@ -129,6 +129,7 @@
        other without the preview dropping. -->
   <div
     class="group pointer-events-none fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2 transition-opacity duration-300"
+    style="writing-mode: horizontal-tb;"
     class:opacity-20={faded}
     on:mouseenter={() => (hovered = true)}
     on:mouseleave={() => (hovered = false)}
