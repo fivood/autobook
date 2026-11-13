@@ -234,3 +234,22 @@ export function highlightHtml(text: string, terms: string[]): string {
   out += escapeHtml(text.slice(last));
   return out;
 }
+
+/** `highlightHtml` for text that is already rendered HTML (a Markdown note):
+ *  matches are marked inside text nodes only, never across or inside tags. */
+export function highlightRenderedHtml(html: string, terms: string[]): string {
+  if (!terms.some(Boolean)) return html;
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+  for (const node of nodes) {
+    const marked = highlightHtml(node.data, terms);
+    if (!marked.includes('<mark')) continue;
+    const frag = document.createElement('template');
+    frag.innerHTML = marked;
+    node.replaceWith(frag.content);
+  }
+  return tpl.innerHTML;
+}

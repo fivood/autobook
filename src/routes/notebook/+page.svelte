@@ -45,8 +45,10 @@
     collectMatchTerms,
     collectTags,
     filterAndGroup,
-    highlightHtml
+    highlightHtml,
+    highlightRenderedHtml
   } from '$lib/functions/notebook/notebook-search';
+  import { getFormattedElementMd } from '$lib/functions/file-loaders/md/generate-md-html';
   import type { NotebookSortKey, TagMode, NotebookGroup } from '$lib/functions/notebook/notebook-search';
   import { HIGHLIGHT_SLOTS, normalizeHighlightSlot } from '$lib/data/highlight-color';
   import HighlightSlotSwatch from '$lib/components/highlight-slot-swatch.svelte';
@@ -742,7 +744,9 @@
                     />
                     <div class="min-w-0 flex-1">
                       {#if h.kind === 'note'}
-                        <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{@html highlightHtml(h.memo, matchTerms)}</p>
+                        <!-- Rendered like the editor's preview: the note is Markdown, and
+                             「## 读后记」 used to show its two #s here. -->
+                        <div class="text-editor-preview break-words text-sm leading-relaxed">{@html highlightRenderedHtml(getFormattedElementMd(h.memo).element.innerHTML, matchTerms)}</div>
                       {:else}
                         <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{@html highlightHtml(h.text, matchTerms)}</p>
                         {#if h.memo}
