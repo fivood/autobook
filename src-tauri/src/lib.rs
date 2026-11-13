@@ -18,6 +18,7 @@ mod koreader;
 mod mobi_parser;
 mod proxy;
 mod secrets;
+#[cfg(windows)]
 mod winrt_tts;
 
 #[cfg(test)]
@@ -87,8 +88,30 @@ fn allow_paths(app: &tauri::AppHandle, paths: &[String]) {
 /// meant to prevent. The list can only grow through `pick_user_dir`, and that
 /// cannot return a path the user did not select in a native dialog.
 fn allowed_roots_path() -> std::path::PathBuf {
+  app_local_dir().join("allowed-roots.json")
+}
+
+/// Where the app keeps its own small files: `%LOCALAPPDATA%\<id>` on Windows,
+/// the folder Tauri's `$APPLOCALDATA` resolves to on macOS.
+fn app_local_dir() -> std::path::PathBuf {
+  #[cfg(windows)]
   let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/allowed-roots.json")
+  #[cfg(not(windows))]
+  let base = std::env::var("HOME")
+    .map(|h| format!("{h}/Library/Application Support"))
+    .unwrap_or_else(|_| ".".into());
+  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader")
+}
+
+/// `%USERPROFILE%\Documents` on Windows — deliberately not the known-folder
+/// API: a OneDrive-redirected Documents would move every existing default
+/// library out from under its user. `~/Documents` on macOS.
+fn user_documents_dir() -> Option<std::path::PathBuf> {
+  #[cfg(windows)]
+  let home = std::env::var("USERPROFILE");
+  #[cfg(not(windows))]
+  let home = std::env::var("HOME");
+  home.ok().map(|h| std::path::PathBuf::from(h).join("Documents"))
 }
 
 fn read_allowed_roots() -> Vec<String> {
@@ -176,28 +199,64 @@ async fn pick_user_dir(
 
 /// Path to the marker file that signals "delete WebView2 Local Storage on next launch".
 fn reset_flag_path() -> std::path::PathBuf {
-  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/reset-ui.flag")
+  app_local_dir().join("reset-ui.flag")
 }
 
 /// Path to the marker file that signals "delete EVERYTHING — Local Storage,
 /// IndexedDB, the lot — on next launch". Used by the nuclear data reset.
 fn full_reset_flag_path() -> std::path::PathBuf {
-  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/reset-full.flag")
+  app_local_dir().join("reset-full.flag")
 }
 
+/// The webview's own storage root: WebView2's user-data folder on Windows,
+/// WKWebView's default data store on macOS.
+fn webview_root() -> std::path::PathBuf {
+  #[cfg(windows)]
+  return app_local_dir().join("EBWebView");
+  #[cfg(not(windows))]
+  return std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()))
+    .join("Library/WebKit/io.github.fukki.ebookreader/WebsiteData");
+}
+
+#[cfg(windows)]
 fn webview_local_storage_dirs() -> Vec<std::path::PathBuf> {
-  webview_subdir_paths("Default/Local Storage")
+  profile_subdir(&webview_root(), "Default/Local Storage")
 }
 
+#[cfg(windows)]
 fn webview_indexeddb_dirs() -> Vec<std::path::PathBuf> {
-  webview_subdir_paths("Default/IndexedDB")
+  profile_subdir(&webview_root(), "Default/IndexedDB")
 }
 
-fn webview_subdir_paths(rel: &str) -> Vec<std::path::PathBuf> {
-  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-  profile_subdir(&std::path::PathBuf::from(base).join("io.github.fukki.ebookreader").join("EBWebView"), rel)
+// WebKit has moved these between releases (`WebsiteData/LocalStorage` on
+// older macOS, `WebsiteData/Default/<salt>/<salt>/LocalStorage` on newer), so
+// they are found by name instead of by one hard-coded layout.
+// ponytail: only those two layouts are known; confirm on a real Mac.
+#[cfg(not(windows))]
+fn webview_local_storage_dirs() -> Vec<std::path::PathBuf> {
+  find_dirs_named(&webview_root(), "LocalStorage", 4)
+}
+
+#[cfg(not(windows))]
+fn webview_indexeddb_dirs() -> Vec<std::path::PathBuf> {
+  find_dirs_named(&webview_root(), "IndexedDB", 4)
+}
+
+#[cfg_attr(windows, allow(dead_code))]
+fn find_dirs_named(root: &std::path::Path, name: &str, depth: u8) -> Vec<std::path::PathBuf> {
+  let mut out = Vec::new();
+  let Ok(entries) = std::fs::read_dir(root) else { return out };
+  for entry in entries.flatten() {
+    if !entry.file_type().is_ok_and(|t| t.is_dir()) {
+      continue;
+    }
+    if entry.file_name() == name {
+      out.push(entry.path());
+    } else if depth > 0 {
+      out.extend(find_dirs_named(&entry.path(), name, depth - 1));
+    }
+  }
+  out
 }
 
 /// `EBWebView` is WebView2's user-data folder and `Default` the profile right
@@ -227,6 +286,23 @@ mod profile_subdir_tests {
     let _ = std::fs::remove_dir_all(&root);
     assert!(profile_subdir(&root, "Default/IndexedDB").is_empty());
   }
+
+  #[test]
+  fn finds_webkit_dirs_in_both_layouts() {
+    let root = std::env::temp_dir().join(format!("autobook_webkit_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for d in ["LocalStorage", "Default/salt/salt/IndexedDB", "Default/salt/salt/LocalStorage/x"] {
+      std::fs::create_dir_all(root.join(d)).unwrap();
+    }
+    let mut ls = super::find_dirs_named(&root, "LocalStorage", 4);
+    ls.sort();
+    let mut want = vec![root.join("LocalStorage"), root.join("Default/salt/salt/LocalStorage")];
+    want.sort();
+    assert_eq!(ls, want);
+    assert_eq!(super::find_dirs_named(&root, "IndexedDB", 4), vec![root.join("Default/salt/salt/IndexedDB")]);
+    assert!(super::find_dirs_named(&root, "IndexedDB", 2).is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+  }
 }
 
 /// Runs before the WebView2 process is spawned. Removes Local Storage if the
@@ -236,10 +312,7 @@ mod profile_subdir_tests {
 /// `Documents/AutoBook/` on first launch of the new version so the app's
 /// name and its data folder match.
 fn migrate_books_dir() {
-  let docs = match std::env::var("USERPROFILE") {
-    Ok(home) => std::path::PathBuf::from(home).join("Documents"),
-    Err(_) => return,
-  };
+  let Some(docs) = user_documents_dir() else { return };
   let old = docs.join("EbookReader");
   let new_dir = docs.join("AutoBook");
   if old.exists() && !new_dir.exists() {
@@ -277,6 +350,20 @@ fn show_main_window(app: &tauri::AppHandle) {
     let _ = window.unminimize();
     let _ = window.set_focus();
   }
+}
+
+/// Hand book paths to the frontend: queue them, then nudge it to drain the
+/// queue. The event carries no payload so that a file arriving before the
+/// frontend listens (macOS delivers a double-clicked file as `Opened` during
+/// launch) and one arriving later take the same road and are never imported
+/// twice.
+fn deliver_launch_files(app: &tauri::AppHandle, files: Vec<String>) {
+  if files.is_empty() {
+    return;
+  }
+  allow_paths(app, &files);
+  app.state::<LaunchFiles>().0.lock().unwrap().extend(files);
+  let _ = app.emit("open-files", ());
 }
 
 #[tauri::command]
@@ -323,9 +410,7 @@ fn schedule_full_reset(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 fn default_documents_root_path() -> std::path::PathBuf {
-  std::env::var("USERPROFILE")
-    .map(|h| std::path::PathBuf::from(h).join("Documents").join("AutoBook"))
-    .unwrap_or_default()
+  user_documents_dir().map(|d| d.join("AutoBook")).unwrap_or_default()
 }
 
 /// The default library folder (`%USERPROFILE%\Documents\AutoBook`) — the
@@ -357,9 +442,7 @@ fn get_data_paths(fs_root: Option<String>) -> serde_json::Value {
     total
   }
 
-  let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
-  let webview_root =
-    std::path::PathBuf::from(&local_appdata).join("io.github.fukki.ebookreader/EBWebView");
+  let webview_root = webview_root();
   let default_root = default_documents_root_path();
   let effective_root = fs_root
     .as_deref()
@@ -643,22 +726,40 @@ fn open_data_folder(path: String) -> Result<(), String> {
   if !p.is_dir() {
     return Err(format!("不是文件夹: {path}"));
   }
-  // Spawn explorer.exe; on non-Windows builds this command is irrelevant.
-  #[cfg(target_os = "windows")]
-  {
-    std::process::Command::new("explorer")
-      .arg(&p)
-      .spawn()
-      .map_err(|e| e.to_string())?;
-  }
+  #[cfg(windows)]
+  let mut cmd = std::process::Command::new("explorer");
+  // `-a Finder`: plain `open` on a folder that is a bundle (`X.app`) launches
+  // it instead of showing it.
+  #[cfg(not(windows))]
+  let mut cmd = std::process::Command::new("open");
+  #[cfg(not(windows))]
+  cmd.args(["-a", "Finder"]);
+  cmd.arg(&p).spawn().map_err(|e| e.to_string())?;
   Ok(())
 }
 
+#[cfg(windows)]
 #[tauri::command]
 fn sapi_list_voices() -> Result<Vec<winrt_tts::SapiVoice>, String> {
   winrt_tts::list_voices()
 }
 
+// The settings page hides the SAPI engine off Windows; these only answer a
+// stale `ttsEngine = sapi` carried over from elsewhere.
+#[cfg(not(windows))]
+#[tauri::command]
+fn sapi_list_voices() -> Result<Vec<String>, String> {
+  Err("系统 TTS（SAPI）只在 Windows 上可用".into())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+#[allow(unused_variables)]
+async fn sapi_speak(text: String, voice_id: Option<String>, rate: Option<f32>) -> Result<String, String> {
+  Err("系统 TTS（SAPI）只在 Windows 上可用".into())
+}
+
+#[cfg(windows)]
 /// Synthesize via WinRT SpeechSynthesizer. Returns a base64 WAV the frontend
 /// plays with HTMLAudioElement (same plumbing as Edge). Natural / Online
 /// neural voices are picked up automatically once installed via Windows
@@ -863,6 +964,7 @@ mod move_directory_tests {
   /// move_directory / open_data_folder are reachable from the webview: only a
   /// root itself passes, however it is spelled — never a path inside or above
   /// one, a UNC path, or a relative root.
+  #[cfg(windows)]
   #[test]
   fn only_exact_granted_roots_pass() {
     let roots = vec![
@@ -893,11 +995,7 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
       show_main_window(app);
-      let files = collect_book_files(args.into_iter().skip(1));
-      if !files.is_empty() {
-        allow_paths(app, &files);
-        let _ = app.emit("open-files", files);
-      }
+      deliver_launch_files(app, collect_book_files(args.into_iter().skip(1)));
     }))
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_fs::init())
@@ -961,11 +1059,7 @@ pub fn run() {
       }
 
       // Files passed on first launch (double-click association / CLI)
-      let launch_files = collect_book_files(std::env::args().skip(1));
-      if !launch_files.is_empty() {
-        allow_paths(app.handle(), &launch_files);
-        *app.state::<LaunchFiles>().0.lock().unwrap() = launch_files;
-      }
+      deliver_launch_files(app.handle(), collect_book_files(std::env::args().skip(1)));
 
       // Global shortcut plugin: actual binding is set from the frontend
       // (settings) via set_tts_shortcut so users can rebind / disable it.
@@ -1065,6 +1159,25 @@ pub fn run() {
 
       Ok(())
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|_app, _event| {
+      // macOS sends neither of these through argv / the single-instance
+      // plugin: a double-clicked book arrives as `Opened`, and with the close
+      // button hiding to tray a Dock click (`Reopen`) is how the window comes
+      // back — the menu-bar icon has no double-click.
+      #[cfg(target_os = "macos")]
+      match _event {
+        tauri::RunEvent::Opened { urls } => {
+          let paths = urls
+            .into_iter()
+            .filter_map(|u| u.to_file_path().ok())
+            .map(|p| p.to_string_lossy().into_owned());
+          show_main_window(_app);
+          deliver_launch_files(_app, collect_book_files(paths));
+        }
+        tauri::RunEvent::Reopen { .. } => show_main_window(_app),
+        _ => {}
+      }
+    });
 }

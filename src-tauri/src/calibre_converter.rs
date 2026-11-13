@@ -9,17 +9,22 @@ use tokio::time::timeout;
 const CONVERSION_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn find_calibre_convert() -> Option<PathBuf> {
+    #[cfg(windows)]
     let candidates = [
         r"C:\Program Files\Calibre2\ebook-convert.exe",
         r"C:\Program Files (x86)\Calibre2\ebook-convert.exe",
     ];
+    #[cfg(not(windows))]
+    let candidates = ["/Applications/calibre.app/Contents/MacOS/ebook-convert"];
     for c in &candidates {
         let p = PathBuf::from(c);
         if p.exists() {
             return Some(p);
         }
     }
-    let mut probe = std::process::Command::new("where");
+    // A Finder-launched app gets a bare PATH on macOS, so this mostly matters
+    // on Windows; it is still the only way to find a non-default install.
+    let mut probe = std::process::Command::new(if cfg!(windows) { "where" } else { "which" });
     probe.arg("ebook-convert");
     // Same reason the conversion itself hides its window: this runs from a GUI
     // process, and `where` would otherwise flash a console on every settings

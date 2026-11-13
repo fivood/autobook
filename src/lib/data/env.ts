@@ -9,6 +9,11 @@ export const pagePath = import.meta.env.VITE_PAGE_PATH || '';
 export const clearConsoleOnReload = !!import.meta.env.VITE_CLEAR_ON_RELOAD || false;
 export const storageRootName = import.meta.env.VITE_STORAGE_ROOT_NAME || 'ttu-reader-data';
 
+/** WinRT/SAPI voices exist only in the Windows build. */
+export function hasSystemSapi(): boolean {
+  return isTauri() && /Windows/.test(navigator.userAgent);
+}
+
 export function isTauri(): boolean {
   if (typeof window === 'undefined') return false;
   return (

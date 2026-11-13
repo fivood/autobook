@@ -98,6 +98,7 @@ dependencies = [
  "mobi",
  "reqwest 0.12.28",
  "rusqlite",
+ "security-framework",
  "serde",
  "serde_json",
  "sha2",

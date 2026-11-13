@@ -244,8 +244,12 @@
         }
       };
 
-      queueLaunchFiles(await invoke<string[]>('take_launch_files'));
-      listen<string[]>('open-files', (event) => queueLaunchFiles(event.payload));
+      // `open-files` is only a nudge; the paths always come from the Rust-side
+      // queue, so a file that arrived before this listener existed is not lost
+      // and one that arrived after is not taken twice.
+      const drainLaunchFiles = async () => queueLaunchFiles(await invoke<string[]>('take_launch_files'));
+      await listen('open-files', drainLaunchFiles);
+      await drainLaunchFiles();
 
       // Tray + global shortcut fan into the same store; per-page handlers
       // subscribe and act when they can (e.g. /b toggles TTS).

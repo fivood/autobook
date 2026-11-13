@@ -6,7 +6,7 @@
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
-  import { isTauri } from '$lib/data/env';
+  import { hasSystemSapi, isTauri } from '$lib/data/env';
   import { getEdgeVoiceGroups, getEdgeVoiceIds } from '$lib/data/edge-voices';
   import {
     getDefaultKokoroVoice,
@@ -636,7 +636,9 @@
         bind:value={$ttsEngine$}
       >
         <option value="web">{$t('settings.value.ttsEngine.web')}</option>
-        <option value="sapi">{$t('settings.value.ttsEngine.sapi')}</option>
+        {#if hasSystemSapi()}
+          <option value="sapi">{$t('settings.value.ttsEngine.sapi')}</option>
+        {/if}
         <option value="edge">{$t('settings.value.ttsEngine.edge')}</option>
         <option value="kokoro">{$t('settings.value.ttsEngine.kokoro')}</option>
         <option value="custom">{$t('settings.value.ttsEngine.custom')}</option>
