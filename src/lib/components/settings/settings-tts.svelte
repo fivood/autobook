@@ -2,7 +2,6 @@
   import { browser } from '$app/environment';
   import { onDestroy } from 'svelte';
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
-  import { optionsForToggle } from '$lib/components/button-toggle-group/toggle-option';
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
@@ -14,12 +13,12 @@
     getKokoroVoices
   } from '$lib/data/kokoro-voices';
   import {
+    autoScrollStopAtChapter$,
     kokoroAccepted$,
     kokoroLoadStatus$,
     kokoroModel$,
     kokoroVoiceId$,
     readerVoiceUri$,
-    ttsAutoAdvanceSection$,
     ttsCustomActivePreset$,
     ttsCustomAudioPath$,
     ttsCustomBody$,
@@ -67,6 +66,12 @@
 
   let activeLang: TtsLang = langSlotOf(bookLanguage);
 
+  // Choices named for what happens rather than Off / On: the store is 章止,
+  // so On would have meant "stop".
+  $: chapterEndOptions = [
+    { id: false, text: $t('settings.value.chapterEnd.continue') },
+    { id: true, text: $t('settings.value.chapterEnd.stop') }
+  ];
   $: voiceLangOptions = TTS_LANGS.map((id) => ({ id, text: $t(`settings.tts.lang.${id}`) }));
 
   // The engine stores below are the pre-slot values; they stand in for any
@@ -693,7 +698,7 @@
   title={$t('settings.item.autoContinue')}
   tooltip={$t('settings.tip.autoContinue')}
 >
-  <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$ttsAutoAdvanceSection$} />
+  <ButtonToggleGroup options={chapterEndOptions} bind:selectedOptionId={$autoScrollStopAtChapter$} />
 </SettingsItemGroup>
 
 <SettingsItemGroup

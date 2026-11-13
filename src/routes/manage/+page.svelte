@@ -11,6 +11,7 @@
     faSquareCheck,
     faSquareMinus,
     faTrash,
+    faFolderMinus,
     faUpload
   } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
@@ -326,18 +327,6 @@
     ev.dataTransfer.effectAllowed = 'copy';
   }
 
-  async function removeSelectedFromActiveFolder() {
-    const filter = $activeFolderFilter$;
-    if (filter === 'all' || filter === 'uncategorized') return;
-    const folderId = Number(filter);
-    if (!Number.isFinite(folderId)) return;
-    const ids = Array.from(selectedBookIds);
-    await removeBooksFromFolder(ids, folderId);
-    selectedBookIds = new Set();
-    activeFolderFilter$.next('uncategorized');
-    flashToast(tImmediate('manager.toast.removedFromFolder', { n: ids.length }));
-  }
-
   async function addSelectedToFolder(folderId: number) {
     const ids = Array.from(selectedBookIds);
     await addBooksToFolder(ids, folderId);
@@ -607,9 +596,29 @@
   let contextMenu: { x: number; y: number } | null = null;
   /** 加入分类 expanded in the right-click menu. */
   let contextMenuFoldersOpen = false;
+  /**
+   * The right-click turned multi-select on, rather than the user. It goes back
+   * off when the menu closes without a pick, and once nothing is ticked any
+   * more (after 删除 / 移出此分类): otherwise a look at the menu left the
+   * library in a mode where the next click on a book ticks it instead of
+   * opening it, with an emptied top bar as the only sign. Not right after
+   * every pick — 导出 reads the selection later, from its dialog.
+   */
+  let contextMenuStartedSelectMode = false;
+  // Called from `$:` rather than written inline, so the reactive graph sees
+  // only the argument: inline, selectMode → flag → selectMode is a cycle.
+  function forgetContextSelection(on: boolean) {
+    if (!on) contextMenuStartedSelectMode = false;
+  }
+  function leaveContextSelectionWhenEmpty(ids: ReadonlySet<BookCardId>) {
+    if (contextMenuStartedSelectMode && selectMode && !ids.size) selectMode = false;
+  }
+  $: forgetContextSelection(selectMode);
+  $: leaveContextSelectionWhenEmpty(selectedBookIds);
 
   function openContextMenu(id: BookCardId, x: number, y: number) {
     if (!selectedBookIds.has(id)) {
+      if (!selectMode) contextMenuStartedSelectMode = true;
       selectMode = true;
       selectedBookIds = new Set([id]);
       selectionAnchorId = id;
@@ -617,6 +626,11 @@
     contextMenuFoldersOpen = false;
     // Kept inside the window by use:keepInViewport, from the menu's real size.
     contextMenu = { x, y };
+  }
+
+  function dismissContextMenu() {
+    contextMenu = null;
+    if (contextMenuStartedSelectMode) selectMode = false;
   }
 
   function runFromContextMenu(action: () => void) {
@@ -1229,7 +1243,7 @@
       return;
     }
     if (event.key === 'Escape' && contextMenu) {
-      contextMenu = null;
+      dismissContextMenu();
       event.preventDefault();
     } else if (event.key === 'Escape' && selectMode) {
       selectMode = false;
@@ -1246,20 +1260,53 @@
     gotoBook(currentBookId);
   }
 
-  /** Card X / multi-select "remove" inside a folder view: only detach from the
-   * current folder, don't delete the book. Library-wide views (全部 / 未分类)
-   * still delete. */
-  async function handleRemove(bookIds: BookCardId[]) {
+  /** The folder being viewed, when it is one; 全部 / 未分类 / 已归档 are not. */
+  $: currentFolderId = (() => {
     const filter = $activeFolderFilter$;
-    if (filter !== 'all' && filter !== 'uncategorized') {
-      const folderId = Number(filter);
-      if (Number.isFinite(folderId)) {
-        await removeBooksFromFolder(bookIds, folderId);
-        selectedBookIds = new Set();
-        flashToast(tImmediate('manager.toast.removedFromCurrentFolder', { n: bookIds.length }));
-        return;
-      }
+    if (filter === 'all' || filter === 'uncategorized') return undefined;
+    const id = Number(filter);
+    return Number.isFinite(id) ? id : undefined;
+  })();
+
+  /**
+   * Inside a folder this used to be what 删除 did — the same red word that
+   * deletes files everywhere else, told apart only by the toast afterwards.
+   * It has its own label now, and 删除 deletes in every view.
+   */
+  async function removeFromCurrentFolder(bookIds: BookCardId[]) {
+    if (currentFolderId === undefined) return;
+    await removeBooksFromFolder(bookIds, currentFolderId);
+    selectedBookIds = new Set();
+    flashToast(tImmediate('manager.toast.removedFromCurrentFolder', { n: bookIds.length }));
+  }
+
+  /** Deleting books went straight through from three places with no undo,
+   *  while 清除统计 next to it asked first. */
+  async function confirmAndDeleteBooks(bookIds: BookCardId[]) {
+    const titles = $bookCards$.filter((card) => bookIds.includes(card.id)).map((card) => card.title);
+    if (!titles.length) return;
+    const SHOWN = 5;
+    const lines = titles.slice(0, SHOWN).map((title) => `· ${title}`);
+    if (titles.length > SHOWN) {
+      lines.push(tImmediate('manager.deleteBooksConfirm.more', { n: titles.length - SHOWN }));
     }
+    const wasCanceled = await new Promise<boolean>((resolver) => {
+      dialogManager.dialogs$.next([
+        {
+          component: ConfirmDialog,
+          props: {
+            dialogHeader: tImmediate('manager.deleteBooksConfirm.header'),
+            dialogMessage: tImmediate('manager.deleteBooksConfirm.body', {
+              n: titles.length,
+              titles: lines.join('\n')
+            }),
+            contentStyles: 'white-space: pre-line;',
+            resolver
+          }
+        }
+      ]);
+    });
+    if (wasCanceled) return;
     await removeBooks(bookIds);
   }
 
@@ -1656,11 +1703,22 @@
           ? $t('manager.action.unarchive')
           : $t('manager.action.archive')}
       </button>
+      {#if currentFolderId !== undefined}
+        <button
+          type="button"
+          class="selection-action"
+          title={$t('manager.removeFromFolderTitle')}
+          on:click={() => removeFromCurrentFolder(Array.from(selectedBookIds))}
+        >
+          <Fa icon={faFolderMinus} />
+          {$t('manager.action.removeFromFolder')}
+        </button>
+      {/if}
       <button
         type="button"
         class="selection-action selection-action-danger"
         title={$t('manager.deleteBooks')}
-        on:click={() => handleRemove(Array.from(selectedBookIds))}
+        on:click={() => confirmAndDeleteBooks(Array.from(selectedBookIds))}
       >
         <Fa icon={faTrash} />
         {$t('manager.action.delete')}
@@ -1672,7 +1730,7 @@
     <div
       class="menu-surface menu-list context-menu"
       style="left:{contextMenu.x}px;top:{contextMenu.y}px;"
-      use:clickOutside={() => (contextMenu = null)}
+      use:clickOutside={dismissContextMenu}
       use:keepInViewport
     >
       {#if selectedBookIds.size === 1}
@@ -1746,11 +1804,21 @@
           ? $t('manager.action.unarchive')
           : $t('manager.action.archive')}
       </div>
+      {#if currentFolderId !== undefined}
+        <div
+          tabindex="0"
+          role="button"
+          class="menu-item"
+          title={$t('manager.removeFromFolderTitle')}
+          on:click={() => runFromContextMenu(() => removeFromCurrentFolder(Array.from(selectedBookIds)))}
+          on:keyup={activateOnKeyup}
+        >{$t('manager.action.removeFromFolder')}</div>
+      {/if}
       <div
         tabindex="0"
         role="button"
         class="menu-item context-menu-danger"
-        on:click={() => runFromContextMenu(() => handleRemove(Array.from(selectedBookIds)))}
+        on:click={() => runFromContextMenu(() => confirmAndDeleteBooks(Array.from(selectedBookIds)))}
         on:keyup={activateOnKeyup}
       >{$t('manager.action.delete')}</div>
     </div>
@@ -1793,14 +1861,6 @@
             + {folder.name}
           </button>
         {/each}
-        {#if $activeFolderFilter$ !== 'all' && $activeFolderFilter$ !== 'uncategorized'}
-          <button
-            class="rounded-full border-2 border-red-400 px-3 py-1 text-xs text-danger hover:bg-red-400/20"
-            on:click={removeSelectedFromActiveFolder}
-          >
-            {$t('manager.removeFromFolder')}
-          </button>
-        {/if}
       {/if}
     </div>
   {/if}
@@ -1846,7 +1906,6 @@
       on:bookClick={(ev) => onBookClick(ev.detail.id, ev.detail.shiftKey, ev.detail.toggleKey)}
       on:marqueeSelect={(ev) => onMarqueeSelect(ev.detail.ids)}
       on:cardContextMenu={(ev) => openContextMenu(ev.detail.id, ev.detail.x, ev.detail.y)}
-      on:removeBookClick={(ev) => handleRemove([ev.detail.id])}
       on:cardDragStart={(ev) => onCardDragStart(ev.detail.event, ev.detail.id)}
     />
   {:else if $activeFolderFilter$ === ARCHIVED_FILTER}

@@ -137,7 +137,6 @@
     enableVerticalFontKerning$,
     enableFontVPAL$,
     verticalTextOrientation$,
-    ttsAutoAdvanceSection$,
     ttsPositions$,
     ttsStartStrategy$,
     ttsToggleRequest$,
@@ -1144,10 +1143,11 @@ ${$t('reader.ttsFailed.hint')}`
     };
     autoReader.onEnd = (nothingToRead = false) => {
       // A section with no text (cover, illustration page, comic) used to make
-      // play a silent no-op that also stalled auto-continue. Skip past it when
-      // auto-continue is on, otherwise say why nothing happened — but only if
-      // nothing was read since the user pressed play: running into a blank
-      // back cover after the last chapter is a normal ending, not an error.
+      // play a silent no-op that also stalled auto-continue. Skip past it —
+      // 章止 included, see the resume below — and only say why nothing
+      // happened when a long run of them ends it with nothing read since the
+      // user pressed play: running into a blank back cover after the last
+      // chapter is a normal ending, not an error.
       if (nothingToRead && !ttsAutoResuming) ttsSpokeInRun = false;
       const stopHere = () => {
         forgetPlaybackCursor();
@@ -1166,7 +1166,7 @@ ${$t('reader.ttsFailed.hint')}`
       };
       // ponytail: fixed cap so an all-image book doesn't flip to its last page;
       // make it smarter only if real books have longer runs of picture pages.
-      if (!$ttsAutoAdvanceSection$ || (nothingToRead && ++ttsEmptySkips > TTS_MAX_EMPTY_SKIPS)) {
+      if (nothingToRead && ++ttsEmptySkips > TTS_MAX_EMPTY_SKIPS) {
         stopHere();
         return;
       }
@@ -1277,8 +1277,11 @@ ${$t('reader.ttsFailed.hint')}`
     // Defer so DOM/innerHTML updates from the new section land before
     // extractText() runs.
     setTimeout(() => {
+      // 章止 is about chapters that were read. Pressing play on a cover that
+      // is a chapter of its own skips into chapter 1 and must keep going.
       if (
         $autoScrollStopAtChapter$ &&
+        ttsSpokeInRun &&
         $sectionData$?.length &&
         getChapterData($sectionData$)[1] !== ttsChapterAtSectionEnd
       ) {

@@ -22,11 +22,8 @@
     bookClick: { id: BookCardId; shiftKey: boolean; toggleKey: boolean };
     marqueeSelect: { ids: BookCardId[] };
     cardContextMenu: { id: BookCardId; x: number; y: number };
-    removeBookClick: { id: BookCardId };
     cardDragStart: { id: BookCardId; event: DragEvent };
   }>();
-
-  let hoveringBookId: BookCardId | undefined;
 
   // Hover-detail popover: shows on 600ms hover hold, hides instantly on
   // leave or click. Skipped while in select mode to keep the click target
@@ -43,6 +40,14 @@
   const POPOVER_H_MAX = 360;
   const GAP = 12;
 
+  // Right-click selects the card it lands on, so the mode can start under a
+  // pointer that is still hovering: the 600ms timer had already fired and the
+  // popover sat on top of the context menu.
+  $: if (selectMode) {
+    clearTimeout(hoverTimer);
+    detailId = undefined;
+  }
+
   $: detailCard = detailId != null ? bookCards.find((c) => c.id === detailId) : undefined;
 
   // Format label for the hover popover: prefer originalFormat (set at
@@ -58,12 +63,7 @@
   })();
 
   function onCardEnter(card: BookCardProps, ev: MouseEvent) {
-    // Keyed on the mode, not on `selectedBookIds.size`: with the mode on but
-    // nothing selected yet, the hover delete button used to appear over the
-    // card you were about to select — one pixel of aim away from deleting a
-    // book instead of ticking it.
     if (selectMode) return;
-    hoveringBookId = card.id;
     clearTimeout(hoverTimer);
     const cardEl = (ev.currentTarget as HTMLElement) ?? null;
     hoverTimer = setTimeout(() => {
@@ -93,7 +93,6 @@
   }
 
   function onCardLeave() {
-    hoveringBookId = undefined;
     clearTimeout(hoverTimer);
     detailId = undefined;
   }
@@ -327,23 +326,6 @@
               <div class="w-40">{getCardDateInfo(bookCard.lastBookModified)}</div>
             </div>
           </Popover>
-        </div>
-      {/if}
-      {#if bookCard.id === hoveringBookId}
-        <div
-          tabindex="0"
-          role="button"
-          class="mdc-elevation--z2 hover:mdc-elevation--z8 mdc-elevation-transition absolute top-1 right-1 h-6 w-6 rounded-full"
-          style="background:var(--danger-color);"
-          on:click={() => dispatch('removeBookClick', { id: bookCard.id })}
-          on:keyup={activateOnKeyup}
-        >
-          <svg role="img" class="w-full" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 504 504">
-            <path
-              class="fill-current text-white"
-              d="M369.6 313.1c4.7 4.7 4.7 12.3 0 17L330 369.6c-4.7 4.7-12.3 4.7-17 0L248 304l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L126.4 330c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L304 248l65.6 65.1z"
-            />
-          </svg>
         </div>
       {/if}
     </div>

@@ -218,10 +218,23 @@ export const multiplier$ = writableNumberLocalStorageSubject()('autoScrollMultip
   const v = multiplier$.getValue();
   if (v > 30 || v < 1) multiplier$.next(6);
 }
+/** 章止: both engines stop where a new chapter begins. The only chapter-end
+ * switch — the dock pill and settings → 朗读 both write it. */
 export const autoScrollStopAtChapter$ = writableBooleanLocalStorageSubject()(
   'autoScrollStopAtChapter',
   false
 );
+// There used to be a second switch, voice-only, set in settings
+// (`ttsAutoAdvanceSection`, 章末自动续读). Either one could stop the voice, so
+// the dock could read 连播 while the voice still stopped at every chapter.
+// Its Off meant "stop", which is 章止 now.
+if (browser) {
+  const legacy = localStorage.getItem('ttsAutoAdvanceSection');
+  if (legacy !== null) {
+    if (legacy === '0') autoScrollStopAtChapter$.next(true);
+    localStorage.removeItem('ttsAutoAdvanceSection');
+  }
+}
 
 /** Absolute paths queued from file-association / CLI launch (desktop only). */
 export const pendingLaunchFiles$ = writableSubject<string[]>([]);
@@ -244,12 +257,6 @@ export const ttsStartStrategy$ = writableStringLocalStorageSubject()(
   'ttsStartStrategy',
   'selection'
 );
-/** When TTS finishes a section in paginated mode, auto-advance to next section. */
-export const ttsAutoAdvanceSection$ = writableBooleanLocalStorageSubject()(
-  'ttsAutoAdvanceSection',
-  true
-);
-
 export const ttsShortcut$ = writableStringLocalStorageSubject()('ttsShortcut', 'ctrl+alt+p');
 
 export const highlightSidebarOpen$ = writableBooleanLocalStorageSubject()('highlightSidebarOpen', false);
