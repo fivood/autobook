@@ -1124,8 +1124,10 @@
             </button>
           </div>
         {/if}
-      </div>
 
+      <!-- Inside the bar so it's anchored to the bar's top edge: a fixed
+           offset from the screen bottom fell behind once the bar grew a
+           second row, and the pill sat on the mode switch. -->
       {#if readMode === 'typewriter' && book.chapters.length > 1}
         <details class="toc">
           <summary>{$t('typewriter.tocSummary', { n: book.chapters.length })}</summary>
@@ -1141,6 +1143,7 @@
           <button class="restart" on:click={restart}>{$t('typewriter.restart')}</button>
         </details>
       {/if}
+      </div>
     {/if}
   </div>
 {/if}
@@ -1422,13 +1425,31 @@
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     position: relative;
+    /* Hidden bars are slid off-screen, not removed; without this they
+       made the page itself scrollable by a bar's height. */
+    overflow: hidden;
   }
-  /* Immersive: top / bottom bars collapse to zero height + zero opacity
-     so the viewport gets the full screen. A short fade keeps tap-to-flash
-     from feeling jarring. */
+  /* Immersive: the bars float over the text instead of taking rows of the
+     column, so the viewport gets the full screen. Left in flow, fading
+     them out only left blank bands top and bottom that swallowed taps.
+     A short fade keeps tap-to-flash from feeling jarring. The TOC lives
+     inside .controls and hides with it. */
+  .reader.immersive .topbar,
+  .reader.immersive .controls {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 5;
+  }
+  .reader.immersive .topbar {
+    top: env(safe-area-inset-top);
+    background: var(--bg);
+  }
+  .reader.immersive .controls {
+    bottom: env(safe-area-inset-bottom);
+  }
   .reader.chrome-hidden .topbar,
-  .reader.chrome-hidden .controls,
-  .reader.chrome-hidden .toc {
+  .reader.chrome-hidden .controls {
     opacity: 0;
     pointer-events: none;
     transform: translateY(var(--chrome-shift, 0));
@@ -1661,6 +1682,7 @@
   }
 
   .controls {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1743,7 +1765,7 @@
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(env(safe-area-inset-bottom) + 5.5rem);
+    bottom: calc(100% + 0.5rem);
     max-width: 88vw;
     max-height: 60vh;
     overflow-y: auto;

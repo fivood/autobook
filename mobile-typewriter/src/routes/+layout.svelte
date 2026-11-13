@@ -89,7 +89,11 @@
       --chip-text: #d4d3c5;
     }
   }
-  :global(html, body) {
+  /* Plain selectors: `:global(html, body)` compiled to `html,:global(body)`,
+     an invalid list the browser dropped whole — body kept its 8px UA
+     margin and pushed the reader's bottom bar off a 100dvh screen. */
+  html,
+  body {
     margin: 0;
     padding: 0;
     background: var(--bg);
