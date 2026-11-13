@@ -25,7 +25,7 @@
 use base64::{engine::general_purpose, Engine};
 use serde::Serialize;
 
-use crate::mobi_parser::{ParsedMobi, ParsedMobiImage};
+use crate::mobi_parser::{ParsedFlowResource, ParsedMobi, ParsedMobiImage};
 
 /// MOBIv8 header subset we need. All offsets are from the start of the MOBI
 /// signature (`b"MOBI"`), which lives at byte 16 of the first KF8 record
@@ -67,6 +67,8 @@ struct Mobi8Header {
     ///   skeleton_table at record offset 0xFC → MOBI sig + 0xEC
     fragment_record: u32,
     skeleton_record: u32,
+    /// NCX / TOC index (MOBI-sig+0xE4), Phase 4.
+    ncx_record: u32,
 }
 
 /// Read a big-endian u32 from `bytes` at `offset`, returning 0 if out of
@@ -114,31 +116,38 @@ fn parse_mobi8_header(record: &[u8]) -> Result<Mobi8Header, String> {
     h.compression = compression;
     h.header_length = read_u32_be(record, mobi_start + 4);
 
-    // Field offsets within the MOBI header (relative to MOBI signature):
-    //   0x0C text_encoding
+    // Field offsets — all MOBI-sig-relative unless noted. Cross-referenced
+    // against KindleUnpack (mobi_header.py) and Calibre (mobi/reader/headers.py).
+    //   0x0C text_encoding      (1252 = CP1252, 65001 = UTF-8)
     //   0x40 first_non_book_index
-    //   0x58 format_version (8 = KF8)
+    //   0x58 format_version     (8 = KF8)
     //   0x5C first_image_index
-    //   0x60 huff_record
-    //   0x64 huff_count
-    //   0xC8 fdst_record (KF8 stores it here, MOBI6 leaves zero)
-    //   0xCC fdst_count
-    //   0xC0 skeleton_record (KF8 only)
-    //   0xC4 chunks_record (KF8 only)
+    //   0x60 huff_record / 0x64 huff_count
+    //   0xB0 fdst_index / 0xB4 fdst_count           (KF8 only)
+    //   0xE4 ncx_index                               (navigation, ignored)
+    //   0xE8 chunks_index (aka fragment)             (KF8 Phase 3)
+    //   0xEC skeleton_index                          (KF8 Phase 2)
+    // Header layout was probed empirically — several online references
+    // disagree about which of 0xE8 / 0xEC is skeleton vs. chunks. In our
+    // sample corpus the TAGX shape at 0xEC is `(1, 1, 3, 0), (6, 2, 12, 0)`
+    // which matches the documented skeleton layout (num_frags + [offset,
+    // length] pair encoded as tag 6 with num_values=2).
+    //   0xF2 extra_record_data_flags (u16) — record-relative, not sig-relative
+    // Cross-checked KindleUnpack mobi_header.py and Calibre latest;
+    // Phase 1 misread these (skeleton at 0xEC and fragment/skeleton
+    // swapped) which yielded NCX rows shaped like `off=1 len=0` when we
+    // tried to use them in Phase 2.
     h.text_encoding = read_u32_be(record, mobi_start + 0x0C);
     h.first_non_book_index = read_u32_be(record, mobi_start + 0x40);
     h.format_version = read_u32_be(record, mobi_start + 0x58);
     h.first_image_index = read_u32_be(record, mobi_start + 0x5C);
     h.huff_record = read_u32_be(record, mobi_start + 0x60);
     h.huff_count = read_u32_be(record, mobi_start + 0x64);
-    // KindleUnpack-verified offsets (record-relative, so subtract 16 for MOBI-sig-relative):
-    //   0xB0: fdst_table, 0xB4: fdst_count, 0xE8: fragment_table, 0xEC: skeleton_table
     h.fdst_record = read_u32_be(record, mobi_start + 0xB0);
     h.fdst_count = read_u32_be(record, mobi_start + 0xB4);
-    // KindleUnpack: fragment at record offset 0xF4, skeleton at record offset 0xFC
-    h.fragment_record = read_u32_be(record, 0xF4);
-    h.skeleton_record = read_u32_be(record, 0xFC);
-    // extra_record_data_flags: u16 at record offset 0xF2 (KindleUnpack-verified).
+    h.ncx_record = read_u32_be(record, mobi_start + 0xE4);
+    h.fragment_record = read_u32_be(record, mobi_start + 0xE8);
+    h.skeleton_record = read_u32_be(record, mobi_start + 0xEC);
     h.extra_record_data_flags = read_u16_be(record, 0xF2) as u32;
 
     // PalmDoc header (bytes 0..16 of the same record):
@@ -216,73 +225,6 @@ fn is_pure_kf8(record_0: &[u8]) -> bool {
         return false;
     }
     read_u32_be(record_0, 16 + 0x58) == 8
-}
-
-/// PalmDoc decompression — same algorithm used by MOBI6, shared here so we
-/// don't depend on mobi crate's private impl.
-fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
-    let length = data.len();
-    let mut pos: usize = 0;
-    let mut text_pos: usize = 0;
-    let mut text: Vec<u8> = Vec::with_capacity(length * 2);
-
-    let mut prev = None;
-    while pos < length {
-        let byte = data[pos];
-        pos += 1;
-        match byte {
-            new if prev.is_some() => {
-                let old = prev.take().unwrap();
-                let mut dist_len_bytes = u16::from_be_bytes([old, new]);
-                dist_len_bytes &= 0x3fff;
-                let offset = (dist_len_bytes >> 3) as usize;
-                let len = ((dist_len_bytes & 0x0007) + 3) as usize;
-                let start = if offset > text_pos {
-                    if text_pos == 0 {
-                        return text;
-                    }
-                    offset % text_pos
-                } else {
-                    text_pos - offset
-                };
-                let end = if start + len >= text.len() {
-                    text.len()
-                } else {
-                    start + len
-                };
-                for i in start..end {
-                    text.push(text[i]);
-                    text_pos += 1;
-                }
-            }
-            0x0 | 0x09..=0x7f => {
-                text.push(byte);
-                text_pos += 1;
-            }
-            0x1..=0x8 => {
-                let b = byte as usize;
-                if pos + b <= length {
-                    for ch in &data[pos..(pos + b)] {
-                        text.push(*ch);
-                        text_pos += 1;
-                    }
-                    pos += b;
-                }
-            }
-            0x80..=0xbf => {
-                if pos >= text.len() {
-                    return text;
-                }
-                prev = Some(byte);
-            }
-            _ => {
-                text.push(b' ');
-                text.push(byte ^ 0x80);
-                text_pos += 2;
-            }
-        }
-    }
-    text
 }
 
 fn detect_image_ext(bytes: &[u8]) -> Option<&'static str> {
@@ -426,6 +368,505 @@ pub fn parse_mobi_full_name(record0: &[u8]) -> Option<String> {
     }
 }
 
+/// Phase 2 fallback: no fragment table available, so we can only slice
+/// each skeleton's full raw byte range (template + fragments back-to-back).
+/// HTML output isn't strictly valid — fragments trail past `</html>` —
+/// but tolerant parsers still render it.
+fn reassemble_phase2_concat(
+    skels: &[crate::kf8_indx::SkeletonRow],
+    raw_html_bytes: &[u8],
+    flow0_end: usize,
+) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::with_capacity(flow0_end.saturating_sub(skels[0].offset as usize));
+    let ends: Vec<usize> = (0..skels.len())
+        .map(|i| {
+            if i + 1 < skels.len() {
+                skels[i + 1].offset as usize
+            } else {
+                flow0_end
+            }
+        })
+        .collect();
+    let mut kept = 0usize;
+    for (i, row) in skels.iter().enumerate() {
+        let start = row.offset as usize;
+        let end = ends[i].min(raw_html_bytes.len());
+        if start >= end || start >= raw_html_bytes.len() {
+            continue;
+        }
+        buf.extend_from_slice(b"<mbp:pagebreak/>");
+        buf.extend_from_slice(&raw_html_bytes[start..end]);
+        kept += 1;
+    }
+    if kept < 2 {
+        buf.clear();
+    }
+    buf
+}
+
+/// Calibre's test for a broken insert point, with Python `find`'s -1 for
+/// "absent" kept: the tail closes a tag before opening one, or the head ends
+/// inside an open tag.
+fn lands_mid_tag(part: &[u8], ip: usize) -> bool {
+    let pos = |o: Option<usize>| o.map_or(-1, |i| i as i64);
+    let (head, tail) = part.split_at(ip);
+    pos(tail.iter().position(|&b| b == b'>')) < pos(tail.iter().position(|&b| b == b'<'))
+        || pos(head.iter().rposition(|&b| b == b'>')) < pos(head.iter().rposition(|&b| b == b'<'))
+}
+
+/// Byte index of the `>` closing the first tag carrying `aid="…"` (Calibre
+/// `locate_beg_end_of_tag`).
+fn aid_tag_end(part: &[u8], aid: &str) -> Option<usize> {
+    let lower = part.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(at) = find_from(&lower, b"aid", from) {
+        from = at + 3;
+        // `aid` as a whole attribute name: whitespace before, `=` after.
+        if at == 0 || !lower[at - 1].is_ascii_whitespace() {
+            continue;
+        }
+        let rest = &part[at + 3..];
+        let eq = rest.iter().position(|b| !b.is_ascii_whitespace())?;
+        if rest[eq] != b'=' {
+            continue;
+        }
+        let after = &rest[eq + 1..];
+        let q = after.iter().position(|b| !b.is_ascii_whitespace())?;
+        let quote = after[q];
+        if quote != b'"' && quote != b'\'' {
+            continue;
+        }
+        let value = &after[q + 1..];
+        if !value.starts_with(aid.as_bytes()) || value.get(aid.len()) != Some(&quote) {
+            continue;
+        }
+        let open = part[..at].iter().rposition(|&b| b == b'<')?;
+        if part[open..at].contains(&b'>') {
+            continue;
+        }
+        return part[at..].iter().position(|&b| b == b'>').map(|i| at + i);
+    }
+    None
+}
+
+/// Phase 3: fragment-into-skeleton reassembly, per Calibre `mobi8.py`
+/// `build_parts`: fragments are consumed in table order, `num_fragments`
+/// per skeleton; their bytes sit back-to-back right after the skeleton
+/// template; `insert_pos` is absolute in flow 0, so `insert_pos - skel.offset`
+/// is the offset into the *growing* part (earlier fragments included).
+/// Then `kindle:pos` links are resolved to `#id` and the parts are joined by
+/// `<mbp:pagebreak/>` for the frontend's section split.
+fn reassemble_with_fragments(
+    skels: &[crate::kf8_indx::SkeletonRow],
+    frags: &[crate::kf8_indx::FragmentRow],
+    raw_html_bytes: &[u8],
+    cncx_pool: &[u8],
+    ncx_labels: &[Option<String>],
+) -> Vec<u8> {
+    let raw = raw_html_bytes;
+    let mut parts: Vec<Vec<u8>> = Vec::with_capacity(skels.len());
+    let mut first_frag: Vec<usize> = Vec::with_capacity(skels.len());
+    let mut fi = 0usize;
+    for skel in skels {
+        let start = (skel.offset as usize).min(raw.len());
+        let mut base = (start + skel.length as usize).min(raw.len());
+        let mut part = raw[start..base].to_vec();
+        first_frag.push(fi);
+        let n = (skel.num_fragments as usize).min(frags.len().saturating_sub(fi));
+        // The aid of the skeleton's anchor tag, from the first fragment's TOC
+        // text `P-//*[@aid='UGI0']`. Calibre reads it once per skeleton too.
+        let aid = frags
+            .get(fi)
+            .filter(|_| n > 0 && !cncx_pool.is_empty())
+            .and_then(|f| crate::kf8_indx::read_cncx_name(cncx_pool, f.toc_cncx))
+            .and_then(|t| {
+                t.strip_prefix("P-//*[@aid='")?
+                    .strip_suffix("']")
+                    .map(str::to_owned)
+            });
+        for f in &frags[fi..fi + n] {
+            let end = (base + f.length as usize).min(raw.len());
+            let mut ip = (f.insert_pos as usize)
+                .saturating_sub(skel.offset as usize)
+                .min(part.len());
+            // Badly formed KF8 (launchpad #1082669) puts insert points inside
+            // a tag, which splices the fragment into the tag's attributes.
+            // Calibre then recomputes the point from the aid tag's end.
+            if lands_mid_tag(&part, ip) {
+                if let Some(tag_end) = aid.as_deref().and_then(|a| aid_tag_end(&part, a)) {
+                    ip = (tag_end + 1 + f.start_pos as usize).min(part.len());
+                }
+            }
+            part.splice(ip..ip, raw[base..end].iter().copied());
+            base = end;
+        }
+        fi += n;
+        parts.push(part);
+    }
+
+    resolve_pos_links(&mut parts, skels, frags);
+
+    let mut buf: Vec<u8> = Vec::with_capacity(parts.iter().map(|p| p.len() + 16).sum());
+    let mut kept = 0usize;
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() {
+            continue;
+        }
+        buf.extend_from_slice(b"<mbp:pagebreak/>");
+        // Prefer the NCX-derived chapter label (real epub TOC name). Fall
+        // back to the fragment CNCX only if it isn't an xpath position
+        // anchor (e.g. `P-//*[@aid='UGI0']`, what it holds in practice).
+        // Neither → omit and let the frontend scan `<h*>`.
+        let label: Option<String> = ncx_labels.get(i).cloned().flatten().or_else(|| {
+            let first = frags
+                .get(first_frag[i])
+                .filter(|_| skels[i].num_fragments > 0)?;
+            if first.toc_cncx == 0 || cncx_pool.is_empty() {
+                return None;
+            }
+            let name = crate::kf8_indx::read_cncx_name(cncx_pool, first.toc_cncx)?;
+            let looks_like_xpath =
+                name.starts_with("P-//") || name.starts_with("//*[") || name.contains("[@aid");
+            (!looks_like_xpath && !name.trim().is_empty()).then_some(name)
+        });
+        if let Some(l) = label {
+            buf.extend_from_slice(b"<!--autobook-section-label:");
+            buf.extend_from_slice(l.replace("-->", "-- >").as_bytes());
+            buf.extend_from_slice(b"-->");
+        }
+        buf.extend_from_slice(part);
+        kept += 1;
+    }
+    if kept < 2 {
+        buf.clear();
+    }
+    buf
+}
+
+const POS_PREFIX: &[u8] = b"kindle:pos:fid:";
+
+fn find_from(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
+    hay.get(from..)?
+        .windows(needle.len())
+        .position(|w| w == needle)
+        .map(|i| i + from)
+}
+
+/// Kindle base32 (`0-9A-V`) prefix of `s` → (value, digits consumed).
+fn base32_prefix(s: &[u8]) -> (usize, usize) {
+    let mut v = 0usize;
+    let mut n = 0usize;
+    for &c in s {
+        let d = match c {
+            b'0'..=b'9' => c - b'0',
+            b'A'..=b'V' => c - b'A' + 10,
+            b'a'..=b'v' => c - b'a' + 10,
+            _ => break,
+        };
+        v = v.saturating_mul(32).saturating_add(d as usize);
+        n += 1;
+    }
+    (v, n)
+}
+
+/// Parse `kindle:pos:fid:F:off:O` at `at` → (fid, off, total length).
+fn parse_pos_link(html: &[u8], at: usize) -> Option<(usize, usize, usize)> {
+    let mut p = at + POS_PREFIX.len();
+    let (fid, n) = base32_prefix(&html[p..]);
+    if n == 0 || !html[p + n..].starts_with(b":off:") {
+        return None;
+    }
+    p += n + 5;
+    let (off, m) = base32_prefix(&html[p..]);
+    (m > 0).then_some((fid, off, p + m - at))
+}
+
+/// Value of attribute `name` in one tag (`<...>`), matched case-insensitively
+/// and only right after whitespace (so `aid` never matches inside `data-aid`).
+fn tag_attr<'a>(tag: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
+    tag_attr_span(tag, name).map(|(_, v, _)| &tag[v.0..v.1])
+}
+
+/// Where `tag_attr` found it: (start of the name, the value's range, end past
+/// the closing quote).
+fn tag_attr_span(tag: &[u8], name: &[u8]) -> Option<(usize, (usize, usize), usize)> {
+    let skip_ws = |mut j: usize| {
+        while j < tag.len() && tag[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        j
+    };
+    for i in 1..tag.len().saturating_sub(name.len()) {
+        if !tag[i - 1].is_ascii_whitespace() || !tag[i..i + name.len()].eq_ignore_ascii_case(name) {
+            continue;
+        }
+        let j = skip_ws(i + name.len());
+        if tag.get(j) != Some(&b'=') {
+            continue;
+        }
+        let j = skip_ws(j + 1);
+        if let Some(&q @ (b'"' | b'\'')) = tag.get(j) {
+            let e = tag[j + 1..].iter().position(|&c| c == q)? + j + 1;
+            return Some((i, (j + 1, e), e + 1));
+        }
+    }
+    None
+}
+
+/// Every `name=` attribute in `html`, tag by tag: (attr start, attr end, value).
+fn attrs_in(html: &[u8], name: &[u8]) -> Vec<(usize, usize, Vec<u8>)> {
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(lt) = find_from(html, b"<", from) {
+        let Some(gt) = find_from(html, b">", lt) else { break };
+        let tag = &html[lt..=gt];
+        if let Some((s, v, e)) = tag_attr_span(tag, name) {
+            out.push((lt + s, lt + e, tag[v.0..v.1].to_vec()));
+        }
+        from = gt + 1;
+    }
+    out
+}
+
+enum Anchor {
+    Id(Vec<u8>),
+    /// `<a name>` with no id — the reader looks targets up by id only.
+    Name(Vec<u8>),
+    Aid(Vec<u8>),
+}
+
+/// Calibre `get_id_tag`: nearest tag at/before `npos` carrying id / a@name
+/// (or, failing those on that tag, aid). A position inside a tag counts
+/// that tag.
+fn anchor_before(part: &[u8], npos: usize) -> Option<Anchor> {
+    let npos = npos.min(part.len());
+    let end = match (find_from(part, b">", npos), find_from(part, b"<", npos)) {
+        (Some(g), Some(l)) if l == npos || g < l => g + 1,
+        (Some(g), None) => g + 1,
+        _ => npos,
+    };
+    let block = &part[..end];
+    let mut close = block.len();
+    while let Some(lt) = block[..close].iter().rposition(|&c| c == b'<') {
+        let tag = &block[lt..close];
+        close = lt;
+        let Some(gt) = tag.iter().position(|&c| c == b'>') else { continue };
+        let tag = &tag[..=gt];
+        let is_a = tag.len() > 2 && tag[1].eq_ignore_ascii_case(&b'a') && tag[2].is_ascii_whitespace();
+        if let Some(v) = tag_attr(tag, b"id") {
+            return Some(Anchor::Id(v.to_vec()));
+        }
+        if let Some(v) = is_a.then(|| tag_attr(tag, b"name")).flatten() {
+            return Some(Anchor::Name(v.to_vec()));
+        }
+        if let Some(v) = tag_attr(tag, b"aid") {
+            return Some(Anchor::Aid(v.to_vec()));
+        }
+    }
+    None
+}
+
+/// Rewrite every `kindle:pos:fid:F:off:O` to `#id` (Calibre
+/// `get_id_tag_by_pos_fid`: pos = frags[F].insert_pos + O, located in the
+/// skeleton whose flow-0 span holds it). Targets known only by `aid` get
+/// `id="aid-X"` added. Unresolvable links are left for the frontend's
+/// section-level fallback.
+fn resolve_pos_links(
+    parts: &mut [Vec<u8>],
+    skels: &[crate::kf8_indx::SkeletonRow],
+    frags: &[crate::kf8_indx::FragmentRow],
+) {
+    // Links become plain `#id`, one namespace for the whole book, but each
+    // part was its own file and ids repeat across them (note `n1` in every
+    // chapter). The first part to use an id keeps it; later ones that a link
+    // needs get `id--part`, so the link can't land on the first.
+    let mut owner: std::collections::HashMap<Vec<u8>, usize> = Default::default();
+    for (pi, part) in parts.iter().enumerate() {
+        for (_, _, v) in attrs_in(part, b"id") {
+            owner.entry(v).or_insert(pi);
+        }
+    }
+    let unique = |v: &[u8], ti: usize| -> Vec<u8> {
+        match owner.get(v) {
+            Some(&first) if first != ti => [v, b"--", ti.to_string().as_bytes()].concat(),
+            _ => v.to_vec(),
+        }
+    };
+
+    // Pass 1 on the untouched parts: (part, at, len, target id), plus per
+    // part the attribute to find and the id to give that target.
+    let mut edits: Vec<(usize, usize, usize, Vec<u8>)> = Vec::new();
+    // Per part: (attribute, its value) → the id to give that target.
+    let mut targets: Vec<std::collections::HashMap<(&[u8], Vec<u8>), Vec<u8>>> =
+        vec![Default::default(); parts.len()];
+    for (pi, part) in parts.iter().enumerate() {
+        let mut from = 0;
+        while let Some(at) = find_from(part, POS_PREFIX, from) {
+            from = at + POS_PREFIX.len();
+            let Some((fid, off, len)) = parse_pos_link(part, at) else { continue };
+            let Some(f) = frags.get(fid) else { continue };
+            let pos = f.insert_pos as usize + off;
+            let Some(ti) = skels.iter().zip(parts.iter()).position(|(s, p)| {
+                let s0 = s.offset as usize;
+                pos >= s0 && pos < s0 + p.len()
+            }) else {
+                continue;
+            };
+            let (attr, value) = match anchor_before(&parts[ti], pos - skels[ti].offset as usize) {
+                Some(Anchor::Id(v)) => (b"id".as_slice(), v),
+                Some(Anchor::Name(v)) => (b"name".as_slice(), v),
+                Some(Anchor::Aid(v)) => (b"aid".as_slice(), v),
+                None => continue,
+            };
+            let id = if attr == b"aid" {
+                [b"aid-".as_slice(), &value].concat()
+            } else {
+                unique(&value, ti)
+            };
+            targets[ti].insert((attr, value), id.clone());
+            edits.push((pi, at, len, id));
+            from = at + len;
+        }
+    }
+    // Pass 2: link rewrites, back to front so earlier offsets stay valid.
+    for (pi, at, len, id) in edits.into_iter().rev() {
+        let href = [b"#".as_slice(), &id].concat();
+        parts[pi].splice(at..at + len, href);
+    }
+    // Pass 3: give each target the id its links now use — a renamed `id`
+    // replaces the old one, `name` / `aid` targets gain one. Found by parsing
+    // tags, not a literal ` id="…"`: an attribute after a newline/tab or in
+    // single quotes was missed, leaving a link already rewritten to `#id`
+    // with nothing carrying that id.
+    for (pi, wanted) in targets.iter().enumerate() {
+        for ((attr, value), id) in wanted {
+            let found = attrs_in(&parts[pi], attr).into_iter().find(|(_, _, v)| v == value);
+            let Some((at, end, _)) = found else { continue };
+            let new_id = [b"id=\"".as_slice(), id, b"\""].concat();
+            if *attr == b"id" {
+                if parts[pi][at..end] != new_id[..] {
+                    parts[pi].splice(at..end, new_id);
+                }
+            } else {
+                parts[pi].splice(at..at, [new_id.as_slice(), b" "].concat());
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kf8_indx::{FragmentRow, SkeletonRow};
+
+    fn skel(offset: u32, length: u32, n: u32) -> SkeletonRow {
+        SkeletonRow { name: String::new(), num_fragments: n, offset, length }
+    }
+    fn frag(insert_pos: u32, length: u32) -> FragmentRow {
+        FragmentRow { insert_pos, parent_ord: 0, start_pos: 0, length, toc_cncx: 0 }
+    }
+
+    #[test]
+    fn spots_insert_points_inside_a_tag_and_finds_the_aid_tag() {
+        let t: &[u8] = b"<html><body aid=\"0\"></body></html>";
+        let body_end = b"<html><body aid=\"0\">".len();
+        assert_eq!(t[body_end - 1], b'>');
+        assert!(lands_mid_tag(t, 9), "inside `<body aid=…>`");
+        assert!(lands_mid_tag(t, body_end - 1), "right before the body tag's `>`");
+        assert!(!lands_mid_tag(t, body_end), "after the body tag");
+        assert_eq!(aid_tag_end(t, "0"), Some(body_end - 1));
+        // `data-aid` and a longer value don't count.
+        assert_eq!(aid_tag_end(b"<p data-aid='0'><p aid='01'><i aid = '0' >", "0"), Some(41));
+        assert_eq!(aid_tag_end(t, "1"), None);
+    }
+
+    #[test]
+    fn repeated_ids_and_name_anchors_get_their_own_target() {
+        // Both parts have a `n1`; part 0 links to part 1's, and to an `<a name>`.
+        let t: &[u8] = b"<html><body></body></html>";
+        let f0: &[u8] = b"<p id=\"n1\">a</p><a href=\"kindle:pos:fid:0001:off:0000000000\">x</a><a href=\"kindle:pos:fid:0002:off:0000000000\">y</a>";
+        let f1: &[u8] = b"<p id=\"n1\">note</p>";
+        let f2: &[u8] = b"<a name=\"m\">m</a>";
+        let raw = [t, f0, t, f1, f2].concat();
+        let s1 = (t.len() + f0.len()) as u32;
+        let tl = t.len() as u32;
+        let skels = [skel(0, tl, 1), skel(s1, tl, 2)];
+        let frags = [
+            frag(12, f0.len() as u32),
+            frag(s1 + 12, f1.len() as u32),
+            frag(s1 + 12 + f1.len() as u32, f2.len() as u32),
+        ];
+        let out = String::from_utf8(reassemble_with_fragments(&skels, &frags, &raw, &[], &[])).unwrap();
+        let parts: Vec<&str> = out.split("<mbp:pagebreak/>").filter(|s| !s.is_empty()).collect();
+        assert!(parts[0].contains("<p id=\"n1\">a</p><a href=\"#n1--1\">x</a><a href=\"#m\">y</a>"), "{}", parts[0]);
+        assert!(parts[1].contains("<p id=\"n1--1\">note</p><a id=\"m\" name=\"m\">m</a>"), "{}", parts[1]);
+    }
+
+    #[test]
+    fn reassembles_and_resolves_pos_links() {
+        // flow 0: skel0 template + 2 frags, then skel1 template + 1 frag.
+        // Both templates take their fragments right after `<body>` (12).
+        let t: &[u8] = b"<html><body></body></html>";
+        let f0: &[u8] = b"<p id=\"c1\"><a href=\"kindle:pos:fid:0002:off:0000000003\">*</a></p>";
+        let f1: &[u8] = b"<p>tail</p>";
+        let f2: &[u8] = b"<div aid=\"7\">x<p aid=\"8\">note</p></div>";
+        let raw = [t, f0, f1, t, f2].concat();
+        let s1 = (t.len() + f0.len() + f1.len()) as u32;
+        let tl = t.len() as u32;
+        let skels = [skel(0, tl, 2), skel(s1, tl, 1)];
+        let frags = [
+            frag(12, f0.len() as u32),
+            frag(12 + f0.len() as u32, f1.len() as u32),
+            frag(s1 + 12, f2.len() as u32),
+        ];
+        let out = reassemble_with_fragments(&skels, &frags, &raw, &[], &[]);
+        let out = String::from_utf8(out).unwrap();
+        let parts: Vec<&str> = out.split("<mbp:pagebreak/>").filter(|s| !s.is_empty()).collect();
+        // pos = frag2.insert_pos + 3 → inside `<div aid="7">` → that tag.
+        assert_eq!(
+            parts[0],
+            "<html><body><p id=\"c1\"><a href=\"#aid-7\">*</a></p><p>tail</p></body></html>"
+        );
+        assert_eq!(
+            parts[1],
+            "<html><body><div id=\"aid-7\" aid=\"7\">x<p aid=\"8\">note</p></div></body></html>"
+        );
+    }
+
+    /// Targets with a newline/tab before the attribute or single quotes: the
+    /// link is rewritten to `#id`, so the target must end up carrying it.
+    #[test]
+    fn targets_with_any_whitespace_and_quotes_get_their_id() {
+        let t: &[u8] = b"<html><body></body></html>";
+        let f0: &[u8] = b"<p id='n1'>a</p><a href=\"kindle:pos:fid:0001:off:0000000000\">x</a><a href=\"kindle:pos:fid:0002:off:0000000000\">y</a>";
+        let f1: &[u8] = b"<p\n id='n1'>note</p>";
+        let f2: &[u8] = b"<a\tname='m'>m</a>";
+        let raw = [t, f0, t, f1, f2].concat();
+        let s1 = (t.len() + f0.len()) as u32;
+        let tl = t.len() as u32;
+        let skels = [skel(0, tl, 1), skel(s1, tl, 2)];
+        let frags = [
+            frag(12, f0.len() as u32),
+            frag(s1 + 12, f1.len() as u32),
+            frag(s1 + 12 + f1.len() as u32, f2.len() as u32),
+        ];
+        let out = String::from_utf8(reassemble_with_fragments(&skels, &frags, &raw, &[], &[])).unwrap();
+        let parts: Vec<&str> = out.split("<mbp:pagebreak/>").filter(|s| !s.is_empty()).collect();
+        assert!(parts[0].contains("<a href=\"#n1--1\">x</a><a href=\"#m\">y</a>"), "{}", parts[0]);
+        assert!(parts[1].contains("<p\n id=\"n1--1\">note</p>"), "{}", parts[1]);
+        assert!(parts[1].contains("<a\tid=\"m\" name='m'>m</a>"), "{}", parts[1]);
+    }
+
+    #[test]
+    fn anchor_prefers_nearest_id() {
+        let html: &[u8] = b"<div id=\"a\"><p aid=\"1\">t</p><span id=\"b\">x</span>yz";
+        let Some(Anchor::Id(v)) = anchor_before(html, html.len() - 1) else { panic!() };
+        assert_eq!(v, b"b");
+        let Some(Anchor::Aid(v)) = anchor_before(html, 16) else { panic!() };
+        assert_eq!(v, b"1");
+    }
+}
+
 /// Top-level entry. Returns `Ok(Some(parsed))` if the file is KF8 (joint or
 /// pure) and we managed to parse it, `Ok(None)` if the file is pure MOBI6
 /// (caller should use the legacy MOBI6 path), or `Err` if parse failed.
@@ -436,14 +877,17 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         return Ok(None);
     }
 
-    let kf8_start = match find_boundary_index(&records) {
-        Some(boundary) => boundary + 1,
-        None => {
-            if is_pure_kf8(records[0]) {
-                0
-            } else {
-                return Ok(None);
-            }
+    // Pure KF8 (record 0 is a KF8 header, fv==8) takes precedence over the
+    // BOUNDARY scan: some AZW3 files have a valid KF8 header at record 0 AND
+    // a BOUNDARY marker later (a secondary/legacy segment). Previously the
+    // BOUNDARY scan won and pointed kf8_start past it, where records[boundary+1]
+    // isn't a PalmDoc+MOBI header → "expected MOBI signature" error.
+    let kf8_start = if is_pure_kf8(records[0]) {
+        0
+    } else {
+        match find_boundary_index(&records) {
+            Some(boundary) => boundary + 1,
+            None => return Ok(None),
         }
     };
 
@@ -461,11 +905,25 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         ));
     }
 
+    // Huff/CDIC decoder is loaded once and reused across all text
+    // records if this KF8 uses compression==17480. huff_record and
+    // huff_count in the KF8 header are relative to the KF8 segment.
+    let mut huff: Option<crate::mobi_parser::HuffCdic> = None;
     if header.compression == 17480 {
-        return Err(
-            "本文件使用 Huff/CDIC 压缩，KF8 解析器还在做（计划 1.6.0）。临时方案：用 Calibre 转 EPUB。"
-                .into(),
-        );
+        if header.huff_record == 0 || header.huff_count == 0 {
+            return Err("KF8 Huff/CDIC-compressed but header.huff_record==0".into());
+        }
+        let huff_abs = kf8_start + header.huff_record as usize;
+        if huff_abs + header.huff_count as usize > records.len() {
+            return Err("KF8 Huff/CDIC record range extends past file".into());
+        }
+        let cdic_records: Vec<&[u8]> = (1..header.huff_count as usize)
+            .map(|i| records[huff_abs + i])
+            .collect();
+        match crate::mobi_parser::HuffCdic::load(records[huff_abs], &cdic_records) {
+            Ok(h) => huff = Some(h),
+            Err(e) => return Err(format!("KF8 Huff/CDIC init failed: {e}")),
+        }
     }
 
     // Title: prefer MOBI full-name from KF8 header record, then from MOBI6
@@ -506,10 +964,14 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         let trimmed = strip_record_trailers(record, header.extra_record_data_flags);
         let chunk = match header.compression {
             1 => trimmed.to_vec(),
-            2 => decompress_palmdoc(trimmed),
+            2 => crate::mobi_parser::decompress_palmdoc(trimmed),
+            17480 => match huff.as_mut() {
+                Some(h) => h.unpack(trimmed),
+                None => return Err("KF8 Huff/CDIC decoder not initialized".into()),
+            },
             other => {
                 return Err(format!(
-                    "unknown KF8 compression type: {other} (expected 1 or 2)"
+                    "unknown KF8 compression type: {other} (expected 1, 2, or 17480)"
                 ));
             }
         };
@@ -520,10 +982,218 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         return Err("KF8 text records decompressed to nothing".into());
     }
 
+    // Phase 2: use FDST to slice out flow 0 (the HTML container).
+    // Everything past flow 0 is CSS files, SVG image masks, and other
+    // resources concatenated into the same decompressed byte stream.
+    // Phase 1 returned all of it, dumping raw CSS + SVG markup into the
+    // visible content. Phase 2 keeps only flow 0. Phase 4 extracts flow
+    // 1+ SVG so `<image xlink:href="kindle:flow:XXXX?mime=image/svg+xml"/>`
+    // renders (typically the cover page).
+    let mut flow0_range: Option<(usize, usize)> = None;
+    let mut fdst_flows: Vec<crate::kf8_indx::FdstSection> = Vec::new();
+    let fdst_abs = kf8_start.saturating_add(header.fdst_record as usize);
+    if header.fdst_record != 0
+        && header.fdst_record != u32::MAX
+        && header.fdst_count > 0
+        && fdst_abs < records.len()
+    {
+        // FDST usually lives in a single record but the header allows
+        // multiple — concatenate them before parsing.
+        let end_rec = (fdst_abs + header.fdst_count as usize).min(records.len());
+        let mut concat: Vec<u8> = Vec::new();
+        for i in fdst_abs..end_rec {
+            concat.extend_from_slice(records[i]);
+        }
+        if let Ok(flows) = crate::kf8_indx::parse_fdst(&concat) {
+            if let Some(first) = flows.first() {
+                let s = first.start as usize;
+                let e = (first.end as usize).min(raw_html_bytes.len());
+                if s < e {
+                    flow0_range = Some((s, e));
+                }
+            }
+            fdst_flows = flows;
+        }
+    }
+    let (flow0_start, flow0_end) = flow0_range.unwrap_or((0, raw_html_bytes.len()));
+    let flow0_bytes = &raw_html_bytes[flow0_start..flow0_end];
+
+    // Extract SVG flow resources (flow 1+ that look like SVG). Skip CSS
+    // and other unknown-type flows — we own the reader's CSS pipeline
+    // and don't want book-specific styling overriding it.
+    let mut flow_resources: Vec<ParsedFlowResource> = Vec::new();
+    for (i, flow) in fdst_flows.iter().enumerate().skip(1) {
+        let s = flow.start as usize;
+        let e = (flow.end as usize).min(raw_html_bytes.len());
+        if s >= e {
+            continue;
+        }
+        let bytes = &raw_html_bytes[s..e];
+        let head_len = bytes.len().min(300);
+        // Content sniff: an SVG resource either starts with an XML
+        // declaration followed by `<svg`, or with `<svg` directly.
+        let head = &bytes[..head_len];
+        let is_svg = head.windows(4).any(|w| w == b"<svg");
+        if !is_svg {
+            continue;
+        }
+        flow_resources.push(ParsedFlowResource {
+            flow_index: i as u32,
+            ext: "svg".into(),
+            data: general_purpose::STANDARD.encode(bytes),
+        });
+    }
+
+    // Phase 2/3: skeleton INDX + fragment INDX — reassemble flow 0 into
+    // per-section HTML with fragments inserted into their parent
+    // skeleton's template at the correct filepos.
+    //
+    // Phase 2 (fallback if fragment parse fails): concatenate
+    //   raw[skel.offset .. next_skel.offset)
+    // for each row. Template + fragments end up back-to-back (fragments
+    // fall after `</html>`), but tolerant HTML parsers still read the
+    // whole thing.
+    //
+    // Phase 3 (when fragment table parses): for each skeleton, interleave
+    // fragment content into the template at each fragment's insert_pos.
+    // The result is byte-accurate to the epub source's per-file HTML,
+    // one document per skeleton row, joined by <mbp:pagebreak/> so the
+    // frontend's splitIntoSections regex picks up the section
+    // boundaries.
+    let mut skeleton_split: Option<Vec<u8>> = None;
+    if header.skeleton_record != 0 && header.skeleton_record != u32::MAX {
+        let skel_prim_abs = kf8_start + header.skeleton_record as usize;
+        let frag_prim_abs = kf8_start + header.fragment_record as usize;
+        if skel_prim_abs < records.len() {
+            let primary = records[skel_prim_abs];
+            let data_count = crate::kf8_indx::primary_indx_data_count(primary);
+            let data_records: Vec<&[u8]> = (1..=data_count)
+                .filter_map(|i| records.get(skel_prim_abs + i).copied())
+                .collect();
+
+            let skel_rows = crate::kf8_indx::parse_skeleton_indx(primary, &data_records)
+                .ok()
+                .filter(|r| !r.is_empty());
+
+            // Try fragment table too. If it parses, do Phase 3
+            // reassembly; if not, fall back to Phase 2 concat. Also load
+            // the fragment INDX's CNCX pool so we can attach real chapter
+            // titles to each section (Calibre's `toc_text` semantic).
+            let (frag_rows, cncx_pool) = if header.fragment_record != 0
+                && header.fragment_record != u32::MAX
+                && frag_prim_abs < records.len()
+            {
+                let f_prim = records[frag_prim_abs];
+                let f_data_count = crate::kf8_indx::primary_indx_data_count(f_prim);
+                let f_cncx_count = crate::kf8_indx::primary_indx_cncx_count(f_prim);
+                let f_data_records: Vec<&[u8]> = (1..=f_data_count)
+                    .filter_map(|i| records.get(frag_prim_abs + i).copied())
+                    .collect();
+                let cncx_start = frag_prim_abs + 1 + f_data_count;
+                let mut cncx_pool: Vec<u8> = Vec::new();
+                for i in 0..f_cncx_count {
+                    if let Some(rec) = records.get(cncx_start + i) {
+                        cncx_pool.extend_from_slice(rec);
+                    }
+                }
+                let rows = crate::kf8_indx::parse_fragment_indx(f_prim, &f_data_records)
+                    .ok()
+                    .filter(|r| !r.is_empty());
+                (rows, cncx_pool)
+            } else {
+                (None, Vec::new())
+            };
+
+            // Also try to load NCX (real TOC with human-readable chapter
+            // names). Its CNCX pool holds the chapter titles; each row's
+            // position is a byte offset in flow 0 we can match to a
+            // skeleton by nearest-preceding.
+            let (ncx_rows, ncx_cncx_pool) = if header.ncx_record != 0
+                && header.ncx_record != u32::MAX
+                && (kf8_start + header.ncx_record as usize) < records.len()
+            {
+                let ncx_prim_abs = kf8_start + header.ncx_record as usize;
+                let n_prim = records[ncx_prim_abs];
+                let n_data_count = crate::kf8_indx::primary_indx_data_count(n_prim);
+                let n_cncx_count = crate::kf8_indx::primary_indx_cncx_count(n_prim);
+                let n_data_records: Vec<&[u8]> = (1..=n_data_count)
+                    .filter_map(|i| records.get(ncx_prim_abs + i).copied())
+                    .collect();
+                let n_cncx_start = ncx_prim_abs + 1 + n_data_count;
+                let mut pool: Vec<u8> = Vec::new();
+                for i in 0..n_cncx_count {
+                    if let Some(rec) = records.get(n_cncx_start + i) {
+                        pool.extend_from_slice(rec);
+                    }
+                }
+                let rows = crate::kf8_indx::parse_ncx_indx(n_prim, &n_data_records)
+                    .ok()
+                    .filter(|r| !r.is_empty());
+                (rows, pool)
+            } else {
+                (None, Vec::new())
+            };
+
+            if let Some(skels) = skel_rows {
+                // Build per-skeleton label lookup from NCX by finding the
+                // top-level (depth 0 or 1) NCX entry whose position falls
+                // in [skel.offset, next_skel.offset). Chapter names come
+                // from the NCX's own CNCX pool.
+                let skel_labels: Vec<Option<String>> = if let Some(nrows) = &ncx_rows {
+                    let mut top_level: Vec<&crate::kf8_indx::NcxRow> = nrows
+                        .iter()
+                        .filter(|n| n.depth == 0 || n.depth == 1)
+                        .collect();
+                    if top_level.is_empty() {
+                        top_level = nrows.iter().collect();
+                    }
+                    top_level.sort_by_key(|n| n.position);
+                    (0..skels.len())
+                        .map(|i| {
+                            let start = skels[i].offset;
+                            let end = if i + 1 < skels.len() {
+                                skels[i + 1].offset
+                            } else {
+                                flow0_end as u32
+                            };
+                            top_level
+                                .iter()
+                                .find(|n| n.position >= start && n.position < end)
+                                .and_then(|n| crate::kf8_indx::read_cncx_name(&ncx_cncx_pool, n.name_cncx))
+                                .filter(|s| !s.trim().is_empty())
+                        })
+                        .collect()
+                } else {
+                    vec![None; skels.len()]
+                };
+
+                let buf = match frag_rows {
+                    Some(frags) => reassemble_with_fragments(
+                        &skels,
+                        &frags,
+                        raw_html_bytes.as_slice(),
+                        &cncx_pool,
+                        &skel_labels,
+                    ),
+                    None => reassemble_phase2_concat(
+                        &skels,
+                        raw_html_bytes.as_slice(),
+                        flow0_end,
+                    ),
+                };
+                if !buf.is_empty() {
+                    skeleton_split = Some(buf);
+                }
+            }
+        }
+    }
+
+    let final_bytes: &[u8] = skeleton_split.as_deref().unwrap_or(flow0_bytes);
+
     let html = if header.text_encoding == 1252 {
-        encoding_rs::WINDOWS_1252.decode(&raw_html_bytes).0.into_owned()
+        encoding_rs::WINDOWS_1252.decode(final_bytes).0.into_owned()
     } else {
-        String::from_utf8_lossy(&raw_html_bytes).into_owned()
+        String::from_utf8_lossy(final_bytes).into_owned()
     };
 
     let first_image_abs = kf8_start + header.first_image_index as usize;
@@ -543,6 +1213,9 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         }
     }
 
+    // EXTH CoverOffset is a 0-based record number (+1 inside the parser), but
+    // images[].index is 1-based relative to `resource_scan_start`. Convert the
+    // absolute record number into that relative space so the cover resolves.
     let exth_cover = parse_exth_cover_offset(kf8_records[0])
         .or_else(|| {
             if kf8_start > 0 {
@@ -551,6 +1224,7 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
                 None
             }
         })
+        .map(|abs_one_based| abs_one_based.saturating_sub(resource_scan_start))
         .filter(|&idx| idx > 0 && idx <= images.len())
         .unwrap_or(0);
     let cover_index = if exth_cover > 0 {
@@ -568,5 +1242,11 @@ pub fn try_parse_kf8(bytes: &[u8]) -> Result<Option<ParsedMobi>, String> {
         html,
         images,
         cover_index,
+        // Phase 3 skeleton+fragment reassembly produces byte-accurate
+        // XHTML; flag it so the frontend can skip the DOMParser
+        // round-trip stripAttributeLeaks pass (only needed for MOBI6's
+        // split-tag garbage). Set when skeleton_split actually landed.
+        well_formed: skeleton_split.is_some(),
+        flow_resources,
     }))
 }

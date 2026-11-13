@@ -5,13 +5,24 @@ use tauri::{
   tray::{TrayIconBuilder, TrayIconEvent},
   Emitter, Manager, WindowEvent,
 };
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_fs::FsExt;
 
 mod calibre_converter;
 mod custom_tts;
+mod edge_tts;
+mod kf8_indx;
 mod kf8_parser;
+mod kindle;
+mod koreader;
 mod mobi_parser;
+mod proxy;
+mod secrets;
+#[cfg(windows)]
 mod winrt_tts;
+
+#[cfg(test)]
+mod mobi_scan_test;
 
 
 /// Set when the tray "退出" menu item is chosen so the WindowEvent handler
@@ -23,7 +34,10 @@ fn request_quit(app: &tauri::AppHandle) {
   app.exit(0);
 }
 
-const BOOK_EXTS: [&str; 9] = ["epub", "txt", "htmlz", "md", "markdown", "mobi", "azw3", "pdf", "cbz"];
+const BOOK_EXTS: [&str; 13] = [
+    "epub", "txt", "htmlz", "md", "markdown", "mobi", "azw", "azw3", "pdf",
+    "cbz", "cbr", "cb7", "cbt",
+];
 
 /// File paths handed to the app via file association / command line, waiting
 /// for the frontend to pick them up.
@@ -49,45 +63,246 @@ fn collect_book_files<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
 fn allow_paths(app: &tauri::AppHandle, paths: &[String]) {
   let scope = app.fs_scope();
   for path in paths {
+    // Best-effort: a path the scope refuses simply fails to open later, with
+    // the frontend's own import error. There is no UI at this point in
+    // startup to report it through, and refusing to launch over one bad
+    // association argument would be worse.
     let _ = scope.allow_file(path);
   }
 }
 
+/// Roots the user pointed us at themselves — custom library folder, Obsidian
+/// vault, dictionary folder. The static fs scope only covers
+/// `Documents/AutoBook` (plus the app-data dirs `fs:default` reads), and the
+/// grant the dialog plugin adds when a folder is picked dies with the process,
+/// so the choices are remembered here and re-granted on the next launch.
+///
+/// Keep it that way in `capabilities/default.json`: list individual
+/// `fs:allow-<command>` permissions, never the `fs:allow-document-*` sets.
+/// Those bundle `scope-document-recursive`, which quietly adds all of
+/// `$DOCUMENT/**` back on top of the narrow scope.
+///
+/// Rust owns this list deliberately. An "allow this path" command callable
+/// from the webview would hand any injected script the whole disk back for the
+/// price of one `invoke`, which is exactly what dropping the `**` scope was
+/// meant to prevent. The list can only grow through `pick_user_dir`, and that
+/// cannot return a path the user did not select in a native dialog.
+fn allowed_roots_path() -> std::path::PathBuf {
+  app_local_dir().join("allowed-roots.json")
+}
+
+/// Where the app keeps its own small files: `%LOCALAPPDATA%\<id>` on Windows,
+/// the folder Tauri's `$APPLOCALDATA` resolves to on macOS.
+fn app_local_dir() -> std::path::PathBuf {
+  #[cfg(windows)]
+  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+  #[cfg(not(windows))]
+  let base = std::env::var("HOME")
+    .map(|h| format!("{h}/Library/Application Support"))
+    .unwrap_or_else(|_| ".".into());
+  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader")
+}
+
+/// `%USERPROFILE%\Documents` on Windows — deliberately not the known-folder
+/// API: a OneDrive-redirected Documents would move every existing default
+/// library out from under its user. `~/Documents` on macOS.
+fn user_documents_dir() -> Option<std::path::PathBuf> {
+  #[cfg(windows)]
+  let home = std::env::var("USERPROFILE");
+  #[cfg(not(windows))]
+  let home = std::env::var("HOME");
+  home.ok().map(|h| std::path::PathBuf::from(h).join("Documents"))
+}
+
+fn read_allowed_roots() -> Vec<String> {
+  std::fs::read_to_string(allowed_roots_path())
+    .ok()
+    .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+    .unwrap_or_default()
+}
+
+fn remember_allowed_root(path: &str) {
+  let mut roots = read_allowed_roots();
+  if roots.iter().any(|r| r == path) {
+    return;
+  }
+  roots.push(path.to_string());
+  // Someone who reorganizes their folders often should not accumulate grants
+  // forever; oldest choice falls off first.
+  while roots.len() > 32 {
+    roots.remove(0);
+  }
+  let file = allowed_roots_path();
+  if let Some(parent) = file.parent() {
+    let _ = std::fs::create_dir_all(parent);
+  }
+  if let Ok(json) = serde_json::to_string(&roots) {
+    let _ = std::fs::write(file, json);
+  }
+}
+
+/// Re-grant remembered roots at startup. A folder the user has since deleted
+/// is skipped rather than granted back.
+fn grant_remembered_roots(app: &tauri::AppHandle) {
+  let scope = app.fs_scope();
+  for root in read_allowed_roots() {
+    let path = std::path::PathBuf::from(&root);
+    if path.is_dir() {
+      let _ = scope.allow_directory(&path, true);
+    }
+  }
+}
+
+/// Open a native folder picker, grant the choice, and remember it for next
+/// launch. Replaces the frontend calling the dialog plugin directly: the pick
+/// and the persistence of its grant have to happen together, or a vault picked
+/// today stops working after a restart.
+#[tauri::command]
+async fn pick_user_dir(
+  app: tauri::AppHandle,
+  title: Option<String>,
+  default_path: Option<String>,
+) -> Result<Option<String>, String> {
+  let mut builder = app.dialog().file();
+  if let Some(title) = title {
+    builder = builder.set_title(title);
+  }
+  if let Some(default_path) = default_path {
+    let candidate = std::path::PathBuf::from(&default_path);
+    if candidate.is_dir() {
+      builder = builder.set_directory(candidate);
+    }
+  }
+
+  let (tx, rx) = tokio::sync::oneshot::channel();
+  builder.pick_folder(move |picked| {
+    let _ = tx.send(picked);
+  });
+
+  let Some(picked) = rx.await.map_err(|e| e.to_string())? else {
+    return Ok(None);
+  };
+  let path = picked.into_path().map_err(|e| e.to_string())?;
+
+  // The dialog plugin already widened the live scope for this pick; the
+  // explicit grant covers the recursive flag and keeps this command honest on
+  // its own terms.
+  app
+    .fs_scope()
+    .allow_directory(&path, true)
+    .map_err(|e| e.to_string())?;
+
+  let path_str = path.to_string_lossy().into_owned();
+  remember_allowed_root(&path_str);
+  Ok(Some(path_str))
+}
+
 /// Path to the marker file that signals "delete WebView2 Local Storage on next launch".
 fn reset_flag_path() -> std::path::PathBuf {
-  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/reset-ui.flag")
+  app_local_dir().join("reset-ui.flag")
 }
 
 /// Path to the marker file that signals "delete EVERYTHING — Local Storage,
 /// IndexedDB, the lot — on next launch". Used by the nuclear data reset.
 fn full_reset_flag_path() -> std::path::PathBuf {
-  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-  std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/reset-full.flag")
+  app_local_dir().join("reset-full.flag")
 }
 
+/// The webview's own storage root: WebView2's user-data folder on Windows,
+/// WKWebView's default data store on macOS.
+fn webview_root() -> std::path::PathBuf {
+  #[cfg(windows)]
+  return app_local_dir().join("EBWebView");
+  #[cfg(not(windows))]
+  return std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()))
+    .join("Library/WebKit/io.github.fukki.ebookreader/WebsiteData");
+}
+
+#[cfg(windows)]
 fn webview_local_storage_dirs() -> Vec<std::path::PathBuf> {
-  webview_subdir_paths("Default/Local Storage")
+  profile_subdir(&webview_root(), "Default/Local Storage")
 }
 
+#[cfg(windows)]
 fn webview_indexeddb_dirs() -> Vec<std::path::PathBuf> {
-  webview_subdir_paths("Default/IndexedDB")
+  profile_subdir(&webview_root(), "Default/IndexedDB")
 }
 
-fn webview_subdir_paths(rel: &str) -> Vec<std::path::PathBuf> {
-  let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-  let root = std::path::PathBuf::from(base).join("io.github.fukki.ebookreader/EBWebView");
+// WebKit has moved these between releases (`WebsiteData/LocalStorage` on
+// older macOS, `WebsiteData/Default/<salt>/<salt>/LocalStorage` on newer), so
+// they are found by name instead of by one hard-coded layout.
+// ponytail: only those two layouts are known; confirm on a real Mac.
+#[cfg(not(windows))]
+fn webview_local_storage_dirs() -> Vec<std::path::PathBuf> {
+  find_dirs_named(&webview_root(), "LocalStorage", 4)
+}
+
+#[cfg(not(windows))]
+fn webview_indexeddb_dirs() -> Vec<std::path::PathBuf> {
+  find_dirs_named(&webview_root(), "IndexedDB", 4)
+}
+
+#[cfg_attr(windows, allow(dead_code))]
+fn find_dirs_named(root: &std::path::Path, name: &str, depth: u8) -> Vec<std::path::PathBuf> {
   let mut out = Vec::new();
-  if let Ok(entries) = std::fs::read_dir(&root) {
-    for entry in entries.flatten() {
-      let path = entry.path();
-      let target = path.join(rel);
-      if target.exists() {
-        out.push(target);
-      }
+  let Ok(entries) = std::fs::read_dir(root) else { return out };
+  for entry in entries.flatten() {
+    if !entry.file_type().is_ok_and(|t| t.is_dir()) {
+      continue;
+    }
+    if entry.file_name() == name {
+      out.push(entry.path());
+    } else if depth > 0 {
+      out.extend(find_dirs_named(&entry.path(), name, depth - 1));
     }
   }
   out
+}
+
+/// `EBWebView` is WebView2's user-data folder and `Default` the profile right
+/// inside it, so `rel` (`Default/IndexedDB`) hangs straight off the root. This
+/// used to look one level deeper (`EBWebView/<x>/Default/…`), always came back
+/// empty, and both resets quietly deleted nothing.
+fn profile_subdir(webview_root: &std::path::Path, rel: &str) -> Vec<std::path::PathBuf> {
+  // Component by component: a `/` joined in verbatim reaches explorer (打开文件夹) as-is.
+  let target = rel.split('/').fold(webview_root.to_path_buf(), |p, c| p.join(c));
+  if target.exists() { vec![target] } else { Vec::new() }
+}
+
+#[cfg(test)]
+mod profile_subdir_tests {
+  use super::profile_subdir;
+
+  #[test]
+  fn finds_dirs_in_a_real_webview2_layout() {
+    let root = std::env::temp_dir().join(format!("autobook_ebwebview_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for d in ["Default/IndexedDB", "Default/Local Storage", "Crashpad/reports", "GrShaderCache"] {
+      std::fs::create_dir_all(root.join(d)).unwrap();
+    }
+    assert_eq!(profile_subdir(&root, "Default/IndexedDB"), vec![root.join("Default").join("IndexedDB")]);
+    assert_eq!(profile_subdir(&root, "Default/Local Storage"), vec![root.join("Default").join("Local Storage")]);
+    assert!(profile_subdir(&root, "Default/Nope").is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(profile_subdir(&root, "Default/IndexedDB").is_empty());
+  }
+
+  #[test]
+  fn finds_webkit_dirs_in_both_layouts() {
+    let root = std::env::temp_dir().join(format!("autobook_webkit_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for d in ["LocalStorage", "Default/salt/salt/IndexedDB", "Default/salt/salt/LocalStorage/x"] {
+      std::fs::create_dir_all(root.join(d)).unwrap();
+    }
+    let mut ls = super::find_dirs_named(&root, "LocalStorage", 4);
+    ls.sort();
+    let mut want = vec![root.join("LocalStorage"), root.join("Default/salt/salt/LocalStorage")];
+    want.sort();
+    assert_eq!(ls, want);
+    assert_eq!(super::find_dirs_named(&root, "IndexedDB", 4), vec![root.join("Default/salt/salt/IndexedDB")]);
+    assert!(super::find_dirs_named(&root, "IndexedDB", 2).is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+  }
 }
 
 /// Runs before the WebView2 process is spawned. Removes Local Storage if the
@@ -97,10 +312,7 @@ fn webview_subdir_paths(rel: &str) -> Vec<std::path::PathBuf> {
 /// `Documents/AutoBook/` on first launch of the new version so the app's
 /// name and its data folder match.
 fn migrate_books_dir() {
-  let docs = match std::env::var("USERPROFILE") {
-    Ok(home) => std::path::PathBuf::from(home).join("Documents"),
-    Err(_) => return,
-  };
+  let Some(docs) = user_documents_dir() else { return };
   let old = docs.join("EbookReader");
   let new_dir = docs.join("AutoBook");
   if old.exists() && !new_dir.exists() {
@@ -140,16 +352,33 @@ fn show_main_window(app: &tauri::AppHandle) {
   }
 }
 
+/// Hand book paths to the frontend: queue them, then nudge it to drain the
+/// queue. The event carries no payload so that a file arriving before the
+/// frontend listens (macOS delivers a double-clicked file as `Opened` during
+/// launch) and one arriving later take the same road and are never imported
+/// twice.
+fn deliver_launch_files(app: &tauri::AppHandle, files: Vec<String>) {
+  if files.is_empty() {
+    return;
+  }
+  allow_paths(app, &files);
+  app.state::<LaunchFiles>().0.lock().unwrap().extend(files);
+  let _ = app.emit("open-files", ());
+}
+
 #[tauri::command]
 fn take_launch_files(state: tauri::State<LaunchFiles>) -> Vec<String> {
   let mut guard = state.0.lock().unwrap();
   std::mem::take(&mut *guard)
 }
 
-/// Schedule a Local Storage wipe on next launch and restart. Used by both the
-/// tray menu and the settings page reset button.
-#[tauri::command]
-fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
+/// Drop the marker Local Storage wipe reads on next launch, then restart.
+/// Never returns on success — `restart()` diverges.
+///
+/// The tray menu used to inline a copy of this that swallowed the write
+/// error, so a failed write still restarted and the user just saw "nothing
+/// happened". One path, one error.
+fn do_ui_reset(app: &tauri::AppHandle) -> Result<(), String> {
   let flag = reset_flag_path();
   if let Some(parent) = flag.parent() {
     let _ = std::fs::create_dir_all(parent);
@@ -157,6 +386,13 @@ fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
   std::fs::write(&flag, b"1").map_err(|e| e.to_string())?;
   QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
   app.restart();
+}
+
+/// Schedule a Local Storage wipe on next launch and restart. Used by both the
+/// tray menu and the settings page reset button.
+#[tauri::command]
+fn schedule_ui_reset(app: tauri::AppHandle) -> Result<(), String> {
+  do_ui_reset(&app)
 }
 
 /// Schedule a FULL data wipe on next launch (Local Storage + IndexedDB) and
@@ -173,11 +409,23 @@ fn schedule_full_reset(app: tauri::AppHandle) -> Result<(), String> {
   app.restart();
 }
 
-/// Return paths the frontend can show in a Settings → Data panel so the
-/// user knows where their books and settings actually live. Sizes are
-/// computed best-effort; huge directories may report 0 to avoid blocking.
+fn default_documents_root_path() -> std::path::PathBuf {
+  user_documents_dir().map(|d| d.join("AutoBook")).unwrap_or_default()
+}
+
+/// The default library folder (`%USERPROFILE%\Documents\AutoBook`) — the
+/// frontend uses this to show what "restore default" would pick.
 #[tauri::command]
-fn get_data_paths() -> serde_json::Value {
+fn default_fs_root() -> String {
+  default_documents_root_path().to_string_lossy().into_owned()
+}
+
+/// Return paths the frontend can show in a Settings → Data panel so the
+/// user knows where their books and settings actually live. `fs_root` is
+/// the user-chosen library folder (empty = default). Sizes are computed
+/// best-effort; huge directories may report 0 to avoid blocking.
+#[tauri::command]
+fn get_data_paths(fs_root: Option<String>) -> serde_json::Value {
   fn dir_size(p: &std::path::Path) -> u64 {
     let mut total: u64 = 0;
     if let Ok(entries) = std::fs::read_dir(p) {
@@ -194,12 +442,14 @@ fn get_data_paths() -> serde_json::Value {
     total
   }
 
-  let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
-  let webview_root =
-    std::path::PathBuf::from(&local_appdata).join("io.github.fukki.ebookreader/EBWebView");
-  let docs_root = std::env::var("USERPROFILE")
-    .map(|h| std::path::PathBuf::from(h).join("Documents").join("AutoBook"))
-    .unwrap_or_default();
+  let webview_root = webview_root();
+  let default_root = default_documents_root_path();
+  let effective_root = fs_root
+    .as_deref()
+    .map(str::trim)
+    .filter(|s| !s.is_empty())
+    .map(std::path::PathBuf::from)
+    .unwrap_or_else(|| default_root.clone());
 
   let ls_dirs: Vec<String> = webview_local_storage_dirs()
     .into_iter()
@@ -211,17 +461,253 @@ fn get_data_paths() -> serde_json::Value {
     .collect();
 
   let idb_size: u64 = webview_indexeddb_dirs().iter().map(|p| dir_size(p)).sum();
-  let docs_size = if docs_root.exists() { dir_size(&docs_root) } else { 0 };
+  let root_size = if effective_root.exists() { dir_size(&effective_root) } else { 0 };
 
   serde_json::json!({
     "webviewRoot": webview_root.to_string_lossy(),
     "localStorageDirs": ls_dirs,
     "indexeddbDirs": idb_dirs,
     "indexeddbBytes": idb_size,
-    "documentsRoot": docs_root.to_string_lossy(),
-    "documentsBytes": docs_size,
-    "documentsExists": docs_root.exists(),
+    "fsRoot": effective_root.to_string_lossy(),
+    "fsRootBytes": root_size,
+    "fsRootExists": effective_root.exists(),
+    "defaultFsRoot": default_root.to_string_lossy(),
+    "isDefaultFsRoot": effective_root == default_root,
+    "fsRootOverlapsInstall": install_dir().is_some_and(|i| overlaps_install(&effective_root, &i)),
   })
+}
+
+fn dir_is_empty(p: &std::path::Path) -> bool {
+  std::fs::read_dir(p).map(|mut it| it.next().is_none()).unwrap_or(false)
+}
+
+/// Resolve `..`, short (8.3) names and case so two spellings of the same
+/// folder compare equal. A path that does not exist yet has no canonical
+/// form, so fall back to canonicalizing the nearest ancestor that does.
+fn canonical_ish(p: &std::path::Path) -> std::path::PathBuf {
+  if let Ok(c) = p.canonicalize() {
+    return c;
+  }
+  match (p.parent(), p.file_name()) {
+    (Some(parent), Some(name)) => canonical_ish(parent).join(name),
+    _ => p.to_path_buf(),
+  }
+}
+
+/// Folders `move_directory` / `open_data_folder` will touch: the default
+/// library and the roots the user picked in a native dialog
+/// (`allowed-roots.json`), plus — with `webview_dirs` — the IndexedDB / Local
+/// Storage dirs Settings → Data offers to open.
+///
+/// Those two commands work with std::fs and explorer, outside the fs-plugin
+/// scope, so without a check one injected `invoke` could move any folder on
+/// the disk (say, into Startup) or hand explorer a file to launch.
+fn granted_roots(webview_dirs: bool) -> Vec<std::path::PathBuf> {
+  let mut roots = vec![default_documents_root_path()];
+  roots.extend(read_allowed_roots().into_iter().map(std::path::PathBuf::from));
+  if webview_dirs {
+    roots.extend(webview_local_storage_dirs());
+    roots.extend(webview_indexeddb_dirs());
+  }
+  roots
+}
+
+/// The path must BE one of the roots, not merely sit under one. Every
+/// legitimate caller passes a root verbatim, and allowing descendants would let
+/// a script craft one inside the library — a folder it can swap for an .exe
+/// between our `is_dir()` and explorer's, or a name with commas explorer
+/// splits into extra arguments. Purely lexical on purpose: canonicalizing an
+/// attacker-chosen `\\host\share` would already make Windows connect to it
+/// (and offer an NTLM hash) before we got to say no.
+fn is_granted_root(p: &str, roots: &[std::path::PathBuf]) -> bool {
+  fn norm(s: &str) -> String {
+    // ASCII only: Unicode folding is looser than NTFS's (K == U+212A KELVIN
+    // SIGN here, distinct names on disk), which would let a sibling pass.
+    s.replace('/', "\\").trim_end_matches('\\').to_ascii_lowercase()
+  }
+  let target = norm(p);
+  // `C:` alone is drive-relative (that drive's cwd) yet normalizes like `C:\`.
+  std::path::Path::new(p).is_absolute()
+    && !target.is_empty()
+    && roots
+      .iter()
+      .filter(|r| r.is_absolute())
+      .any(|r| norm(&r.to_string_lossy()) == target)
+}
+
+/// Move a directory to a new location. Tries a plain rename first (instant,
+/// same volume); on cross-volume rename failure it falls back to recursive
+/// copy + remove. `to` may be an empty existing directory — that's the normal
+/// case when the frontend's folder picker returned an already-created folder.
+/// Refuses to clobber a target that already contains files.
+///
+/// `Err` means the library is still whole at `from` (anything moved so far is
+/// moved back), so the caller must keep the old root: switching anyway is how
+/// half a library went missing. `Ok(false)` means everything reached `to` but
+/// some of `from` couldn't be deleted — leftovers, not lost books.
+#[tauri::command]
+fn move_directory(from: String, to: String) -> Result<bool, String> {
+  let roots = granted_roots(false);
+  for p in [&from, &to] {
+    if !is_granted_root(p, &roots) {
+      return Err(format!("不是已授权的书库文件夹: {p}"));
+    }
+  }
+  move_directory_impl(from, to)
+}
+
+fn move_directory_impl(from: String, to: String) -> Result<bool, String> {
+  move_directory_with(from, to, install_dir().as_deref())
+}
+
+/// The folder app.exe runs from — where the installer also put uninstall.exe.
+fn install_dir() -> Option<std::path::PathBuf> {
+  std::env::current_exe().ok()?.parent().map(canonical_ish)
+}
+
+/// `root` and the install folder overlap: one is the other or contains it.
+/// People pick the install folder as their library (it's the obvious
+/// "AutoBook" folder), and then the library and the program share a home.
+fn overlaps_install(root: &std::path::Path, install: &std::path::Path) -> bool {
+  let root = canonical_ish(root);
+  install.starts_with(&root) || root.starts_with(install)
+}
+
+/// Whether `path` overlaps the install folder — checked before it becomes the
+/// library root.
+#[tauri::command]
+fn library_root_overlaps_install(path: String) -> bool {
+  install_dir().is_some_and(|i| overlaps_install(std::path::Path::new(&path), &i))
+}
+
+fn move_directory_with(
+  from: String,
+  to: String,
+  install: Option<&std::path::Path>,
+) -> Result<bool, String> {
+  let from_path = std::path::PathBuf::from(&from);
+  let to_path = std::path::PathBuf::from(&to);
+  if !from_path.exists() {
+    return Err(format!("源文件夹不存在: {from}"));
+  }
+  let from_c = canonical_ish(&from_path);
+  let to_c = canonical_ish(&to_path);
+  if from_c == to_c {
+    return Ok(true);
+  }
+  // Nothing stops the folder picker from returning a subfolder of the current
+  // library root, and that case is quietly catastrophic: Windows refuses to
+  // rename a directory into itself, so control falls through to the recursive
+  // copy — which walks `from` while creating the copy *inside* `from`, and
+  // duplicates the entire library once per nesting level until the path
+  // length limit finally errors out. A 10 GB library writes hundreds of GB
+  // before that happens.
+  if to_c.starts_with(&from_c) {
+    return Err(format!("目标文件夹在源文件夹内部，无法移动: {to}"));
+  }
+  if to_path.exists() {
+    if !to_path.is_dir() {
+      return Err(format!("目标不是目录: {to}"));
+    }
+    if !dir_is_empty(&to_path) {
+      return Err(format!("目标已存在且不为空: {to}"));
+    }
+    // Rename won't work when the target dir already exists (even empty) on
+    // Windows — remove it first so the rename can create it fresh.
+    std::fs::remove_dir(&to_path).map_err(|e| e.to_string())?;
+  }
+  if let Some(parent) = to_path.parent() {
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+  }
+
+  // A library that is (or contains) the install folder can't move as one
+  // folder: app.exe is running and locked, so the rename fails, the copy
+  // fallback's remove_dir_all deletes books until it hits app.exe, and what
+  // made it across includes a copy of the program. Move the library's own
+  // entries one by one instead and leave the program — and the folder that
+  // holds it — where the installer and updater expect them.
+  if let Some(install) = install.filter(|i| i.starts_with(&from_c)) {
+    std::fs::create_dir_all(&to_path).map_err(|e| e.to_string())?;
+    let entries: Vec<_> = std::fs::read_dir(&from_c)
+      .and_then(|rd| rd.collect::<std::io::Result<_>>())
+      .map_err(|e| e.to_string())?;
+    let mut moved: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
+    let mut clean = true;
+    for entry in entries {
+      let src = entry.path();
+      let program_file = src.parent() == Some(install)
+        && entry.file_type().map(|t| t.is_file()).unwrap_or(false)
+        && src.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe"));
+      if install.starts_with(&src) || program_file {
+        continue;
+      }
+      let dst = to_path.join(entry.file_name());
+      match move_entry(&src, &dst) {
+        Ok(c) => {
+          clean &= c;
+          moved.push((src, dst));
+        }
+        Err(e) => {
+          let name = entry.file_name().to_string_lossy().into_owned();
+          let stuck: Vec<_> = moved
+            .iter()
+            .rev()
+            .filter(|(s, d)| move_entry(d, s).is_err())
+            .map(|(_, d)| d.to_string_lossy().into_owned())
+            .collect();
+          if stuck.is_empty() {
+            let _ = std::fs::remove_dir(&to_path);
+            return Err(format!("搬到「{name}」时失败，已搬过去的都已移回原处，书库没有变：{e}"));
+          }
+          return Err(format!(
+            "搬到「{name}」时失败：{e}。有 {} 项没能移回，仍在新位置：{}",
+            stuck.len(),
+            stuck.join("、")
+          ));
+        }
+      }
+    }
+    return Ok(clean);
+  }
+
+  move_entry(&from_path, &to_path).map_err(|e| e.to_string())
+}
+
+/// `Ok(true)`: moved. `Ok(false)`: all of it reached `to`, but `from` could
+/// only be partly deleted. `Err`: `from` is untouched and no partial copy is
+/// left at `to`.
+fn move_entry(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<bool> {
+  if std::fs::rename(from, to).is_ok() {
+    return Ok(true);
+  }
+  // Cross-volume or locked — fall back to copy + remove.
+  let copied = if from.is_dir() {
+    copy_dir_recursive(from, to)
+  } else {
+    std::fs::copy(from, to).map(|_| ())
+  };
+  if let Err(e) = copied {
+    // Best effort: a failed cleanup only leaves a stray partial copy beside
+    // an intact original.
+    let _ = if to.is_dir() { std::fs::remove_dir_all(to) } else { std::fs::remove_file(to) };
+    return Err(e);
+  }
+  Ok(if from.is_dir() { std::fs::remove_dir_all(from) } else { std::fs::remove_file(from) }.is_ok())
+}
+
+fn copy_dir_recursive(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+  std::fs::create_dir_all(to)?;
+  for entry in std::fs::read_dir(from)? {
+    let entry = entry?;
+    let file_type = entry.file_type()?;
+    let target = to.join(entry.file_name());
+    if file_type.is_dir() {
+      copy_dir_recursive(&entry.path(), &target)?;
+    } else {
+      std::fs::copy(entry.path(), &target)?;
+    }
+  }
+  Ok(())
 }
 
 /// Open a folder in the OS file manager (Explorer on Windows). The path
@@ -230,25 +716,50 @@ fn get_data_paths() -> serde_json::Value {
 #[tauri::command]
 fn open_data_folder(path: String) -> Result<(), String> {
   let p = std::path::PathBuf::from(&path);
+  if !is_granted_root(&path, &granted_roots(true)) {
+    return Err(format!("不是已授权的文件夹: {path}"));
+  }
   if !p.exists() {
     std::fs::create_dir_all(&p).map_err(|e| e.to_string())?;
   }
-  // Spawn explorer.exe; on non-Windows builds this command is irrelevant.
-  #[cfg(target_os = "windows")]
-  {
-    std::process::Command::new("explorer")
-      .arg(&p)
-      .spawn()
-      .map_err(|e| e.to_string())?;
+  // Explorer handed a file runs it with its default handler.
+  if !p.is_dir() {
+    return Err(format!("不是文件夹: {path}"));
   }
+  #[cfg(windows)]
+  let mut cmd = std::process::Command::new("explorer");
+  // `-a Finder`: plain `open` on a folder that is a bundle (`X.app`) launches
+  // it instead of showing it.
+  #[cfg(not(windows))]
+  let mut cmd = std::process::Command::new("open");
+  #[cfg(not(windows))]
+  cmd.args(["-a", "Finder"]);
+  cmd.arg(&p).spawn().map_err(|e| e.to_string())?;
   Ok(())
 }
 
+#[cfg(windows)]
 #[tauri::command]
 fn sapi_list_voices() -> Result<Vec<winrt_tts::SapiVoice>, String> {
   winrt_tts::list_voices()
 }
 
+// The settings page hides the SAPI engine off Windows; these only answer a
+// stale `ttsEngine = sapi` carried over from elsewhere.
+#[cfg(not(windows))]
+#[tauri::command]
+fn sapi_list_voices() -> Result<Vec<String>, String> {
+  Err("系统 TTS（SAPI）只在 Windows 上可用".into())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+#[allow(unused_variables)]
+async fn sapi_speak(text: String, voice_id: Option<String>, rate: Option<f32>) -> Result<String, String> {
+  Err("系统 TTS（SAPI）只在 Windows 上可用".into())
+}
+
+#[cfg(windows)]
 /// Synthesize via WinRT SpeechSynthesizer. Returns a base64 WAV the frontend
 /// plays with HTMLAudioElement (same plumbing as Edge). Natural / Online
 /// neural voices are picked up automatically once installed via Windows
@@ -279,6 +790,7 @@ async fn custom_tts_synthesize(
   headers: std::collections::HashMap<String, String>,
   body_template: String,
   audio_path: Option<String>,
+  proxy_url: Option<String>,
   text: String,
 ) -> Result<String, String> {
   let audio = custom_tts::synthesize(
@@ -287,6 +799,7 @@ async fn custom_tts_synthesize(
     &headers,
     &body_template,
     audio_path.as_deref(),
+    proxy_url.as_deref(),
     &text,
   )
   .await?;
@@ -308,6 +821,173 @@ fn set_tts_shortcut(app: tauri::AppHandle, accelerator: String) -> Result<(), St
   gs.register(trimmed).map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
+mod move_directory_tests {
+  use super::*;
+
+  fn tmp(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("autobook_move_test_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+  }
+
+  /// Library picked as the install folder (E:\AutoBook held app.exe and
+  /// uninstall.exe next to the books): moving it must take the books and
+  /// leave the program, not drag app.exe along or delete the folder.
+  #[test]
+  fn leaves_the_program_behind_when_the_library_is_the_install_folder() {
+    let root = tmp("install");
+    let src = root.join("AutoBook");
+    std::fs::create_dir_all(src.join("Book A")).unwrap();
+    std::fs::write(src.join("Book A").join("bookdata.zip"), b"x").unwrap();
+    std::fs::write(src.join("app.exe"), b"exe").unwrap();
+    std::fs::write(src.join("uninstall.exe"), b"exe").unwrap();
+    let dst = root.join("Library");
+
+    move_directory_with(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+      Some(&canonical_ish(&src)),
+    )
+    .unwrap();
+
+    assert!(dst.join("Book A").join("bookdata.zip").exists());
+    assert!(!src.join("Book A").exists());
+    assert!(src.join("app.exe").exists() && src.join("uninstall.exe").exists());
+    assert!(!dst.join("app.exe").exists() && !dst.join("uninstall.exe").exists());
+    assert!(overlaps_install(&src, &canonical_ish(&src)));
+    assert!(overlaps_install(&root, &canonical_ish(&src)));
+    assert!(!overlaps_install(&dst, &canonical_ish(&src)));
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// One entry that can't move (a file held open without sharing — what an
+  /// antivirus scan or another reader does) must not leave the library split:
+  /// what already moved goes back, and the error says the library is unchanged.
+  #[cfg(windows)]
+  #[test]
+  fn a_failed_entry_moves_the_others_back() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let root = tmp("rollback");
+    let src = root.join("AutoBook");
+    std::fs::create_dir_all(src.join("A book")).unwrap();
+    std::fs::write(src.join("A book").join("bookdata.zip"), b"x").unwrap();
+    std::fs::create_dir_all(src.join("Z locked")).unwrap();
+    std::fs::write(src.join("Z locked").join("bookdata.zip"), b"y").unwrap();
+    std::fs::write(src.join("app.exe"), b"exe").unwrap();
+    let lock = std::fs::OpenOptions::new()
+      .read(true)
+      .share_mode(0)
+      .open(src.join("Z locked").join("bookdata.zip"))
+      .unwrap();
+    let dst = root.join("Library");
+
+    let err = move_directory_with(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+      Some(&canonical_ish(&src)),
+    )
+    .unwrap_err();
+    drop(lock);
+
+    assert!(err.contains("没有变"), "unexpected error: {err}");
+    assert!(src.join("A book").join("bookdata.zip").exists());
+    assert!(src.join("Z locked").join("bookdata.zip").exists());
+    assert!(!dst.join("A book").exists() && !dst.join("Z locked").exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// The regression that motivated the guard: picking a subfolder of the
+  /// library root used to fall through to the recursive copy and duplicate
+  /// the whole library once per nesting level.
+  #[test]
+  fn refuses_a_target_inside_the_source() {
+    let root = tmp("nested");
+    let src = root.join("AutoBook");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("book.epub"), b"x").unwrap();
+    let dst = src.join("newfolder");
+    std::fs::create_dir_all(&dst).unwrap();
+
+    let err = move_directory_impl(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+    )
+    .unwrap_err();
+    assert!(err.contains("内部"), "unexpected error: {err}");
+    // The source must be untouched — no copy started, nothing removed.
+    assert!(src.join("book.epub").exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// A sibling whose name merely starts with the source's name is not inside
+  /// it — `starts_with` on Path compares components, and this pins that.
+  #[test]
+  fn allows_a_sibling_with_a_prefix_name() {
+    let root = tmp("sibling");
+    let src = root.join("e");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("book.epub"), b"x").unwrap();
+    let dst = root.join("ebooks");
+
+    move_directory_impl(
+      src.to_string_lossy().into_owned(),
+      dst.to_string_lossy().into_owned(),
+    )
+    .unwrap();
+    assert!(dst.join("book.epub").exists());
+    assert!(!src.exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// Two spellings of the same folder are a no-op, not an error — the
+  /// comparison runs on canonical paths so a trailing separator or `..`
+  /// cannot make it look like a real move.
+  #[test]
+  fn same_folder_spelled_differently_is_a_noop() {
+    let root = tmp("same");
+    let src = root.join("lib");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("book.epub"), b"x").unwrap();
+    let alias = root.join("other").join("..").join("lib");
+
+    move_directory_impl(
+      src.to_string_lossy().into_owned(),
+      alias.to_string_lossy().into_owned(),
+    )
+    .unwrap();
+    assert!(src.join("book.epub").exists());
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  /// move_directory / open_data_folder are reachable from the webview: only a
+  /// root itself passes, however it is spelled — never a path inside or above
+  /// one, a UNC path, or a relative root.
+  #[cfg(windows)]
+  #[test]
+  fn only_exact_granted_roots_pass() {
+    let roots = vec![
+      std::path::PathBuf::from(r"C:\Users\u\Documents\AutoBook"),
+      std::path::PathBuf::from(r"E:\e"),
+      std::path::PathBuf::from("relative"),
+    ];
+    assert!(is_granted_root(r"C:\Users\u\Documents\AutoBook", &roots));
+    assert!(is_granted_root("c:/users/u/documents/autobook/", &roots));
+    assert!(is_granted_root(r"E:\e", &roots));
+    assert!(!is_granted_root(r"C:\Users\u\Documents\AutoBook\x.cmd", &roots));
+    assert!(!is_granted_root(r"C:\Users\u\Documents\AutoBook\..\..", &roots));
+    assert!(!is_granted_root(r"C:\Users\u\Documents", &roots));
+    assert!(!is_granted_root(r"\\host\share", &roots));
+    assert!(!is_granted_root("relative", &roots));
+    assert!(!is_granted_root("", &roots));
+    assert!(!is_granted_root("C:\\Users\\u\\Documents\\AutoBoo\u{212A}", &roots));
+    let drive = vec![std::path::PathBuf::from(r"D:\")];
+    assert!(is_granted_root(r"D:\", &drive));
+    assert!(!is_granted_root("D:", &drive));
+  }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   migrate_books_dir();
@@ -315,11 +995,7 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
       show_main_window(app);
-      let files = collect_book_files(args.into_iter().skip(1));
-      if !files.is_empty() {
-        allow_paths(app, &files);
-        let _ = app.emit("open-files", files);
-      }
+      deliver_launch_files(app, collect_book_files(args.into_iter().skip(1)));
     }))
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_fs::init())
@@ -333,29 +1009,57 @@ pub fn run() {
       sapi_list_voices,
       sapi_speak,
       custom_tts_synthesize,
+      edge_tts::edge_tts_synthesize,
       schedule_ui_reset,
       schedule_full_reset,
       get_data_paths,
       open_data_folder,
+      default_fs_root,
+      pick_user_dir,
+      move_directory,
+      library_root_overlaps_install,
+      kindle::find_kindle_books,
+      koreader::read_koreader,
       mobi_parser::parse_mobi,
       calibre_converter::check_calibre,
-      calibre_converter::convert_with_calibre
+      calibre_converter::convert_with_calibre,
+      secrets::secret_get,
+      secrets::secret_set
     ])
     .setup(|app| {
+      // tauri.conf.json's title is a hand-typed string nobody remembers to
+      // touch on release — it sat at "AutoBook v1.33.0" through two whole
+      // versions. The version now comes from the package instead, and the
+      // config carries the bare product name so it can never be wrong.
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_title(&format!("AutoBook v{}", app.package_info().version));
+      }
+
+      // Before any window can ask for them: the static scope is
+      // Documents/AutoBook only, so a custom library root, vault or dictionary
+      // folder is unreachable until its remembered grant is restored.
+      grant_remembered_roots(app.handle());
+
       if cfg!(debug_assertions) {
-        app.handle().plugin(
+        // The log plugin writes to AppData/<identifier>/logs. A leftover file
+        // from a prior crashed run can make its rotator hit `os error 183`
+        // (file exists) — that must not take the whole app down. Degrade to
+        // stderr so dev logs still surface in the terminal.
+        if let Err(err) = app.handle().plugin(
           tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Info)
+            .targets([
+              tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
+              tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+            ])
             .build(),
-        )?;
+        ) {
+          eprintln!("[log-plugin] init failed, continuing without file log: {err}");
+        }
       }
 
       // Files passed on first launch (double-click association / CLI)
-      let launch_files = collect_book_files(std::env::args().skip(1));
-      if !launch_files.is_empty() {
-        allow_paths(app.handle(), &launch_files);
-        *app.state::<LaunchFiles>().0.lock().unwrap() = launch_files;
-      }
+      deliver_launch_files(app.handle(), collect_book_files(std::env::args().skip(1)));
 
       // Global shortcut plugin: actual binding is set from the frontend
       // (settings) via set_tts_shortcut so users can rebind / disable it.
@@ -393,13 +1097,38 @@ pub fn run() {
               let _ = app.emit("tts-toggle", ());
             }
             "reset" => {
-              let flag = reset_flag_path();
-              if let Some(parent) = flag.parent() {
-                let _ = std::fs::create_dir_all(parent);
-              }
-              let _ = std::fs::write(&flag, b"1");
-              QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
-              app.restart();
+              // The settings-page button for this same action confirms first;
+              // the tray one sits one row above 退出 in a four-item menu, so it
+              // is the copy that most needs a guard, not the one that can skip it.
+              let handle = app.clone();
+              app
+                .dialog()
+                .message(
+                  "将清除本地保存的 UI 设置（主题、字体、快捷键、TTS 选项等），书库与统计数据保留。应用会重启。",
+                )
+                .title("重置 UI 设置")
+                .buttons(MessageDialogButtons::OkCancelCustom(
+                  "重置并重启".to_string(),
+                  "取消".to_string(),
+                ))
+                .show(move |confirmed| {
+                  if !confirmed {
+                    return;
+                  }
+                  // This callback runs on a thread the dialog plugin spawns;
+                  // restart() tears down the windows and the tray, so hop back
+                  // to the main thread before touching either.
+                  let app = handle.clone();
+                  let _ = handle.run_on_main_thread(move || {
+                    if let Err(err) = do_ui_reset(&app) {
+                      app
+                        .dialog()
+                        .message(format!("重置失败：{err}"))
+                        .title("重置 UI 设置")
+                        .show(|_| {});
+                    }
+                  });
+                });
             }
             "quit" => request_quit(app),
             _ => {}
@@ -430,6 +1159,25 @@ pub fn run() {
 
       Ok(())
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|_app, _event| {
+      // macOS sends neither of these through argv / the single-instance
+      // plugin: a double-clicked book arrives as `Opened`, and with the close
+      // button hiding to tray a Dock click (`Reopen`) is how the window comes
+      // back — the menu-bar icon has no double-click.
+      #[cfg(target_os = "macos")]
+      match _event {
+        tauri::RunEvent::Opened { urls } => {
+          let paths = urls
+            .into_iter()
+            .filter_map(|u| u.to_file_path().ok())
+            .map(|p| p.to_string_lossy().into_owned());
+          show_main_window(_app);
+          deliver_launch_files(_app, collect_book_files(paths));
+        }
+        tauri::RunEvent::Reopen { .. } => show_main_window(_app),
+        _ => {}
+      }
+    });
 }

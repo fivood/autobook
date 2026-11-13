@@ -7,11 +7,24 @@
 import { isNodeGaiji } from './is-node-gaiji';
 
 export function getCharacterCount(node: Node) {
-  return isNodeGaiji(node) ? 1 : getRawCharacterCount(node);
+  if (isNodeGaiji(node)) return 1;
+  // Image-only fallback path from getParagraphNodes: each scan page counts
+  // as one unit so the position tracker can step across image-only EPUBs.
+  // `localName` is lowercase for both HTML <img> and SVG <image>.
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const local = (node as Element).localName;
+    if (local === 'img' || local === 'image') return 1;
+  }
+  return getRawCharacterCount(node);
 }
 
 const isNotJapaneseRegex =
   /[^0-9A-Z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]+/gimu;
+
+/** Whether one character counts toward the reader's position, same rule as below. */
+export function isCountedCharacter(ch: string): boolean {
+  return ch.replace(isNotJapaneseRegex, '') !== '';
+}
 
 function getRawCharacterCount(node: Node) {
   if (!node.textContent) return 0;

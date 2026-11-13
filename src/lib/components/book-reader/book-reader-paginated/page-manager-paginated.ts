@@ -18,12 +18,19 @@ export class PageManagerPaginated implements PageManager {
 
   private sectionData: Map<string, SectionWithProgress> = new Map();
 
+  /** Refs in reading order, mirroring sectionData's insertion order, so
+   * progress updates can touch only the affected range instead of the whole
+   * book on every page turn. */
+  private sectionOrder: string[] = [];
+
+  private lastCurrentIndex = -1;
+
   private calculator: SectionCharacterStatsCalculator | undefined;
 
   constructor(
     private contentEl: HTMLElement,
     private scrollEl: HTMLElement,
-    private sections: Element[],
+    private sections: ReadonlyArray<{ id: string }>,
     private sectionIndex$: BehaviorSubject<number>,
     private virtualScrollPos$: BehaviorSubject<number>,
     private width: number,
@@ -40,6 +47,7 @@ export class PageManagerPaginated implements PageManager {
 
       entries.forEach((section) => {
         this.sectionData.set(section.reference, { ...section, progress: 0 });
+        this.sectionOrder.push(section.reference);
       });
 
       sectionProgress$.next(this.sectionData);
@@ -180,13 +188,6 @@ export class PageManagerPaginated implements PageManager {
 
     const step = viewportSize + this.pageGap;
     const pageIndex = Math.max(0, Math.floor(targetScrollPos / step));
-    // A horizontal flipPage may have left a CSS `transform: translateX(...)`
-    // on the content element — scrollTo alone wouldn't undo that, so the
-    // page would scroll behind a still-translated layer.
-    if (this.translateX) {
-      this.contentEl.style.removeProperty('transform');
-      this.translateX = 0;
-    }
     this.scrollTo(pageIndex * step, false);
   }
 
@@ -227,6 +228,18 @@ export class PageManagerPaginated implements PageManager {
   }
 
   private scrollToPos(pos: number, isUser: boolean) {
+    // A page is reached either by scrolling or, for a last page that doesn't
+    // fill a whole spread, by translating the content — never both. Scrolling
+    // without dropping a translate left over from that last page shows the
+    // destination shifted by it: advancing from a chapter's short final page
+    // (the voice's auto-flip, and the typewriter carrying on into the next
+    // section) landed the new section two spreads in, on a page nothing was
+    // reading. Every scroll goes through here, so this is the one place that
+    // can't be bypassed.
+    if (this.translateX) {
+      this.contentEl.style.removeProperty('transform');
+      this.translateX = 0;
+    }
     this.virtualScrollPos$.next(pos);
     this.scrollEl.scrollTo({ [this.verticalMode ? 'top' : 'left']: pos });
     this.pageChange$.next(isUser);
@@ -267,26 +280,26 @@ export class PageManagerPaginated implements PageManager {
   private updateSectionData(ref: string, progress: number, emit = true) {
     if (!ref || !this.sectionData.has(ref)) return;
 
-    const sections = [...this.sectionData.values()];
-    let currentRefSeen = false;
+    const newIndex = this.sectionOrder.indexOf(ref);
+    if (newIndex < 0) return;
 
-    sections.forEach((section) => {
-      const entry = this.sectionData.get(section.reference) as SectionWithProgress;
-      const isCurrentRef = section.reference === ref;
+    // Only rewrite the range between the previous current section and the new
+    // one: sections before `newIndex` are 100, after are 0 — the rest already
+    // holds that invariant from the previous update. Adjacent page turns touch
+    // ~2 sections instead of the whole book; a TOC jump touches only its span.
+    const from = Math.min(this.lastCurrentIndex, newIndex);
+    const to = Math.max(this.lastCurrentIndex, newIndex);
 
-      if (isCurrentRef) {
-        entry.progress = progress;
-      } else if (currentRefSeen) {
-        entry.progress = 0;
-      } else {
-        entry.progress = 100;
-      }
+    for (let i = from; i <= to; i += 1) {
+      if (i < 0) continue;
+      const sectionRef = this.sectionOrder[i];
+      const entry = this.sectionData.get(sectionRef);
+      if (!entry) continue;
+      entry.progress = i < newIndex ? 100 : i === newIndex ? progress : 0;
+      this.sectionData.set(sectionRef, entry);
+    }
 
-      if (!currentRefSeen && isCurrentRef) {
-        currentRefSeen = true;
-      }
-      this.sectionData.set(section.reference, entry);
-    });
+    this.lastCurrentIndex = newIndex;
 
     if (emit) {
       sectionProgress$.next(this.sectionData);

@@ -2,7 +2,8 @@
 //
 // Layout per dict in a single subdirectory:
 //   foo.ifo       — key=value metadata
-//   foo.idx       — concatenated (zero-terminated UTF-8 word) + (u32 BE offset) + (u32 BE length)
+//   foo.idx       — concatenated (zero-terminated UTF-8 word) + (BE offset) + (u32 BE length)
+//                   offset is u32 unless the .ifo declares idxoffsetbits=64
 //   foo.dict      — raw definition bytes referenced by offset/length
 //   foo.dict.dz   — gzipped foo.dict (dictzip is a gzip extension; vanilla gzip decode works)
 //
@@ -13,6 +14,13 @@ export interface DictMetadata {
   bookname: string;
   wordCount: number;
   sameTypeSequence: string;
+  /**
+   * Width of the offset field in .idx — 32 (default) or 64. Big packs that
+   * exceed 4 GB uncompressed declare 64, and reading those records as u32
+   * desynchronizes the whole index after the first entry rather than failing
+   * loudly.
+   */
+  idxOffsetBits: 32 | 64;
 }
 
 export interface StarDict {
@@ -26,7 +34,12 @@ export interface StarDict {
 }
 
 export function parseIfo(text: string): DictMetadata {
-  const meta: DictMetadata = { bookname: 'Dictionary', wordCount: 0, sameTypeSequence: 'm' };
+  const meta: DictMetadata = {
+    bookname: 'Dictionary',
+    wordCount: 0,
+    sameTypeSequence: 'm',
+    idxOffsetBits: 32
+  };
   for (const line of text.split(/\r?\n/)) {
     const m = /^([a-zA-Z_]+)\s*=\s*(.+)$/.exec(line);
     if (!m) continue;
@@ -34,11 +47,15 @@ export function parseIfo(text: string): DictMetadata {
     if (k === 'bookname') meta.bookname = v;
     else if (k === 'wordcount') meta.wordCount = parseInt(v, 10) || 0;
     else if (k === 'sametypesequence') meta.sameTypeSequence = v;
+    else if (k === 'idxoffsetbits') meta.idxOffsetBits = parseInt(v, 10) === 64 ? 64 : 32;
   }
   return meta;
 }
 
-export function parseIdx(buf: Uint8Array): {
+export function parseIdx(
+  buf: Uint8Array,
+  idxOffsetBits: 32 | 64 = 32
+): {
   index: Map<string, Array<[number, number]>>;
   originalCase: Map<string, string>;
 } {
@@ -47,14 +64,20 @@ export function parseIdx(buf: Uint8Array): {
   const decoder = new TextDecoder('utf-8');
   let i = 0;
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  // Only the offset widens with idxoffsetbits=64; the length stays u32.
+  const offsetBytes = idxOffsetBits === 64 ? 8 : 4;
+  const recordBytes = offsetBytes + 4;
   while (i < buf.length) {
     // find zero terminator
     let j = i;
     while (j < buf.length && buf[j] !== 0) j++;
-    if (j >= buf.length - 8) break;
+    if (j + 1 + recordBytes > buf.length) break;
     const word = decoder.decode(buf.subarray(i, j));
-    const offset = dv.getUint32(j + 1, false);
-    const length = dv.getUint32(j + 5, false);
+    // Number() is safe here: offsets stay far below 2^53 even for the largest
+    // packs, and keeping BigInt would infect every subarray call downstream.
+    const offset =
+      offsetBytes === 8 ? Number(dv.getBigUint64(j + 1, false)) : dv.getUint32(j + 1, false);
+    const length = dv.getUint32(j + 1 + offsetBytes, false);
     const key = word.toLowerCase();
     const entries = index.get(key);
     if (entries) entries.push([offset, length]);
@@ -62,7 +85,7 @@ export function parseIdx(buf: Uint8Array): {
       index.set(key, [[offset, length]]);
       originalCase.set(key, word);
     }
-    i = j + 9;
+    i = j + 1 + recordBytes;
   }
   return { index, originalCase };
 }

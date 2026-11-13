@@ -9,11 +9,17 @@ export const pagePath = import.meta.env.VITE_PAGE_PATH || '';
 export const clearConsoleOnReload = !!import.meta.env.VITE_CLEAR_ON_RELOAD || false;
 export const storageRootName = import.meta.env.VITE_STORAGE_ROOT_NAME || 'ttu-reader-data';
 
+/** WinRT/SAPI voices exist only in the Windows build. */
+export function hasSystemSapi(): boolean {
+  return isTauri() && /Windows/.test(navigator.userAgent);
+}
+
 export function isTauri(): boolean {
   if (typeof window === 'undefined') return false;
   return (
     '__TAURI_INTERNALS__' in window ||
     '__TAURI__' in window ||
+    // isTauri is the Tauri 1.x global; Tauri 2 uses __TAURI_INTERNALS__ above.
     !!(window as any).isTauri
   );
 }

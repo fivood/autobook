@@ -8,9 +8,62 @@
  */
 
 import { Marked } from 'marked';
-import hljs from 'highlight.js';
+import hljs from 'highlight.js/lib/core';
 import katex from 'katex';
+import bash from 'highlight.js/lib/languages/bash';
+import c from 'highlight.js/lib/languages/c';
+import cpp from 'highlight.js/lib/languages/cpp';
+import csharp from 'highlight.js/lib/languages/csharp';
+import css from 'highlight.js/lib/languages/css';
+import diff from 'highlight.js/lib/languages/diff';
+import go from 'highlight.js/lib/languages/go';
+import ini from 'highlight.js/lib/languages/ini';
+import java from 'highlight.js/lib/languages/java';
+import javascript from 'highlight.js/lib/languages/javascript';
+import json from 'highlight.js/lib/languages/json';
+import markdown from 'highlight.js/lib/languages/markdown';
+import php from 'highlight.js/lib/languages/php';
+import python from 'highlight.js/lib/languages/python';
+import ruby from 'highlight.js/lib/languages/ruby';
+import rust from 'highlight.js/lib/languages/rust';
+import shell from 'highlight.js/lib/languages/shell';
+import sql from 'highlight.js/lib/languages/sql';
+import typescript from 'highlight.js/lib/languages/typescript';
+import xml from 'highlight.js/lib/languages/xml';
+import yaml from 'highlight.js/lib/languages/yaml';
 import type { Section } from '$lib/data/database/books-db/versions/books-db';
+import { sanitizeHtml } from '$lib/functions/sanitize-html';
+import { extractMdFootnotes } from './md-footnotes';
+
+// The default `highlight.js` entry point pulls in ~190 grammars — Erlang,
+// Smalltalk, the lot — for a reading app that meets code blocks occasionally.
+// Register the plausible ones; anything else falls back to plaintext, which is
+// what an unrecognized language tag already did.
+for (const [name, language] of Object.entries({
+  bash,
+  c,
+  cpp,
+  csharp,
+  css,
+  diff,
+  go,
+  ini,
+  java,
+  javascript,
+  json,
+  markdown,
+  php,
+  python,
+  ruby,
+  rust,
+  shell,
+  sql,
+  typescript,
+  xml,
+  yaml
+})) {
+  hljs.registerLanguage(name, language);
+}
 
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*$/;
 
@@ -80,10 +133,11 @@ export function getFormattedElementMd(data: string) {
 
   // Pre-render math so marked doesn't mangle the LaTeX.
   const withMath = renderMath(withoutFrontmatter);
+  const { text: withRefs, notes } = extractMdFootnotes(withMath);
 
   // Split on top-level headings (# / ##) for TOC sections. Lower-level
   // headings stay inside the section.
-  const lines = withMath.split(/\r?\n/);
+  const lines = withRefs.split(/\r?\n/);
   const sectionBuckets: { label: string; lines: string[] }[] = [
     { label: '', lines: [] }
   ];
@@ -100,17 +154,31 @@ export function getFormattedElementMd(data: string) {
     sectionBuckets.shift();
   }
   if (!sectionBuckets.length) {
-    sectionBuckets.push({ label: '', lines: [withMath] });
+    sectionBuckets.push({ label: '', lines: [withRefs] });
   }
 
   let totalChars = 0;
   sectionBuckets.forEach((bucket, idx) => {
     const sectionId = `section-${idx + 1}`;
-    const html = marked.parse(bucket.lines.join('\n'), { async: false }) as string;
+    let html = marked.parse(bucket.lines.join('\n'), { async: false }) as string;
+    if (notes.length && idx === sectionBuckets.length - 1) {
+      const items = notes
+        .map(
+          ({ n, text }) =>
+            `<li id="md-fn-${n}" class="md-footnote">${marked.parseInline(text, { async: false })} <a class="md-footnote-back" href="#md-fnref-${n}">↩</a></li>`
+        )
+        .join('');
+      html += `<section class="md-footnotes"><ol>${items}</ol></section>`;
+    }
     const wrapper = document.createElement('div');
     wrapper.id = sectionId;
     wrapper.className = 'md-section';
-    wrapper.innerHTML = html;
+    // Markdown passes raw HTML straight through, so marked's output carries
+    // whatever the author wrote. Sanitizing here rather than only at render
+    // time matters because the text-source editor feeds this element's
+    // innerHTML into `{@html}` for its live preview, which never goes through
+    // formatBookDataHtml.
+    wrapper.innerHTML = sanitizeHtml(html);
     const text = wrapper.textContent || '';
     const chars = charCountOf(text);
     sections.push({

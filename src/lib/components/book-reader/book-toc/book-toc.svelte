@@ -10,10 +10,11 @@
   import { dialogManager } from '$lib/data/dialog-manager';
   import { PAGE_CHANGE } from '$lib/data/events';
   import { skipKeyDownListener$, statisticsEnabled$ } from '$lib/data/store';
-  import { dummyFn, getWeightedAverage } from '$lib/functions/utils';
+  import { activateOnKeyup, getWeightedAverage } from '$lib/functions/utils';
   import { debounceTime, fromEvent, merge, take } from 'rxjs';
   import { onMount } from 'svelte';
   import Fa from 'svelte-fa';
+  import { t } from '$lib/i18n';
 
   export let sectionData: SectionWithProgress[] = [];
   export let exploredCharCount = 0;
@@ -127,33 +128,43 @@
   }
 </script>
 
-<div class="flex justify-between p-4">
-  <div>章节进度: {currentChapterCharacterProgress} ({currentChapterProgress}%)</div>
+<!-- Header like the other drawers. It used to open on a bare
+     「章节进度: 0 / 1681」 and a column of numbers nobody had named. -->
+<div class="flex items-center gap-2 border-b border-current/10 px-4 py-3">
+  <h2 class="text-lg font-medium">{$t('toc.title')}</h2>
+  <span class="text-sm text-muted">
+    {$t('toc.chapterProgress', { chars: currentChapterCharacterProgress, pct: currentChapterProgress })}
+  </span>
+  <div class="flex-1" />
   <div
     tabindex="0"
     role="button"
-    title="关闭目录"
-    class="flex items-end md:items-center"
+    title={$t('toc.close')}
+    class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
     on:click={closeTocMenu}
-    on:keyup={dummyFn}
+    on:keyup={activateOnKeyup}
   >
     <Fa icon={faXmark} />
   </div>
 </div>
 <div class="flex-1 overflow-auto p-4">
+  <div class="flex justify-between text-xs text-muted">
+    <div>{$t('toc.chapterColumn')}</div>
+    <div>{$t('toc.startColumn')}</div>
+  </div>
   {#each chapters as chapter (chapter.reference)}
-    <div class="my-6 flex justify-between">
+    <div class="my-6 flex justify-between" class:font-semibold={chapter === currentChapter}>
       <div
         tabindex="0"
         role="button"
-        title={`跳转到 ${chapter.label}`}
+        title={$t('toc.jumpTo', { label: chapter.label ?? '' })}
         id={`for${chapter.reference}`}
         class="mr-4"
         class:opacity-30={chapter.progress === 100 && chapter !== currentChapter}
         class:hover:opacity-100={chapter.progress === 100 && chapter !== currentChapter}
         class:hover:opacity-60={chapter.progress < 100 || chapter === currentChapter}
         on:click={() => goToChapter(chapter.reference, true)}
-        on:keyup={dummyFn}
+        on:keyup={activateOnKeyup}
       >
         {chapter.label}
       </div>
@@ -167,20 +178,20 @@
   <div
     tabindex="0"
     role="button"
-    title={prevChapterAvailable ? `${verticalMode ? '下一章' : '上一章'}` : ''}
+    title={verticalMode ? $t('toc.nextChapter') : $t('toc.prevChapter')}
     class:opacity-30={!prevChapterAvailable}
     on:click={() => changeChapter(prevChapterAvailable, verticalMode ? 1 : -1)}
-    on:keyup={dummyFn}
+    on:keyup={activateOnKeyup}
   >
     <Fa icon={faChevronLeft} />
   </div>
   <div
     tabindex="0"
     role="button"
-    title={nextChapterAvailable ? `${verticalMode ? '上一章' : '下一章'}` : ''}
+    title={verticalMode ? $t('toc.prevChapter') : $t('toc.nextChapter')}
     class:opacity-30={!nextChapterAvailable}
     on:click={() => changeChapter(nextChapterAvailable, verticalMode ? -1 : 1)}
-    on:keyup={dummyFn}
+    on:keyup={activateOnKeyup}
   >
     <Fa icon={faChevronRight} />
   </div>

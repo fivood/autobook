@@ -60,7 +60,13 @@ export class BookmarkManagerContinuous implements BookmarkManager {
   }
 
   private getBookmarkPosition(bookmark: BooksDbBookmarkData): TargetScroll | undefined {
-    if (!bookmark.exploredCharCount) return undefined;
+    // 0 is a real position — the top of the book — not "no bookmark". Testing
+    // it for falsiness made every bookmark set before scrolling unreachable:
+    // the scroll-value path below rejects scrollY 0 as well, so the char-count
+    // fallback was the only thing that could still resolve it, and this guard
+    // returned before ever reaching it. Bookmarking a book the moment you open
+    // it is exactly when the count is 0.
+    if (bookmark.exploredCharCount == null) return undefined;
 
     const { verticalMode } = this.calculator;
 

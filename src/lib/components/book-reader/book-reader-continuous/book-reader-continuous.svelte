@@ -7,6 +7,7 @@
     type SectionWithProgress
   } from '$lib/components/book-reader/book-toc/book-toc';
   import HtmlRenderer from '$lib/components/html-renderer.svelte';
+  import { pdfPageShell } from '$lib/functions/pdf-page-shell';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { isStoredFont } from '$lib/data/fonts';
   import { FuriganaStyle } from '$lib/data/furigana-style';
@@ -389,11 +390,14 @@
 
     autoReaderConcrete = createAutoReader($ttsEngine$, destroy$);
     if (language) autoReaderConcrete.lang = language;
-    autoReaderConcrete.onBoundary = (charIndex) => {
-      autoScrollerConcrete?.seekToCharIndex(charIndex);
-    };
+    // No onBoundary here: /b's own handler owns that slot (it is a single
+    // property, so whatever was assigned here was overwritten anyway) and it
+    // no longer drives the reveal at all.
     autoReaderConcrete.wasReaderEnabled$.subscribe((enabled) => {
       if (enabled) {
+        // TTS and the typewriter are mutually exclusive: stop the typewriter
+        // and put the whole text back on screen, so the reader can read ahead
+        // and scroll freely while the voice runs.
         autoScrollerConcrete?.revealAll();
         autoScrollerConcrete?.off();
       }
@@ -471,6 +475,7 @@
 
     if (scrollWhenReady) {
       scrollWhenReady = false;
+      let restoreScrolled = false;
 
       bookmarkData
         .then((data) => {
@@ -479,12 +484,23 @@
           }
 
           prevIntendedCharCount = data.exploredCharCount || 0;
+          const before = verticalMode ? window.scrollX : window.scrollY;
           bookmarkManager.scrollToBookmark(data, customReadingPointScrollOffset);
+          restoreScrolled = (verticalMode ? window.scrollX : window.scrollY) !== before;
         })
         .finally(() => {
           if (autoBookmark) {
+            // Swallow the restore's own scroll event — but only if there was
+            // one. With no bookmark (or one at the top) nothing scrolls, and an
+            // unconditional skip(1) ate the reader's first jump instead (TOC,
+            // n/m, an in-book link), so it was never saved if the window then
+            // closed.
             fromEvent(window, 'scroll')
-              .pipe(skip(1), debounceTime(autoBookmarkTime * 1000), takeUntil(destroy$))
+              .pipe(
+                skip(restoreScrolled ? 1 : 0),
+                debounceTime(autoBookmarkTime * 1000),
+                takeUntil(destroy$)
+              )
               .subscribe(() => {
                 dispatch('bookmark');
               });
@@ -652,11 +668,13 @@
       return;
     }
 
-    const checkForParent = !chapterId.startsWith(prependValue);
-
-    targetElement = checkForParent
-      ? targetElement.closest(`div[id^="${prependValue}"]`) || targetElement
-      : targetElement;
+    // In-book links go to the element itself. They used to be widened to the
+    // enclosing chapter, so a link into the end of a long chapter landed on
+    // its first page. A target with no box (a `display:none` note) can't be
+    // scrolled to, so that one still falls back to its chapter.
+    if (!chapterId.startsWith(prependValue) && !targetElement.getClientRects().length) {
+      targetElement = targetElement.closest(`div[id^="${prependValue}"]`) || targetElement;
+    }
 
     willNavigate = true;
 
@@ -693,6 +711,7 @@
 
 <div
   bind:this={contentEl}
+  use:pdfPageShell
   style:color={fontColor}
   style:font-size="{fontSize}px"
   style:line-height={lineHeight}
@@ -807,11 +826,17 @@
 />
 
 <style lang="scss">
-  @import '../styles';
+  @use '../styles';
 
   .book-content {
+    // EPUB / inline illustrations get capped at viewport height so a
+    // tall figure doesn't blow the layout. PDF page images and CBZ comic
+    // pages are wrapped in `.pdf-page-shell` whose `aspect-ratio` already
+    // sizes them correctly — capping their height here truncates the
+    // image so the transparent OCR text layer no longer aligns with the
+    // visible scan. Exclude both.
     :global(svg),
-    :global(img) {
+    :global(img:not(.pdf-page-img)) {
       max-height: 100vh;
     }
   }

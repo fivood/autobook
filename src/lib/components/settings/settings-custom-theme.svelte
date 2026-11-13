@@ -3,10 +3,10 @@
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import SettingsCustomThemeInput from '$lib/components/settings/settings-custom-theme-input.svelte';
-  import { buttonClasses } from '$lib/css-classes';
   import { customThemes$, theme$ } from '$lib/data/store';
   import { availableThemes, type CustomThemeValue, type ThemeOption } from '$lib/data/theme-option';
   import { createEventDispatcher, onMount } from 'svelte';
+  import { t, tImmediate } from '$lib/i18n';
 
   export let selectedTheme: string;
   export let existingThemes: ToggleOption<string>[] = [];
@@ -145,7 +145,7 @@
     themeNameElm.setCustomValidity('');
 
     if (!themeName) {
-      themeNameElm.setCustomValidity('请输入名称！');
+      themeNameElm.setCustomValidity(tImmediate('theme.nameRequired'));
       themeNameElm.reportValidity();
       return;
     }
@@ -208,74 +208,74 @@
         {/each}
       </select>
       <button
-        class="m-1 rounded-md border-2 p-2 text-lg transition-colors"
-        style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
+        class="settings-btn m-1"
+        style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--button-selected-text);"
         on:click={handleCopyTheme}
       >
-        复制
+        {$t('theme.copy')}
         <Ripple />
       </button>
-      <span class="hidden sm:block">属性</span>
-      <span class="hidden sm:block">颜色</span>
-      <span class="hidden sm:block">透明度</span>
+      <span class="hidden sm:block">{$t('theme.col.attr')}</span>
+      <span class="hidden sm:block">{$t('theme.col.color')}</span>
+      <span class="hidden sm:block">{$t('theme.col.alpha')}</span>
       <SettingsCustomThemeInput
-        label="正文字体色"
+        label={$t('theme.attr.fontColor')}
         attribute="fontColor"
         values={customTheme.fontColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="正文背景色"
+        label={$t('theme.attr.backgroundColor')}
         attribute="backgroundColor"
         values={customTheme.backgroundColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="菜单背景色"
+        label={$t('theme.attr.menuBackgroundColor')}
         attribute="menuBackgroundColor"
         values={customTheme.menuBackgroundColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="菜单文字色"
+        label={$t('theme.attr.menuFontColor')}
         attribute="menuFontColor"
         values={customTheme.menuFontColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="按钮选中色"
+        label={$t('theme.attr.buttonSelectedColor')}
         attribute="buttonSelectedColor"
         values={customTheme.buttonSelectedColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="按钮悬停色"
+        label={$t('theme.attr.buttonHoverColor')}
         attribute="buttonHoverColor"
         values={customTheme.buttonHoverColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="选中文字背景"
+        label={$t('theme.attr.selectionBackgroundColor')}
         attribute="selectionBackgroundColor"
         values={customTheme.selectionBackgroundColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="选中文字颜色"
+        label={$t('theme.attr.selectionFontColor')}
         attribute="selectionFontColor"
         values={customTheme.selectionFontColor}
         on:color={handleColorValueChange}
         on:alpha={handleAlphaValueChange}
       />
       <SettingsCustomThemeInput
-        label="超链接颜色"
+        label={$t('theme.attr.linkColor')}
         attribute="linkColor"
         values={customTheme.linkColor}
         on:color={handleColorValueChange}
@@ -284,15 +284,15 @@
       <input
         class="sm:col-span-2"
         type="text"
-        placeholder="主题名称"
+        placeholder={$t('theme.name')}
         bind:value={themeName}
         bind:this={themeNameElm}
       />
       <button
-        class="flex justify-center items-center rounded-md border-2 border-gray-400 p-2 text-lg"
+        class="settings-btn"
         style={themeStyle}
       >
-        中字
+        {$t('theme.sample')}
         <Ripple />
       </button>
     </div>
@@ -300,18 +300,18 @@
   </div>
   <div class="mt-2 flex grow justify-between" slot="footer">
     <button
-      class="m-1 rounded-md border-2 border-gray-400 bg-white p-2 text-lg text-black transition-colors"
+      class="settings-btn m-1"
       on:click={() => dispatch('close')}
     >
-      取消
+      {$t('dialog.cancel')}
       <Ripple />
     </button>
     <button
-      class="m-1 rounded-md border-2 p-2 text-lg transition-colors"
-      style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
+      class="settings-btn m-1"
+      style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--button-selected-text);"
       on:click={handleSave}
     >
-      保存
+      {$t('theme.save')}
       <Ripple />
     </button>
   </div>

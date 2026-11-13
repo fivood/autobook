@@ -9,8 +9,6 @@ import { CharacterStatsCalculator } from '$lib/components/book-reader/book-reade
 import { binarySearchNoNegative } from '$lib/functions/binary-search';
 import { dev } from '$app/environment';
 import { formatPos } from '$lib/functions/format-pos';
-import { getCharacterCount } from '$lib/functions/get-character-count';
-import { getParagraphNodes } from '../get-paragraph-nodes';
 
 export class SectionCharacterStatsCalculator {
   readonly charCount: number;
@@ -23,7 +21,7 @@ export class SectionCharacterStatsCalculator {
 
   constructor(
     public readonly containerEl: HTMLElement,
-    public readonly sections: ReadonlyArray<Element>,
+    private readonly sectionCharCounts: ReadonlyArray<number>,
     private virtualScrollPos$: BehaviorSubject<number>,
     private getWidth: () => number,
     private getHeight: () => number,
@@ -32,13 +30,9 @@ export class SectionCharacterStatsCalculator {
     private readonly scrollEl: HTMLElement,
     private readonly document: Document
   ) {
-    const getSectionCharCount = (section: Element) => {
-      const paragraphs = getParagraphNodes(section);
-      return paragraphs.reduce((acc, cur) => acc + getCharacterCount(cur), 0);
-    };
     let exploredCharCount = 0;
-    this.sectionAccCharCounts = sections.map((section) => {
-      exploredCharCount += getSectionCharCount(section);
+    this.sectionAccCharCounts = sectionCharCounts.map((charCount) => {
+      exploredCharCount += charCount;
       return exploredCharCount;
     });
     this.charCount = exploredCharCount;

@@ -6,64 +6,141 @@
 
 import { BlurMode } from '$lib/data/blur-mode';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import { Observable } from 'rxjs';
+import { Observable, type Subject } from 'rxjs';
 import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
-import buildDummyBookImage from '$lib/functions/file-loaders/utils/build-dummy-book-image';
 import { isElementGaiji } from '$lib/functions/is-element-gaiji';
+import { parseSanitized } from '$lib/functions/sanitize-html';
 import { map } from 'rxjs/operators';
+import type { LoadProgress } from './load-progress';
+import { progress } from './load-progress';
 import {
   readerImageGalleryPictures$,
   type ReaderImageGalleryPicture
 } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
 
+export interface FormattedBookHtml {
+  htmlContent: string;
+  /** Object URLs the htmlContent embeds. The caller (typically the
+   * formatted-book cache in `/b`) owns their lifecycle: revoke them only
+   * when the cache entry is evicted, never before. Revoking while the
+   * cache still serves this entry leaves the cached htmlContent pointing
+   * at dead URLs — `<img>` element loads, `complete: true`,
+   * `naturalWidth: 0`, displays as the browser's broken-image icon. */
+  objectUrls: string[];
+}
+
 export default function formatBookDataHtml(
   bookData: BooksDbBookData,
   document: Document,
   isPaginated: boolean,
-  blurMode: BlurMode
-) {
-  return getHtmlWithImageSource(bookData, isPaginated).pipe(
-    map((elementHtml) => {
-      const element = document.createElement('div');
-      element.innerHTML = elementHtml;
+  blurMode: BlurMode,
+  progress$?: Subject<LoadProgress>
+): Observable<FormattedBookHtml> {
+  return getHtmlWithImageSource(bookData, isPaginated, progress$).pipe(
+    map(({ html, objectUrls }) => {
+      progress$?.next(progress('format-parse', 50));
+      // Parse in an inert document rather than assigning to a detached div and
+      // cleaning after: `innerHTML` still starts image loads and arms
+      // `onerror`, so disarming afterwards is a race we don't need to run.
+      // Books already in the library are covered here too, not just freshly
+      // imported ones — this is the single chokepoint every format renders
+      // through.
+      const element = parseSanitized(html, document);
 
+      progress$?.next(progress('format-clean', 65));
       addImageContainerClass(element);
       // combineImagePairs(element);
       removeSvgDimensions(element);
       addSpoilerTags(element, document, blurMode);
       removeOldBrTagSolution(element);
       stripInlineColor(element);
+      optimizeBookPageImages(element);
 
-      return element.innerHTML;
+      progress$?.next(progress('format-clean', 85));
+      return { htmlContent: element.innerHTML, objectUrls };
     })
   );
 }
 
-function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean) {
-  return new Observable<string>((subscriber) => {
+// Escape regex metacharacters in a literal string. Book blob keys are
+// usually plain filenames but can contain periods, hyphens, brackets.
+function reEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getHtmlWithImageSource(
+  bookData: BooksDbBookData,
+  isPaginated: boolean,
+  progress$?: Subject<LoadProgress>
+) {
+  return new Observable<{ html: string; objectUrls: string[] }>((subscriber) => {
     const { blobs } = bookData;
     const objectUrls: string[] = [];
     const urlIndexes = new Map<string, number>();
-
-    let { elementHtml } = bookData;
-
+    const urlByKey = new Map<string, string>();
     const pdfPageUrls = new Set<string>();
 
-    Object.entries(blobs).forEach(([key, value]) => {
+    // Pass 1: register blob URLs + build key→url map. This is O(blobs)
+    // and cheap. Pre-1.19.4 also did a `replaceAll` per blob here, which
+    // walked the whole (potentially 50MB+) elementHtml twice per blob →
+    // quadratic on image-heavy books.
+    progress$?.next(progress('blob-register', 15));
+    const blobEntries = Object.entries(blobs);
+    const total = blobEntries.length || 1;
+    blobEntries.forEach(([key, value], i) => {
       const url = URL.createObjectURL(
         value.type
           ? value
           : new Blob([value], { type: BaseStorageHandler.getImageMimeTypeFromExtension(key) })
       );
-      const dummyUrl = buildDummyBookImage(key);
-
       objectUrls.push(url);
-      urlIndexes.set(url, elementHtml.indexOf(dummyUrl));
+      urlByKey.set(key, url);
       if (/^pdf-page-\d+\.jpg$/.test(key)) pdfPageUrls.add(url);
-
-      elementHtml = elementHtml.replaceAll(dummyUrl, url).replaceAll(`ttu:${key}`, url);
+      if (i % 128 === 0) {
+        // 15% → 30% range for blob registration
+        progress$?.next(progress('blob-register', 15 + (i / total) * 15));
+      }
     });
-    subscriber.next(elementHtml);
+
+    // Pass 2: single-pass regex over the whole elementHtml. Matches both
+    // the dummy data URL (`data:image/gif;ttu:{key};base64,R0lGOD…==`)
+    // and the bare `ttu:{key}` markers, replaces via the map. One string
+    // walk instead of `blobs × 2` walks. The replace callback's `offset`
+    // argument doubles as the key's position for gallery ordering — records
+    // it in the same single pass instead of a later O(n × htmlLen) indexOf
+    // per URL (quadratic on image-heavy books).
+    progress$?.next(progress('blob-register', 32));
+    const keys = [...urlByKey.keys()].sort((a, b) => b.length - a.length);
+    let elementHtml = bookData.elementHtml;
+    if (keys.length > 0) {
+      const alt = keys.map(reEscape).join('|');
+      const dummyPrefix = 'data:image/gif;ttu:';
+      const dummySuffix = ';base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+      // Non-greedy: dummy data URL branch first, then bare `ttu:{key}`.
+      const dummyRe = new RegExp(
+        `${reEscape(dummyPrefix)}(?:${alt})${reEscape(dummySuffix)}|ttu:(?:${alt})`,
+        'g'
+      );
+      // Since `alt` has no capturing groups, the callback receives
+      // (match, offset, string) — record the original-HTML offset per key.
+      elementHtml = elementHtml.replace(dummyRe, (match, offset: number) => {
+        // Extract the key from either branch by trimming known prefixes/suffixes.
+        let key: string | undefined;
+        if (match.startsWith(dummyPrefix)) {
+          key = match.slice(dummyPrefix.length, match.length - dummySuffix.length);
+        } else {
+          key = match.slice(4); // "ttu:".length
+        }
+        const url = urlByKey.get(key);
+        if (key && url && !urlIndexes.has(url)) {
+          urlIndexes.set(url, offset);
+        }
+        return url ?? match;
+      });
+    }
+
+    progress$?.next(progress('format-parse', 45));
+    subscriber.next({ html: elementHtml, objectUrls });
 
     const readerImageGalleryPictures: ReaderImageGalleryPicture[] = objectUrls.map((url) => ({
       url,
@@ -79,20 +156,34 @@ function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean)
 
     readerImageGalleryPictures$.next(readerImageGalleryPictures);
 
-    return () => {
-      objectUrls.forEach((url) => URL.revokeObjectURL(url));
-    };
+    // No teardown — URL lifecycle deliberately handed off to the caller.
+    // See the FormattedBookHtml docstring.
+    subscriber.complete();
   });
 }
 
 function addImageContainerClass(el: HTMLElement) {
   Array.from(el.getElementsByTagName('img'))
-    .map((imgEl) => ({ parentEl: imgEl.parentElement, isGaiji: isElementGaiji(imgEl) }))
-    .forEach(({ parentEl, isGaiji }) => {
+    .map((imgEl) => ({
+      imgEl,
+      parentEl: imgEl.parentElement,
+      isGaiji: isElementGaiji(imgEl)
+    }))
+    .forEach(({ imgEl, parentEl, isGaiji }) => {
       parentEl?.classList.add('ttu-img-container');
 
       if (!isGaiji) {
         parentEl?.classList.add('ttu-illustration-container');
+      }
+
+      // Tailwind's preflight sets `img { display: block }` for every image on
+      // the page. For an illustration that is what you want; for the small
+      // image some EPUBs use as a footnote marker it is not — the marker takes
+      // a line of its own and shoves the rest of the sentence onto the next
+      // one. Tag the ones that live inside a line of text so the stylesheet
+      // can put them back inline.
+      if (isInlineImage(imgEl)) {
+        imgEl.classList.add('ttu-inline-img');
       }
     });
 }
@@ -104,10 +195,61 @@ function removeSvgDimensions(el: HTMLElement) {
   });
 }
 
-function isInlineImage(img: HTMLImageElement): boolean {
-  const parent = img.parentElement;
-  if (!parent) return false;
-  for (const node of Array.from(parent.childNodes)) {
+/**
+ * Inline wrappers a note marker is normally found in. The image itself carries
+ * no text, so asking its immediate parent whether it has text alongside gets
+ * the wrong answer for every one of these.
+ */
+const INLINE_WRAPPER_TAGS = new Set([
+  'A',
+  'ABBR',
+  'B',
+  'BDI',
+  'BDO',
+  'CITE',
+  'CODE',
+  'EM',
+  'FONT',
+  'I',
+  'LABEL',
+  'MARK',
+  'Q',
+  'RUBY',
+  'S',
+  'SMALL',
+  'SPAN',
+  'STRONG',
+  'SUB',
+  'SUP',
+  'TIME',
+  'U'
+]);
+
+/**
+ * Is this image part of a line of text rather than a standalone illustration?
+ *
+ * It matters because standalone images get wrapped in `.ttu-img-parent`, which
+ * is `display: flex` — a block-level box. Wrapping a footnote marker in one
+ * breaks the line, which is what an EPUB using a small image for its note
+ * marks looked like: the text after every marker started a new line.
+ *
+ * The old rule asked the image's *immediate parent* for a text sibling. A bare
+ * `<img>` between two runs of prose passed, but the shapes note markers
+ * actually take — `<sup><img></sup>`, `<a><img></a>`, `<span><img></span>` —
+ * all failed, because those wrappers hold nothing but the image.
+ *
+ * So climb out of inline wrappers first and ask the enclosing block instead.
+ * The predicate itself is unchanged — a *direct* text-node child — which keeps
+ * a captioned illustration (`<p><img><span>图1</span></p>`, no direct text)
+ * classified as an illustration exactly as before.
+ */
+export function isInlineImage(img: HTMLImageElement): boolean {
+  let scope: HTMLElement | null = img.parentElement;
+  while (scope?.parentElement && INLINE_WRAPPER_TAGS.has(scope.tagName)) {
+    scope = scope.parentElement;
+  }
+  if (!scope) return false;
+  for (const node of Array.from(scope.childNodes)) {
     if (node.nodeType === Node.TEXT_NODE && node.textContent && node.textContent.trim().length > 0) {
       return true;
     }
@@ -153,6 +295,18 @@ function addSpoilerTags(el: HTMLElement, document: Document, blurMode: BlurMode)
     Array.from(childNode.getElementsByTagName('svg'))
       .filter((tag) => tag.getElementsByTagName('image').length)
       .forEach((tag) => createWrapper(tag, childNode));
+  });
+}
+
+// PDF / CBZ page images: huge image-mode books (e.g. 150MB scanned PDFs) blow
+// up memory in scroll mode because every page decodes at once. loading="lazy"
+// + decoding="async" lets the browser keep most off-screen images undecoded.
+// Also tag them with .book-page-image so the zoom control can target them.
+function optimizeBookPageImages(el: HTMLElement) {
+  el.querySelectorAll<HTMLImageElement>('img.pdf-page-img, img.cbz-img').forEach((img) => {
+    if (!img.hasAttribute('loading')) img.setAttribute('loading', 'lazy');
+    if (!img.hasAttribute('decoding')) img.setAttribute('decoding', 'async');
+    img.classList.add('book-page-image');
   });
 }
 

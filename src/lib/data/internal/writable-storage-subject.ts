@@ -12,7 +12,9 @@ type Storage = typeof localStorage;
 
 export function writableStorageSubject<T>(
   storage: Storage,
-  mapFromString: (s: string) => T,
+  // The key is passed along so a mapper that has to recover from a bad stored
+  // value can name it — "object store is corrupt" is useless with 12 of them.
+  mapFromString: (s: string, key: string) => T,
   mapToString: (t: T) => string
 ) {
   return (key: string, defaultValue: T) => {
@@ -26,8 +28,8 @@ export function writableStorageSubject<T>(
 }
 
 function getStoredOrDefault(storage: Storage) {
-  return <T>(key: string, defaultVal: T, mapFn: (s: string) => T) => {
+  return <T>(key: string, defaultVal: T, mapFn: (s: string, key: string) => T) => {
     const stored = storage.getItem(key);
-    return stored ? mapFn(stored) : defaultVal;
+    return stored ? mapFn(stored, key) : defaultVal;
   };
 }

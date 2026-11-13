@@ -7,13 +7,47 @@
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
 import parseCss from '../css-parser/css-parser';
 import stringifyCss from '../css-parser/css-stringify';
-import type { Declaration, Rule } from '../css-parser/types';
+import type { CssTree, Declaration, Rule } from '../css-parser/types';
 
 const htmlRegex = /\s?html\s?/gi;
 const bodyRegex = /\s?body\s?/gi;
 
+/**
+ * A publisher stylesheet is decoration. The text is the book.
+ *
+ * parseCss throws on anything it does not understand — an unterminated
+ * comment, a missing brace, `@layer`, native nesting — and this runs inside
+ * the observable that loads the book, with no catch anywhere above it. The
+ * result was a **blank page**: no error, no message, no hint that the problem
+ * was one stray `/*` in a stylesheet the reader never sees. Verified by
+ * feeding a book whose only defect was an unterminated comment.
+ *
+ * So: keep the book. The reader's own theme still applies, so a book that
+ * loses its publisher CSS is plain, not broken. The reason goes to the log
+ * (surfaced by the report dialog) rather than a modal — it happens at open
+ * time, the reader cannot act on it, and a dialog on every open would be
+ * worse than the missing styling.
+ */
+function parseBookCss(styleSheet: string): CssTree | undefined {
+  try {
+    return parseCss(styleSheet);
+  } catch (error) {
+    console.warn(
+      '[format-style-sheet] 样式表解析失败，本书按无样式渲染：',
+      error instanceof Error ? error.message : error
+    );
+    return undefined;
+  }
+}
+
 export default function formatStyleSheet(bookData: BooksDbBookData, parentSelector: string) {
-  const cssTree = parseCss(bookData.styleSheet);
+  const cssTree = parseBookCss(bookData.styleSheet);
+  if (!cssTree) {
+    return stringifyCss({
+      stylesheet: { rules: [getGeckoBrSolutionRule()] },
+      type: 'stylesheet'
+    });
+  }
 
   const newRules = cssTree.stylesheet.rules
     .filter((r) => r.type === 'rule')
