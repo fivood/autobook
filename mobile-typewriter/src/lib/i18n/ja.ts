@@ -18,7 +18,7 @@ export default {
   'landing.recentPagesPdf': '{page} / {total} ページ · PDF',
   'landing.recentPct': '{pct}% · {preview}…',
   'landing.recentDelete': '履歴を削除',
-  'landing.recentHint': '項目をタップして同じファイルを選び直せば、続きから再開できます。',
+  'landing.recentHint': '項目をタップすると続きから再開します。開けない場合は同じファイルを選び直してください。',
   'landing.syncOpen': 'デバイス間で読書時間を同期',
   'landing.desktopFullLink':
     'デスクトップ完全版（ハイライト／ノート／AI／オフライン辞書／Obsidian 同期）：{link}',

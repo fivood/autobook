@@ -1474,6 +1474,8 @@
     font-size: 1.1rem;
     line-height: 1;
     padding: 0.3rem 0.5rem;
+    min-width: 44px;
+    min-height: 44px;
   }
   .topbar {
     display: flex;
@@ -1485,6 +1487,7 @@
   .ghost {
     padding: 0.4rem 0.6rem;
     font-size: 0.95rem;
+    min-height: 44px;
   }
   .link {
     display: block;
@@ -1683,6 +1686,8 @@
   .note-sheet header button {
     padding: 0.4rem;
     opacity: 0.7;
+    min-width: 44px;
+    min-height: 44px;
   }
   .note-text {
     margin: 0;
@@ -1715,6 +1720,14 @@
     background: var(--chip-bg);
     color: var(--chip-text);
     font-size: 1.1rem;
+    position: relative;
+  }
+  /* 2.2rem looks right but is under a fingertip's 44px; grow the hit box,
+     not the chip. */
+  .chip::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
   }
   .speed {
     min-width: 4.5em;
@@ -1740,6 +1753,7 @@
     font-size: 0.8rem;
     color: var(--fg-dim);
     white-space: nowrap;
+    min-height: 44px;
   }
   .text-controls {
     flex-direction: column;
@@ -1764,6 +1778,7 @@
     padding: 0.35rem 0.8rem;
     font-size: 0.85rem;
     color: var(--fg-dim);
+    min-height: 44px;
   }
   .mode-switch button.active {
     background: var(--accent);
@@ -1785,10 +1800,13 @@
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
     font-size: 0.85rem;
   }
+  /* The summary spans the pill's padding so the whole pill toggles it. */
   .toc summary {
     cursor: pointer;
     font-weight: 600;
-    margin-bottom: 0.4rem;
+    margin: -0.6rem -1rem 0;
+    padding: 0.8rem 1rem;
+    min-height: 44px;
   }
   .toc ul {
     list-style: none;
@@ -1803,6 +1821,7 @@
     padding: 0.4rem 0.5rem;
     border-radius: 0.4rem;
     font-size: 0.85rem;
+    min-height: 44px;
   }
   .toc li button.active {
     background: var(--accent);
@@ -1814,5 +1833,6 @@
     border: 1px solid var(--fg-dim);
     border-radius: 0.4rem;
     font-size: 0.78rem;
+    min-height: 44px;
   }
 </style>

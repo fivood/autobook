@@ -211,6 +211,8 @@
   header button {
     padding: 0.4rem;
     opacity: 0.7;
+    min-width: 44px;
+    min-height: 44px;
   }
   .lead {
     font-size: 0.82rem;
@@ -224,11 +226,13 @@
     gap: 0.5rem;
     margin-bottom: 0.7rem;
     font-size: 0.9rem;
+    min-height: 44px;
   }
   .token-row {
     flex-wrap: wrap;
   }
   .token-input {
+    min-height: 44px;
     flex: 1;
     min-width: 10em;
     padding: 0.5rem 0.6rem;
@@ -240,6 +244,7 @@
     font-size: 0.8rem;
   }
   .token-row button {
+    min-height: 44px;
     padding: 0.5rem 0.8rem;
     border: 1px solid var(--fg-dim);
     border-radius: 0.4rem;
@@ -247,6 +252,7 @@
   }
   .token-row button.icon {
     padding: 0.5rem 0.7rem;
+    min-width: 44px;
   }
   .meta {
     font-size: 0.75rem;
@@ -264,6 +270,7 @@
     margin: 0.8rem 0 0.4rem;
   }
   .actions button {
+    min-height: 44px;
     padding: 0.5rem 0.8rem;
     border: 1px solid var(--fg-dim);
     border-radius: 0.4rem;

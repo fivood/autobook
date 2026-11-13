@@ -18,7 +18,7 @@ export default {
   'landing.recentPagesPdf': 'Page {page} / {total} · PDF',
   'landing.recentPct': '{pct}% · {preview}…',
   'landing.recentDelete': 'Delete entry',
-  'landing.recentHint': 'Click an entry and pick the same file to resume where you left off.',
+  'landing.recentHint': "Tap an entry to resume where you left off. If it can't be reopened, you'll be asked to pick the same file again.",
   'landing.syncOpen': 'Sync reading time across devices',
   'landing.desktopFullLink':
     'Desktop full version (highlights / notebook / AI / offline dictionary / Obsidian sync): {link}',

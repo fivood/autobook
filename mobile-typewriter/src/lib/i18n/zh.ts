@@ -24,7 +24,7 @@ export default {
   'landing.recentPagesPdf': '第 {page} / {total} 页 · PDF',
   'landing.recentPct': '{pct}% · {preview}…',
   'landing.recentDelete': '删除记录',
-  'landing.recentHint': '点条目重新选同一个文件即可继续上次进度。',
+  'landing.recentHint': '点条目从上次的位置继续；打不开时会让你重新选同一个文件。',
   'landing.syncOpen': '跨设备同步阅读时长',
   'landing.desktopFullLink':
     '桌面完整版（高亮 / 笔记本 / AI / 离线词典 / Obsidian 同步）：{link}',
