@@ -435,10 +435,6 @@ mark[data-hl-id] {
   }
 }
 
-mark[data-hl-memo]::after {
-  content: '';
-  display: inline-block;
-  width: 0.34em;
 /* The notebook's 跳转 lands here; a highlight among many is easy to miss. */
 mark.hl-flash {
   animation: hl-flash 0.8s ease-in-out 3;
@@ -451,6 +447,10 @@ mark.hl-flash {
   }
 }
 
+mark[data-hl-memo]::after {
+  content: '';
+  display: inline-block;
+  width: 0.34em;
   height: 0.34em;
   margin-left: 0.15em;
   vertical-align: super;
