@@ -9,19 +9,19 @@
    * apps.
    *
    * The layout rule is one line: this page's own sub-views and actions go
-   * left, the ways out of this page go right. Nothing carries a text label —
-   * an icon plus its tooltip is enough once the bar is the same everywhere,
-   * and the labels were what forced the responsive clipping rules the old
-   * headers were full of.
+   * left, the ways out of this page go right, ending in NavStrip — the same
+   * five pages in the same places everywhere, with this one marked.
    */
   import Fa from 'svelte-fa';
   import type { IconDefinition } from '@fortawesome/free-solid-svg-icons';
-  import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
-  import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
-  import { baseHeaderClasses, baseIconClasses, pxScreen } from '$lib/css-classes';
+  import { page } from '$app/stores';
+  import NavStrip from '$lib/components/page-header/nav-strip.svelte';
+  import { mergeEntries, NAV_DESTINATIONS } from '$lib/components/merged-header-icon/merged-entries';
+  import { baseHeaderClasses, baseIconClasses, translateXHeaderFa } from '$lib/css-classes';
   import { t } from '$lib/i18n';
 
-  /** Identity of the page, since no title text is shown. */
+  /** Identity of a page that is not in NavStrip (更新历史); the strip's
+   *  marked entry says which page this is for the others. */
   export let icon: IconDefinition;
   export let titleKey: string;
   /**
@@ -30,50 +30,40 @@
    */
   export let backLink = '';
 
-  /**
-   * The other main pages, minus this one (MergedHeaderIcon drops it).
-   * 书库 goes last so it is always the rightmost icon in the window — the
-   * way out sits in one fixed place no matter which page you are on.
-   */
-  const destinations = [
-    mergeEntries.STATISTICS,
-    mergeEntries.NOTEBOOK,
-    mergeEntries.TRANSLATE,
-    mergeEntries.SETTINGS,
-    mergeEntries.MANAGE
-  ];
+  $: inNav = NAV_DESTINATIONS.some((destination) => destination.routeId === $page.route.id);
 </script>
 
 <div class="elevation-4 fixed inset-x-0 top-0 z-40">
   <div class={baseHeaderClasses}>
-    <div class="{pxScreen} flex px-0 md:px-5">
+    <!-- Same box as the library header's, so NavStrip lands in the same
+         place on every page: this used to be the content column, which is
+         narrower than the window from lg to xl. -->
+    <div class="mx-auto flex px-4 md:px-8 xl:max-w-none 2xl:max-w-6xl">
       <div class="flex h-12 min-w-0 grow items-center xl:h-10">
-        <div class="{baseIconClasses} !cursor-default !opacity-100" title={$t(titleKey)}>
-          <Fa {icon} />
-        </div>
-        <!--
-          Without these rules the bar is one undifferentiated run of icons and
-          "which page am I on" reads the same as "what can I press". The
-          dividers separate identity | this page | leaving this page.
-        -->
-        {#if $$slots.left}
-          <div class="mr-1 h-5 w-px shrink-0 bg-current/30"></div>
+        {#if !inNav}
+          <div class="{baseIconClasses} !cursor-default !opacity-100" title={$t(titleKey)}>
+            <Fa {icon} />
+          </div>
+          {#if $$slots.left}
+            <div class="mr-1 h-5 w-px shrink-0 bg-current/30"></div>
+          {/if}
         {/if}
         <slot name="left" />
       </div>
-      <div class="flex h-12 shrink-0 items-center xl:h-10">
+      <div class="flex h-12 shrink-0 transform-gpu items-center xl:h-10 {translateXHeaderFa}">
+        <!-- Rules keep "what this page does" apart from "where to go". -->
         <slot name="right" />
-        {#if $$slots.right}
-          <div class="mx-1 h-5 w-px shrink-0 bg-current/30"></div>
-        {/if}
         {#if backLink}
           <a href={backLink} style="color: inherit;" title={$t('menu.back.title')}>
-            <div class="{baseIconClasses} !opacity-100">
+            <div class={baseIconClasses}>
               <Fa icon={mergeEntries.BACK.icon} />
             </div>
           </a>
         {/if}
-        <MergedHeaderIcon items={destinations} mergeTo={mergeEntries.MORE} alwaysCollapse={false} />
+        {#if $$slots.right || backLink}
+          <div class="mx-1 h-5 w-px shrink-0 bg-current/30"></div>
+        {/if}
+        <NavStrip />
       </div>
     </div>
   </div>

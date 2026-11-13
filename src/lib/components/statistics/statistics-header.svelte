@@ -62,6 +62,7 @@
         on:click={() => ($lastStatisticsTab$ = item.tab)}
       >
         <Fa icon={item.icon} />
+        <span class="ml-2 hidden text-sm xl:inline">{$t(item.labelKey)}</span>
         <Ripple />
       </button>
     {/each}

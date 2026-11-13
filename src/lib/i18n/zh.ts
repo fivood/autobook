@@ -39,7 +39,7 @@ export default {
   'manager.sort.progress': '阅读进度',
   'manager.sort.lastBookmark': '最近标记',
   'manager.filter': '筛选',
-  'manager.display': '显示',
+  'manager.display': '筛选与显示',
   'manager.context.addToFolder': '加入分类',
   'menu.import.label': '导入',
   'settings.section.updates': '版本与更新',
@@ -128,6 +128,7 @@ export default {
   'menu.more.title': '更多操作',
   'menu.back.label': '返回',
   'menu.back.title': '返回上一页',
+  'menu.nav.aria': '页面导航',
   'menu.changelog.label': '更新历史',
   'menu.changelog.title': '查看版本更新记录',
 

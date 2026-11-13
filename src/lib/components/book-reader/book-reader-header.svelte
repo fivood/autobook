@@ -3,7 +3,6 @@
   import { faBookmark as farBookmark } from '@fortawesome/free-regular-svg-icons';
   import {
     faBookmark as fasBookmark,
-    faCog,
     faCrosshairs,
     faExpand,
     faFlag,
@@ -15,6 +14,7 @@
     faPenToSquare,
     faRobot,
     faRotateLeft,
+    faSliders,
     type IconDefinition
   } from '@fortawesome/free-solid-svg-icons';
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
@@ -351,7 +351,9 @@
       on:click={() => dispatch('settingsClick')}
       on:keyup={activateOnKeyup}
     >
-      <Fa icon={faCog} />
+      <!-- Not the settings page's gear: this opens a drawer over the book,
+           the same sliders icon the statistics page uses for its own drawer. -->
+      <Fa icon={faSliders} />
     </div>
     <div
       tabindex="0"

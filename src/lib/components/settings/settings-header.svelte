@@ -19,7 +19,8 @@
 
   // `label` is the internal dispatch identifier used across
   // settings-content.svelte and the parent page; only `labelKey` is
-  // resolved through $t, and only as the tooltip — the bar is icons.
+  // resolved through $t. Icons alone made 文件 = OCR and 圆柱 = 数据 a
+  // guessing game, so wide windows spell them out.
   const settingItems = [
     { label: 'Reader', labelKey: 'settings.tab.reader', icon: faBookOpenReader },
     { label: 'TTS', labelKey: 'settings.tab.tts', icon: faVolumeHigh },
@@ -50,6 +51,7 @@
         aria-pressed={activeSettings === settingItem.label}
       >
         <Fa icon={settingItem.icon} />
+        <span class="ml-2 hidden text-sm xl:inline">{$t(settingItem.labelKey)}</span>
         <Ripple />
       </button>
     {/each}

@@ -38,7 +38,7 @@ export default {
   'manager.sort.progress': '進捗',
   'manager.sort.lastBookmark': 'しおり日時',
   'manager.filter': '絞り込み',
-  'manager.display': '表示',
+  'manager.display': '絞り込みと表示',
   'manager.context.addToFolder': 'フォルダに追加',
   'menu.import.label': 'インポート',
   'settings.section.updates': 'バージョンとアップデート',
@@ -125,6 +125,7 @@ export default {
   'menu.more.title': 'その他の操作',
   'menu.back.label': '戻る',
   'menu.back.title': '前のページへ戻る',
+  'menu.nav.aria': 'ページ',
   'menu.changelog.label': '更新履歴',
   'menu.changelog.title': 'バージョン更新履歴を表示',
 

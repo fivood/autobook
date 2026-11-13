@@ -3,6 +3,7 @@
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MergedHeaderIcon from '$lib/components/merged-header-icon/merged-header-icon.svelte';
+  import NavStrip from '$lib/components/page-header/nav-strip.svelte';
   import Popover from '$lib/components/popover/popover.svelte';
   import {
     baseHeaderClasses,
@@ -497,37 +498,26 @@
               </svg>
             </div>
           {/if}
-          <div
-            class="relative transform-gpu"
-            in:scale={inAnimationParams}
-            out:scale={outAnimationParams}
-          >
-            <!--
-              `mergeTo` is the collapsed trigger below lg. Left at its default
-              it was the 书库 house with a 「返回书库」 tooltip — on the library
-              page itself, promising to go where you already are, and actually
-              opening a menu. 更多 says what it does.
-            -->
+          {#if isOldUrl}
             <MergedHeaderIcon
               mergeTo={mergeEntries.MORE}
-              items={[
-                ...(isOldUrl
-                  ? [mergeEntries.MANAGE, mergeEntries.DOMAIN_HINT, mergeEntries.SETTINGS]
-                  : [
-                      mergeEntries.MANAGE,
-                      mergeEntries.STATISTICS,
-                      mergeEntries.NOTEBOOK,
-                      mergeEntries.TRANSLATE,
-                      mergeEntries.SETTINGS
-                    ])
-              ]}
+              items={[mergeEntries.MANAGE, mergeEntries.DOMAIN_HINT, mergeEntries.SETTINGS]}
               on:action={({ detail }) => {
                 if (detail === mergeEntries.DOMAIN_HINT.label) {
                   dispatch('domainHintClick');
                 }
               }}
             />
-          </div>
+          {:else}
+            <div
+              class="flex h-12 items-center xl:h-10"
+              in:scale={inAnimationParams}
+              out:scale={outAnimationParams}
+            >
+              <div class="mx-1 h-5 w-px shrink-0 bg-current/30"></div>
+              <NavStrip />
+            </div>
+          {/if}
           {#if showLoadCount}
             <button
               style:color={!!$fileCountData$ ? 'red' : null}

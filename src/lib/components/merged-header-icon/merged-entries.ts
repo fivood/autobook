@@ -185,3 +185,15 @@ export const mergeEntries = {
     titleKey: 'menu.changelog.title'
   }
 };
+
+/**
+ * The main pages, in the one order every header shows them (NavStrip). 书库
+ * last, so the way home is the rightmost thing in the window everywhere.
+ */
+export const NAV_DESTINATIONS = [
+  mergeEntries.STATISTICS,
+  mergeEntries.NOTEBOOK,
+  mergeEntries.TRANSLATE,
+  mergeEntries.SETTINGS,
+  mergeEntries.MANAGE
+];

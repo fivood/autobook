@@ -33,7 +33,7 @@ export default {
   'manager.sort.progress': 'Progress',
   'manager.sort.lastBookmark': 'Bookmarked',
   'manager.filter': 'Filter',
-  'manager.display': 'Display',
+  'manager.display': 'Filter & display',
   'manager.context.addToFolder': 'Add to folder',
   'menu.import.label': 'Import',
   'settings.section.updates': 'Version & updates',
@@ -120,6 +120,7 @@ export default {
   'menu.more.title': 'More actions',
   'menu.back.label': 'Back',
   'menu.back.title': 'Back to the previous page',
+  'menu.nav.aria': 'Pages',
   'menu.changelog.label': 'Changelog',
   'menu.changelog.title': 'View version history',
 
