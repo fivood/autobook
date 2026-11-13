@@ -130,6 +130,17 @@
   }
 </script>
 
+<!-- The textarea handles its own Ctrl+S (and marks it handled); this catches
+     the rest — Preview mode has no textarea at all, so the shortcut did nothing. -->
+<svelte:window
+  on:keydown={(e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && !e.defaultPrevented) {
+      e.preventDefault();
+      save();
+    }
+  }}
+/>
+
 <svelte:head>
   <title>{formatPageTitle(name ? `${dirty ? '● ' : ''}${name}` : $t('fileEditor.title'))}</title>
 </svelte:head>
