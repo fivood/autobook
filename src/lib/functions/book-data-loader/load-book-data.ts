@@ -21,7 +21,7 @@ export default function loadBookData(
   progress$?: Subject<LoadProgress>
 ) {
   return formatBookDataHtml(bookData, document, isPaginated, blurMode, progress$).pipe(
-    map(({ htmlContent, objectUrls }) => {
+    map(({ htmlContent, objectUrls, sections }) => {
       progress$?.next(progress('stylesheet', 90));
       const styleSheet = formatStyleSheet(bookData, parentSelector);
       progress$?.next(progress('render', 95));
@@ -29,7 +29,8 @@ export default function loadBookData(
         htmlContent,
         styleSheet,
         language: bookData.language,
-        objectUrls
+        objectUrls,
+        sections
       };
     })
   );

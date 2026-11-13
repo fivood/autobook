@@ -1,4 +1,5 @@
 <script context="module" lang="ts">
+  import type { ReaderSection } from '$lib/functions/rebase-sections';
   // Survives /b unmount so navigating to /settings and back doesn't re-format the book.
   // Keyed on (bookId, viewMode, blurMode, lastBookmarkModified). Only the latest entry is kept
   // to avoid leaking object URLs from prior books.
@@ -15,6 +16,7 @@
     styleSheet: string;
     language?: string;
     objectUrls: string[];
+    sections: ReaderSection[];
   }
   const formattedBookCache = new Map<string, FormattedBookEntry>();
   function evictFormattedBookCache() {
@@ -28,11 +30,14 @@
 </script>
 
 <script lang="ts">
+  import { readerPosOfTextOffset } from '$lib/functions/rebase-sections';
   import {
     auditTime,
+    BehaviorSubject,
     debounceTime,
     EMPTY,
     filter,
+    firstValueFrom,
     fromEvent,
     map,
     merge,
@@ -604,6 +609,9 @@
     ? Number(new URL(window.location.href).searchParams.get('pos') ?? NaN)
     : NaN;
 
+  /** The formatted book once it exists, for placing a highlight jump. */
+  const formattedHtml$ = new BehaviorSubject<{ id: number; html: string } | undefined>(undefined);
+
   const initBookmarkData$ = rawBookData$.pipe(
     tap((rawBookData) => {
       if (!rawBookData) return;
@@ -621,6 +629,25 @@
         return;
       }
       bookmarkData = database.getBookmark(rawBookData.id);
+      if (pendingScrollHlId) {
+        // Open at the highlight (the notebook's 跳转), falling back to the
+        // saved position if it can't be placed.
+        const hlId = pendingScrollHlId;
+        const saved = bookmarkData;
+        bookmarkData = Promise.all([
+          firstValueFrom(formattedHtml$.pipe(filter((f) => f?.id === rawBookData.id))),
+          database.getHighlights(rawBookData.id)
+        ]).then(([formatted, hls]) => {
+          const hl = hls.find((h) => h.id === hlId);
+          const root = new DOMParser().parseFromString(formatted!.html, 'text/html').body;
+          const pos = hl && readerPosOfTextOffset(root, hl.startOffset);
+          if (pos === undefined) return saved;
+          return { dataId: rawBookData.id, exploredCharCount: pos, progress: 0, lastBookmarkModified: 0 };
+        });
+        const url = new URL(window.location.href);
+        url.searchParams.delete('hl');
+        window.history.replaceState({}, '', url.toString());
+      }
     }),
     reduceToEmptyString()
   );
@@ -629,13 +656,14 @@
     switchMap((rawBookData) => {
       if (!rawBookData) return EMPTY;
 
-      sectionList$.next(rawBookData.sections || []);
       initHighlightManager(database, rawBookData.id, rawBookData.title);
 
       const isPaginated = $viewMode$ === ViewMode.Paginated;
       const cacheKey = `${rawBookData.id}|${isPaginated ? 'p' : 'c'}|${$hideSpoilerImageMode$}|${rawBookData.lastBookModified || 0}`;
       const cached = formattedBookCache.get(cacheKey);
       if (cached) {
+        sectionList$.next(cached.sections);
+        formattedHtml$.next({ id: rawBookData.id, html: cached.htmlContent });
         return of(cached);
       }
 
@@ -648,12 +676,14 @@
         loadProgress$
       ).pipe(
         tap((data) => {
+          formattedHtml$.next({ id: rawBookData.id, html: data.htmlContent });
           // Only keep the latest entry. evictFormattedBookCache revokes
           // the prior entry's blob URLs as it clears — safe now because
           // formatBookDataHtml hands URL ownership to this cache instead
           // of revoking them on observable teardown.
           evictFormattedBookCache();
           formattedBookCache.set(cacheKey, data);
+          sectionList$.next(data.sections);
         })
       );
     }),
@@ -783,7 +813,6 @@
   let pendingScrollHlId = browser
     ? Number(new URL(window.location.href).searchParams.get('hl')) || 0
     : 0;
-  let pendingSectionAdjusted = false;
 
   function scheduleHighlightRender(highlights: BooksDbHighlight[]) {
     cancelAnimationFrame(hlRafId);
@@ -791,36 +820,14 @@
       const el = getBookContentEl();
       if (el) {
         renderHighlights(el, highlights);
+        // Positioning is the bookmark restore's job (see initBookmarkData$);
+        // this only points the eye at it once the marks exist.
         if (pendingScrollHlId) {
-          const target = highlights.find((h) => h.id === pendingScrollHlId);
-          if (target) {
-            const mark = el.querySelector(`mark[data-hl-id="${pendingScrollHlId}"]`);
-            if (mark) {
-              scrollToHighlight(el, target);
-              pendingScrollHlId = 0;
-              pendingSectionAdjusted = false;
-              const url = new URL(window.location.href);
-              url.searchParams.delete('hl');
-              window.history.replaceState({}, '', url.toString());
-            } else if (
-              !pendingSectionAdjusted &&
-              $viewMode$ === ViewMode.Paginated &&
-              $sectionData$ &&
-              $sectionData$.length
-            ) {
-              const secStarts = $sectionData$.map((s) => s.startCharacter ?? 0);
-              let idx = 0;
-              for (let i = secStarts.length - 1; i >= 0; i--) {
-                if (target.startOffset >= secStarts[i]) {
-                  idx = i;
-                  break;
-                }
-              }
-              if (idx !== currentSectionIndex) {
-                currentSectionIndex = idx;
-              }
-              pendingSectionAdjusted = true;
-            }
+          const marks = el.querySelectorAll(`mark[data-hl-id="${pendingScrollHlId}"]`);
+          if (marks.length) {
+            pendingScrollHlId = 0;
+            marks.forEach((m) => m.classList.add('hl-flash'));
+            setTimeout(() => marks.forEach((m) => m.classList.remove('hl-flash')), 2400);
           }
         }
       } else {

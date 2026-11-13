@@ -435,6 +435,18 @@ mark[data-hl-memo]::after {
   content: '';
   display: inline-block;
   width: 0.34em;
+/* The notebook's 跳转 lands here; a highlight among many is easy to miss. */
+mark.hl-flash {
+  animation: hl-flash 0.8s ease-in-out 3;
+}
+
+@keyframes hl-flash {
+  50% {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+}
+
   height: 0.34em;
   margin-left: 0.15em;
   vertical-align: super;

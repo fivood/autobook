@@ -3,7 +3,7 @@ import { normalizeHighlightSlot } from '$lib/data/highlight-color';
 
 const HL_ATTR = 'data-hl-id';
 
-function textNodesUnder(root: Node): Text[] {
+export function textNodesUnder(root: Node): Text[] {
   const result: Text[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let node: Text | null;

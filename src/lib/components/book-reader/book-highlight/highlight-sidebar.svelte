@@ -5,14 +5,14 @@
   import Fa from 'svelte-fa';
   import { faTrash, faPen, faTimes } from '@fortawesome/free-solid-svg-icons';
   import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
-  import type { Section } from '$lib/data/database/books-db/versions/books-db';
+  import type { ReaderSection } from '$lib/functions/rebase-sections';
   import { clickOutside } from '$lib/functions/use-click-outside';
   import { normalizeHighlightSlot } from '$lib/data/highlight-color';
   import HighlightSlotSwatch from '$lib/components/highlight-slot-swatch.svelte';
   import { t } from '$lib/i18n';
 
   export let highlights: BooksDbHighlight[] = [];
-  export let sections: Section[] = [];
+  export let sections: ReaderSection[] = [];
 
   const dispatch = createEventDispatcher<{
     navigate: BooksDbHighlight;
@@ -30,14 +30,17 @@
 
   function groupBySection(
     hls: BooksDbHighlight[],
-    secs: Section[],
+    allSecs: ReaderSection[],
     tFn: (key: string, vars?: Record<string, string | number>) => string
   ): GroupedSection[] {
+    // Highlight offsets are raw-text offsets (textStart), not reader characters.
+    // Group by TOC chapters: EPUB spine files outside the TOC have no label.
+    const secs = allSecs.filter((s) => !s.parentChapter);
     if (!secs.length) {
       return hls.length ? [{ label: tFn('highlight.sidebar.all'), items: hls }] : [];
     }
     const groups: GroupedSection[] = [];
-    const secStarts = secs.map((s) => s.startCharacter ?? 0);
+    const secStarts = secs.map((s) => s.textStart ?? s.startCharacter ?? 0);
     for (const hl of hls) {
       let secIdx = 0;
       for (let i = secStarts.length - 1; i >= 0; i--) {

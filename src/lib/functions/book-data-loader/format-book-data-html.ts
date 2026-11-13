@@ -10,6 +10,7 @@ import { Observable, type Subject } from 'rxjs';
 import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import { isElementGaiji } from '$lib/functions/is-element-gaiji';
 import { parseSanitized } from '$lib/functions/sanitize-html';
+import { rebaseSections, type ReaderSection } from '$lib/functions/rebase-sections';
 import { map } from 'rxjs/operators';
 import type { LoadProgress } from './load-progress';
 import { progress } from './load-progress';
@@ -27,6 +28,8 @@ export interface FormattedBookHtml {
    * at dead URLs — `<img>` element loads, `complete: true`,
    * `naturalWidth: 0`, displays as the browser's broken-image icon. */
   objectUrls: string[];
+  /** `bookData.sections` recounted on the reader's basis, see rebaseSections. */
+  sections: ReaderSection[];
 }
 
 export default function formatBookDataHtml(
@@ -57,7 +60,11 @@ export default function formatBookDataHtml(
       optimizeBookPageImages(element);
 
       progress$?.next(progress('format-clean', 85));
-      return { htmlContent: element.innerHTML, objectUrls };
+      return {
+        htmlContent: element.innerHTML,
+        objectUrls,
+        sections: rebaseSections(bookData.sections, element)
+      };
     })
   );
 }
