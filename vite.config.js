@@ -44,6 +44,12 @@ const config = {
     // https://github.com/FortAwesome/Font-Awesome/issues/18677
     noExternal: ['@fortawesome/*', '@popperjs/*']
   },
+  // Reached only through dynamic import, so Vite discovers them on first use,
+  // re-optimizes and reloads the page — mid-import, which dropped half of a
+  // batch import (and the first smoke run after a lockfile change).
+  optimizeDeps: {
+    include: ['pdfjs-dist', 'fast-xml-parser', 'kokoro-js', 'ua-parser-js']
+  },
   experimental: {
     prebundleSvelteLibraries: true
   }

@@ -12,12 +12,28 @@
  * Safety: the suite creates its own book, restores every setting it touches,
  * and deletes what it made — including on failure. It refuses to run if it
  * cannot take a snapshot first.
+ *
+ * Every reader scenario runs once per view mode (`SMOKE_VIEW=continuous` or
+ * `=paginated` to run one). They used to run in scroll mode only — and one of
+ * them quietly forced it — so "the suite is green" said nothing about the
+ * paginated reader, which has its own key handling, bookmarking and layout.
  */
 import { connect } from './cdp-client.mjs';
 
 const TEST_TITLE = 'ZZ-冒烟测试用书';
 const results = [];
 let session;
+let errors;
+
+const MODES = (process.env.SMOKE_VIEW || 'continuous,paginated')
+  .split(',')
+  .map((m) => m.trim())
+  .filter(Boolean);
+const MODE_LABEL = { continuous: '滚动', paginated: '分页' };
+/** The view mode the current scenario runs in. */
+let mode = MODES[0];
+/** `modes` value for scenarios that don't touch the reader's view at all. */
+const ONCE = 'once';
 
 function ok(name, detail = '') {
   results.push({ name, passed: true, detail });
@@ -29,16 +45,179 @@ function fail(name, detail) {
   console.log(`  \u2718 ${name} — ${detail}`);
 }
 
-async function scenario(name, fn) {
+/**
+ * Every visible control must be the topmost thing at its own centre. This is
+ * the shape of several real bugs: the TOC under its own backdrop (acb8bbd),
+ * the image-zoom pill over the reading tracker, a banner over the header
+ * title. A fixed element covering most of the window is a modal backdrop
+ * doing its job, not an overlap.
+ */
+const COVERED_CONTROLS = `(async () => {
+  // Let transitions finish first: a header sliding away is still "visible"
+  // for a moment while the tap strip that replaces it is already on top.
+  for (let i = 0; i < 20 && document.getAnimations().some((a) => a.playState === 'running'); i++) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  const desc = (e) => {
+    const t = e.getAttribute && (e.getAttribute('title') || e.getAttribute('aria-label'));
+    const cls = (e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className || '')
+      .toString().split(' ').slice(0, 3).join('.');
+    return e.tagName.toLowerCase() + (cls ? '.' + cls : '') + (t ? '[' + t.slice(0, 30) + ']' : '');
+  };
+  const visible = (e) => {
+    const r = e.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return false;
+    if (e.closest('details:not([open])') && !e.closest('summary')) return false;
+    if (r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) return false;
+    for (let x = e; x && x !== document.documentElement; x = x.parentElement) {
+      const cs = getComputedStyle(x);
+      if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) < 0.05) return false;
+    }
+    return true;
+  };
+  const backdrop = (e) => {
+    for (let x = e; x && x !== document.body; x = x.parentElement) {
+      if (getComputedStyle(x).position !== 'fixed') continue;
+      const r = x.getBoundingClientRect();
+      if (r.width * r.height > innerWidth * innerHeight * 0.9) return true;
+    }
+    return false;
+  };
+  const covered = [];
+  for (const e of document.querySelectorAll('button, a[href], [role=button], [role=menuitem], input:not([type=hidden]), select, textarea, [title]')) {
+    if (!visible(e)) continue;
+    if (e.closest('.book-content') && !e.matches('a[href],button')) continue;
+    if (getComputedStyle(e).pointerEvents === 'none') continue;
+    const r = e.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    // A centre off screen is something sliding in or out (the header's fly
+    // transition); clamping it to the edge used to hit whatever sits there.
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+    const top = document.elementFromPoint(x, y);
+    if (!top || top === e || e.contains(top) || top.contains(e) || backdrop(top)) continue;
+    covered.push(desc(e) + ' ← ' + desc(top));
+  }
+  return covered;
+})()`;
+
+/**
+ * `modes`: which view modes the scenario runs in (default: all of MODES), or
+ * ONCE for scenarios that never look at the reader's view.
+ * `allowErrors`: console errors the scenario provokes on purpose.
+ */
+async function scenario(name, fn, { allowErrors } = {}) {
   // SMOKE_ONLY=<substring> runs just the matching scenarios — for the
   // revert-the-fix self-check without sitting through the whole suite.
   if (process.env.SMOKE_ONLY && !name.includes(process.env.SMOKE_ONLY)) return;
+  errors.take();
   try {
     const detail = await fn();
+    // Two invariants after every scenario: no stray errors on the way, and
+    // nothing on screen sitting on top of another control.
+    const stray = errors.take().filter((e) => !(allowErrors && allowErrors.test(e)));
+    if (stray.length) throw new Error(`page errors: ${stray.slice(0, 3).join(' | ')}`);
+    const covered = await session.evaluate(COVERED_CONTROLS);
+    if (covered.length) throw new Error(`controls covered: ${covered.slice(0, 3).join(' | ')}`);
     ok(name, detail);
   } catch (err) {
     fail(name, err.message);
   }
+}
+
+/** Set the view mode for the next page load; scenarios must not depend on the machine's. */
+async function useMode(m) {
+  mode = m;
+  // lastStorageSource too: the test book lives in browser storage, and the
+  // per-scenario restore puts back the user's own source.
+  await session.evaluate(js`(() => {
+    localStorage.setItem('viewMode', ${m});
+    localStorage.setItem('lastStorageSource', 'browser');
+    return 1;
+  })()`);
+}
+
+/**
+ * The first page loads after a lockfile or vite.config change make Vite
+ * discover dependencies and reload the page on its own, a few times. Inside a
+ * scenario that is an "Execution context was destroyed" or a broken HMR
+ * component; take the hits here instead.
+ */
+async function warmUp(path, ready) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await goto(path, ready);
+      await pause(4000);
+      if (await session.evaluate(ready)) return;
+    } catch {
+      // reloaded under us — that is the point; try again
+    }
+  }
+}
+
+const READER_READY = `!!document.querySelector('[aria-label="显示阅读器菜单"]')`;
+
+/** Enough of the book is rendered to move around in. Scroll mode: the page
+ *  scrolls; paginated: the current chapter's paragraphs are in. */
+const laidOut = () =>
+  mode === 'continuous'
+    ? `document.documentElement.scrollHeight > window.innerHeight * 2`
+    : `document.querySelectorAll('.book-content p').length > 20`;
+
+/** The first paragraph or heading on screen, either axis — "where am I" in
+ *  both modes (paginated content moves by columns, not by scrollY). */
+const WHERE = `(() => {
+  const v = [...document.querySelectorAll('.book-content p, .book-content h2')].find((p) => {
+    const r = p.getBoundingClientRect();
+    return r.width > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  });
+  return v ? v.textContent.trim().slice(0, 8) : null;
+})()`;
+
+/** Leave the start of the book: scroll down, or flip a few pages. */
+async function moveAway() {
+  if (mode === 'continuous') {
+    await session.evaluate(`(() => { window.scrollTo(0, 4000); return 1; })()`);
+  } else {
+    await session.evaluate(`(() => { document.activeElement?.blur?.(); return 1; })()`);
+    for (let i = 0; i < 3; i += 1) {
+      await session.press('ArrowRight');
+      await pause(400);
+    }
+  }
+  await pause(1200);
+}
+
+/** Delete the book's saved position so the next open starts at the top. */
+const forgetBookmark = (bookId) =>
+  session.evaluate(js`new Promise((r) => {
+    const q = indexedDB.open('books');
+    q.onsuccess = () => {
+      const tx = q.result.transaction('bookmark', 'readwrite');
+      tx.objectStore('bookmark').delete(${bookId});
+      tx.oncomplete = () => r(1);
+    };
+  })`);
+
+const savedPosition = (bookId) =>
+  session.evaluate(js`new Promise((r) => {
+    const q = indexedDB.open('books');
+    q.onsuccess = () => {
+      const g = q.result.transaction('bookmark').objectStore('bookmark').get(${bookId});
+      g.onsuccess = () => r(g.result ? g.result.exploredCharCount : null);
+    };
+  })`);
+
+/** Open the reader menu if it is closed, so the header buttons exist. */
+async function showReaderMenu(probeTitle) {
+  for (let k = 0; k < 3; k += 1) {
+    const there = await session.evaluate(js`[...document.querySelectorAll('[title]')]
+      .some((e) => (e.getAttribute('title') || '').startsWith(${probeTitle}) && e.getBoundingClientRect().width > 0)`);
+    if (there) return;
+    await session.evaluate(`(() => { document.querySelector('[aria-label="显示阅读器菜单"]').click(); return 1; })()`);
+    await pause(800);
+  }
+  throw new Error(`reader menu has no visible "${probeTitle}"`);
 }
 
 /**
@@ -98,7 +277,10 @@ async function snapshotSettings() {
       'ttsPositions',
       'statisticsEnabled',
       'activeFolderFilter',
-      'autoScrollMultiplier'
+      'autoScrollMultiplier',
+      'autoBookmark',
+      'autoBookmarkTime',
+      'manualBookmark'
     ];
     const out = {};
     for (const k of keys) out[k] = localStorage.getItem(k);
@@ -129,7 +311,11 @@ async function importTestBook() {
       const input = [...document.querySelectorAll('input[type=file]')]
         .find(i => (i.getAttribute('accept') || '').includes('.epub'));
       if (!input) return r({ ok: false, why: 'no file input on /manage' });
+      // Two chapters (第41段 opens the second) so the TOC and the chapter keys
+      // have somewhere to go. The headings become <h2>, so the paragraphs are
+      // still the only <p>s and p[i] is still 第(i+1)段.
       const text = Array.from({ length: 80 }, (_, i) =>
+        (i === 0 ? '第1章 开头\\n\\n' : i === 40 ? '第2章 后半\\n\\n' : '') +
         '第' + (i + 1) + '段。冒烟测试正文，需要足够长才能滚动。'
       ).join('\\n\\n');
       const dt = new DataTransfer();
@@ -153,27 +339,40 @@ async function importTestBook() {
 
 async function cleanup(bookId, snap) {
   try {
+    // Every row the run can leave behind. Highlights hang off the book id;
+    // reading statistics, sessions and their sync stamps off the title — those
+    // were never deleted, and dozens of 「ZZ-冒烟测试用书」 rows piled up in the
+    // dev library's notebook and statistics pages. lastItem holds one row (the
+    // last book opened) and is only ours to remove if it points at the test book.
     await session.evaluate(js`(() => new Promise(r => {
       const q = indexedDB.open('books');
       q.onsuccess = () => {
         const db = q.result;
-        const names = ['data', 'bookmark', 'highlight', 'lastItem', 'archived'].filter(n => db.objectStoreNames.contains(n));
+        const names = [
+          'data', 'bookmark', 'highlight', 'lastItem', 'archived', 'statistic', 'session', 'lastModified'
+        ].filter(n => db.objectStoreNames.contains(n));
         const tx = db.transaction(names, 'readwrite');
+        const sweep = (name, hit) => {
+          if (!names.includes(name)) return;
+          tx.objectStore(name).openCursor().onsuccess = (ev) => {
+            const c = ev.target.result;
+            if (!c) return;
+            if (hit(c.key, c.value || {})) c.delete();
+            c.continue();
+          };
+        };
+        const ours = (title) => String(title || '').startsWith(${TEST_TITLE});
         tx.objectStore('data').delete(${bookId});
-        if (db.objectStoreNames.contains('bookmark')) tx.objectStore('bookmark').delete(${bookId});
-        if (db.objectStoreNames.contains('lastItem')) tx.objectStore('lastItem').clear();
+        if (names.includes('bookmark')) tx.objectStore('bookmark').delete(${bookId});
+        sweep('highlight', (_, v) => v.dataId === ${bookId});
+        sweep('lastItem', (_, v) => v.dataId === ${bookId});
         // The archive is keyed by title and outlives the book row on purpose,
         // so it needs clearing explicitly or a failed run leaves the suite's
         // book hidden from the library forever.
-        if (db.objectStoreNames.contains('archived')) {
-          const cur = tx.objectStore('archived').openCursor();
-          cur.onsuccess = (ev) => {
-            const c = ev.target.result;
-            if (!c) return;
-            if (String(c.key).startsWith(${TEST_TITLE})) c.delete();
-            c.continue();
-          };
-        }
+        sweep('archived', (k) => ours(k));
+        sweep('statistic', (_, v) => ours(v.title));
+        sweep('session', (_, v) => ours(v.title));
+        sweep('lastModified', (_, v) => ours(v.title));
         tx.oncomplete = () => r(1);
         tx.onerror = () => r(0);
       };
@@ -187,50 +386,39 @@ async function cleanup(bookId, snap) {
 
 /** Regression: a bookmark set at char 0 could never be returned to (1.38.0). */
 async function bookmarkAtStart(bookId) {
-  await goto(`/b?id=${bookId}`, `!!document.querySelector('[aria-label="显示阅读器菜单"]')`);
-  await session.waitFor(`document.documentElement.scrollHeight > window.innerHeight * 2`, {
-    label: 'the book to lay out'
-  });
+  // Only the manual bookmark: an auto-bookmark firing while we page away
+  // would overwrite it, and that is the auto-bookmark working, not this bug.
+  await session.evaluate(`(() => { localStorage.setItem('autoBookmark', '0'); return 1; })()`);
+  await forgetBookmark(bookId);
+  await goto(`/b?id=${bookId}`, READER_READY);
+  await session.waitFor(laidOut(), { label: 'the book to lay out' });
+  await pause(800);
 
-  const set = await session.evaluate(`(() => {
-    window.scrollTo(0, 0);
-    document.querySelector('[aria-label="显示阅读器菜单"]').click();
-    return ${after(
-      900,
-      `(() => {
-        const bm = [...document.querySelectorAll('[title]')]
-          .find(e => (e.getAttribute('title') || '').startsWith('添加书签'));
-        if (!bm) return { ok: false, why: 'no bookmark button' };
-        bm.click();
-        return { ok: true };
-      })()`
-    )};
+  const start = await session.evaluate(WHERE);
+  await showReaderMenu('添加书签');
+  await session.evaluate(`(() => {
+    [...document.querySelectorAll('[title]')]
+      .find(e => (e.getAttribute('title') || '').startsWith('添加书签')).click();
+    return 1;
   })()`);
-  if (!set.ok) throw new Error(set.why);
+  await pause(600);
 
-  const out = await session.evaluate(`(() => {
-    window.scrollTo(0, 4000);
-    return ${after(
-      1200,
-      `(() => {
-        const scrolled = Math.round(window.scrollY);
-        document.querySelector('[aria-label="显示阅读器菜单"]').click();
-        return new Promise(r => setTimeout(() => {
-          const back = [...document.querySelectorAll('[title]')]
-            .find(e => /返回书签/.test(e.getAttribute('title') || ''));
-          if (!back) return r({ ok: false, why: 'no return-to-bookmark button' });
-          back.click();
-          setTimeout(() => r({ ok: true, scrolled, after: Math.round(window.scrollY) }), 2000);
-        }, 900));
-      })()`
-    )};
+  await moveAway();
+  const away = await session.evaluate(WHERE);
+  if (paragraphNumber(away) < 5) throw new Error(`could not move away from the start (at ${away})`);
+
+  await showReaderMenu('返回书签');
+  await session.evaluate(`(() => {
+    [...document.querySelectorAll('[title]')]
+      .find(e => /返回书签/.test(e.getAttribute('title') || '')).click();
+    return 1;
   })()`);
-  if (!out.ok) throw new Error(out.why);
-  if (out.scrolled < 1000) throw new Error(`could not scroll away (got ${out.scrolled})`);
-  if (out.after > 100) {
-    throw new Error(`bookmark at position 0 did not return (${out.scrolled} → ${out.after})`);
+  await pause(2000);
+  const back = await session.evaluate(WHERE);
+  if (paragraphNumber(back) > 1) {
+    throw new Error(`bookmark at position 0 did not return (${start} → ${away} → ${back})`);
   }
-  return `${out.scrolled} → ${out.after}`;
+  return `${start} → ${away} → ${back}`;
 }
 
 /** Regression: TTS drove the typewriter reveal, so the text was hidden and the
@@ -263,7 +451,8 @@ async function ttsLeavesTextAlone(bookId) {
   })()`);
 
   if (out.hidden > 0) throw new Error(`TTS hid ${out.hidden} blocks of text`);
-  if (!out.scrollable) throw new Error('page is not scrollable during TTS');
+  // Paginated pages never scroll; there the hidden-block count is the check.
+  if (mode === 'continuous' && !out.scrollable) throw new Error('page is not scrollable during TTS');
   if (out.sentences < 2) {
     throw new Error(`sentence highlight did not advance (saw ${out.sentences} distinct sentences)`);
   }
@@ -297,20 +486,34 @@ async function ttsLeavesTextAlone(bookId) {
  * ships SAPI, so this does not depend on what is installed on the box.
  */
 async function ttsStartsAtTheHighlightedPassage(bookId) {
+  // It runs once per mode; the second run must not find the first's mark.
+  await session.evaluate(js`new Promise((r) => {
+    const q = indexedDB.open('books');
+    q.onsuccess = () => {
+      const tx = q.result.transaction('highlight', 'readwrite');
+      tx.objectStore('highlight').openCursor().onsuccess = (ev) => {
+        const c = ev.target.result;
+        if (!c) return;
+        if (c.value.dataId === ${bookId}) c.delete();
+        c.continue();
+      };
+      tx.oncomplete = () => r(1);
+    };
+  })`);
   await session.evaluate(`(() => {
     localStorage.setItem('ttsEngine', 'sapi');
     localStorage.setItem('ttsStartStrategy', 'selection');
     return 1;
   })()`);
   await goto(`/b?id=${bookId}`, `!!document.querySelector('[title^="开始朗读"]')`);
-  await session.waitFor(`document.querySelectorAll('.book-content p').length > 50`, {
+  await session.waitFor(`document.querySelectorAll('.book-content p').length > 35`, {
     label: 'the test book text'
   });
 
-  // Paragraph 50 of 80: far enough from both the resume position (paragraph 0
-  // on a book that was just imported) and the end that a wrong start is
-  // unambiguous.
-  const target = 50;
+  // Paragraph 31: far enough from the resume position (paragraph 0 on a book
+  // that was just imported) that a wrong start is unambiguous, and inside the
+  // first chapter — the one the paginated reader has in the DOM on open.
+  const target = 30;
   const out = await session.evaluate(`(() => {
     const p = document.querySelectorAll('.book-content p')[${target}];
     const tn = [...p.childNodes].find((x) => x.nodeType === 3);
@@ -676,9 +879,7 @@ async function archiveHidesAndRestores(bookId) {
  */
 async function ttsFollowResolvesParagraphStarts(bookId) {
   await goto(`/b?id=${bookId}`, `!!document.querySelector('.book-content')`);
-  await session.waitFor(`document.documentElement.scrollHeight > window.innerHeight * 2`, {
-    label: 'the book to lay out'
-  });
+  await session.waitFor(laidOut(), { label: 'the book to lay out' });
 
   const out = await session.evaluate(`(async () => {
     const { elementForCharIndex } = await import('/src/lib/components/book-reader/char-index-locator.ts');
@@ -902,10 +1103,13 @@ async function inlineImagesDoNotBreakTheLine(bookId) {
   return `${Object.keys(out.markers).length} marker shapes stay on one line, illustrations stay block`;
 }
 
-/** Scroll mode, SAPI, nothing selected, no saved voice position for the book. */
+/** SAPI, nothing selected, no saved voice position for the book. Scroll mode
+ *  only — the scenarios using this put a paragraph on screen with
+ *  scrollIntoView and drive the typewriter, which only exists in scroll mode.
+ *  It used to set viewMode itself, so a paginated run "passed" them in
+ *  scroll mode; the mode loop now simply doesn't run them in paginated. */
 async function scrollModeVoiceFromScratch(bookId) {
   await session.evaluate(js`(() => {
-    localStorage.setItem('viewMode', 'continuous');
     localStorage.setItem('ttsEngine', 'sapi');
     localStorage.setItem('ttsStartStrategy', 'selection');
     const saved = JSON.parse(localStorage.getItem('ttsPositions') || '{}');
@@ -948,6 +1152,13 @@ const SPOKEN_PARAGRAPH = `(() => {
 })()`;
 
 const paragraphNumber = (text) => Number((/第(\d+)段/.exec(text || '') || [])[1] || 0);
+/** Like paragraphNumber, but a chapter heading counts as the paragraph it
+ *  opens (the test book's 第2章 starts at 第41段) — after a jump the screen can
+ *  show the heading or the line just above it, which are the same place. */
+const positionOf = (text) => {
+  const ch = /第(\d+)章/.exec(text || '');
+  return ch ? (Number(ch[1]) - 1) * 40 + 1 : paragraphNumber(text);
+};
 
 /**
  * Regression, found 2026-10-29 while mapping where playback starts in scroll
@@ -1206,13 +1417,22 @@ async function caretStartSurvivesReload(bookId) {
 }
 
 /**
- * Regression (1.56.1): typing in the AI drawer lost the caret mid-word. The
- * reader's window keydown treated b/r/a/d/n/m/space as shortcuts even inside
- * a textarea — ran the action (bookmark, jump, chapter…) and then blurred the
- * focused element, so the rest of the sentence went nowhere.
+ * Regression (1.56.1, 10fcca6): typing in the AI drawer lost the caret
+ * mid-word. The reader's window keydown treated b/r/a/d/n/m/space as
+ * shortcuts even inside a textarea — ran the action (bookmark, jump,
+ * chapter…) and then blurred the focused element, so the rest of the
+ * sentence went nowhere. The paginated reader has its own keydown (a/d and
+ * the arrows flip pages), which is why this runs in both modes and also
+ * presses arrows: the page must not move while the reader types.
+ *
+ * The search box (Ctrl+F) is not checked here: its dialog sets
+ * skipKeyDownListener, so the guard under test is never reached from it.
  */
 async function aiDrawerKeepsFocusWhileTyping(bookId) {
-  await goto(`/b?id=${bookId}`, `!!document.querySelector('[aria-label="显示阅读器菜单"]')`);
+  await goto(`/b?id=${bookId}`, READER_READY);
+  await session.waitFor(laidOut(), { label: 'the book to lay out' });
+  await pause(800);
+  const before = { where: await session.evaluate(WHERE), saved: await savedPosition(bookId) };
   const box = await session.evaluate(`(() => {
     document.querySelector('[aria-label="显示阅读器菜单"]').click();
     return ${after(
@@ -1234,12 +1454,193 @@ async function aiDrawerKeepsFocusWhileTyping(bookId) {
   await session.click(box.x, box.y);
   const typed = 'a bad dream, then a brave man ran';
   await session.type(typed);
+  for (const k of ['ArrowRight', 'ArrowLeft', 'ArrowDown']) await session.press(k);
+  await session.type('dd');
+  await pause(1500);
   const out = await session.evaluate(
-    after(300, `({ tag: document.activeElement?.tagName, value: document.querySelector('textarea')?.value })`)
+    `({ tag: document.activeElement?.tagName, value: document.querySelector('textarea')?.value, where: ${WHERE} })`
   );
+  const want = typed + 'dd';
   if (out.tag !== 'TEXTAREA') throw new Error(`focus went to ${out.tag}; box holds "${out.value}"`);
-  if (out.value !== typed) throw new Error(`box holds "${out.value}", expected "${typed}"`);
-  return `${typed.length} 个字符连续输入，焦点一直在输入框`;
+  if (out.value !== want) throw new Error(`box holds "${out.value}", expected "${want}"`);
+  if (out.where !== before.where) throw new Error(`the page moved while typing: ${before.where} → ${out.where}`);
+  const saved = await savedPosition(bookId);
+  if (saved !== before.saved) throw new Error(`typing moved the saved position: ${before.saved} → ${saved}`);
+  // Close the drawer: it legitimately sits over the play buttons while open,
+  // and the covered-controls check runs against this page.
+  await session.evaluate(`(() => {
+    [...document.querySelectorAll('button[title="关闭"]')].find((b) => b.getBoundingClientRect().width > 0)?.click();
+    return 1;
+  })()`);
+  await pause(600);
+  return `${want.length} 个字符 + 方向键，焦点一直在输入框，页面没动`;
+}
+
+/**
+ * Regression (acb8bbd): the TOC and reading-history drawers sat under their
+ * own dimming backdrop after the dialog layer moved to z-200, so every click
+ * on an entry only closed the drawer. Checked the way the user meets it: each
+ * entry must be the topmost thing at its centre, and a real click on 第2章
+ * must land there and close the drawer.
+ */
+async function tocEntriesAreClickable(bookId) {
+  await forgetBookmark(bookId);
+  await goto(`/b?id=${bookId}`, READER_READY);
+  await session.waitFor(laidOut(), { label: 'the book to lay out' });
+  await pause(800);
+  await showReaderMenu('打开目录');
+  await session.evaluate(`(() => {
+    [...document.querySelectorAll('[title="打开目录"]')].find(e => e.getBoundingClientRect().width > 0).click();
+    return 1;
+  })()`);
+  await pause(900);
+  const entries = await session.evaluate(`(() => [...document.querySelectorAll('[title^="跳转到"]')]
+    .filter((e) => e.getBoundingClientRect().width > 0)
+    .map((e) => {
+      const r = e.getBoundingClientRect();
+      const x = r.left + r.width / 2, y = r.top + r.height / 2;
+      const top = document.elementFromPoint(x, y);
+      return { title: e.title, x, y, onTop: !!top && (e === top || e.contains(top)) };
+    }))()`);
+  if (entries.length < 2) throw new Error(`TOC shows ${entries.length} entries, expected 2 chapters`);
+  const buried = entries.filter((e) => !e.onTop);
+  if (buried.length) throw new Error(`TOC entries covered: ${buried.map((e) => e.title).join(', ')}`);
+
+  const second = entries.find((e) => e.title.includes('第2章'));
+  if (!second) throw new Error(`no 第2章 entry among ${entries.map((e) => e.title).join(', ')}`);
+  await session.click(second.x, second.y);
+  await pause(1500);
+  const out = await session.evaluate(`({
+    where: ${WHERE},
+    drawerOpen: [...document.querySelectorAll('[title^="跳转到"]')].some((e) => e.getBoundingClientRect().width > 0)
+  })`);
+  if (out.drawerOpen) throw new Error('the drawer stayed open after clicking an entry');
+  if (!/第2章|第41段/.test(out.where || '')) throw new Error(`clicked 第2章, landed on ${out.where}`);
+  return `${entries.length} 个条目都在最上层，点第2章到了 ${out.where}`;
+}
+
+/**
+ * Regression (8c7d1b5, and the rest of it found 2026-11-13): in scroll mode
+ * the first jump after opening a book was never saved — the auto-bookmark
+ * skipped the first scroll event to swallow the bookmark restore, and with no
+ * bookmark to restore that event was the reader's own jump. Closing the
+ * window then reopened the book where it was before. 8c7d1b5 saved 跳转 and
+ * in-book search directly; the TOC and the chapter keys stayed broken.
+ *
+ * `location.reload()` stands in for closing the window: it skips the in-app
+ * leave path, which saves on its way out and would hide the bug. The 跳转
+ * dialog is not driven here — it lands through the same jumpToPosition as
+ * search.
+ */
+async function jumpSurvivesReload(bookId) {
+  await session.evaluate(`(() => {
+    localStorage.setItem('autoBookmark', '1');
+    localStorage.setItem('autoBookmarkTime', '1');
+    localStorage.setItem('manualBookmark', '0');
+    return 1;
+  })()`);
+  const routes = {
+    书内搜索: async () => {
+      await session.evaluate(`(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', code: 'KeyF', ctrlKey: true, bubbles: true }));
+        return 1;
+      })()`);
+      await session.waitFor(`!!document.querySelector('input[placeholder]:focus')`, { label: 'the search box' });
+      await session.evaluate(`(() => {
+        const box = document.activeElement;
+        box.value = '第60段';
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+        return 1;
+      })()`);
+      await pause(600);
+      await session.evaluate(`(() => {
+        const hit = [...document.querySelectorAll('li button')].find((b) => b.innerText.includes('第60段'));
+        hit.click();
+        return 1;
+      })()`);
+    },
+    目录: async () => {
+      await showReaderMenu('打开目录');
+      await session.evaluate(`(() => {
+        [...document.querySelectorAll('[title="打开目录"]')].find(e => e.getBoundingClientRect().width > 0).click();
+        return 1;
+      })()`);
+      await pause(900);
+      await session.evaluate(`(() => {
+        [...document.querySelectorAll('[title^="跳转到"]')].find((e) => e.title.includes('第2章')).click();
+        return 1;
+      })()`);
+    },
+    // m = next chapter (n goes back).
+    'm 键': async () => {
+      await session.evaluate(`(() => { document.activeElement?.blur?.(); return 1; })()`);
+      await session.type('m');
+    }
+  };
+  const got = [];
+  for (const [label, jump] of Object.entries(routes)) {
+    await forgetBookmark(bookId);
+    await goto(`/b?id=${bookId}`, READER_READY);
+    await session.waitFor(laidOut(), { label: 'the book to lay out' });
+    await pause(1000);
+    await jump();
+    await pause(2500);
+    const jumped = await session.evaluate(WHERE);
+    if (positionOf(jumped) < 30) {
+      throw new Error(`${label}: setup — the jump went to ${jumped}`);
+    }
+    await session.evaluateThroughNavigation(`(() => { location.reload(); return 1; })()`);
+    await session.waitFor(READER_READY, { label: 'the reader after reload' });
+    await session.waitFor(laidOut(), { label: 'the book to lay out' });
+    await pause(1500);
+    const reopened = await session.evaluate(WHERE);
+    if (Math.abs(positionOf(reopened) - positionOf(jumped)) > 1) {
+      throw new Error(`${label}: jumped to ${jumped}, reopened at ${reopened}`);
+    }
+    got.push(`${label}→${reopened}`);
+  }
+  return got.join('，');
+}
+
+/**
+ * Regression, found 2026-11-13: in scroll mode every open → leave of a TXT
+ * book moved the saved position back one paragraph. The restore lands on a
+ * paragraph's exact bottom edge, the 2/3px scroll grid at 150% scaling rounds
+ * it just short, and the next save counted the paragraph above. Reopen a book
+ * enough times and it walks back to the chapter start.
+ */
+async function positionHoldsAcrossReopen(bookId) {
+  await session.evaluate(`(() => {
+    localStorage.setItem('autoBookmark', '1');
+    localStorage.setItem('autoBookmarkTime', '1');
+    localStorage.setItem('manualBookmark', '0');
+    return 1;
+  })()`);
+  await forgetBookmark(bookId);
+  await goto(`/b?id=${bookId}`, READER_READY);
+  await session.waitFor(laidOut(), { label: 'the book to lay out' });
+  await pause(1000);
+  if (mode === 'continuous') await session.evaluate(scrollToParagraph(25));
+  else await moveAway();
+  await pause(2500);
+  const saved = [await savedPosition(bookId)];
+  if (!saved[0]) throw new Error('setup: moving into the book saved no position');
+
+  for (let i = 0; i < 3; i += 1) {
+    await goto(`/b?id=${bookId}`, READER_READY);
+    await session.waitFor(laidOut(), { label: 'the book to lay out' });
+    await pause(1500);
+    await showReaderMenu('返回书库');
+    await session.evaluateThroughNavigation(`(() => {
+      [...document.querySelectorAll('[title="返回书库"]')].find((e) => e.getBoundingClientRect().width > 0).click();
+      return 1;
+    })()`);
+    await session.waitFor(MANAGE_READY, { label: 'the library after leaving' });
+    await pause(800);
+    saved.push(await savedPosition(bookId));
+  }
+  if (new Set(saved).size > 1) throw new Error(`saved position drifted: ${saved.join(' → ')}`);
+  return `打开→离开 ×3，进度一直是 ${saved[0]}`;
 }
 
 // ----------------------------------------------------------------- run ----
@@ -1259,45 +1660,56 @@ try {
   snap = await snapshotSettings();
   console.log(`  settings snapshot taken: ${JSON.stringify(snap)}\n`);
 
-  // The reader scenarios were written against scroll mode and never said so;
-  // on a machine left in paginated mode three of them timed out waiting for
-  // a page that scrolls.
-  await session.evaluate(`(() => { localStorage.setItem('viewMode', 'continuous'); return 1; })()`);
-
+  errors = await session.watchErrors();
+  await useMode(MODES[0]);
+  await warmUp('/manage', MANAGE_READY);
   bookId = await importTestBook();
+  for (const m of MODES) {
+    await useMode(m);
+    await warmUp(`/b?id=${bookId}`, READER_READY);
+  }
   console.log(`  test book imported as id ${bookId}\n`);
 
-  await scenario('书签：书籍开头设的书签能跳回去', () => bookmarkAtStart(bookId));
-  await scenario('朗读：正文不被隐藏、可滚动、逐句高亮推进', () => ttsLeavesTextAlone(bookId));
-  await scenario('朗读：引擎失败时说明原因', () => ttsFailureExplainsItself(bookId));
-  await scenario('朗读：高亮一段后从那段开读', () => ttsStartsAtTheHighlightedPassage(bookId));
-  await scenario('导入：批量失败时逐个报出文件名和原因', () => batchImportNamesEveryFailure());
-  await scenario('归档：从书库隐藏、在已归档里能找到、能放回来', () => archiveHidesAndRestores(bookId));
-  await scenario('朗读跟随：段落开头的位置解析不跑偏', () =>
-    ttsFollowResolvesParagraphStarts(bookId)
-  );
-  await scenario('朗读翻页：振假名/隐藏文本不会让字符空间漂移', () =>
-    ttsCalculatorIndexAgrees()
-  );
-  await scenario('排版：注释小图不再把后面的文字挤到下一行', () =>
-    inlineImagesDoNotBreakTheLine(bookId)
-  );
-  await scenario('朗读起点：没选区时从当前屏开读（播放键、V 键）', () =>
-    voiceStartsOnScreen(bookId)
-  );
-  await scenario('打字机接管：朗读中开打字机会停掉朗读、接着那句打', () =>
-    typewriterTakesOverFromVoice(bookId)
-  );
-  await scenario('朗读接管：打字机在跑时直接点朗读，从前沿那段开始', () =>
-    voiceTakesOverFromTypewriter(bookId)
-  );
-  await scenario('跳转：打字机暂停后跳走不留空白页，播放从新位置开始', () =>
-    jumpAfterTypewriterPause(bookId)
-  );
-  await scenario('续读：光标起点 → 停下 → 重开书后从停下那段接上', () =>
-    caretStartSurvivesReload(bookId)
-  );
-  await scenario('AI 助手：输入框里连续打字不丢焦点', () => aiDrawerKeepsFocusWhileTyping(bookId));
+  // Scroll-only ones position the screen with scrollIntoView and/or drive the
+  // typewriter, which the paginated reader doesn't have.
+  const SCROLL = ['continuous'];
+  const SCENARIOS = [
+    ['书签：书籍开头设的书签能跳回去', bookmarkAtStart],
+    ['朗读：正文不被隐藏、逐句高亮推进', ttsLeavesTextAlone],
+    // The injected engine failure logs on purpose.
+    ['朗读：引擎失败时说明原因', ttsFailureExplainsItself, { allowErrors: /synthesis-failed|Web Speech/ }],
+    ['朗读：高亮一段后从那段开读', ttsStartsAtTheHighlightedPassage],
+    // Three broken files are the point; the loader logs each.
+    ['导入：批量失败时逐个报出文件名和原因', batchImportNamesEveryFailure, { modes: ONCE, allowErrors: /./ }],
+    ['归档：从书库隐藏、在已归档里能找到、能放回来', archiveHidesAndRestores, { modes: ONCE }],
+    ['朗读跟随：段落开头的位置解析不跑偏', ttsFollowResolvesParagraphStarts],
+    ['朗读翻页：振假名/隐藏文本不会让字符空间漂移', ttsCalculatorIndexAgrees, { modes: ONCE }],
+    ['排版：注释小图不再把后面的文字挤到下一行', inlineImagesDoNotBreakTheLine],
+    ['朗读起点：没选区时从当前屏开读（播放键、V 键）', voiceStartsOnScreen, { modes: SCROLL }],
+    ['打字机接管：朗读中开打字机会停掉朗读、接着那句打', typewriterTakesOverFromVoice, { modes: SCROLL }],
+    ['朗读接管：打字机在跑时直接点朗读，从前沿那段开始', voiceTakesOverFromTypewriter, { modes: SCROLL }],
+    ['跳转：打字机暂停后跳走不留空白页，播放从新位置开始', jumpAfterTypewriterPause, { modes: SCROLL }],
+    ['续读：光标起点 → 停下 → 重开书后从停下那段接上', caretStartSurvivesReload, { modes: SCROLL }],
+    ['输入框：AI 助手里打字不触发快捷键、不翻页', aiDrawerKeepsFocusWhileTyping],
+    ['目录：条目在蒙版之上，点了能跳', tocEntriesAreClickable],
+    ['进度：搜索/目录/m 键跳转后直接关窗也不丢', jumpSurvivesReload],
+    ['进度：反复打开→离开，书签不往回退', positionHoldsAcrossReopen]
+  ];
+
+  for (const m of MODES) {
+    console.log(`  — ${MODE_LABEL[m] || m} —`);
+    for (const [name, run, opts = {}] of SCENARIOS) {
+      const modes = opts.modes ?? MODES;
+      if (modes === ONCE ? m !== MODES[0] : !modes.includes(m)) continue;
+      // Each scenario starts from the user's settings, not from whatever the
+      // previous one pinned: a 1s auto-bookmark left behind by one scenario
+      // overwrote the next one's manual bookmark mid-test.
+      await restoreSettings(snap);
+      await useMode(m);
+      const label = modes === ONCE ? name : `[${MODE_LABEL[m] || m}] ${name}`;
+      await scenario(label, () => run(bookId), opts);
+    }
+  }
 } catch (err) {
   fail('suite setup', err.message);
 } finally {

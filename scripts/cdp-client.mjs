@@ -30,10 +30,12 @@ export async function connect({ port = DEFAULT_PORT, timeoutMs = 0 } = {}) {
   const page = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   const pending = new Map();
+  const listeners = new Set();
   let id = 0;
 
   ws.addEventListener('message', (ev) => {
     const msg = JSON.parse(ev.data);
+    if (msg.method) for (const fn of listeners) fn(msg);
     const slot = msg.id && pending.get(msg.id);
     if (!slot) return;
     pending.delete(msg.id);
@@ -136,5 +138,44 @@ export async function connect({ port = DEFAULT_PORT, timeoutMs = 0 } = {}) {
     }
   }
 
-  return { evaluate, evaluateThroughNavigation, waitFor, screenshot, click, type, close: () => ws.close() };
+  /** One named key (`ArrowRight`, `Escape`…) as a real keystroke. */
+  const NAMED_KEYS = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Escape: 27, Enter: 13 };
+  async function press(name) {
+    const key = { key: name, code: name, windowsVirtualKeyCode: NAMED_KEYS[name] };
+    if (!key.windowsVirtualKeyCode) throw new Error(`press(): unknown key ${name}`);
+    await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...key });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', ...key });
+  }
+
+  /**
+   * Start collecting uncaught exceptions and console.error calls from the
+   * page. `take()` returns what arrived since the last take and clears it.
+   * Survives navigations: Runtime events keep flowing on the same target.
+   */
+  async function watchErrors() {
+    const seen = [];
+    listeners.add((msg) => {
+      if (msg.method === 'Runtime.exceptionThrown') {
+        const d = msg.params.exceptionDetails;
+        seen.push(`uncaught: ${(d.exception?.description || d.text || '').split('\n')[0]}`);
+      } else if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
+        const text = msg.params.args.map((a) => a.value ?? a.description ?? a.type).join(' ');
+        seen.push(`console.error: ${text.split('\n')[0]}`);
+      }
+    });
+    await send('Runtime.enable');
+    return { take: () => seen.splice(0) };
+  }
+
+  return {
+    evaluate,
+    evaluateThroughNavigation,
+    waitFor,
+    screenshot,
+    click,
+    type,
+    press,
+    watchErrors,
+    close: () => ws.close()
+  };
 }
