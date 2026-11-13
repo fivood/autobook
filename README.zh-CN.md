@@ -1,13 +1,13 @@
 # AutoBook
 
-> Windows 桌面电子书阅读器，把读书变成可检索、可回顾的个人知识库。打字机 / TTS 自动播放、剧透安全的 AI 问答、离线词典、漫画翻译，一键同步 Obsidian。
+> Windows / macOS 桌面电子书阅读器，把读书变成可检索、可回顾的个人知识库。打字机 / TTS 自动播放、剧透安全的 AI 问答、离线词典、漫画翻译，一键同步 Obsidian。
 
 [English](./README.md) · **简体中文**
 
 [![Latest release](https://img.shields.io/github/v/release/fivood/autobook?display_name=tag)](https://github.com/fivood/autobook/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/fivood/autobook/total)](https://github.com/fivood/autobook/releases)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](./LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-lightgrey)](https://github.com/fivood/autobook/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2B%20%7C%20macOS-lightgrey)](https://github.com/fivood/autobook/releases/latest)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)](https://tauri.app/)
 
 原型 fork 自 [ttu-ebook-reader](https://github.com/ttu-ttu/ebook-reader)，与上游已实质性分叉。Tauri 2 + SvelteKit + Rust，带签名的自动更新通道。
@@ -55,9 +55,9 @@
 
 首次安装 SmartScreen 提示「未知发布者」，点「更多信息 → 仍要运行」。之后的更新由应用内 updater 静默应用。
 
-### macOS（预览，仅 Apple Silicon）
+### macOS（预览）
 
-下载 `AutoBook_<ver>_aarch64.dmg`，把 AutoBook 拖进「应用程序」。安装包没有 Apple 签名，第一次打开会被 Gatekeeper 拦下，二选一放行：
+Apple 芯片下载 `AutoBook_<ver>_aarch64.dmg`，Intel 芯片下载 `AutoBook_<ver>_x64.dmg`，把 AutoBook 拖进「应用程序」。安装包没有 Apple 签名，第一次打开会被 Gatekeeper 拦下，二选一放行：
 
 - 双击打开一次（被拦），再到「系统设置 → 隐私与安全性」底部点「仍要打开」。macOS 14 及更早也可以在「应用程序」里右键 AutoBook →「打开」
 - 或在终端执行：

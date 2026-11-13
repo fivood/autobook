@@ -1,13 +1,13 @@
 # AutoBook
 
-> A Windows desktop ebook reader that turns reading into a searchable personal knowledge base. Typewriter auto-play, spoiler-safe AI Q&A, offline dictionaries, comic translation, and one-click Obsidian sync.
+> A desktop ebook reader for Windows and macOS that turns reading into a searchable personal knowledge base. Typewriter auto-play, spoiler-safe AI Q&A, offline dictionaries, comic translation, and one-click Obsidian sync.
 
 **English** · [简体中文](./README.zh-CN.md)
 
 [![Latest release](https://img.shields.io/github/v/release/fivood/autobook?display_name=tag)](https://github.com/fivood/autobook/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/fivood/autobook/total)](https://github.com/fivood/autobook/releases)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](./LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-lightgrey)](https://github.com/fivood/autobook/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2B%20%7C%20macOS-lightgrey)](https://github.com/fivood/autobook/releases/latest)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)](https://tauri.app/)
 
 Forked from [ttu-ebook-reader](https://github.com/ttu-ttu/ebook-reader), substantially diverged. Tauri 2 + SvelteKit + Rust, signed auto-update channel.
@@ -55,9 +55,9 @@ Grab the installer from [Releases](https://github.com/fivood/autobook/releases/l
 
 First launch shows a SmartScreen "Unknown publisher" prompt — click **More info → Run anyway**. Updates apply silently via the built-in updater.
 
-### macOS (preview, Apple Silicon only)
+### macOS (preview)
 
-Download `AutoBook_<ver>_aarch64.dmg` and drag AutoBook into Applications. The app is not signed with an Apple certificate, so Gatekeeper blocks the first launch. Either:
+Download `AutoBook_<ver>_aarch64.dmg` (Apple silicon) or `AutoBook_<ver>_x64.dmg` (Intel) and drag AutoBook into Applications. The app is not signed with an Apple certificate, so Gatekeeper blocks the first launch. Either:
 
 - Open it once (it gets blocked), then click **Open Anyway** at the bottom of **System Settings → Privacy & Security**. On macOS 14 and earlier, right-click AutoBook in Applications → **Open** also works.
 - Or run:
