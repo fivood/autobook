@@ -73,7 +73,8 @@
     align-items: center;
     gap: 0.6rem;
     max-width: 90vw;
-    margin-top: 0.6rem;
+    /* Below the 2.5rem reader header, not over its book title. */
+    margin-top: 3.1rem;
     padding: 0.6rem 1rem;
     border-radius: 0.6rem;
     background: var(--menu-background);

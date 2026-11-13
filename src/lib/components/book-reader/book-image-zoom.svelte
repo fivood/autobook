@@ -46,8 +46,11 @@
      both are visible. */
   .zoom-control {
     position: fixed;
-    left: env(safe-area-inset-left, 0.6rem);
-    bottom: calc(env(safe-area-inset-bottom, 0.6rem) + 0.8rem);
+    /* max(), not env()'s fallback: WebView2 defines the insets as 0px, so a
+       fallback never applies and the pill sat at the very corner — on top of
+       the reading tracker. 2.6rem clears the h-8 bottom status bar. */
+    left: max(env(safe-area-inset-left, 0px), 0.6rem);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 2.6rem);
     z-index: 20;
     display: flex;
     align-items: center;

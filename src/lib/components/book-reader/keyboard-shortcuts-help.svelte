@@ -157,8 +157,10 @@
      reserved for play controls. */
   .trigger {
     position: fixed;
-    left: env(safe-area-inset-left, 0.6rem);
-    bottom: calc(env(safe-area-inset-bottom, 0.6rem) + 3.2rem);
+    /* Same env()-fallback trap as book-image-zoom (WebView2 reports 0px);
+       stacked above the zoom pill, which sits above the bottom status bar. */
+    left: max(env(safe-area-inset-left, 0px), 0.6rem);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 5.4rem);
     z-index: 20;
     width: 2rem;
     height: 2rem;
