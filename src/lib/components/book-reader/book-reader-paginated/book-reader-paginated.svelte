@@ -3,6 +3,7 @@
   import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
   import HtmlRenderer from '$lib/components/html-renderer.svelte';
   import { pdfPageShell } from '$lib/functions/pdf-page-shell';
+  import { manualBookmarkView } from '$lib/functions/manual-bookmark';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { SECTION_CHANGE } from '$lib/data/events';
   import { isStoredFont } from '$lib/data/fonts';
@@ -159,6 +160,9 @@
     charCount: number;
     /** Book-global raw-text offset (the highlight basis) of its first character. */
     textStart: number;
+    /** Markdown's heading/list/code styles hang off `.md-section`, the class
+     *  of the section wrapper this mode replaces with its own container. */
+    md: boolean;
   }
 
   let sections: SectionInfo[] = [];
@@ -174,6 +178,8 @@
   let displayedHtml = '';
 
   let displayedTextStart = 0;
+
+  let displayedMd = false;
 
   let previousIntendedCount = 0;
 
@@ -293,7 +299,8 @@
           id: section.id,
           innerHTML: section.innerHTML,
           charCount: getSectionCharCount(section),
-          textStart
+          textStart,
+          md: section.classList.contains('md-section')
         };
       });
       sectionIndex$.next(0);
@@ -557,6 +564,7 @@
 
   currentSection$.pipe(takeUntil(destroy$)).subscribe((html) => {
     const textStart = sections[sectionIndex$.getValue()]?.textStart ?? 0;
+    const md = !!sections[sectionIndex$.getValue()]?.md;
     const nestAnimationFrame = (fn: () => void, count: number) => {
       if (count === 0) {
         fn();
@@ -569,6 +577,7 @@
     nestAnimationFrame(() => {
       displayedHtml = html;
       displayedTextStart = textStart;
+      displayedMd = md;
     }, 2);
   });
 
@@ -690,7 +699,8 @@
   }
 
   function updateBookmarkScreen(data: BooksDbBookmarkData | undefined) {
-    const bookmarkCharCount = data?.exploredCharCount;
+    // The ribbon marks where B was pressed, not the auto-saved resume spot.
+    const bookmarkCharCount = manualBookmarkView(data)?.exploredCharCount;
     if (!calculator || !bookmarkCharCount) return;
 
     const result = calculator.checkBookmarkOnScreen(bookmarkCharCount);
@@ -718,14 +728,14 @@
       setDefaultBookmarkPositions(0);
     }
 
-    if (result.isBookmarkScreen && data.exploredCharCount) {
+    if (result.isBookmarkScreen) {
       if (result.node && !useExploredCharCount && !result.isFirstNode) {
         updateSectionData(createRange(result.node));
       } else if (result.isFirstNode) {
         updateSectionData(undefined);
       }
 
-      exploredCharCount = useExploredCharCount ? exploredCharCount : data.exploredCharCount;
+      exploredCharCount = useExploredCharCount ? exploredCharCount : bookmarkCharCount;
       previousIntendedCount = exploredCharCount;
     }
 
@@ -886,6 +896,7 @@
 >
   <div
     class="book-content-container"
+    class:md-section={displayedMd}
     id={currentSectionId || null}
     data-text-start={displayedTextStart}
     bind:this={contentEl}
@@ -945,6 +956,26 @@
     :global(.ttu-illustration-container:not(.pdf-page-shell):not(.pdf-section)) {
       max-width: var(--book-content-image-max-width, 95vh) !important;
       max-height: var(--book-content-child-height, 95vh) !important;
+    }
+
+    // A comic / image-PDF page must fit one column whole. Sized by width
+    // alone (book-image-zoom's rule), a portrait page in a short window came
+    // out taller than the column: Blink ran it off the bottom, WebKit broke
+    // the rest into the next column — the Mac test's same-colour strip.
+    // auto + max-* keeps the aspect ratio and the box equal to the picture,
+    // which the comic translation overlay measures (object-fit would not).
+    // The label above takes ~2.1em, the section's bottom margin 1em. Zoom
+    // can still shrink; enlarging past the column is what broke it.
+    // Selected by the image's own class: paginated mode re-wraps each
+    // section in a bare <div>, so `.pdf-section` is gone by now. OCR'd PDF
+    // pages size through their shell's aspect-ratio and stay out of it.
+    :global(img.book-page-image:not(.pdf-page-shell img)) {
+      width: auto !important;
+      height: auto !important;
+      max-width: calc(100% * min(1, var(--book-image-scale, 1))) !important;
+      max-height: calc(
+        (var(--book-content-child-height, 95vh) - 3.5em) * min(1, var(--book-image-scale, 1))
+      ) !important;
     }
   }
 

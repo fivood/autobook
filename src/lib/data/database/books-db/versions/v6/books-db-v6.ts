@@ -78,6 +78,9 @@ interface BooksDbV6BookmarkData {
   exploredCharCount?: number;
   progress: number | string | undefined;
   lastBookmarkModified: number;
+  /** Where B / 添加书签 was pressed; see manual-bookmark.ts. Not indexed, so
+   *  no schema bump: rows without it are unmarked. */
+  manualExploredCharCount?: number;
 }
 
 interface BooksDbV6StorageSource {

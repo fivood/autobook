@@ -332,6 +332,10 @@ option {
   h3 { font-size: 1.25em; }
   p { margin: 0.7em 0; }
   ul, ol { margin: 0.6em 0 0.6em 1.6em; }
+  // Tailwind's preflight strips list markers; a Markdown list without them
+  // reads as loose lines (the Mac test took it for "lists not rendered").
+  ul { list-style: disc; }
+  ol { list-style: decimal; }
   li { margin: 0.2em 0; }
   blockquote {
     margin: 0.8em 0;

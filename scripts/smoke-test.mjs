@@ -1979,6 +1979,100 @@ async function searchMissIsNotAnEmptyLibrary() {
   return '没搜到时提示「没有找到匹配的书」';
 }
 
+/**
+ * Regression (Mac test R8, reproduced on Windows): with 自动书签 on, the mark
+ * set with B was overwritten by the auto-saved resume position a few seconds
+ * later, so 返回书签位置 (R) stayed where you were. Auto-bookmark pinned on at
+ * 1s so the overwrite happens inside the scenario.
+ */
+async function manualBookmarkSurvivesAutoSave(bookId) {
+  await session.evaluate(`(() => {
+    localStorage.setItem('autoBookmark', '1');
+    localStorage.setItem('autoBookmarkTime', '1');
+    localStorage.setItem('manualBookmark', '0');
+    return 1;
+  })()`);
+  await forgetBookmark(bookId);
+  await goto(`/b?id=${bookId}`, READER_READY);
+  await session.waitFor(laidOut(), { label: 'the book to lay out' });
+  await pause(800);
+  await moveAway();
+  const marked = await session.evaluate(FOOTER_COUNT);
+  await session.press('b');
+  await pause(800);
+  await session.press('n'); // moveAway() already sits in the last chapter
+  await pause(3000);
+  const away = await session.evaluate(FOOTER_COUNT);
+  const saved = await savedPosition(bookId);
+  await session.press('r');
+  await pause(1500);
+  const back = await session.evaluate(FOOTER_COUNT);
+  if (away === marked) throw new Error(`n did not leave the marked spot (${marked})`);
+  if (saved !== away) throw new Error(`auto-bookmark did not save the new spot: ${saved} vs ${away}`);
+  if (back !== marked) throw new Error(`R went to ${back}, the mark was at ${marked} (resume position ${saved})`);
+  return `B 在 ${marked}，自动保存到 ${saved} 后按 R 回到 ${back}`;
+}
+
+/**
+ * Regression (Mac test R14, same on Windows): a Markdown note opening with
+ * 「# 标题」 straight into 「## 小节」 showed the title alone on page 1, and the
+ * paginated reader dropped `.md-section` with the section wrapper, so headings
+ * and lists rendered as plain lines. Paginated only — that is where both were.
+ */
+async function markdownTitleSharesItsPage() {
+  const title = `${TEST_TITLE}-md`;
+  await goto('/manage', MANAGE_READY);
+  const imported = await session.evaluate(js`(() => new Promise(r => {
+    const input = [...document.querySelectorAll('input[type=file]')]
+      .find(i => (i.getAttribute('accept') || '').includes('.epub'));
+    const NL = String.fromCharCode(10);
+    const text = ['# 测试笔记', '', '## 二级标题', '', '这是正文。', '', '- 列表一', '- 列表二'].join(NL);
+    const dt = new DataTransfer();
+    dt.items.add(new File([text], ${title} + '.md', { type: 'text/markdown' }));
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    setTimeout(() => r(1), 2500);
+  }))()`);
+  if (!imported) throw new Error('could not import the Markdown note');
+  const id = await session.waitFor(
+    js`(() => new Promise(r => { const q = indexedDB.open('books'); q.onsuccess = () => {
+      const g = q.result.transaction('data','readonly').objectStore('data').getAll();
+      g.onsuccess = () => { const b = g.result.find(x => x.title.startsWith(${title})); r(b ? b.id : 0); };
+    }; }))()`,
+    { label: 'the Markdown note to appear in IndexedDB' }
+  );
+  try {
+    await goto(`/b?id=${id}`, READER_READY);
+    await session.waitFor(`!!document.querySelector('.book-content h1')`, { label: 'the note to render' });
+    await pause(1000);
+    const out = await session.evaluate(`(() => {
+      const onScreen = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth; };
+      const q = (s) => document.querySelector('.book-content ' + s);
+      return {
+        h2: !!q('h2') && onScreen(q('h2')),
+        li: !!q('li') && onScreen(q('li')),
+        h2Size: q('h2') && parseFloat(getComputedStyle(q('h2')).fontSize),
+        pSize: q('p') && parseFloat(getComputedStyle(q('p')).fontSize),
+        bullet: q('li') && getComputedStyle(q('li')).listStyleType
+      };
+    })()`);
+    if (!out.h2 || !out.li) throw new Error('the title is alone on page 1; the section and list are not on screen');
+    if (!(out.h2Size > out.pSize)) throw new Error(`## renders at ${out.h2Size}px, body at ${out.pSize}px`);
+    if (out.bullet === 'none') throw new Error('list items have no markers');
+    return `标题、二级标题、正文、列表同在第 1 页；h2 ${out.h2Size}px > 正文 ${out.pSize}px，列表 ${out.bullet}`;
+  } finally {
+    await session.evaluate(js`new Promise((r) => {
+      const q = indexedDB.open('books');
+      q.onsuccess = () => {
+        const tx = q.result.transaction(['data', 'bookmark'], 'readwrite');
+        tx.objectStore('data').delete(${id});
+        tx.objectStore('bookmark').delete(${id});
+        tx.oncomplete = () => r(1);
+      };
+    })`);
+  }
+}
+
 let snap;
 let bookId = 0;
 try {
@@ -2024,7 +2118,9 @@ try {
     ['高亮：按全书偏移存取，分页也画得出、跳转会闪', highlightsUseBookOffsets],
     ['设置抽屉：V 不在后台朗读，Esc 关闭并还焦点', settingsDrawerOwnsItsKeys],
     ['书库：右键删除→取消后回到普通模式', deleteCancelLeavesSelectMode, { modes: ONCE }],
-    ['书库：没搜到时不显示导入提示', searchMissIsNotAnEmptyLibrary, { modes: ONCE }]
+    ['书库：没搜到时不显示导入提示', searchMissIsNotAnEmptyLibrary, { modes: ONCE }],
+    ['书签：手动书签不被自动书签覆盖，R 能回去', manualBookmarkSurvivesAutoSave],
+    ['Markdown：标题不独占一页，分页下标题和列表有样式', markdownTitleSharesItsPage, { modes: ['paginated'] }]
   ];
 
   for (const m of MODES) {

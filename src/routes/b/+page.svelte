@@ -31,6 +31,7 @@
 
 <script lang="ts">
   import { readerPosOfTextOffset } from '$lib/functions/rebase-sections';
+  import { manualBookmarkView, withManualBookmark } from '$lib/functions/manual-bookmark';
   import {
     auditTime,
     BehaviorSubject,
@@ -1611,15 +1612,27 @@ ${$t('reader.ttsFailed.hint')}`
       customReadingPointScrollOffset
     );
     if ($manualBookmark$) return;
-    const data: BooksDbBookmarkData = {
+    await saveBookmarkRow({
       dataId,
       exploredCharCount: target,
       progress: bookCharCount ? target / bookCharCount : 0,
       lastBookmarkModified: now
-    };
-    await database.putBookmark(data);
-    bookmarkData = Promise.resolve(data);
+    });
     scheduleReplication(StorageDataType.PROGRESS);
+  }
+
+  /**
+   * Every write of the bookmark row goes through here, so the mark set with
+   * B survives the auto-saved resume position moving on (manual-bookmark.ts).
+   * The previous row is read from the database, not `bookmarkData`: that can
+   * be a synthesized open position (?pos=, ?hl=) without the mark.
+   */
+  async function saveBookmarkRow(data: BooksDbBookmarkData, manual = false) {
+    const prev = manual ? undefined : await database.getBookmark(data.dataId);
+    const row = withManualBookmark(data, prev, manual);
+    await database.putBookmark(row);
+    bookmarkData = Promise.resolve(row);
+    return row;
   }
 
   // Blocks for in-book search, rebuilt only when the book or its text changes.
@@ -1791,9 +1804,7 @@ ${$t('reader.ttsFailed.hint')}`
           progress: 1
         };
 
-        await database.putBookmark(data);
-
-        bookmarkData = Promise.resolve(data);
+        await saveBookmarkRow(data);
 
         scheduleReplication(StorageDataType.PROGRESS);
       }
@@ -2110,7 +2121,7 @@ ${$t('reader.ttsFailed.hint')}`
     const result = onKeydownReader(
       ev,
       bookReaderKeybindMap$.getValue(),
-      bookmarkPage,
+      () => bookmarkPage(true),
       scrollToBookmark,
       (x) => multiplier$.next(multiplier$.getValue() + x),
       autoScroller,
@@ -2414,7 +2425,8 @@ ${$t('reader.ttsFailed.hint')}`
     hlMemoDialogOpen = true;
   }
 
-  async function bookmarkPage() {
+  /** `manual`: B / 添加书签, which also sets the mark; otherwise an auto save. */
+  async function bookmarkPage(manual = false) {
     const bookId = getBookIdSync();
     if (!bookId || !bookmarkManager) return;
 
@@ -2439,15 +2451,13 @@ ${$t('reader.ttsFailed.hint')}`
       data = bookmarkManager.formatBookmarkData(bookId, customReadingPointScrollOffset);
     }
 
-    await database.putBookmark(data);
-
-    bookmarkData = Promise.resolve(data);
+    await saveBookmarkRow(data, manual);
 
     scheduleReplication(StorageDataType.PROGRESS);
   }
 
   async function scrollToBookmark() {
-    const data = await bookmarkData;
+    const data = manualBookmarkView(await bookmarkData);
     if (!data || !bookmarkManager) return;
 
     stopPlaybackForJump();
@@ -3077,7 +3087,7 @@ ${$t('reader.ttsFailed.hint')}`
         }
       }}
       on:fullscreenClick={onFullscreenClick}
-      on:bookmarkClick={bookmarkPage}
+      on:bookmarkClick={() => bookmarkPage(true)}
       on:scrollToBookmarkClick={() => {
         showHeader = false;
         scrollToBookmark();
@@ -3196,7 +3206,7 @@ ${$t('reader.ttsFailed.hint')}`
     bind:customReadingPointScrollOffset
     bind:customReadingPointRange
     bind:showCustomReadingPoint
-    on:bookmark={bookmarkPage}
+    on:bookmark={() => bookmarkPage()}
     on:trackerPause={() => pauseTracker(true)}
     on:contentChange={() => scheduleHighlightRender($hlStore$)}
   />

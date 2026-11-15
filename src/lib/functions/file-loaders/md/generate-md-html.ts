@@ -156,6 +156,19 @@ export function getFormattedElementMd(data: string) {
   if (!sectionBuckets.length) {
     sectionBuckets.push({ label: '', lines: [withRefs] });
   }
+  // A heading with nothing under it before the next one (「# 标题」 straight
+  // into 「## 小节」) would be a section of its own — and the paginated
+  // reader starts every section on a new page, so the title sat alone on
+  // page 1 (the Mac test read that as "the body isn't rendered"). Fold it
+  // into the next section; the TOC keeps the more specific heading.
+  for (let i = sectionBuckets.length - 2; i >= 0; i -= 1) {
+    // `label` rules out the leading untitled bucket, whose first line is body.
+    if (sectionBuckets[i].label && sectionBuckets[i].lines.slice(1).every((l) => !l.trim())) {
+      const next = sectionBuckets[i + 1];
+      next.lines = [...sectionBuckets[i].lines, ...next.lines];
+      sectionBuckets.splice(i, 1);
+    }
+  }
 
   let totalChars = 0;
   sectionBuckets.forEach((bucket, idx) => {
