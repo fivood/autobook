@@ -46,7 +46,6 @@
   } from '$lib/data/tts/voice-by-lang';
   import {
     CUSTOM_PRESETS,
-    PRESET_CATEGORY_LABEL,
     PRESET_CATEGORY_ORDER,
     TTS_STYLE_PRESETS,
     type CustomPreset,
@@ -244,10 +243,6 @@
     }
   }
 
-  function setXmlVoice(body: string, voice: string): string {
-    return body.replace(/name=['"][^'"]*['"]/, `name='${voice}'`);
-  }
-
   function navigateJson(root: any, path: string): unknown {
     let cur = root;
     for (const part of path.split('.')) {
@@ -258,58 +253,35 @@
     return cur;
   }
 
-  /** Preset entries grouped by category, in the declared order — for the
-   *  picker's `<optgroup>`s. Local presets come first (no signup), then free
-   *  cloud, then paid, then manual. */
-  const presetGroups: { category: PresetCategory; label: string; items: [string, CustomPreset][] }[] =
+  const presetGroups: { category: PresetCategory; items: [string, CustomPreset][] }[] =
     PRESET_CATEGORY_ORDER.map((category) => ({
       category,
-      label: PRESET_CATEGORY_LABEL[category],
       items: Object.entries(CUSTOM_PRESETS).filter(([, p]) => p.category === category)
     })).filter((g) => g.items.length > 0);
 
-  $: activePresetDef = CUSTOM_PRESETS[$ttsCustomActivePreset$] ?? CUSTOM_PRESETS.manual;
-  $: presetVoices = activePresetDef.voices ?? [];
-  $: currentVoice = (() => {
-    if (!activePresetDef.voices) return '';
-    if (activePresetDef.voiceFormat === 'url') {
-      if (!activePresetDef.voiceUrlPattern) return '';
-      const regex = new RegExp(activePresetDef.voiceUrlPattern);
-      const match = $ttsCustomEndpoint$.match(regex);
-      return match?.[0] ?? '';
-    }
-    if (!activePresetDef.voicePath) return '';
-    if (activePresetDef.voiceFormat === 'xml') {
-      const match = $ttsCustomBody$.match(/name=['"]([^'"]*)['"]/);
-      return match?.[1] ?? '';
-    }
-    return String(getBodyValue($ttsCustomBody$, activePresetDef.voicePath) ?? '');
-  })();
+  // Configs saved under ids that are no longer templates (the provider
+  // presets before 1.60.0). Untouched templates still hold YOUR_* placeholders
+  // and would only clutter the list, so only filled-in ones — and whatever is
+  // active — stay pickable.
+  $: savedPresetIds = [...new Set([$ttsCustomActivePreset$, ...Object.keys($ttsCustomPresetStates$)])]
+    .filter((id) => !CUSTOM_PRESETS[id])
+    .filter(
+      (id) =>
+        id === $ttsCustomActivePreset$ ||
+        !JSON.stringify($ttsCustomPresetStates$[id] ?? {}).includes('YOUR_')
+    );
 
-  function onVoiceChange(voice: string) {
-    if (activePresetDef.voiceFormat === 'url') {
-      if (!activePresetDef.voiceUrlPattern) return;
-      const regex = new RegExp(activePresetDef.voiceUrlPattern);
-      ttsCustomEndpoint$.next($ttsCustomEndpoint$.replace(regex, voice));
-      return;
-    }
-    if (!activePresetDef.voicePath) return;
-    if (activePresetDef.voiceFormat === 'xml') {
-      ttsCustomBody$.next(setXmlVoice($ttsCustomBody$, voice));
-    } else {
-      ttsCustomBody$.next(setBodyValue($ttsCustomBody$, activePresetDef.voicePath, voice));
-    }
-  }
+  $: activePresetDef = CUSTOM_PRESETS[$ttsCustomActivePreset$];
 
   // Reading style — same swap-a-field-in-the-body trick as the voice picker,
   // for the presets whose model takes a natural-language tone prompt.
-  $: currentStyle = activePresetDef.stylePath
+  $: currentStyle = activePresetDef?.stylePath
     ? String(getBodyValue($ttsCustomBody$, activePresetDef.stylePath) ?? '')
     : '';
   $: styleIsCustom = !TTS_STYLE_PRESETS.some((s) => s.value === currentStyle);
 
   function onStyleChange(style: string) {
-    if (!activePresetDef.stylePath || !style) return;
+    if (!activePresetDef?.stylePath || !style) return;
     ttsCustomBody$.next(setBodyValue($ttsCustomBody$, activePresetDef.stylePath, style));
   }
 
@@ -346,19 +318,6 @@
   function onPresetSelectChange(ev: Event) {
     const target = ev.currentTarget as HTMLSelectElement;
     switchCustomPreset(target.value);
-  }
-
-  /** Open a URL in the user's default browser (Tauri shell), or a new
-   * tab in the web build. Used by the TTS preset "获取 API key" buttons. */
-  async function openExternal(url: string) {
-    try {
-      const { open } = await import('@tauri-apps/plugin-shell');
-      await open(url);
-    } catch {
-      if (typeof window !== 'undefined') {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
-    }
   }
 
   // --- TTS shortcut recorder ---
@@ -955,7 +914,6 @@
       <p class="text-xs opacity-70 mb-2">
         {$t('settings.ttsCustom.hint')}
       </p>
-      {@const activePreset = CUSTOM_PRESETS[$ttsCustomActivePreset$] ?? CUSTOM_PRESETS.manual}
       <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
         <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.preset')}</span>
         <div class="flex flex-col gap-1.5">
@@ -966,50 +924,37 @@
               on:change={onPresetSelectChange}
             >
               {#each presetGroups as g (g.category)}
-                <optgroup label={g.label}>
+                <optgroup label={$t(`settings.ttsCustom.cat.${g.category}`)}>
                   {#each g.items as [id, preset] (id)}
-                    <option value={id}>{preset.label}</option>
+                    <option value={id}>{$t(preset.labelKey)}</option>
                   {/each}
                 </optgroup>
               {/each}
+              {#if savedPresetIds.length}
+                <optgroup label={$t('settings.ttsCustom.cat.saved')}>
+                  {#each savedPresetIds as id (id)}
+                    <option value={id}>{id}</option>
+                  {/each}
+                </optgroup>
+              {/if}
             </select>
             <button
               class="settings-btn"
               title={$t('settings.ttsCustom.restoreTemplateTip')}
+              disabled={!activePresetDef}
               on:click={resetActivePresetToDefaults}
             >{$t('settings.ttsCustom.restoreTemplate')}<Ripple /></button>
             <button
               class="settings-btn"
               on:click={() => (revealCustomSecrets = !revealCustomSecrets)}
             >{revealCustomSecrets ? $t('settings.ttsCustom.hideContent') : $t('settings.ttsCustom.showContent')}<Ripple /></button>
-            {#if activePreset.helpUrl}
-              <button
-                type="button"
-                class="settings-btn"
-                on:click={() => openExternal(activePreset.helpUrl || '')}
-              >{$t('settings.ttsCustom.getApiKey')}</button>
-            {/if}
           </div>
-          {#if activePreset.helpHint}
-            <p class="text-xs opacity-65 leading-snug">{activePreset.helpHint}</p>
+          {#if activePresetDef}
+            <p class="text-xs opacity-65 leading-snug">{$t(activePresetDef.hintKey)}</p>
           {/if}
         </div>
 
-        {#if presetVoices.length}
-          <span class="text-xs opacity-80 pt-2">{$t('settings.tts.voice')}</span>
-          <select
-            class="settings-input px-2 py-1 text-sm"
-            value={currentVoice}
-            on:change={(e) => onVoiceChange(e.currentTarget.value)}
-          >
-            <option value="">-- {$t('settings.ttsCustom.pickVoice')} --</option>
-            {#each presetVoices as voice (voice.value)}
-              <option value={voice.value}>{voice.label}</option>
-            {/each}
-          </select>
-        {/if}
-
-        {#if activePresetDef.stylePath}
+        {#if activePresetDef?.stylePath}
           <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.style')}</span>
           <div class="flex flex-col gap-1">
             <select
@@ -1040,7 +985,7 @@
           type="text"
           class="settings-input px-2 py-1 text-sm"
           class:secret-masked={!revealCustomSecrets}
-          placeholder="https://api.openai.com/v1/audio/speech"
+          placeholder="https://api.example.com/v1/audio/speech"
           bind:value={$ttsCustomEndpoint$}
         />
 

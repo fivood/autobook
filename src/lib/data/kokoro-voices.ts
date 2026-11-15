@@ -23,7 +23,7 @@ export interface KokoroVoice {
 
 const V1_0_VOICES: KokoroVoice[] = [
   // American English female
-  { id: 'af_heart', label: 'af_heart (♥ 推荐)', group: '英语 美式 · 女' },
+  { id: 'af_heart', label: 'af_heart (♥ 默认)', group: '英语 美式 · 女' },
   { id: 'af_alloy', label: 'af_alloy', group: '英语 美式 · 女' },
   { id: 'af_aoede', label: 'af_aoede', group: '英语 美式 · 女' },
   { id: 'af_bella', label: 'af_bella (高质量)', group: '英语 美式 · 女' },

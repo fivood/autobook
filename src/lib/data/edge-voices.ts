@@ -44,7 +44,7 @@ export interface EdgeVoice {
 
 const VOICES: EdgeVoice[] = [
   // 中文 · 大陆
-  { id: 'zh-CN-XiaoxiaoNeural', label: '晓晓 · 女 · 通用（推荐）', group: '中文 · 大陆' },
+  { id: 'zh-CN-XiaoxiaoNeural', label: '晓晓 · 女 · 通用（默认）', group: '中文 · 大陆' },
   { id: 'zh-CN-XiaoyiNeural', label: '晓伊 · 女 · 活泼', group: '中文 · 大陆' },
   { id: 'zh-CN-YunxiNeural', label: '云希 · 男 · 阳光', group: '中文 · 大陆' },
   { id: 'zh-CN-YunyangNeural', label: '云扬 · 男 · 新闻播报', group: '中文 · 大陆' },
@@ -61,7 +61,7 @@ const VOICES: EdgeVoice[] = [
   { id: 'zh-TW-HsiaoYuNeural', label: '曉雨 · 女 · 台灣國語', group: '中文 · 港台' },
   { id: 'zh-TW-YunJheNeural', label: '雲哲 · 男 · 台灣國語', group: '中文 · 港台' },
   // 日语
-  { id: 'ja-JP-NanamiNeural', label: '七海 · 女（推荐）', group: '日语' },
+  { id: 'ja-JP-NanamiNeural', label: '七海 · 女（默认）', group: '日语' },
   { id: 'ja-JP-KeitaNeural', label: '圭太 · 男', group: '日语' },
   // 英语（多语音色首选，可讲中文）
   { id: 'en-US-EmmaMultilingualNeural', label: 'Emma · 女 · 多语', group: '英语（多语首选）' },

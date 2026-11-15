@@ -24,7 +24,7 @@ function at(root: unknown, path: string): unknown {
 const styled = Object.entries(CUSTOM_PRESETS).filter(([, p]) => p.stylePath);
 
 test('some presets actually declare a style path', () => {
-  assert.ok(styled.length >= 3, 'expected the prompt-capable presets to be tagged');
+  assert.ok(styled.length >= 1, 'expected the prompt-capable template to be tagged');
 });
 
 test('every stylePath resolves to the default prompt in its own body', () => {
