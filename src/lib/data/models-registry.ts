@@ -81,7 +81,7 @@ export const MODELS: ModelEntry[] = [
     kind: 'llm',
     nameKey: 'models.llmOllama',
     purposeKey: 'models.llmOllamaPurpose',
-    location: 'Ollama 数据目录（Windows: %USERPROFILE%\\.ollama\\models）',
+    location: 'Ollama 数据目录（macOS: ~/.ollama/models，Windows: %USERPROFILE%\\.ollama\\models）',
     size: '按模型而异（数 GB）',
     ready: async () => {
       // Reuse the shared local probe — the AI panel already keeps it warm and
@@ -96,7 +96,7 @@ export const MODELS: ModelEntry[] = [
     kind: 'inpaint',
     nameKey: 'models.inpaintLama',
     purposeKey: 'models.inpaintLamaPurpose',
-    location: 'IOPaint 缓存（%USERPROFILE%\\.cache\\torch\\hub\\checkpoints）',
+    location: 'IOPaint 缓存（用户目录下的 .cache/torch/hub/checkpoints）',
     size: '~196 MB',
     ready: async () => {
       const endpoint = (await import('$lib/data/store')).translateLamaEndpoint$.getValue().trim();

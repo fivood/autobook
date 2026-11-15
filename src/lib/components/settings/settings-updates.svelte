@@ -37,7 +37,7 @@
 {#if isTauri()}
   <SettingsItemGroup title={$t('menu.checkUpdate.label')}>
     <button class="settings-btn m-1" disabled={checking} on:click={check}>
-      {$t('menu.checkUpdate.title')}
+      {checking ? $t('update.checking') : $t('menu.checkUpdate.title')}
       <Ripple />
     </button>
   </SettingsItemGroup>

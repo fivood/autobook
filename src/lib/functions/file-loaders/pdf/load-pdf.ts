@@ -29,8 +29,35 @@ type PdfjsBundle = {
   wasmUrl: string;
 };
 let pdfjsPromise: Promise<PdfjsBundle> | null = null;
+
+/**
+ * WebKit's ReadableStream is not async-iterable (Safari 18 — so the macOS
+ * WebView), and pdfjs's getTextContent does `for await (… of stream)`: every
+ * PDF import on the Mac died with "undefined is not a function (near
+ * '...value of readableStream...')". The worker's one such loop sits in a
+ * try with a fallback, so the main thread is the only place that needs it.
+ */
+function ensureReadableStreamAsyncIterator() {
+  // `as any`: lib.dom types the iterator as always present, which is the bug.
+  const proto = ReadableStream.prototype as any;
+  if (proto[Symbol.asyncIterator]) return;
+  proto[Symbol.asyncIterator] = async function* (this: ReadableStream) {
+    const reader = this.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        yield value;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
+}
+
 function loadPdfjs(): Promise<PdfjsBundle> {
   if (!pdfjsPromise) {
+    ensureReadableStreamAsyncIterator();
     pdfjsPromise = (async () => {
       const [pdfjs, workerModule] = await Promise.all([
         import('pdfjs-dist'),

@@ -26,7 +26,10 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   if (!isTauri()) return null;
 
   const { check } = await import('@tauri-apps/plugin-updater');
-  const update = await check();
+  // Without a timeout a stalled request never settles, and the manual check
+  // — which answers every outcome with a dialog — showed nothing at all (Mac
+  // test X9). Timing out turns that into the 检查更新失败 dialog.
+  const update = await check({ timeout: 20_000 });
   if (!update) return null;
 
   let downloaded = 0;

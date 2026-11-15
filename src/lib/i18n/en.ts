@@ -908,7 +908,7 @@ export default {
   'dataPaths.refreshTooltip': 'Re-read sizes',
   'dataPaths.clearAll': 'Clear all local data and restart',
   'dataPaths.section.library.label': 'Library + highlights + notes + stats',
-  'dataPaths.section.library.hint': "Main storage. Managed by WebView2 — can't be relocated directly. For backup, use \"Sync across devices\" above to push stats, or FS sync for individual books.",
+  'dataPaths.section.library.hint': "Main storage. Managed by the system WebView — can't be relocated directly. For backup, use \"Sync across devices\" above to push stats, or FS sync for individual books.",
   'dataPaths.section.ui.label': 'UI settings / tokens / API keys',
   'dataPaths.section.ui.hint': '"Data → Reset UI settings" clears this alone without touching the library',
   'dataPaths.section.fs.label': 'Library folder (on-disk copy)',
@@ -926,7 +926,7 @@ export default {
   'dataPaths.migrateFail': 'Move failed; the library stays where it was: {err}',
   'dataPaths.migrateLeftovers': "All books reached the new folder, but some files in the old one couldn't be deleted (another program may be using them). You can remove them later: {from}",
   'dataPaths.meta.idb': 'IndexedDB · {size} · {n} profile(s)',
-  'dataPaths.meta.localStorage': 'localStorage · WebView2 user directory',
+  'dataPaths.meta.localStorage': 'localStorage · WebView user directory',
   'dataPaths.clearConfirm': "⚠ About to clear all local data:\n\n• All book content\n• All highlights / notebook / tags / folders\n• Reading stats / reading time / completion records\n• All UI settings / themes / sync tokens / API keys\n\nThis cannot be undone. Copies synced to Documents/AutoBook are preserved, but the IndexedDB main store is fully wiped. Continue?",
   'dataPaths.clearConfirmAgain': 'One more time: really wipe it?',
 
@@ -961,6 +961,8 @@ export default {
   'sync.lastSync': 'Last sync: {time}',
 
   'update.checkFailed': 'Update check failed',
+
+  'update.checking': 'Checking for updates…',
   'update.upToDate.title': 'Up to date',
   'update.upToDate.body': "You're on the latest version.",
 

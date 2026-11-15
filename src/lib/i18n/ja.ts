@@ -912,7 +912,7 @@ export default {
   'dataPaths.refreshTooltip': 'サイズを再取得',
   'dataPaths.clearAll': 'すべてのローカルデータを削除して再起動',
   'dataPaths.section.library.label': 'ライブラリ ＋ ハイライト ＋ ノート ＋ 統計',
-  'dataPaths.section.library.hint': 'メインストレージ。WebView2 管理のため直接移動不可。バックアップは上の「デバイス間同期」で統計をプッシュ、単一の本は FS 同期でバックアップできます',
+  'dataPaths.section.library.hint': 'メインストレージ。システムの WebView 管理のため直接移動不可。バックアップは上の「デバイス間同期」で統計をプッシュ、単一の本は FS 同期でバックアップできます',
   'dataPaths.section.ui.label': 'UI 設定 ／ トークン ／ API キー',
   'dataPaths.section.ui.hint': '「データ → UI 設定をリセット」でここだけ消去可（ライブラリには影響しません）',
   'dataPaths.section.fs.label': 'ライブラリフォルダ（ディスク上のコピー）',
@@ -930,7 +930,7 @@ export default {
   'dataPaths.migrateFail': '移動に失敗しました。ライブラリは元の場所のままです：{err}',
   'dataPaths.migrateLeftovers': '本はすべて新しいフォルダへ移りましたが、旧フォルダの一部のファイルを削除できませんでした（他のプログラムが使用中の可能性があります）。後で手動で削除できます：{from}',
   'dataPaths.meta.idb': 'IndexedDB · {size} · {n} プロファイル',
-  'dataPaths.meta.localStorage': 'localStorage · WebView2 ユーザーディレクトリ',
+  'dataPaths.meta.localStorage': 'localStorage · WebView ユーザーディレクトリ',
   'dataPaths.clearConfirm': '⚠ すべてのローカルデータを削除します：\n\n• すべての書籍内容\n• すべてのハイライト ／ ノート ／ タグ ／ フォルダ\n• 読書統計 ／ 読書時間 ／ 読了記録\n• すべての UI 設定 ／ テーマ ／ 同期トークン ／ API キー\n\nこの操作は取り消せません。Documents/AutoBook に同期されたコピーは削除されませんが、IndexedDB のメインストアは完全に消去されます。続行しますか？',
   'dataPaths.clearConfirmAgain': 'もう一度確認：本当に削除しますか？',
 
@@ -965,6 +965,8 @@ export default {
   'sync.lastSync': '前回の同期：{time}',
 
   'update.checkFailed': 'アップデート確認に失敗',
+
+  'update.checking': '更新を確認中…',
   'update.upToDate.title': '最新版です',
   'update.upToDate.body': '現在すでに最新版です。',
 

@@ -949,7 +949,7 @@ export default {
   'dataPaths.refreshTooltip': '重新读取大小',
   'dataPaths.clearAll': '清除全部本地数据并重启',
   'dataPaths.section.library.label': '书库 + 高亮 + 笔记本 + 统计',
-  'dataPaths.section.library.hint': '主存储。受 WebView2 管理，无法直接搬迁。备份请用上方「跨设备同步」推送阅读统计，单本可用 FS 同步',
+  'dataPaths.section.library.hint': '主存储。受系统 WebView 管理，无法直接搬迁。备份请用上方「跨设备同步」推送阅读统计，单本可用 FS 同步',
   'dataPaths.section.ui.label': 'UI 设置 / token / API key',
   'dataPaths.section.ui.hint': '「数据 → 重置 UI 设置」可单独清此处，不影响书库',
   'dataPaths.section.fs.label': '书库文件夹（本地磁盘副本）',
@@ -967,7 +967,7 @@ export default {
   'dataPaths.migrateFail': '搬移失败，书库仍在原来的位置：{err}',
   'dataPaths.migrateLeftovers': '书已经全部搬到新位置，但旧文件夹里有些文件删不掉（可能正被其他程序占用），可以稍后手动清理：{from}',
   'dataPaths.meta.idb': 'IndexedDB · {size} · {n} profile',
-  'dataPaths.meta.localStorage': 'localStorage · WebView2 用户目录',
+  'dataPaths.meta.localStorage': 'localStorage · WebView 用户目录',
   'dataPaths.clearConfirm': '⚠ 即将清除全部本地数据：\n\n• 所有书籍内容\n• 所有高亮 / 笔记本 / 标签 / 文件夹\n• 阅读统计 / 阅读时长 / 完成记录\n• 所有 UI 设置 / 主题 / 同步 token / API key\n\n此操作不可恢复。Documents/AutoBook 文件夹里同步过的副本不会被删，但 IndexedDB 主存储会彻底清空。继续？',
   'dataPaths.clearConfirmAgain': '再确认一次：真的要清空吗？',
 
@@ -1003,6 +1003,8 @@ export default {
   'sync.lastSync': '上次同步：{time}',
 
   'update.checkFailed': '检查更新失败',
+
+  'update.checking': '正在检查更新…',
   'update.upToDate.title': '已是最新',
   'update.upToDate.body': '当前已是最新版本。',
 
