@@ -60,7 +60,7 @@
         <div class="flex flex-col justify-around mr-2 gap-1">
           <button
             title={availableThemes.has(option.id) ? $t('theme.editOverride') : $t('theme.edit')}
-            class="p-1 opacity-70 hover:opacity-100"
+            class="btn-icon btn-icon-sm opacity-70 hover:opacity-100"
             on:click={() => dispatch('edit', option.id)}
           >
             <Fa icon={faPen} />
@@ -68,7 +68,7 @@
           {#if !availableThemes.has(option.id)}
             <button
               title={$t('theme.delete')}
-              class="p-1 opacity-70 hover:opacity-100 text-danger"
+              class="btn-icon btn-icon-sm opacity-70 hover:opacity-100 text-danger"
               on:click={() => dispatch('delete', option.id)}
             >
               <Fa icon={faTrash} />

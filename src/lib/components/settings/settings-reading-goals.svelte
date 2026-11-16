@@ -275,11 +275,11 @@
 
 <div class="mb-8 sm:col-span-2 lg:col-span-3">
   <div class="flex flex-grow">
-    <h1 class="mb-2 text-xl font-medium w-full">
+    <h1 class="mb-2 w-full text-heading font-semibold">
       <span>{$t('goals.section')}</span>
     </h1>
     {#if isInEditMode}
-      <button class={`${buttonClasses} mr-4`} disabled={saveDisabled} on:click={saveReadingGoal}>
+      <button class={`${buttonClasses} mr-4 shrink-0 whitespace-nowrap`} disabled={saveDisabled} on:click={saveReadingGoal}>
         <div
           class="flex items-center justify-center hover:opacity-50"
           class:cursor-not-allowed={saveDisabled}
@@ -289,7 +289,7 @@
         </div>
       </button>
       <button
-        class={buttonClasses}
+        class={`${buttonClasses} shrink-0 whitespace-nowrap`}
         on:click={() => {
           ({
             timeGoal: currentTimeGoal,
@@ -307,14 +307,14 @@
         </div>
       </button>
     {:else}
-      <button class={buttonClasses} on:click={() => (isInEditMode = true)}>
+      <button class={`${buttonClasses} shrink-0 whitespace-nowrap`} on:click={() => (isInEditMode = true)}>
         <div class="flex items-center justify-center hover:opacity-50">
           <span class="mr-2">{$t('goals.edit')}</span>
           <Fa icon={faEdit} />
         </div>
       </button>
       <button
-        class={buttonClasses}
+        class={`${buttonClasses} shrink-0 whitespace-nowrap`}
         disabled={!readingGoals.length}
         on:click={() => deleteReadingGoals()}
       >
@@ -329,7 +329,7 @@
       </button>
     {/if}
   </div>
-  <hr class="border border-black" />
+  <hr class="border-current/20" />
   <div class="grid grid-cols-1 gap-4 justify-between items-end mt-4 md:grid-cols-4">
     <div class="flex flex-col">
       {$t('goals.timeGoal')}

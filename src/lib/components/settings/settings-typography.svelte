@@ -104,6 +104,7 @@
       <div
         tabindex="0"
         role="button"
+        class="btn-icon btn-icon-sm"
         title={$t('fonts.openDialog')}
         on:click={() =>
           dialogManager.dialogs$.next([
@@ -135,6 +136,8 @@
       <div
         tabindex="0"
         role="button"
+        class="btn-icon btn-icon-sm"
+        title={$t('fonts.openDialog')}
         on:click={() =>
           dialogManager.dialogs$.next([
             {

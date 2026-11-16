@@ -21,7 +21,7 @@
 
 <SettingsSectionHeader title={$t('settings.section.updates')} />
 <SettingsItemGroup title={$t('settings.currentVersion')}>
-  <p class="m-1 text-lg font-medium">v{appVersion}</p>
+  <p class="m-1 text-heading font-medium">v{appVersion}</p>
 </SettingsItemGroup>
 {#if isTauri()}
   <SettingsItemGroup title={$t('menu.checkUpdate.label')}>

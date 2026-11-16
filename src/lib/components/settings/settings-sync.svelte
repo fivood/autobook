@@ -175,7 +175,7 @@
   <div class="mb-3 flex items-center gap-3 text-xs text-muted">
     <span>{$t('sync.deviceIdLabel')}<span class="font-mono">{$syncDeviceId$ || $t('sync.deviceIdUnset')}</span></span>
     <button
-      class="opacity-60 hover:opacity-100"
+      class="btn-icon btn-icon-sm opacity-60 hover:opacity-100"
       title={$t('sync.regenDeviceId')}
       on:click={regenDevice}
       disabled={busy}

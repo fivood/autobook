@@ -28,13 +28,13 @@
     border-top: none;
   }
   h3 {
-    font-size: 1.6rem;
+    font-size: var(--fs-title);
     font-weight: 700;
     margin: 0;
-    line-height: 1.2;
+    line-height: 1.3;
   }
   p {
-    font-size: 0.8rem;
+    font-size: var(--fs-secondary);
     color: var(--muted-text);
     margin: 0.35rem 0 0;
   }

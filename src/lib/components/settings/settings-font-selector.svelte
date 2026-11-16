@@ -13,7 +13,7 @@
 </script>
 
 <Popover bind:this={element} placement="bottom">
-  <div slot="icon" class="mx-2" title={$t('fonts.showDefaults')}>
+  <div slot="icon" class="btn-icon btn-icon-sm mx-1" title={$t('fonts.showDefaults')}>
     <Fa icon={faFont} />
   </div>
   <div class="menu-list" slot="content">

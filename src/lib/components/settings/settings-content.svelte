@@ -735,15 +735,9 @@
       title={$t('settings.item.clearOrphanStats')}
       tooltip={$t('settings.tip.clearOrphanStats')}
     >
-      <div
-        tabindex="0"
-        role="button"
-        class="hover:underline"
-        on:click={confirmClearOrphanStatistics}
-        on:keyup={() => {}}
-      >
+      <button type="button" class="settings-btn" on:click={confirmClearOrphanStatistics}>
         {$t('settings.button.clearOrphanStats')}
-      </div>
+      </button>
     </SettingsItemGroup>
     <SettingsItemGroup
       title={$t('settings.item.overwriteBookCompletion')}
