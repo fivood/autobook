@@ -254,13 +254,13 @@
           </div>
         {:else}
           <div
-            class="flex h-full transform-gpu items-center {nTranslateXHeaderFa} text-xl font-medium"
+            class="flex h-full transform-gpu items-center {nTranslateXHeaderFa} text-heading font-medium"
           >
             <div
               tabindex="0"
               role="button"
               title={$t('manager.selectMode.exit')}
-              class="flex h-full items-center text-2xl xl:text-xl {pHeaderFa} cursor-pointer"
+              class="flex h-full items-center text-lg {pHeaderFa} cursor-pointer"
               in:scale={inAnimationParams}
               out:scale={outAnimationParams}
               on:click={() => (selectMode = !selectMode)}

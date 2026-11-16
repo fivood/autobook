@@ -231,7 +231,7 @@
             <button
               type="button"
               title={$t('folders.new')}
-              class="rounded p-1 hover-soft"
+              class="-my-2 flex h-8 w-8 items-center justify-center rounded-md hover-soft"
               on:click={onCreateFolder}
             >
               <Fa icon={faPlus} />

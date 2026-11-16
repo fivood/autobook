@@ -1844,7 +1844,7 @@
     <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
       <button
         type="button"
-        class="flex items-center gap-1.5 rounded border border-current/30 px-3 py-1 text-xs hover-soft"
+        class="settings-btn"
         title={allVisibleSelected ? $t('manager.selectNone') : $t('manager.selectAll')}
         on:click={onSelectAllBooks}
       >
@@ -1859,7 +1859,7 @@
         <span class="opacity-70">{$t('manager.addToFolder')}</span>
         {#each $folders$ as folder (folder.id)}
           <button
-            class="rounded-full border-2 border-current/40 px-3 py-1 text-xs hover-soft"
+            class="inline-flex h-8 items-center rounded-full border border-current/40 px-3 text-secondary hover-soft"
             on:click={() => addSelectedToFolder(folder.id)}
           >
             + {folder.name}
@@ -2031,9 +2031,10 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.35rem 0.7rem;
-    border-radius: 0.5rem;
-    font-size: 0.8rem;
+    min-height: var(--ctl-h);
+    padding: 0 0.75rem;
+    border-radius: var(--radius-ctl);
+    font-size: var(--fs-body);
     white-space: nowrap;
     transition: background-color 0.12s ease, color 0.12s ease;
   }
