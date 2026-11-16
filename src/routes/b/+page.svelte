@@ -334,7 +334,7 @@
   import { t, tImmediate } from '$lib/i18n';
 
   let showSpinner = true;
-  let loadProgress: LoadProgress = { stage: 'idle', pct: 0, label: '' };
+  let loadProgress: LoadProgress = { stage: 'idle', pct: 0 };
   const loadProgress$ = new Subject<LoadProgress>();
   loadProgress$.subscribe((p) => (loadProgress = p));
   let showHeader = false;
@@ -442,7 +442,7 @@
 
   const rawBookData$ = bookId$.pipe(
     switchMap((id) => {
-      loadProgress$.next({ stage: 'db-fetch', pct: 5, label: STAGE_LABELS['db-fetch'] });
+      loadProgress$.next({ stage: 'db-fetch', pct: 5 });
       const loadPromise = (async () => {
         let bookData: BooksDbBookData | undefined;
 
@@ -467,7 +467,7 @@
         // Baseline for the storage-pull stage; the external disk extraction
         // (saveExternalLastRead → storageHandler.getBook) advances this from
         // 10% onward via its onProgress callback.
-        loadProgress$.next({ stage: 'storage-pull', pct: 10, label: STAGE_LABELS['storage-pull'] });
+        loadProgress$.next({ stage: 'storage-pull', pct: 10 });
 
         const currentContext = {
           id: bookData.id,
@@ -515,13 +515,13 @@
           if (pct === 50 || now - lastPullUpdate > 150) {
             lastPullUpdate = now;
             lastPullPct = pct;
-            loadProgress$.next({ stage: 'storage-pull', pct, label: STAGE_LABELS['storage-pull'] });
+            loadProgress$.next({ stage: 'storage-pull', pct });
           } else if (pct > lastPullPct) {
             lastPullPct = pct;
           }
         });
         if (lastPullPct < 50) {
-          loadProgress$.next({ stage: 'storage-pull', pct: 50, label: STAGE_LABELS['storage-pull'] });
+          loadProgress$.next({ stage: 'storage-pull', pct: 50 });
         }
 
         // The detected fallback is applied reactively below — at this point
@@ -3411,7 +3411,7 @@ ${$t('reader.ttsFailed.hint')}`
     {#if loadProgress.stage !== 'idle' && loadProgress.stage !== 'done'}
       <div class="w-72 flex flex-col gap-2 items-center">
         <div class="text-sm opacity-75 tabular-nums">
-          {loadProgress.label || STAGE_LABELS[loadProgress.stage]}
+          {$t(STAGE_LABELS[loadProgress.stage].labelKey)}
           <span class="opacity-60">· {loadProgress.pct}%</span>
         </div>
         <div class="w-full h-1.5 rounded bg-current/20 overflow-hidden">

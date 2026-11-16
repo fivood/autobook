@@ -23,6 +23,7 @@ import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
 import { pulseElement } from '$lib/functions/range-util';
 import { toggleImageGalleryPictureSpoiler$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
 import { footnote$, mightBeNoteRef, noteTextFor } from '$lib/components/book-reader/footnote';
+import { tImmediate } from '$lib/i18n';
 
 export function reactiveElements(
   document: Document,
@@ -130,10 +131,10 @@ function spoilerImageListener(document: Document) {
     const elements = Array.from(contentEl.querySelectorAll('[data-ttu-spoiler-img]'));
     const obs$ = elements.map((el) => {
       const spoilerLabelEl = document.createElement('span');
-      spoilerLabelEl.title = '显示图片';
+      spoilerLabelEl.title = tImmediate('gallery.reveal');
       spoilerLabelEl.classList.add('spoiler-label');
       spoilerLabelEl.setAttribute('aria-hidden', 'true');
-      spoilerLabelEl.innerText = '剧透';
+      spoilerLabelEl.innerText = tImmediate('gallery.spoiler');
       el.appendChild(spoilerLabelEl);
 
       const imageElement = el.querySelector('img,image');

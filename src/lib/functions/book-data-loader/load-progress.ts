@@ -23,22 +23,22 @@ export interface LoadProgress {
   stage: LoadStage;
   /** 0..100. May go backwards when a new fetch starts (view mode toggle). */
   pct: number;
-  /** Human-readable one-liner (Chinese, matches app tone). */
-  label: string;
 }
 
-export const STAGE_LABELS: Record<LoadStage, string> = {
-  idle: '',
-  'db-fetch': '读取书数据…',
-  'storage-pull': '从存储拉取…',
-  'blob-register': '注册图片…',
-  'format-parse': '解析 HTML…',
-  'format-clean': '清理 & 图片布局…',
-  stylesheet: '样式表…',
-  render: '渲染首屏…',
-  done: '完成'
+/** Translated where it is shown, not here. `labelKey:` is the sidecar shape
+ * i18n-keys-test scans, so a key missing from zh fails the tests. */
+export const STAGE_LABELS: Record<LoadStage, { labelKey: string }> = {
+  idle: { labelKey: '' },
+  'db-fetch': { labelKey: 'load.dbFetch' },
+  'storage-pull': { labelKey: 'load.storagePull' },
+  'blob-register': { labelKey: 'load.blobRegister' },
+  'format-parse': { labelKey: 'load.formatParse' },
+  'format-clean': { labelKey: 'load.formatClean' },
+  stylesheet: { labelKey: 'load.stylesheet' },
+  render: { labelKey: 'load.render' },
+  done: { labelKey: 'load.done' }
 };
 
 export function progress(stage: LoadStage, pct: number): LoadProgress {
-  return { stage, pct: Math.max(0, Math.min(100, Math.round(pct))), label: STAGE_LABELS[stage] };
+  return { stage, pct: Math.max(0, Math.min(100, Math.round(pct))) };
 }
