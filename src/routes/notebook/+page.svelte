@@ -558,12 +558,12 @@
         type="search"
         placeholder={$t('notebook.search')}
         title={$t('notebook.search.syntaxHint')}
-        class="mx-2 w-40 min-w-0 rounded border border-current/30 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-current/50 focus:border-current/60 md:w-64"
+        class="mx-2 h-8 w-40 min-w-0 rounded-md border border-current/30 bg-transparent px-2 text-body outline-none placeholder:text-current/50 focus:border-current/60 md:w-64"
         bind:value={query}
         on:input={onQueryInput}
       />
       <select
-        class="rounded border border-current/30 bg-transparent px-1.5 py-1 text-sm outline-none"
+        class="h-8 rounded-md border border-current/30 bg-transparent py-0 pl-2 text-body outline-none"
         style="color:var(--menu-foreground);"
         value={sortKey}
         on:change={setSort}
@@ -670,14 +670,14 @@
         <span class="ml-2 text-muted">{$t('notebook.tagsLabel')}</span>
         <button
           type="button"
-          class="rounded-full border border-current/20 px-2 py-0.5 text-muted hover:text-inherit"
+          class="inline-flex h-7 items-center rounded-full border border-current/20 px-2.5 text-muted hover:text-inherit"
           title={$t('notebook.tagMode.tooltip')}
           on:click={() => (tagMode = tagMode === 'and' ? 'or' : 'and')}
         >{tagMode === 'and' ? $t('notebook.tagMode.and') : $t('notebook.tagMode.or')}</button>
         {#each allTags as tag (tag)}
           <button
             type="button"
-            class="rounded-full border px-2 py-0.5 transition-colors"
+            class="inline-flex h-7 items-center rounded-full border px-2.5 transition-colors"
             style:border-color={selectedTags.has(tag) ? 'transparent' : 'currentColor'}
             style:background={selectedTags.has(tag) ? 'var(--font-color)' : 'transparent'}
             style:color={selectedTags.has(tag) ? 'var(--background-color)' : 'var(--muted-text)'}
@@ -719,7 +719,7 @@
           {@const bookExists = !isStandalone && titleToId.has(group.title)}
           <section class="mb-8">
             <div class="mb-3 flex items-baseline gap-3 border-b border-current/10 pb-2">
-              <h2 class="text-lg font-medium">{#if isStandalone}{$t('notebook.standalone')}{:else}{@html highlightHtml(group.title, matchTerms)}{/if}</h2>
+              <h2 class="text-heading font-semibold">{#if isStandalone}{$t('notebook.standalone')}{:else}{@html highlightHtml(group.title, matchTerms)}{/if}</h2>
               <span class="text-xs text-muted">{$t('notebook.itemCount', { n: group.items.length })}</span>
               {#if !isStandalone && !bookExists}
                 <span class="rounded bg-current/10 px-2 py-0.5 text-xs text-muted">{$t('notebook.deletedBook')}</span>
@@ -776,29 +776,29 @@
                           {/each}
                         </div>
                       {/if}
-                      <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
+                      <div class="mt-2 flex flex-wrap items-center gap-1 text-secondary text-muted">
                         <span>{formatTime(h.createdAt)}</span>
                         {#if !isStandalone && bookExists}
                           <button
                             type="button"
-                            class="flex items-center gap-1 hover:opacity-100"
+                            class="btn-text"
                             on:click={() => openHighlight(h)}
                           ><Fa icon={faExternalLinkAlt} size="xs" /> {$t('notebook.jump')}</button>
                         {/if}
                         <button
                           type="button"
-                          class="flex items-center gap-1 hover:opacity-100"
+                          class="btn-text"
                           on:click={() => openEdit(h)}
                         ><Fa icon={faPen} size="xs" /> {$t('notebook.edit')}</button>
                         <button
                           type="button"
-                          class="flex items-center gap-1 hover:opacity-100"
+                          class="btn-text"
                           on:click={() => (linkPickerSource = h)}
                         ><Fa icon={faLink} size="xs" /> {$t('notebook.link')}</button>
-                        <label class="flex items-center gap-1">
+                        <label class="flex items-center gap-1 px-1">
                           <Fa icon={faFolder} size="xs" />
                           <select
-                            class="bg-transparent text-xs opacity-100"
+                            class="h-7 rounded-md border-current/30 bg-transparent py-0 pl-2 pr-7 text-secondary opacity-100"
                             style="color:var(--font-color);"
                             value={h.folderId ?? ''}
                             on:change={(ev) => handleFolderChange(h, ev)}
@@ -811,7 +811,7 @@
                         </label>
                         <button
                           type="button"
-                          class="flex items-center gap-1 hover-danger hover:opacity-100"
+                          class="btn-text hover-danger"
                           on:click={() => removeOne(h)}
                         ><Fa icon={faTrash} size="xs" /> {$t('notebook.delete')}</button>
                       </div>

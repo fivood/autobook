@@ -100,7 +100,7 @@
     <h2 class="text-xs font-medium uppercase text-muted">{$t('notebook.foldersHeader')}</h2>
     <button
       type="button"
-      class="opacity-50 hover:opacity-100"
+      class="btn-icon -my-2 opacity-50 hover:opacity-100"
       title={$t('folders.new')}
       on:click={startCreate}
     ><Fa icon={faPlus} size="xs" /></button>

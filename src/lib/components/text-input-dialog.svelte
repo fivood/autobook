@@ -1,7 +1,7 @@
 <script lang="ts">
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
-  import { buttonClasses, inputClasses } from '$lib/css-classes';
+  import { buttonClasses, inputClasses, primaryButtonClasses } from '$lib/css-classes';
   import { t } from '$lib/i18n';
   import { createEventDispatcher, tick } from 'svelte';
 
@@ -45,7 +45,7 @@
       {cancelLabel ?? $t('dialog.cancel')}
       <Ripple />
     </button>
-    <button class={buttonClasses} on:click={() => close(value.trim() || undefined)}>
+    <button class={primaryButtonClasses} on:click={() => close(value.trim() || undefined)}>
       {confirmLabel ?? $t('dialog.confirm')}
       <Ripple />
     </button>

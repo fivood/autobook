@@ -1,7 +1,7 @@
 <script lang="ts">
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
-  import { buttonClasses } from '$lib/css-classes';
+  import { buttonClasses, primaryButtonClasses } from '$lib/css-classes';
   import { t } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 
@@ -31,7 +31,7 @@
       {$t('dialog.cancel')}
       <Ripple />
     </button>
-    <button class={buttonClasses} on:click={() => closeDialog()}>
+    <button class={primaryButtonClasses} on:click={() => closeDialog()}>
       {$t('dialog.confirm')}
       <Ripple />
     </button>

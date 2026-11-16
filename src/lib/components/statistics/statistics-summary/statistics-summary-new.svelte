@@ -157,17 +157,17 @@
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 my-4">
     <div class="rounded border border-current/30 p-3">
       <div class="text-xs text-muted">{$t('stats.summary.readDays')}</div>
-      <div class="text-xl font-medium tabular-nums">{summary.activeDays}</div>
+      <div class="text-heading font-semibold tabular-nums">{summary.activeDays}</div>
     </div>
     <div class="rounded border border-current/30 p-3">
       <div class="text-xs text-muted">{$t('stats.summary.totalTime')}</div>
-      <div class="text-xl font-medium tabular-nums">{formatDuration(summary.totalSeconds)}</div>
+      <div class="text-heading font-semibold tabular-nums">{formatDuration(summary.totalSeconds)}</div>
     </div>
     <div class="rounded border border-current/30 p-3">
       <div class="text-xs text-muted">
         {summary.totalPages ? $t('stats.summary.totalCharsAndPages') : $t('stats.summary.totalChars')}
       </div>
-      <div class="text-xl font-medium tabular-nums">
+      <div class="text-heading font-semibold tabular-nums">
         {formatChars(summary.totalChars)}{summary.totalPages
           ? ` · ${tImmediate('stats.summary.pagesValue', { n: summary.totalPages })}`
           : ''}
@@ -175,7 +175,7 @@
     </div>
     <div class="rounded border border-current/30 p-3">
       <div class="text-xs text-muted">{$t('stats.summary.completedBooks')}</div>
-      <div class="text-xl font-medium tabular-nums">{summary.totalCompleted}</div>
+      <div class="text-heading font-semibold tabular-nums">{summary.totalCompleted}</div>
     </div>
   </div>
 
@@ -184,7 +184,7 @@
   {:else}
     <div class="rounded border border-current/25 overflow-hidden">
       <div
-        class="grid gap-2 px-3 py-2 text-[11px] text-muted border-b border-current/25"
+        class="grid gap-2 px-3 py-2 text-caption text-muted border-b border-current/25"
         style="grid-template-columns: 1.25rem 6rem 1.5rem 1fr 1fr 1fr 1fr 2rem;"
       >
         <div></div>
@@ -204,7 +204,7 @@
         >
           <button
             type="button"
-            class="opacity-60 hover:opacity-100 text-xs"
+            class="btn-icon btn-icon-sm opacity-60 hover:opacity-100 text-xs"
             title={open
               ? tImmediate('stats.summary.collapse')
               : tImmediate('stats.summary.expand', { n: row.titles.length })}
@@ -230,7 +230,7 @@
           </div>
           <button
             type="button"
-            class="opacity-50 hover:opacity-100 hover-danger text-xs"
+            class="btn-icon btn-icon-sm opacity-50 hover:opacity-100 hover-danger text-xs"
             title={$t('stats.summary.deleteDay')}
             on:click={() => requestDeleteDay(row)}
           >

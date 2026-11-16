@@ -39,10 +39,11 @@
 
 <style>
   .chip {
-    padding: 0.2rem 0.75rem;
+    min-height: var(--ctl-h);
+    padding: 0 0.875rem;
     border-radius: 999px;
     border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    font-size: 0.78rem;
+    font-size: var(--fs-body);
     background: transparent;
     color: inherit;
     cursor: pointer;

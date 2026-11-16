@@ -141,7 +141,7 @@
         <p class="py-12 text-center opacity-50">{$t('changelog.empty')}</p>
       {:else}
         {@const current = sections[activeIdx]}
-        <h2 class="mb-4 text-2xl font-medium">v{current.version}</h2>
+        <h2 class="mb-4 text-title font-semibold">v{current.version}</h2>
         {#if current.callouts.length}
           <div class="mb-5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
             <div class="mb-2 flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
