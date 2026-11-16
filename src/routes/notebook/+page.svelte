@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { afterNavigate, goto } from '$app/navigation';
+  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import Fa from 'svelte-fa';
   import {
@@ -96,14 +96,6 @@
   let reviewOpen = false;
   let syncing = false;
   let syncMessage = '';
-
-  let prevPage = `${pagePath}${mergeEntries.MANAGE.routeId}`;
-
-  afterNavigate((navigation) => {
-    const { from } = navigation;
-    if (!from?.url) return;
-    prevPage = `${from.url.pathname}${from.url.search}`;
-  });
 
   $: highlightById = new Map(highlights.map((h) => [h.id, h]));
   $: folderIdSet = new Set(folders.map((f) => f.id));
@@ -558,7 +550,7 @@
   class="flex min-h-screen flex-col pt-12 xl:pt-10"
   style="color:var(--font-color);background:var(--background-color);"
 >
-  <PageHeader icon={mergeEntries.NOTEBOOK.icon} titleKey="menu.notebook.title" backLink={prevPage}>
+  <PageHeader icon={mergeEntries.NOTEBOOK.icon} titleKey="menu.notebook.title">
     <svelte:fragment slot="left">
       <!-- The search field keeps its box: it shows a value the reader typed,
            which no icon can stand in for. Everything else is icon + tooltip. -->

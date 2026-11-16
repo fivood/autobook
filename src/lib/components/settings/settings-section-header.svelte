@@ -1,9 +1,11 @@
 <script lang="ts">
   export let title: string;
   export let hint = '';
+  /** Link target, e.g. the reader drawer's /settings?tab=…#id links. */
+  export let id: string | undefined = undefined;
 </script>
 
-<div class="section-header lg:col-span-3">
+<div {id} class="section-header lg:col-span-3">
   <h3>{title}</h3>
   {#if hint}<p>{hint}</p>{/if}
 </div>
@@ -14,6 +16,8 @@
      than separating the header from its own contents. Thin + low contrast so
      it reads as a quiet separator, not a heading underline. */
   .section-header {
+    /* Lands below the fixed page header when scrolled to by #id. */
+    scroll-margin-top: 4.5rem;
     margin: 1.75rem 0 0.5rem;
     padding-top: 1.25rem;
     border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);

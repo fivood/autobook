@@ -8,23 +8,31 @@
   import SettingsReaderBehavior from '$lib/components/settings/settings-reader-behavior.svelte';
   import SettingsTypography from '$lib/components/settings/settings-typography.svelte';
   import Ripple from '$lib/components/ripple.svelte';
-  import { pagePath } from '$lib/data/env';
   import { clickOutside } from '$lib/functions/use-click-outside';
   import { t } from '$lib/i18n';
 
   /** Decides which language slot the voice picker opens on. */
   export let bookLanguage: string | undefined = undefined;
 
-  const dispatch = createEventDispatcher<{ close: void }>();
+  /** `openFullSettings` carries a settings route (`/settings?tab=…`); the
+   *  reader leaves through its own exit path so the position is saved. */
+  const dispatch = createEventDispatcher<{ close: void; openFullSettings: string }>();
 
-  // `id` is the dispatch identity; only `labelKey` goes through $t.
+  // `id` is the dispatch identity; only `labelKey` goes through $t. `route` is
+  // where the same controls sit on the settings page, with room to spare and
+  // next to what the drawer leaves out (主题, 数据, 计时…).
   const tabs = [
-    { id: 'tts', labelKey: 'readerSettings.tab.tts' },
-    { id: 'typography', labelKey: 'readerSettings.tab.typography' },
-    { id: 'behavior', labelKey: 'readerSettings.tab.behavior' }
+    { id: 'tts', labelKey: 'readerSettings.tab.tts', route: '/settings?tab=TTS' },
+    {
+      id: 'typography',
+      labelKey: 'readerSettings.tab.typography',
+      route: '/settings?tab=Appearance#settings-typography'
+    },
+    { id: 'behavior', labelKey: 'readerSettings.tab.behavior', route: '/settings?tab=Reader' }
   ];
 
   let activeTab = 'tts';
+  $: active = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
 </script>
 
 <!-- Deliberately NOT a grid, unlike the settings page's container: the panels
@@ -74,8 +82,11 @@
   </div>
 
   <div class="border-t border-current/10 px-4 py-2 text-xs">
-    <a class="underline text-muted hover:text-inherit" href="{pagePath}/settings"
-      >{$t('readerSettings.more')}</a
+    <button
+      type="button"
+      class="underline text-muted hover:text-inherit"
+      on:click={() => dispatch('openFullSettings', active.route)}
+      >{$t('readerSettings.more', { tab: $t(active.labelKey) })}</button
     >
   </div>
 </div>

@@ -727,6 +727,7 @@
         <Ripple />
       </button>
     </SettingsItemGroup>
+  {:else if activeSettings === 'About'}
     <SettingsUpdates />
   {:else}
     <SettingsSectionHeader title={$t('settings.section.statsBasics')} hint={$t('settings.section.statsBasicsHint')} />

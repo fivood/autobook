@@ -2,9 +2,9 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { onDestroy } from 'svelte';
   import TextSourceEditor from '$lib/components/text-editor/text-source-editor.svelte';
-  import { pagePath } from '$lib/data/env';
   import { editFilePath$ } from '$lib/data/store';
   import { formatPageTitle } from '$lib/functions/format-page-title';
+  import { goBack } from '$lib/functions/back-nav';
   import { t, tImmediate } from '$lib/i18n';
 
   /**
@@ -60,7 +60,10 @@
       confirmLabel: tImmediate('fileEditor.discard'),
       run: () => {
         leaving = true;
-        goto(target);
+        // ← is a history back; replaying it as goto would push a new entry
+        // and leave this page sitting behind it.
+        if (nav.type === 'popstate') history.back();
+        else goto(target);
       }
     };
   });
@@ -153,8 +156,8 @@
     <button
       type="button"
       class="menu-choice"
-      title={$t('fileEditor.backToLibrary')}
-      on:click={() => goto(`${pagePath}/manage`)}
+      title={$t('menu.back.title')}
+      on:click={goBack}
     >←</button>
     <div class="min-w-0 flex-1">
       <div class="truncate text-sm font-medium" title={path}>

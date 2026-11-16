@@ -87,7 +87,7 @@
 </script>
 
 {#if showSectionHeader}
-  <SettingsSectionHeader title={$t('settings.section.fontsTypography')} />
+  <SettingsSectionHeader id="settings-typography" title={$t('settings.section.fontsTypography')} />
 {/if}
 <SettingsItemGroup title={$t('settings.item.fontGroup1')}>
   <div slot="header" class="flex items-center">

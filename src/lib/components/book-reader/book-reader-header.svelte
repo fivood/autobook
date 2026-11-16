@@ -26,7 +26,8 @@
     nTranslateXHeaderFa,
     translateXHeaderFa
   } from '$lib/css-classes';
-  import { isTauri } from '$lib/data/env';
+  import { isTauri, pagePath } from '$lib/data/env';
+  import { previousPage } from '$lib/functions/back-nav';
   import { customReadingPointEnabled$, viewMode$, windowAlwaysOnTop$ } from '$lib/data/store';
   import { ViewMode } from '$lib/data/view-mode';
   import { activateOnKeyup, isOnOldUrl } from '$lib/functions/utils';
@@ -79,7 +80,14 @@
     settingsClick: void;
     domainHintClick: void;
     bookManagerClick: void;
+    backClick: void;
   }>();
+
+  // Only when the way back is somewhere other than the library: opened from
+  // the notebook, statistics or translate, 书库 alone could not return you
+  // there. Opened from the library, ← would just repeat 书库.
+  const previous = browser ? previousPage() : undefined;
+  const showBack = !!previous && !previous.startsWith(`${pagePath}/manage`);
 
   /**
    * Reader-only overflow entries, keyed by the event each one dispatches.
@@ -351,6 +359,18 @@
     <!-- 书库 leaves the book; the rule keeps it from reading as one more
          in-book tool next to 设置. -->
     <div class="mx-1 h-5 w-px shrink-0 self-center bg-current/30"></div>
+    {#if showBack}
+      <div
+        tabindex="0"
+        role="button"
+        aria-label={$t('menu.back.title')} title={$t('menu.back.title')}
+        class={baseIconClasses}
+        on:click={() => dispatch('backClick')}
+        on:keyup={activateOnKeyup}
+      >
+        <Fa icon={mergeEntries.BACK.icon} />
+      </div>
+    {/if}
     <div
       tabindex="0"
       role="button"

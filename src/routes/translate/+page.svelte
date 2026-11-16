@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { afterNavigate, goto } from '$app/navigation';
+  import { goto } from '$app/navigation';
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import PageHeader from '$lib/components/page-header/page-header.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
@@ -103,15 +103,7 @@
   // cover page worth skipping, scanned PDFs do not. Reset per book so a
   // previous comic's choices don't leak onto the next PDF.
   let comicSkipCover = true;
-  let comicSkipBackCover = true;
-  let prevPage = `${pagePath}${mergeEntries.MANAGE.routeId}`;
-
-  afterNavigate((navigation) => {
-    const { from } = navigation;
-    if (!from?.url) return;
-    prevPage = `${from.url.pathname}${from.url.search}`;
-  });
-  /** Parsing an imported file. Separate from `running` on purpose — see below. */
+  let comicSkipBackCover = true;  /** Parsing an imported file. Separate from `running` on purpose — see below. */
   let loading = false;
   /**
    * A draft or review pass is in flight. This used to share `loading` with
@@ -1041,7 +1033,7 @@
   <title>{$t('translate.title')}</title>
 </svelte:head>
 
-<PageHeader icon={mergeEntries.TRANSLATE.icon} titleKey="menu.translate.title" backLink={prevPage} />
+<PageHeader icon={mergeEntries.TRANSLATE.icon} titleKey="menu.translate.title" />
 
 <main class="mx-auto flex max-w-4xl flex-col gap-6 p-6 pt-16 xl:pt-14">
 

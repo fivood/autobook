@@ -1,12 +1,14 @@
 <script lang="ts">
   import { t } from '$lib/i18n';
-  import { afterNavigate } from '$app/navigation';
   import Fa from 'svelte-fa';
   import {
     faTriangleExclamation,
-    faRotateLeft
+    faRotateLeft,
+    faRotate
   } from '@fortawesome/free-solid-svg-icons';
-  import { pagePath } from '$lib/data/env';
+  import { isTauri } from '$lib/data/env';
+  import { baseIconClasses } from '$lib/css-classes';
+  import { checkingUpdate$, manualCheckUpdate } from '$lib/functions/updater/manual-check-update';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { confirmResetUiSettings } from '$lib/functions/reset-ui-settings';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
@@ -19,6 +21,7 @@
     callouts: string[];
   }
 
+  const appVersion = __APP_VERSION__;
   const sections: Section[] = parse(rawChangelog as string);
 
   function parse(md: string): Section[] {
@@ -76,25 +79,33 @@
   function needsResetButton(callouts: string[]): boolean {
     return callouts.some((c) => /重置|reset/i.test(c));
   }
-
-  let prevPage = `${pagePath}${mergeEntries.MANAGE.routeId}`;
-
-  afterNavigate((navigation) => {
-    const { from } = navigation;
-    if (!from?.url) return;
-    prevPage = `${from.url.pathname}${from.url.search}`;
-  });
 </script>
 
 <svelte:head>
   <title>{formatPageTitle($t('pageTitle.changelog'))}</title>
 </svelte:head>
 
-<PageHeader
-  icon={mergeEntries.CHANGELOG.icon}
-  titleKey="menu.changelog.title"
-  backLink={prevPage}
-/>
+<PageHeader icon={mergeEntries.CHANGELOG.icon} titleKey="menu.changelog.title">
+  <svelte:fragment slot="left">
+    <span class="ml-1 truncate text-sm opacity-80">{$t('changelog.installed', { version: appVersion })}</span>
+  </svelte:fragment>
+  <svelte:fragment slot="right">
+    {#if isTauri()}
+      <!-- Reading what changed and asking for the next version belong on one
+           page; the check used to live only at the bottom of 设置 → 数据. -->
+      <button
+        type="button"
+        class="{baseIconClasses} !w-auto gap-2 !text-sm"
+        disabled={$checkingUpdate$}
+        title={$t('menu.checkUpdate.title')}
+        on:click={manualCheckUpdate}
+      >
+        <Fa icon={faRotate} spin={$checkingUpdate$} />
+        <span>{$checkingUpdate$ ? $t('update.checking') : $t('menu.checkUpdate.label')}</span>
+      </button>
+    {/if}
+  </svelte:fragment>
+</PageHeader>
 
 <div
   class="flex h-screen flex-col pt-12 xl:pt-10"
@@ -111,6 +122,13 @@
           on:click={() => selectVersion(i)}
         >
           <span>v{s.version}</span>
+          {#if s.version === appVersion}
+            <span
+              class="ml-auto rounded px-1 text-xs"
+              style="background:var(--menu-background);color:var(--menu-foreground);"
+              >{$t('changelog.current')}</span
+            >
+          {/if}
           {#if s.callouts.length}
             <Fa icon={faTriangleExclamation} size="xs" class="text-amber-500" />
           {/if}

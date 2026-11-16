@@ -15,6 +15,8 @@
   import Fa from 'svelte-fa';
   import type { IconDefinition } from '@fortawesome/free-solid-svg-icons';
   import { page } from '$app/stores';
+  import { afterNavigate } from '$app/navigation';
+  import { goBack, previousPage } from '$lib/functions/back-nav';
   import NavStrip from '$lib/components/page-header/nav-strip.svelte';
   import { mergeEntries, NAV_DESTINATIONS } from '$lib/components/merged-header-icon/merged-entries';
   import { baseHeaderClasses, baseIconClasses, translateXHeaderFa } from '$lib/css-classes';
@@ -25,10 +27,16 @@
   export let icon: IconDefinition;
   export let titleKey: string;
   /**
-   * Where the back arrow goes — usually the page you came from, so opening
-   * the notebook mid-book still returns you to the book. Empty hides it.
+   * The back arrow goes back in history (see back-nav.ts), so opening the
+   * notebook mid-book returns you to the book. Hidden when there is nothing
+   * behind this page — the first one after launch.
    */
-  export let backLink = '';
+  let backLink = '';
+
+  afterNavigate(() => {
+    const previous = previousPage();
+    backLink = previous ?? '';
+  });
 
   $: inNav = NAV_DESTINATIONS.some((destination) => destination.routeId === $page.route.id);
 </script>
@@ -54,7 +62,12 @@
         <!-- Rules keep "what this page does" apart from "where to go". -->
         <slot name="right" />
         {#if backLink}
-          <a href={backLink} style="color: inherit;" title={$t('menu.back.title')}>
+          <a
+            href={backLink}
+            style="color: inherit;"
+            title={$t('menu.back.title')}
+            on:click|preventDefault={goBack}
+          >
             <div class={baseIconClasses}>
               <Fa icon={mergeEntries.BACK.icon} />
             </div>

@@ -9,9 +9,10 @@
   import { basePath, clearConsoleOnReload, isTauri, pagePath } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { installOcrFetchTracker } from '$lib/data/models-registry';
-  import { checkForUpdate } from '$lib/functions/updater/check-for-update';
+  import { checkForUpdate, pendingUpdate$ } from '$lib/functions/updater/check-for-update';
+  import { recordHistoryEntry } from '$lib/functions/back-nav';
   import { syncAlwaysOnTop } from '$lib/functions/window-always-on-top';
-  import { goto } from '$app/navigation';
+  import { afterNavigate, goto } from '$app/navigation';
   import {
     customThemes$,
     editFilePath$,
@@ -209,6 +210,10 @@
 
   page.subscribe((p) => (path = p.url.pathname));
 
+  afterNavigate(({ to }) => {
+    if (to?.url) recordHistoryEntry(to.url);
+  });
+
   onMount(async () => {
     // Track PaddleOCR model downloads so the model manager can show
     // "downloaded" without a cache-storage handle.
@@ -272,6 +277,7 @@
     try {
       const update = await checkForUpdate();
       if (update) {
+        pendingUpdate$.set(update);
         // Backdrop/Escape close is disabled — a mid-download dismissal would
         // leave the download running invisibly. The dialog's own "later" /
         // "close" button is the only way out (guarded by phase in the dialog).

@@ -7,8 +7,12 @@
 import MessageDialog from '$lib/components/message-dialog.svelte';
 import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
 import { dialogManager } from '$lib/data/dialog-manager';
-import { checkForUpdate, type UpdateInfo } from '$lib/functions/updater/check-for-update';
+import { checkForUpdate, pendingUpdate$, type UpdateInfo } from '$lib/functions/updater/check-for-update';
 import { tImmediate } from '$lib/i18n';
+import { get, writable } from 'svelte/store';
+
+/** Shared so the 关于 tab and the 更新记录 page show one check in flight. */
+export const checkingUpdate$ = writable(false);
 
 /**
  * The update check someone asked for by hand. Unlike the silent startup
@@ -16,6 +20,8 @@ import { tImmediate } from '$lib/i18n';
  * failure — because the person is waiting for one.
  */
 export async function manualCheckUpdate() {
+  if (get(checkingUpdate$)) return;
+  checkingUpdate$.set(true);
   let update: UpdateInfo | null = null;
   try {
     update = await checkForUpdate();
@@ -27,7 +33,10 @@ export async function manualCheckUpdate() {
       }
     ]);
     return;
+  } finally {
+    checkingUpdate$.set(false);
   }
+  pendingUpdate$.set(update);
   if (update) {
     dialogManager.dialogs$.next([{ component: UpdateDialog, props: { update } }]);
   } else {

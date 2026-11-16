@@ -15,7 +15,33 @@
   import { NAV_DESTINATIONS } from '$lib/components/merged-header-icon/merged-entries';
   import { pagePath } from '$lib/data/env';
   import { t } from '$lib/i18n';
+  import { faCircleArrowUp } from '@fortawesome/free-solid-svg-icons';
+  import UpdateDialog from '$lib/components/updater/update-dialog.svelte';
+  import { dialogManager } from '$lib/data/dialog-manager';
+  import { pendingUpdate$ } from '$lib/functions/updater/check-for-update';
+
+  function openUpdate() {
+    if (!$pendingUpdate$) return;
+    // Same guard as the startup dialog: a backdrop click mid-download would
+    // leave the download running unseen.
+    dialogManager.dialogs$.next([
+      { component: UpdateDialog, props: { update: $pendingUpdate$ }, disableCloseOnClick: true }
+    ]);
+  }
 </script>
+
+{#if $pendingUpdate$}
+  <button
+    type="button"
+    class="mr-2 flex shrink-0 items-center gap-1.5 self-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+    style="background:var(--menu-foreground);color:var(--menu-background);"
+    title={$t('update.badge.title')}
+    on:click={openUpdate}
+  >
+    <Fa icon={faCircleArrowUp} />
+    <span class="hidden sm:inline">{$t('update.badge', { version: $pendingUpdate$.version })}</span>
+  </button>
+{/if}
 
 <nav class="flex h-full items-stretch" aria-label={$t('menu.nav.aria')}>
   {#each NAV_DESTINATIONS as destination (destination.routeId)}

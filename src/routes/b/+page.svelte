@@ -150,6 +150,7 @@
   } from '$lib/data/store';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
+  import { goBack } from '$lib/functions/back-nav';
   import BookTextEditorDialog from '$lib/components/book-reader/book-text-editor-dialog.svelte';
   import PdfOcrBanner from '$lib/components/book-reader/pdf-ocr-banner.svelte';
   import PdfPageContextMenu from '$lib/components/book-reader/pdf-page-context-menu.svelte';
@@ -2636,7 +2637,8 @@ ${$t('reader.ttsFailed.hint')}`
     ]);
   }
 
-  async function leaveReader(routeId: string, deleteLastItem = true) {
+  /** `routeId: null` leaves by going back in history (see back-nav.ts). */
+  async function leaveReader(routeId: string | null, deleteLastItem = true) {
     let message;
 
     try {
@@ -2720,7 +2722,8 @@ ${$t('reader.ttsFailed.hint')}`
       ]);
     }
 
-    goto(`${pagePath}${routeId}`);
+    if (routeId === null) goBack();
+    else goto(`${pagePath}${routeId}`);
   }
 
   function handleSetCustomReadingPoint() {
@@ -3115,6 +3118,7 @@ ${$t('reader.ttsFailed.hint')}`
       }}
       on:domainHintClick={onDomainHintClick}
       on:bookManagerClick={() => leaveReader(mergeEntries.MANAGE.routeId)}
+      on:backClick={() => leaveReader(null, false)}
     />
   </div>
 {/if}
@@ -3248,6 +3252,10 @@ ${$t('reader.ttsFailed.hint')}`
     this={ReaderSettingsDrawer}
     bookLanguage={effectiveLanguage}
     on:close={() => (settingsDrawerOpen = false)}
+    on:openFullSettings={({ detail }) => {
+      settingsDrawerOpen = false;
+      leaveReader(detail, false);
+    }}
   />
 {/if}
 

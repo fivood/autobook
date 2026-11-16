@@ -3,7 +3,15 @@
  * Lazy-imports the updater plugin so the web build doesn't fail.
  */
 
+import { writable } from 'svelte/store';
 import { isTauri } from '$lib/data/env';
+
+/**
+ * The newer version a check found, kept after the dialog closes. Dismissing
+ * the startup dialog with 稍后 used to be the last you saw of it until
+ * 设置 → 数据 at the very bottom; NavStrip now keeps a way back to it.
+ */
+export const pendingUpdate$ = writable<UpdateInfo | null>(null);
 
 export interface UpdateInfo {
   version: string;
