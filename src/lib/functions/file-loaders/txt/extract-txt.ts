@@ -32,12 +32,25 @@ function decodeWithFallback(bytes: Uint8Array): string {
 }
 
 /**
- * Score each candidate decoding by CJK character density.
- * Japanese-only kana ranges strongly indicate Shift-JIS; otherwise the higher
- * Han-character density wins between GB18030 (Simplified) and BIG5 (Traditional).
+ * Decode bytes that are not UTF-8: Korean (EUC-KR / CP949) first, then score
+ * each remaining candidate by CJK character density. Japanese-only kana ranges
+ * strongly indicate Shift-JIS; otherwise the higher Han-character density wins
+ * between GB18030 (Simplified) and BIG5 (Traditional).
  */
-function detectAndDecode(bytes: Uint8Array): string {
+export function detectAndDecode(bytes: Uint8Array): string {
   const sample = bytes.length > 65536 ? bytes.subarray(0, 65536) : bytes;
+
+  // Korean never made the candidate list, so a CP949 TXT — the usual encoding
+  // of Korean text files — came out as GB18030 gibberish. It can't just join
+  // the Han-density race below: GB18030 decodes Korean bytes into valid Han
+  // characters, and GBK Chinese decodes as EUC-KR into valid Hangul syllables.
+  try {
+    if (looksKorean(new TextDecoder('euc-kr').decode(sample))) {
+      return new TextDecoder('euc-kr').decode(bytes);
+    }
+  } catch {
+    // no euc-kr decoder in this runtime: fall back to the CJK candidates
+  }
   const candidates: Array<'shift-jis' | 'gb18030' | 'big5'> = ['shift-jis', 'gb18030', 'big5'];
 
   let bestEncoding: (typeof candidates)[number] = 'gb18030';
@@ -58,6 +71,25 @@ function detectAndDecode(bytes: Uint8Array): string {
   }
 
   return new TextDecoder(bestEncoding).decode(bytes);
+}
+
+// The syllables that carry Korean grammar (particles, endings, 이다/하다).
+// In real Korean text these are roughly a third of all syllables; Chinese or
+// Japanese bytes misread as EUC-KR spread over the ~2,350 KS X 1001 syllables
+// and hit this set only a percent or two of the time.
+const COMMON_HANGUL = new Set([...'이다는의에가을를하고지서로한으도기있사들것그리나수인해었았게요까니면']);
+
+function looksKorean(text: string): boolean {
+  let hangul = 0;
+  let common = 0;
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      hangul += 1;
+      if (COMMON_HANGUL.has(ch)) common += 1;
+    }
+  }
+  return hangul >= 10 && common / hangul >= 0.12;
 }
 
 function scoreText(text: string): number {
