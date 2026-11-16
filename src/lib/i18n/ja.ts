@@ -637,6 +637,10 @@ export default {
   'fileEditor.openOtherConfirm': '{name} を開こうとしていますが、現在のファイルに未保存の変更があります。',
   'fileEditor.changedOnDisk': 'このファイルは別の場所で変更されています。保存するとその変更は上書きされます。',
   'fileEditor.overwrite': '上書きする',
+  'fileEditor.edit': '編集',
+  'fileEditor.read': '閲覧',
+  'fileEditor.editHint': 'ソースを編集 (Ctrl+E)',
+  'fileEditor.readHint': '閲覧表示に戻る (Ctrl+E)',
 
   'ai.title': 'AI アシスタント',
   'ai.subtitleOpen': '全文 · {pct}% 読了',

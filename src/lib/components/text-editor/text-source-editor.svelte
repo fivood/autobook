@@ -22,6 +22,9 @@
   export let outlineInitiallyOpen = false;
   /** Take the parent's full height instead of growing from `minHeight`. */
   export let fill = false;
+  /** Just the writing surface: no view switch, outline or preview, and the
+   *  text set like prose in the surrounding font rather than as code. */
+  export let bare = false;
 
   const dispatch = createEventDispatcher<{
     change: { value: string };
@@ -161,8 +164,11 @@
   }
 </script>
 
-<div class="text-source-editor overflow-hidden rounded-lg border border-current/20" class:fill>
-  {#if format === 'markdown'}
+<div
+  class="text-source-editor overflow-hidden {bare ? '' : 'rounded-lg border border-current/20'}"
+  class:fill
+>
+  {#if format === 'markdown' && !bare}
     <div class="flex flex-wrap items-center justify-between gap-2 border-b border-current/15 p-2">
       <div class="menu-toolbar p-0">
         <button
@@ -221,7 +227,9 @@
         <textarea
           bind:this={textareaEl}
           bind:value
-          class="source-area min-w-0 resize-none bg-transparent p-3 font-mono text-sm leading-relaxed outline-none"
+          class="source-area min-w-0 resize-none bg-transparent outline-none {bare
+            ? 'bare-area'
+            : 'p-3 font-mono text-sm leading-relaxed'}"
           style:min-height={fill ? null : minHeight}
           {placeholder}
           spellcheck="true"
@@ -269,6 +277,22 @@
   }
   .source-area {
     width: 100%;
+  }
+  /* A centred column like Obsidian's readable line length; the padding, not a
+     max-width, does the centring so the scrollbar stays at the window edge. */
+  .bare-area {
+    font: inherit;
+    font-size: 1rem;
+    line-height: 1.75;
+    padding: 2rem max(1.5rem, calc((100% - 46rem) / 2));
+    caret-color: var(--accent-color, currentColor);
+  }
+  /* @tailwindcss/forms draws a blue border + ring on a focused textarea; on a
+     page-wide writing surface that is just a frame around the window. */
+  .bare-area,
+  .bare-area:focus {
+    border: 0;
+    box-shadow: none;
   }
   .fill {
     display: flex;

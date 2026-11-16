@@ -773,6 +773,10 @@ export default {
   'fileEditor.openOtherConfirm': '要打开 {name}，但当前文件还有未保存的修改。',
   'fileEditor.changedOnDisk': '这个文件在别处被修改过，保存会覆盖那些修改。',
   'fileEditor.overwrite': '仍然覆盖',
+  'fileEditor.edit': '编辑',
+  'fileEditor.read': '阅读',
+  'fileEditor.editHint': '编辑源文件 (Ctrl+E)',
+  'fileEditor.readHint': '回到阅读视图 (Ctrl+E)',
 
   'ai.title': 'AI 助手',
   'ai.subtitle': '剧透安全 · 已读 {pct}%',

@@ -633,6 +633,10 @@ export default {
   'fileEditor.openOtherConfirm': 'Opening {name}, but the current file has unsaved changes.',
   'fileEditor.changedOnDisk': 'This file was changed elsewhere; saving will overwrite those changes.',
   'fileEditor.overwrite': 'Overwrite anyway',
+  'fileEditor.edit': 'Edit',
+  'fileEditor.read': 'Read',
+  'fileEditor.editHint': 'Edit the source (Ctrl+E)',
+  'fileEditor.readHint': 'Back to reading view (Ctrl+E)',
 
   'ai.title': 'AI assistant',
   'ai.subtitleOpen': 'Whole book · {pct}% read',

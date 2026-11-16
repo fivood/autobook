@@ -1,7 +1,9 @@
 <script lang="ts">
   import { beforeNavigate, goto } from '$app/navigation';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import TextSourceEditor from '$lib/components/text-editor/text-source-editor.svelte';
+  import { getFormattedElementMd } from '$lib/functions/file-loaders/md/generate-md-html';
+  import { isTauri } from '$lib/data/env';
   import { editFilePath$ } from '$lib/data/store';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { goBack } from '$lib/functions/back-nav';
@@ -12,6 +14,9 @@
    * the library: the file on disk is the only copy, and Ctrl+S writes it back.
    * The fs scope already allows exactly this path — Rust whitelists every
    * launch argument (`allow_paths`) — and nothing else.
+   *
+   * Opens on the rendered note, like Obsidian's reading view; 编辑 (or
+   * Ctrl/⌘+E) swaps in the plain source, set in the same font.
    */
 
   let path = '';
@@ -26,6 +31,8 @@
   let notice = '';
   let noticeTimer: ReturnType<typeof setTimeout> | undefined;
   let editor: TextSourceEditor;
+  let mode: 'read' | 'edit' = 'read';
+  let readEl: HTMLDivElement | undefined;
 
   /** An action held back by unsaved edits, waiting on the inline confirm. */
   let pending: { message: string; confirmLabel: string; run: () => void } | undefined;
@@ -33,6 +40,9 @@
 
   $: name = path.split(/[\\/]/).pop() || '';
   $: dirty = !loadError && value !== saved;
+  // Rendered only while reading; the sanitizer runs inside getFormattedElementMd.
+  $: rendered =
+    mode === 'read' && value.trim() ? getFormattedElementMd(value).element.innerHTML : '';
 
   const subscription = editFilePath$.subscribe((next) => {
     if (!next || next === path) return;
@@ -80,7 +90,10 @@
       // A textarea hands back LF only. Normalize here and restore the file's
       // own line endings on save, or the first save rewrites every line.
       value = saved = text.replace(/\r\n/g, '\n');
-      editor?.focus();
+      // Nothing to read in an empty note: start where the typing happens.
+      mode = value.trim() ? 'read' : 'edit';
+      await tick();
+      if (mode === 'edit') editor?.focus();
     } catch (err: any) {
       value = saved = diskText = '';
       loadError = tImmediate('fileEditor.loadFailed', { error: err?.message || String(err) });
@@ -126,6 +139,37 @@
     }
   }
 
+  async function toggleMode() {
+    if (loadError || !path) return;
+    mode = mode === 'read' ? 'edit' : 'read';
+    // The editor mounts with the mode change; it isn't bound until then.
+    await tick();
+    if (mode === 'edit') editor?.focus();
+  }
+
+  /**
+   * Links in the rendered note must not navigate this window: an in-page
+   * anchor (footnotes) would trip the unsaved-changes guard as a navigation,
+   * and a relative link to another note has nothing here to open. Web links go
+   * to the system browser.
+   */
+  async function onReadClick(e: MouseEvent) {
+    const a = (e.target as Element | null)?.closest('a');
+    const href = a?.getAttribute('href');
+    if (!a || !href) return;
+    e.preventDefault();
+    if (href.startsWith('#')) {
+      readEl?.querySelector(`[id="${CSS.escape(href.slice(1))}"]`)?.scrollIntoView({ block: 'start' });
+    } else if (/^https?:/i.test(href)) {
+      if (isTauri()) {
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(href).catch(() => undefined);
+      } else {
+        window.open(href, '_blank', 'noopener,noreferrer');
+      }
+    }
+  }
+
   function confirmPending() {
     const action = pending;
     pending = undefined;
@@ -134,12 +178,17 @@
 </script>
 
 <!-- The textarea handles its own Ctrl+S (and marks it handled); this catches
-     the rest — Preview mode has no textarea at all, so the shortcut did nothing. -->
+     the rest — the reading view has no textarea at all. -->
 <svelte:window
   on:keydown={(e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && !e.defaultPrevented) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented) return;
+    const key = e.key.toLowerCase();
+    if (key === 's') {
       e.preventDefault();
       save();
+    } else if (key === 'e') {
+      e.preventDefault();
+      toggleMode();
     }
   }}
 />
@@ -166,6 +215,14 @@
       {#if path}<div class="truncate text-xs opacity-50" title={path}>{path}</div>{/if}
     </div>
     {#if notice}<span class="text-sm opacity-70">{notice}</span>{/if}
+    {#if path && !loadError}
+      <button
+        type="button"
+        class="menu-choice"
+        title={$t(mode === 'read' ? 'fileEditor.editHint' : 'fileEditor.readHint')}
+        on:click={toggleMode}
+      >{$t(mode === 'read' ? 'fileEditor.edit' : 'fileEditor.read')}</button>
+    {/if}
     <button
       type="button"
       class="menu-choice menu-choice-active min-w-[5rem]"
@@ -185,20 +242,39 @@
     </div>
   {/if}
 
-  <div class="min-h-0 flex-1 p-2">
+  <div class="min-h-0 flex-1">
     {#if !path}
       <p class="p-4 opacity-60">{$t('fileEditor.noFile')}</p>
     {:else if loadError}
       <p class="p-4" style="color:var(--danger-color);">{loadError}</p>
+    {:else if mode === 'read'}
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <div class="h-full overflow-y-auto" on:click={onReadClick}>
+        <div class="md-read" bind:this={readEl}>{@html rendered}</div>
+      </div>
     {:else}
       <TextSourceEditor
         bind:this={editor}
         bind:value
         format="markdown"
         fill
-        initialView="split"
+        bare
         on:saveShortcut={() => save()}
       />
     {/if}
   </div>
 </div>
+
+<style>
+  /* Same column and type as the editor's bare surface, so switching between
+     reading and editing doesn't move or restyle the text: a 46rem text column
+     plus this padding's 1.5rem each side. */
+  .md-read {
+    max-width: 49rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+    font-size: 1rem;
+    line-height: 1.75;
+  }
+</style>
