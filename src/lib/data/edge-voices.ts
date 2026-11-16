@@ -19,7 +19,8 @@
 const DEFAULT_BY_LANG = {
   zh: 'zh-CN-XiaoxiaoNeural',
   ja: 'ja-JP-NanamiNeural',
-  en: 'en-US-EmmaMultilingualNeural'
+  en: 'en-US-EmmaMultilingualNeural',
+  ko: 'ko-KR-SunHiNeural'
 } as const;
 
 /**

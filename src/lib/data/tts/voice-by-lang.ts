@@ -12,22 +12,39 @@
  * imported book would still start on the wrong voice exactly once.
  *
  * Language is the axis that actually varies, and the books already carry it
- * (`bookData.language` from EPUB metadata / the txt loader), so three slots
- * per engine cover the whole library with no per-book bookkeeping and no
+ * (`bookData.language` from EPUB metadata / the txt loader), so one slot per
+ * language per engine covers the whole library with no per-book bookkeeping and no
  * migration: an unset slot falls back to the engine's existing single-value
  * store, which is what every pre-1.36 install has.
  */
 
 import { ttsVoiceByLang$ } from '$lib/data/store';
 
-export const TTS_LANGS = ['zh', 'ja', 'en'] as const;
+export const TTS_LANGS = ['zh', 'ja', 'en', 'ko'] as const;
 
 export type TtsLang = (typeof TTS_LANGS)[number];
 
+/** BCP 47 tag for a slot, for engines that take one (Web Speech). */
+export const LANG_TAG: Record<TtsLang, string> = {
+  zh: 'zh-CN',
+  ja: 'ja-JP',
+  en: 'en-US',
+  ko: 'ko-KR'
+};
+
+/** What 试听 says in each slot. It used to follow the UI language, so a
+ *  Korean or Japanese voice was tried on Chinese text and told you nothing. */
+export const PREVIEW_TEXT: Record<TtsLang, string> = {
+  zh: '这是语音测试。床前明月光，疑是地上霜。',
+  ja: 'これは音声テストです。春はあけぼの、やうやう白くなりゆく山際。',
+  en: 'This is a voice test. The quick brown fox jumps over the lazy dog.',
+  ko: '음성 테스트입니다. 오늘은 날씨가 맑고 바람이 시원합니다.'
+};
+
 /**
- * Map a book's language tag onto one of the three slots.
+ * Map a book's language tag onto one of the slots.
  *
- * Anything outside zh/ja/en lands on `zh` — that matches `AutoReader`'s own
+ * Anything outside zh/ja/en/ko lands on `zh` — that matches `AutoReader`'s own
  * `_lang = 'zh-CN'` default, so an untagged book behaves exactly as it did
  * before slots existed rather than silently switching to an English voice.
  */
@@ -35,6 +52,7 @@ export function langSlotOf(bookLanguage: string | undefined): TtsLang {
   const tag = (bookLanguage || '').toLowerCase();
   if (tag.startsWith('ja')) return 'ja';
   if (tag.startsWith('en')) return 'en';
+  if (tag.startsWith('ko')) return 'ko';
   return 'zh';
 }
 

@@ -5,6 +5,7 @@
  */
 
 import { isNodeGaiji } from './is-node-gaiji';
+import { isCountedCharacter, isNotCountedRegex } from './counted-character';
 
 export function getCharacterCount(node: Node) {
   if (isNodeGaiji(node)) return 1;
@@ -18,17 +19,11 @@ export function getCharacterCount(node: Node) {
   return getRawCharacterCount(node);
 }
 
-const isNotJapaneseRegex =
-  /[^0-9A-Z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]+/gimu;
-
-/** Whether one character counts toward the reader's position, same rule as below. */
-export function isCountedCharacter(ch: string): boolean {
-  return ch.replace(isNotJapaneseRegex, '') !== '';
-}
+export { isCountedCharacter };
 
 function getRawCharacterCount(node: Node) {
   if (!node.textContent) return 0;
-  return countUnicodeCharacters(node.textContent.replace(isNotJapaneseRegex, ''));
+  return countUnicodeCharacters(node.textContent.replace(isNotCountedRegex, ''));
 }
 
 /**

@@ -13,6 +13,7 @@
 import { BehaviorSubject, type Observable } from 'rxjs';
 import { readerVoiceUri$ } from '$lib/data/store';
 import { langSlotOf, voiceForLang } from '$lib/data/tts/voice-by-lang';
+import { pickWebVoice, voiceSpeaks } from '$lib/data/tts/web-voice-pick';
 import {
   computeGlobalCharIndex,
   extractText,
@@ -139,7 +140,7 @@ export class AutoReaderContinuous implements AutoReader {
     const saved = voiceForLang('web', langSlotOf(this._lang), readerVoiceUri$.getValue());
     if (saved) {
       const chosen = voices.find((v) => v.voiceURI === saved);
-      if (chosen) {
+      if (chosen && voiceSpeaks(chosen, this._lang)) {
         this._voice = chosen;
         return;
       }
@@ -148,32 +149,12 @@ export class AutoReaderContinuous implements AutoReader {
     // If current voice already matches lang, keep it
     if (this._voice && this._voice.lang.startsWith(this._lang)) return;
 
-    const exact = voices.find((v) => v.lang === this._lang);
-    if (exact) {
-      this._voice = exact;
+    // Ranked, not the first match: see web-voice-pick.ts for the macOS
+    // novelty voices that the first match used to land on.
+    const picked = pickWebVoice(voices, this._lang);
+    if (picked) {
+      this._voice = picked;
       return;
-    }
-
-    const prefix = voices.find((v) => v.lang.startsWith(this._lang));
-    if (prefix) {
-      this._voice = prefix;
-      return;
-    }
-
-    if (this._lang === 'zh') {
-      const zh = voices.find((v) => v.lang.startsWith('zh'));
-      if (zh) {
-        this._voice = zh;
-        return;
-      }
-    }
-
-    if (this._lang === 'ja') {
-      const ja = voices.find((v) => v.lang.startsWith('ja'));
-      if (ja) {
-        this._voice = ja;
-        return;
-      }
     }
 
     // Nothing on this machine speaks the book's language. The utterance still

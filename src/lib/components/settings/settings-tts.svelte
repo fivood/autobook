@@ -37,7 +37,10 @@
     type KokoroModelId
   } from '$lib/data/store';
   import { checkVoiceSelection } from '$lib/data/tts/voice-availability';
+  import { pickWebVoice, voiceSpeaks } from '$lib/data/tts/web-voice-pick';
   import {
+    LANG_TAG,
+    PREVIEW_TEXT,
     TTS_LANGS,
     langSlotOf,
     pickVoice,
@@ -71,7 +74,11 @@
     { id: false, text: $t('settings.value.chapterEnd.continue') },
     { id: true, text: $t('settings.value.chapterEnd.stop') }
   ];
-  $: voiceLangOptions = TTS_LANGS.map((id) => ({ id, text: $t(`settings.tts.lang.${id}`) }));
+  // Kokoro has no Korean voices, so it offers no Korean slot.
+  $: voiceLangOptions = TTS_LANGS.filter((id) => !($ttsEngine$ === 'kokoro' && id === 'ko')).map(
+    (id) => ({ id, text: $t(`settings.tts.lang.${id}`) })
+  );
+  $: if ($ttsEngine$ === 'kokoro' && activeLang === 'ko') activeLang = 'zh';
 
   // The engine stores below are the pre-slot values; they stand in for any
   // slot the user has not set, which is what keeps upgrades silent.
@@ -349,7 +356,7 @@
   let previewState: 'idle' | 'loading' | 'playing' | 'error' = 'idle';
   let previewMessage = '';
   let previewAudio: HTMLAudioElement | undefined;
-  $: previewText = $t('settings.tts.previewText');
+  $: previewText = PREVIEW_TEXT[activeLang];
 
   async function kokoroEnsureLoad() {
     try {
@@ -440,7 +447,17 @@
 
     if ($ttsEngine$ === 'web') {
       const utt = new SpeechSynthesisUtterance(previewText);
-      utt.lang = 'zh-CN';
+      utt.lang = LANG_TAG[activeLang];
+      // The voice reading would use, not whatever the platform defaults to:
+      // with no voice set, 试听 sounded fine while playback picked a macOS
+      // novelty voice, and nothing on screen explained the difference.
+      const voices = window.speechSynthesis.getVoices();
+      const saved = voices.find((v) => v.voiceURI === webVoice);
+      const voice =
+        saved && voiceSpeaks(saved, LANG_TAG[activeLang])
+          ? saved
+          : pickWebVoice(voices, LANG_TAG[activeLang]);
+      if (voice) utt.voice = voice;
       utt.rate = 1;
       previewState = 'playing';
       utt.onend = () => (previewState = 'idle');
