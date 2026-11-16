@@ -388,7 +388,7 @@
 
 <style>
   .book-title-label {
-    font-size: 0.9rem;
+    font-size: var(--fs-body);
     letter-spacing: 0.02em;
     /* Keeps title from becoming a click target — icons on either side
        stay unambiguous. */

@@ -78,12 +78,12 @@
   <!-- Same header as the other drawers: title, then ×. This one alone had no
        way to close it except clicking somewhere else. -->
   <div class="flex items-center gap-2 border-b border-current/10 px-4 py-3">
-    <h2 class="text-lg font-medium">{$t('highlight.sidebar.title')}</h2>
+    <h2 class="text-heading font-semibold">{$t('highlight.sidebar.title')}</h2>
     <span class="text-sm text-muted">{$t('highlight.sidebar.count', { n: highlights.length })}</span>
     <div class="flex-1" />
     <button
       type="button"
-      class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
+      class="btn-icon opacity-60 hover:opacity-100"
       title={$t('readerSettings.close')}
       on:click={() => dispatch('close')}
     ><Fa icon={faTimes} /></button>
@@ -117,13 +117,13 @@
                   <span class="text-xs opacity-40">{formatTime(hl.createdAt)}</span>
                   <button
                     type="button"
-                    class="text-xs opacity-40 hover:opacity-80"
+                    class="btn-icon btn-icon-sm text-xs opacity-40 hover:opacity-80"
                     title={$t('highlight.editMemo')}
                     on:click|stopPropagation={() => dispatch('editMemo', hl)}
                   ><Fa icon={faPen} size="xs" /></button>
                   <button
                     type="button"
-                    class="text-xs opacity-40 hover:opacity-80 hover-danger"
+                    class="btn-icon btn-icon-sm text-xs opacity-40 hover:opacity-80 hover-danger"
                     title={$t('highlight.delete')}
                     on:click|stopPropagation={() => dispatch('delete', hl)}
                   ><Fa icon={faTrash} size="xs" /></button>

@@ -271,7 +271,7 @@
   use:clickOutside={() => dispatch('close')}
 >
   <div class="flex items-center gap-2 border-b border-current/10 px-4 py-3">
-    <h2 class="text-lg font-medium">{$t('ai.title')}</h2>
+    <h2 class="text-heading font-semibold">{$t('ai.title')}</h2>
     <span class="text-xs text-muted"
       >{$t(spoilerSafe ? 'ai.subtitle' : 'ai.subtitleOpen', {
         pct: bookCharCount > 0 ? Math.round((exploredCharCount / bookCharCount) * 100) : 0
@@ -280,27 +280,27 @@
     <div class="flex-1" />
     <button
       type="button"
-      class="rounded p-1.5 hover-soft"
+      class="btn-icon"
       class:opacity-60={!spoilerSafe}
       title={spoilerSafe ? $t('ai.spoilerSafeOn') : $t('ai.spoilerSafeOff')}
       on:click={toggleSpoilerSafe}
     ><Fa icon={spoilerSafe ? faEyeSlash : faEye} size="xs" /></button>
     <button
       type="button"
-      class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
+      class="btn-icon opacity-60 hover:opacity-100"
       title={$t('ai.settings')}
       on:click={() => (showSettings = !showSettings)}
     ><Fa icon={faCog} size="xs" /></button>
     <button
       type="button"
-      class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
+      class="btn-icon opacity-60 hover:opacity-100"
       title={$t('ai.clearChat')}
       disabled={streaming}
       on:click={clearChat}
     ><Fa icon={faTrash} size="xs" /></button>
     <button
       type="button"
-      class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
+      class="btn-icon opacity-60 hover:opacity-100"
       title={$t('dialog.close')}
       on:click={() => dispatch('close')}
     ><Fa icon={faTimes} /></button>
@@ -406,14 +406,14 @@
       {#if streaming}
         <button
           type="button"
-          class="flex h-9 items-center gap-1 rounded border border-current/20 px-3 text-sm hover-soft-strong"
+          class="flex h-8 items-center gap-1 whitespace-nowrap rounded-md border border-current/20 px-3 text-body hover-soft-strong"
           style="color:var(--danger-color);"
           on:click={stop}
         ><Fa icon={faStop} size="xs" /> {$t('ai.stop')}</button>
       {:else}
         <button
           type="button"
-          class="flex h-9 items-center gap-1 rounded px-3 text-sm font-medium"
+          class="flex h-8 items-center gap-1 whitespace-nowrap rounded-md px-3 text-body font-medium"
           style="background:var(--menu-background);color:var(--menu-foreground);"
           on:click={send}
           disabled={!input.trim()}

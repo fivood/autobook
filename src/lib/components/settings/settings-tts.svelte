@@ -719,7 +719,7 @@
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-xs text-muted">{$t('settings.tts.kokoro.model')}</span>
           <select
-            class="settings-input px-2 py-1 text-sm"
+            class="settings-input max-w-full px-2 py-1 text-sm"
             bind:value={$kokoroModel$}
           >
             <option value="v1.1-zh">{$t('settings.tts.kokoro.modelZh')}</option>
@@ -931,12 +931,12 @@
       <p class="text-xs opacity-70 mb-2">
         {$t('settings.ttsCustom.hint')}
       </p>
-      <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-3 gap-y-2 items-start">
+      <div class="grid grid-cols-1 sm:grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-2 items-start">
         <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.preset')}</span>
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center gap-2 flex-wrap">
             <select
-              class="settings-input px-2 py-1 text-sm"
+              class="settings-input max-w-full px-2 py-1 text-sm"
               value={$ttsCustomActivePreset$}
               on:change={onPresetSelectChange}
             >
@@ -975,7 +975,7 @@
           <span class="text-xs opacity-80 pt-2">{$t('settings.ttsCustom.style')}</span>
           <div class="flex flex-col gap-1">
             <select
-              class="settings-input px-2 py-1 text-sm"
+              class="settings-input max-w-full px-2 py-1 text-sm"
               value={styleIsCustom ? '' : currentStyle}
               on:change={(e) => onStyleChange(e.currentTarget.value)}
             >

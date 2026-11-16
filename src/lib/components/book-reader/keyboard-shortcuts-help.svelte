@@ -234,7 +234,7 @@
     border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   }
   .head h2 {
-    font-size: 1.05rem;
+    font-size: var(--fs-heading);
     font-weight: 600;
     margin: 0;
   }
@@ -243,7 +243,12 @@
     border: 0;
     color: inherit;
     cursor: pointer;
-    padding: 0.3rem 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ctl-h);
+    height: var(--ctl-h);
+    border-radius: var(--radius-ctl);
     opacity: 0.7;
   }
   .close:hover {
@@ -260,12 +265,12 @@
     padding: 0.45rem 0.7rem;
     vertical-align: top;
     border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent);
-    font-size: 0.85rem;
+    font-size: var(--fs-body);
   }
   th {
     padding: 0.9rem 0.25rem 0.3rem;
     text-align: left;
-    font-size: 0.8rem;
+    font-size: var(--fs-secondary);
     font-weight: 600;
     opacity: 0.65;
   }

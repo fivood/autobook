@@ -249,6 +249,66 @@
   color: var(--danger-color, #c64a4a);
   border-color: color-mix(in srgb, var(--danger-color, #c64a4a) 55%, transparent);
 }
+/* The one filled button in a dialog (confirm / save). Menu colours so it
+   reads as the same voice as the app chrome on every theme. */
+.btn-primary {
+  background: var(--menu-background);
+  color: var(--menu-foreground);
+}
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--menu-background) 88%, var(--menu-foreground));
+}
+/* Tertiary: a worded action inline in a row (跳转 / 编辑 / 删除). 28px so the
+   row stays compact, hit area padded out to 32. */
+.btn-text {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: var(--ctl-h-sm);
+  padding: 0 0.5rem;
+  border-radius: var(--radius-ctl);
+  font-size: var(--fs-secondary);
+  cursor: pointer;
+  transition: background-color 0.12s ease, opacity 0.12s ease;
+}
+.btn-text:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.btn-text::after {
+  content: '';
+  position: absolute;
+  inset: -0.125rem 0;
+}
+/* Icon-only button on page surfaces (drawers, dialogs, panels): a 32px box,
+   which is also the desktop hit-target floor. The drawers each rolled their
+   own `rounded p-1.5` (24-28px), and some row actions were bare 9px glyphs. */
+.btn-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  border-radius: var(--radius-ctl);
+  cursor: pointer;
+  transition: background-color 0.12s ease, opacity 0.12s ease;
+}
+.btn-icon:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+/* In a dense row: a 24px box so the row keeps its height, with the hit area
+   padded back out to 32. */
+.btn-icon-sm {
+  position: relative;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.btn-icon-sm::after {
+  content: '';
+  position: absolute;
+  inset: -0.25rem;
+}
 .settings-btn-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger-color, #c64a4a) 12%, transparent);
   border-color: var(--danger-color, #c64a4a);

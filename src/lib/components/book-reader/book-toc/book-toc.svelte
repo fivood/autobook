@@ -131,7 +131,7 @@
 <!-- Header like the other drawers. It used to open on a bare
      「章节进度: 0 / 1681」 and a column of numbers nobody had named. -->
 <div class="flex items-center gap-2 border-b border-current/10 px-4 py-3">
-  <h2 class="text-lg font-medium">{$t('toc.title')}</h2>
+  <h2 class="text-heading font-semibold">{$t('toc.title')}</h2>
   <span class="text-sm text-muted">
     {$t('toc.chapterProgress', { chars: currentChapterCharacterProgress, pct: currentChapterProgress })}
   </span>
@@ -140,7 +140,7 @@
     tabindex="0"
     role="button"
     title={$t('toc.close')}
-    class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
+    class="btn-icon opacity-60 hover:opacity-100"
     on:click={closeTocMenu}
     on:keyup={activateOnKeyup}
   >
@@ -174,11 +174,12 @@
     </div>
   {/each}
 </div>
-<div class="flex justify-between px-4 py-6">
+<div class="flex justify-between px-3 py-4">
   <div
     tabindex="0"
     role="button"
     title={verticalMode ? $t('toc.nextChapter') : $t('toc.prevChapter')}
+    class="btn-icon"
     class:opacity-30={!prevChapterAvailable}
     on:click={() => changeChapter(prevChapterAvailable, verticalMode ? 1 : -1)}
     on:keyup={activateOnKeyup}
@@ -189,6 +190,7 @@
     tabindex="0"
     role="button"
     title={verticalMode ? $t('toc.prevChapter') : $t('toc.nextChapter')}
+    class="btn-icon"
     class:opacity-30={!nextChapterAvailable}
     on:click={() => changeChapter(nextChapterAvailable, verticalMode ? -1 : 1)}
     on:keyup={activateOnKeyup}

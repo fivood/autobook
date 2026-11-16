@@ -216,14 +216,14 @@
     tabindex="0"
     role="button"
     title={$t('tracker.close')}
-    class="flex items-center hover-danger md:items-center"
+    class="btn-icon hover-danger"
     on:click={() => dispatch('trackerMenuClosed')}
     on:keyup={activateOnKeyup}
   >
     <Fa icon={faXmark} />
   </div>
 </div>
-<div class="flex flex-1 flex-col overflow-auto p-4">
+<div class="flex flex-1 flex-col overflow-auto p-4 text-body">
   {#if currentReadingGoal}
     <div class="mb-6">
       {#if currentReadingGoal.timeGoal}
@@ -291,7 +291,7 @@
                    tooltip, and ⟲ (lock the counted position) read as undo. -->
               <button
                 type="button"
-                class="ml-3 flex items-center gap-1.5 rounded border border-current/30 px-2 py-0.5 text-sm hover-soft"
+                class="settings-btn ml-3"
                 title={$t(action.titleKey)}
                 on:click={() => executeAction(action.event)}
               >
@@ -416,7 +416,7 @@
               <div class="flex">
                 <button
                   title={$t('tracker.undoItem')}
-                  class="hover-danger"
+                  class="btn-icon btn-icon-sm hover-danger"
                   on:click={() => dispatch('revertStatistic', trackingHistoryItem)}
                 >
                   <Fa icon={faTrash} />

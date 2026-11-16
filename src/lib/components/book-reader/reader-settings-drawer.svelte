@@ -46,11 +46,11 @@
   use:clickOutside={() => dispatch('close')}
 >
   <div class="flex items-center gap-2 border-b border-current/10 px-4 py-3">
-    <h2 class="text-lg font-medium">{$t('readerSettings.title')}</h2>
+    <h2 class="text-heading font-semibold">{$t('readerSettings.title')}</h2>
     <div class="flex-1" />
     <button
       type="button"
-      class="rounded p-1.5 opacity-60 hover-soft hover:opacity-100"
+      class="btn-icon opacity-60 hover:opacity-100"
       title={$t('readerSettings.close')}
       on:click={() => dispatch('close')}
     ><Fa icon={faTimes} /></button>
