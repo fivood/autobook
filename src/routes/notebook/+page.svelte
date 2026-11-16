@@ -547,7 +547,7 @@
 </svelte:head>
 
 <div
-  class="flex min-h-screen flex-col pt-12 xl:pt-10"
+  class="flex min-h-screen flex-col pt-10"
   style="color:var(--font-color);background:var(--background-color);"
 >
   <PageHeader icon={mergeEntries.NOTEBOOK.icon} titleKey="menu.notebook.title">

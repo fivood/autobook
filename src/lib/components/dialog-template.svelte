@@ -25,10 +25,10 @@
 <section
   role="dialog"
   aria-modal="true"
-  class="mdc-elevation--z24 flex max-h-[72vh] flex-col rounded p-6"
+  class="mdc-elevation--z24 flex max-h-[72vh] flex-col rounded-lg p-6 text-body"
   style="background-color: {resolved.backgroundColor || '#fff'}; color: {resolved.fontColor || '#000'};"
 >
-  <h2 class="weight-medium mb-5 shrink-0 text-xl"><slot name="header" /></h2>
+  <h2 class="mb-4 shrink-0 text-title font-medium"><slot name="header" /></h2>
   <div class="min-h-0 flex-1 overflow-y-auto"><slot name="content" /></div>
   <footer class="flex shrink-0 flex-wrap items-center justify-end pt-5">
     <slot name="footer" />

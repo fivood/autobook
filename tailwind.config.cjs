@@ -47,6 +47,14 @@ const config = {
       spacing: {
         21: '5.25rem'
       },
+      // App-chrome type scale; values live in app.scss (:root --fs-*).
+      fontSize: {
+        title: ['var(--fs-title)', { lineHeight: '1.4' }],
+        heading: ['var(--fs-heading)', { lineHeight: '1.4' }],
+        body: ['var(--fs-body)', { lineHeight: '1.5' }],
+        secondary: ['var(--fs-secondary)', { lineHeight: '1.45' }],
+        caption: ['var(--fs-caption)', { lineHeight: '1.35' }]
+      },
       maxWidth: {
         '60vw': '60vw'
       }

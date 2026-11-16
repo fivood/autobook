@@ -44,7 +44,7 @@
     {#each SETTINGS_TABS as settingItem (settingItem.label)}
       <button
         type="button"
-        class="chrome-tab flex h-full items-center justify-center px-3 text-lg xl:px-2.5 {activeSettings ===
+        class="chrome-tab flex h-full items-center justify-center px-2.5 text-lg {activeSettings ===
         settingItem.label
           ? 'is-active'
           : 'is-inactive'}"
@@ -54,7 +54,7 @@
         aria-pressed={activeSettings === settingItem.label}
       >
         <Fa icon={settingItem.icon} />
-        <span class="ml-2 hidden text-sm xl:inline">{$t(settingItem.labelKey)}</span>
+        <span class="ml-2 hidden whitespace-nowrap text-sm xl:inline">{$t(settingItem.labelKey)}</span>
         <Ripple />
       </button>
     {/each}

@@ -47,21 +47,21 @@
   {#each NAV_DESTINATIONS as destination (destination.routeId)}
     {#if $page.route.id === destination.routeId}
       <span
-        class="chrome-tab is-active flex items-center gap-2 px-3 text-xl xl:px-2.5 xl:text-lg"
+        class="chrome-tab is-active flex items-center gap-2 px-2.5 text-lg"
         aria-current="page"
         title={$t(destination.titleKey)}
       >
         <Fa icon={destination.icon} />
-        <span class="hidden text-sm xl:inline">{$t(destination.labelKey)}</span>
+        <span class="hidden whitespace-nowrap text-sm xl:inline">{$t(destination.labelKey)}</span>
       </span>
     {:else}
       <a
         href={`${pagePath}${destination.routeId}`}
-        class="chrome-tab is-inactive flex items-center gap-2 px-3 text-xl opacity-80 hover:opacity-100 nav-link xl:px-2.5 xl:text-lg"
+        class="chrome-tab is-inactive flex items-center gap-2 px-2.5 text-lg opacity-80 hover:opacity-100 nav-link"
         title={$t(destination.titleKey)}
       >
         <Fa icon={destination.icon} />
-        <span class="hidden text-sm xl:inline">{$t(destination.labelKey)}</span>
+        <span class="hidden whitespace-nowrap text-sm xl:inline">{$t(destination.labelKey)}</span>
       </a>
     {/if}
   {/each}

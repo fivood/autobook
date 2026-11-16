@@ -7,6 +7,24 @@
 /* Shared menu language. Keep all popovers, context menus and compact action
  * panels on the same type scale and border treatment. Individual menus should
  * only need to provide width/layout and their own semantic active state. */
+/* UI size scale (app chrome only — book text follows the reading settings).
+ * Sizes only; colours stay on the theme variables below. Tailwind exposes the
+ * type steps as text-title / text-heading / text-body / text-secondary /
+ * text-caption (tailwind.config.cjs). Before this, chrome used 17 font sizes
+ * and 12 control heights for the same few jobs. */
+:root {
+  --fs-title: 1.25rem; /* 20 — page / dialog title, settings section */
+  --fs-heading: 1rem; /* 16 — drawer title, group heading */
+  --fs-body: 0.875rem; /* 14 — controls, menu items, body text */
+  --fs-secondary: 0.8125rem; /* 13 — hints, menu labels */
+  --fs-caption: 0.75rem; /* 12 — badges, counts, timestamps; the floor */
+  --ctl-h: 2rem; /* 32 — buttons, inputs, menu items; min desktop hit target */
+  --ctl-h-sm: 1.75rem; /* 28 — inline text buttons (hit area padded out to 32) */
+  --toolbar-h: 2.5rem; /* 40 — top bars and their icon buttons */
+  --radius-ctl: 0.375rem;
+  --radius-surface: 0.5rem;
+}
+
 @layer components {
   .menu-surface {
     background: var(--menu-background);
@@ -14,7 +32,7 @@
     border: 1px solid color-mix(in srgb, var(--menu-foreground) 24%, transparent);
     border-radius: 0.5rem;
     box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
-    font-size: 0.9375rem;
+    font-size: var(--fs-body);
     font-weight: 400;
     line-height: 1.35;
     overflow: hidden;
@@ -32,15 +50,15 @@
   .menu-item {
     display: flex;
     width: 100%;
-    min-height: 2.5rem;
+    min-height: var(--ctl-h);
     align-items: center;
     gap: 0.5rem;
-    padding: 0.625rem 0.875rem;
+    padding: 0.375rem 0.75rem;
     border: 0;
-    border-radius: 0.375rem;
+    border-radius: var(--radius-ctl);
     background: transparent;
     color: inherit;
-    font-size: 0.9375rem;
+    font-size: var(--fs-body);
     font-weight: 400;
     line-height: 1.25;
     text-align: left;
@@ -58,14 +76,14 @@
 
   .menu-item-inline {
     width: auto;
-    min-height: 2.25rem;
-    padding: 0.5rem 0.75rem;
+    min-height: var(--ctl-h);
+    padding: 0.375rem 0.75rem;
   }
 
   .menu-icon-button {
     display: inline-flex;
-    min-width: 2.25rem;
-    min-height: 2.25rem;
+    min-width: var(--ctl-h);
+    min-height: var(--ctl-h);
     align-items: center;
     justify-content: center;
     border-radius: 0.375rem;
@@ -84,18 +102,18 @@
     /* Derived per theme (--menu-muted): 68% of the menu text measured 3.5:1
        on seafoam. Size, not fading, sets labels apart. */
     color: var(--menu-muted);
-    font-size: 0.8125rem;
+    font-size: var(--fs-secondary);
     line-height: 1.3;
   }
 
   .menu-choice {
-    min-height: 2.125rem;
-    padding: 0.45rem 0.75rem;
+    min-height: var(--ctl-h);
+    padding: 0.25rem 0.75rem;
     border: 1px solid color-mix(in srgb, var(--menu-foreground) 28%, transparent);
-    border-radius: 0.375rem;
+    border-radius: var(--radius-ctl);
     background: transparent;
     color: inherit;
-    font-size: 0.875rem;
+    font-size: var(--fs-body);
     line-height: 1.2;
     cursor: pointer;
     transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
@@ -124,10 +142,10 @@
   .menu-sort-item {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    min-height: 2.5rem;
+    min-height: var(--ctl-h);
     align-items: center;
-    border-radius: 0.375rem;
-    font-size: 0.9375rem;
+    border-radius: var(--radius-ctl);
+    font-size: var(--fs-body);
     line-height: 1.25;
     transition: background-color 0.12s ease, color 0.12s ease;
   }
@@ -178,14 +196,14 @@
    drawer, the only two hosts of these panels.
    --------------------------------------------------------------------------- */
 .settings-scope {
-  font-size: 0.875rem;
+  font-size: var(--fs-body);
   line-height: 1.5;
 }
 .settings-scope .text-xs {
-  font-size: 0.8125rem;
+  font-size: var(--fs-secondary);
 }
 .settings-scope .text-sm {
-  font-size: 0.875rem;
+  font-size: var(--fs-body);
 }
 /* Inputs inherit the scale instead of the root size. */
 .settings-scope .settings-input {
@@ -202,12 +220,13 @@
   justify-content: center;
   gap: 0.375rem;
   flex: 0 0 auto;
-  padding: 0.3rem 0.7rem;
+  min-height: var(--ctl-h);
+  padding: 0.25rem 0.75rem;
   border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-ctl);
   background: transparent;
   color: inherit;
-  font-size: 0.875rem;
+  font-size: var(--fs-body);
   line-height: 1.3;
   cursor: pointer;
   transition: background-color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
@@ -223,7 +242,8 @@
 /* Icon-only: square off the horizontal padding so it reads as a glyph, not a
    very short label. */
 .settings-btn-icon {
-  padding: 0.3rem 0.45rem;
+  min-width: var(--ctl-h);
+  padding: 0.25rem 0.5rem;
 }
 .settings-btn-danger {
   color: var(--danger-color, #c64a4a);
@@ -240,11 +260,21 @@
 .settings-input {
   background: color-mix(in srgb, currentColor 8%, transparent);
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-  border-radius: 0.375rem;
-  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-ctl);
+  padding: 0.25rem 0.625rem;
   color: inherit;
   outline: none;
   transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+/* Single-line fields sit on the control height; textareas keep growing. */
+.settings-input:not(textarea) {
+  height: var(--ctl-h);
+  padding-block: 0;
+}
+/* A numeric field holds a handful of digits — it used to stretch across the
+   whole settings column (~480px for "10"). */
+.settings-input[type='number'] {
+  max-width: 8rem;
 }
 /* Native <option> popup on Windows (WebView2 / Chromium) can't inherit
    font/background from the themed <select>, so every select in the app
@@ -261,12 +291,13 @@ option {
 .library-search {
   background: color-mix(in srgb, currentColor 6%, transparent);
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-  border-radius: 0.4rem;
-  padding: 0.4rem 1.75rem 0.4rem 0.75rem;
+  border-radius: var(--radius-ctl);
+  height: var(--ctl-h);
+  padding: 0 1.75rem 0 0.75rem;
   color: inherit;
   outline: none;
   transition: border-color 0.12s ease, background 0.12s ease;
-  font-size: 0.85rem;
+  font-size: var(--fs-body);
 }
 /* The app draws its own clear button; Chromium's native one sat on top of it. */
 .library-search::-webkit-search-cancel-button {

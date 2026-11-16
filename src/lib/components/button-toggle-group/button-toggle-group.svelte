@@ -45,7 +45,7 @@
     <div class="flex">
       <button
         title={option.id}
-        class="toggle-btn m-1 rounded-md border-2 px-3 py-1.5 transition-colors"
+        class="toggle-btn m-1 rounded-md border px-3 transition-colors"
         class:selected={option.id === selectedOptionId}
         class:no-dim={!dimUnselected}
         class:invert-mode={invertColors}
@@ -90,7 +90,8 @@
        It was the whole button at opacity 0.5: 2.4:1 on sage-green, too faint
        to read the options you are choosing between. */
   .toggle-btn {
-    font-size: 0.875rem;
+    min-height: var(--ctl-h);
+    font-size: var(--fs-body);
     line-height: 1.3;
     background: transparent;
     color: var(--muted-text);
@@ -115,6 +116,10 @@
   .toggle-btn.no-dim:not(.selected):hover {
     opacity: 1;
     background: none;
+  }
+  /* Swatches: selection is the border, so it needs the weight. */
+  .toggle-btn.no-dim {
+    border-width: 2px;
   }
   .toggle-btn.no-dim:not(.selected) {
     border-color: color-mix(in srgb, currentColor 22%, transparent);

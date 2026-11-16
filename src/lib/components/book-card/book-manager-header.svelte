@@ -510,7 +510,7 @@
             />
           {:else}
             <div
-              class="flex h-12 items-center xl:h-10"
+              class="flex h-10 items-center"
               in:scale={inAnimationParams}
               out:scale={outAnimationParams}
             >

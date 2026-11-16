@@ -108,7 +108,7 @@
 </PageHeader>
 
 <div
-  class="flex h-screen flex-col pt-12 xl:pt-10"
+  class="flex h-screen flex-col pt-10"
   style="color:var(--font-color);background:var(--background-color);"
 >
   <div class="flex flex-1 overflow-hidden">

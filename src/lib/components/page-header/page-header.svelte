@@ -47,7 +47,7 @@
          place on every page: this used to be the content column, which is
          narrower than the window from lg to xl. -->
     <div class="mx-auto flex px-4 md:px-8 xl:max-w-none 2xl:max-w-6xl">
-      <div class="flex h-12 min-w-0 grow items-center xl:h-10">
+      <div class="flex h-10 min-w-0 grow items-center">
         {#if !inNav}
           <div class="{baseIconClasses} !cursor-default !opacity-100" title={$t(titleKey)}>
             <Fa {icon} />
@@ -58,7 +58,7 @@
         {/if}
         <slot name="left" />
       </div>
-      <div class="flex h-12 shrink-0 transform-gpu items-center xl:h-10 {translateXHeaderFa}">
+      <div class="flex h-10 shrink-0 transform-gpu items-center {translateXHeaderFa}">
         <!-- Rules keep "what this page does" apart from "where to go". -->
         <slot name="right" />
         {#if backLink}
