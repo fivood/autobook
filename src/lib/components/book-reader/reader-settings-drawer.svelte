@@ -40,7 +40,7 @@
      spawn implicit columns in a one-column grid. -->
 <div
   data-reader-panel
-  class="settings-scope fixed top-0 right-0 z-[80] flex h-full w-full max-w-md flex-col border-l border-current/10 shadow-2xl"
+  class="writing-horizontal-tb settings-scope fixed top-0 right-0 z-[80] flex h-full w-full max-w-md flex-col border-l border-current/10 shadow-2xl"
   style="color:var(--font-color);background:var(--background-color);"
   in:fly|local={{ x: 100, duration: 200, easing: quintInOut }}
   use:clickOutside={() => dispatch('close')}

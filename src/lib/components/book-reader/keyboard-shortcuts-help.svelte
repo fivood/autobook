@@ -94,8 +94,10 @@
   });
 </script>
 
+<!-- writing-horizontal-tb: vertical books put vertical-rl on <html>, and
+     anything that doesn't reset it turns sideways. -->
 <button
-  class="trigger"
+  class="trigger writing-horizontal-tb"
   title={$t('shortcuts.trigger')}
   aria-label={$t('shortcuts.triggerAria')}
   on:click={open}
@@ -105,7 +107,7 @@
 
 {#if visible}
   <div class="overlay" on:click={close} on:keyup={() => {}} role="presentation"></div>
-  <div class="panel" role="dialog" aria-label={$t('shortcuts.triggerAria')}>
+  <div class="panel writing-horizontal-tb" role="dialog" aria-label={$t('shortcuts.triggerAria')}>
     <div class="head">
       <h2><Fa icon={faKeyboard} class="mr-2" /> {$t('shortcuts.title')}</h2>
       <button class="close" on:click={close} title={$t('shortcuts.close')}><Fa icon={faTimes} /></button>
