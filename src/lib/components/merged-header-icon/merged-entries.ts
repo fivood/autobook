@@ -17,7 +17,7 @@ import {
   faClockRotateLeft,
   faCog,
   faEllipsisVertical,
-  faFileArrowUp,
+  faFileArrowDown,
   faFileZipper,
   faFolderPlus,
   faHashtag,
@@ -124,7 +124,7 @@ export const mergeEntries = {
     routeId: '',
     label: '导入文件',
     labelKey: 'menu.fileImport.label',
-    icon: faFileArrowUp,
+    icon: faFileArrowDown,
     title: '导入书籍文件',
     titleKey: 'menu.fileImport.title'
   },
@@ -149,7 +149,7 @@ export const mergeEntries = {
     routeId: '',
     label: '导入',
     labelKey: 'menu.import.label',
-    icon: faFileArrowUp,
+    icon: faFileArrowDown,
     title: '导入',
     titleKey: 'menu.import.label'
   },

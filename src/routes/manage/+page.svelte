@@ -12,7 +12,7 @@
     faSquareMinus,
     faTrash,
     faFolderMinus,
-    faUpload
+    faFileArrowDown
   } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
   import FolderSidebar from '$lib/components/library-folders/folder-sidebar.svelte';
@@ -1930,7 +1930,7 @@
     <div class="mt-20 text-center text-sm text-muted">{$t('manager.emptyFolder')}</div>
   {:else}
     <div
-      class="mx-auto mt-44 flex w-3/6 flex-col items-center justify-center text-gray-400 text-opacity-40 hover:text-opacity-60 xl:w-3/12"
+      class="mx-auto mt-44 flex w-3/6 flex-col items-center justify-center text-muted opacity-60 transition-opacity hover:opacity-90 xl:w-3/12"
     >
       <button
         type="button"
@@ -1938,9 +1938,10 @@
         on:click={() => fileInputEl?.click()}
       >
         <div class="flex w-full justify-center transition-transform">
-          <Fa icon={faUpload} style="width: 100%; height: auto" />
+          <!-- Same glyph as the header's 导入: a file with the arrow coming in. -->
+          <Fa icon={faFileArrowDown} style="height: 8rem; width: auto" />
         </div>
-        <span class="mt-4 text-sm opacity-60">
+        <span class="mt-4 text-body">
           {$t('manager.clickToAdd')}
         </span>
       </button>
