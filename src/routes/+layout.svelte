@@ -241,11 +241,16 @@
         const books = paths.filter((p) => !isMd(p));
         const md = paths.find(isMd);
         if (books.length) pendingLaunchFiles$.next([...pendingLaunchFiles$.getValue(), ...books]);
+        // On a cold start we are still on `/`, which only redirects. Leaving
+        // it in history put a dead page behind the editor: 返回 went back to
+        // `/`, which refuses to redirect while editFilePath$ is set, and the
+        // window stayed blank. From any real page, push so 返回 returns there.
+        const replaceState = path === `${pagePath}/` || path === pagePath;
         if (md) {
           editFilePath$.next(md);
-          goto(`${pagePath}/edit`);
+          goto(`${pagePath}/edit`, { replaceState });
         } else {
-          goto(`${pagePath}/manage`);
+          goto(`${pagePath}/manage`, { replaceState });
         }
       };
 

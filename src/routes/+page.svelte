@@ -13,7 +13,10 @@
   const autoNavigate$ = database.lastItem$.pipe(
     filter(() => !editFilePath$.getValue() && !pendingLaunchFiles$.getValue().length),
     map((lastItem) => (lastItem ? `${pagePath}/b?id=${lastItem.dataId}` : 'manage')),
-    tap(goto)
+    // Replace, not push: `/` is a redirect, never a destination. Left in
+    // history, it sat behind the first real page, so ← on that page came
+    // back here and was redirected straight forward again.
+    tap((url) => goto(url, { replaceState: true }))
   );
 </script>
 
