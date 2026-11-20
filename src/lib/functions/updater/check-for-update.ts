@@ -3,7 +3,15 @@
  * Lazy-imports the updater plugin so the web build doesn't fail.
  */
 
+import { writable } from 'svelte/store';
 import { isTauri } from '$lib/data/env';
+
+/**
+ * The newer version a check found, kept after the dialog closes. Dismissing
+ * the startup dialog with 稍后 used to be the last you saw of it until
+ * 设置 → 数据 at the very bottom; NavStrip now keeps a way back to it.
+ */
+export const pendingUpdate$ = writable<UpdateInfo | null>(null);
 
 export interface UpdateInfo {
   version: string;
@@ -26,7 +34,10 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   if (!isTauri()) return null;
 
   const { check } = await import('@tauri-apps/plugin-updater');
-  const update = await check();
+  // Without a timeout a stalled request never settles, and the manual check
+  // — which answers every outcome with a dialog — showed nothing at all (Mac
+  // test X9). Timing out turns that into the 检查更新失败 dialog.
+  const update = await check({ timeout: 20_000 });
   if (!update) return null;
 
   let downloaded = 0;

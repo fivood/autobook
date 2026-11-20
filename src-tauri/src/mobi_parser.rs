@@ -12,9 +12,23 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct ParsedMobiImage {
-    /// 1-based index used by `recindex:NNNNN` references in the HTML.
+    /// 1-based index used by `recindex:NNNNN` and `kindle:embed:XXXX`
+    /// references in the HTML.
     pub index: usize,
-    /// File extension we infer from the magic bytes (jpg / png / gif).
+    /// File extension we infer from the magic bytes (jpg / png / gif / svg).
+    pub ext: String,
+    /// base64-encoded raw bytes.
+    pub data: String,
+}
+
+/// Resource extracted from a non-flow-0 FDST flow (typically SVG image
+/// masks or CSS). Referenced by HTML as `kindle:flow:XXXX?mime=...`
+/// where XXXX is the 4-char Kindle-base32 encoding of `flow_index`.
+#[derive(Serialize)]
+pub struct ParsedFlowResource {
+    /// FDST array index (0-based; kindle:flow:0001 → flow_index=1).
+    pub flow_index: u32,
+    /// "svg" or "css".
     pub ext: String,
     /// base64-encoded raw bytes.
     pub data: String,
@@ -29,6 +43,16 @@ pub struct ParsedMobi {
     pub images: Vec<ParsedMobiImage>,
     /// 1-based index into `images` for the cover, or 0 if none.
     pub cover_index: usize,
+    /// True when the returned HTML came from KF8 Phase 3 fragment
+    /// reassembly (byte-accurate to the epub source). Frontend uses this
+    /// to skip DOMParser round-trip since Phase 3 output doesn't have
+    /// the split-tag attribute leaks that MOBI6 needs cleaning for.
+    #[serde(default)]
+    pub well_formed: bool,
+    /// KF8 flow 1+ resources — SVG image masks referenced from HTML via
+    /// `kindle:flow:XXXX?mime=image/svg+xml`. Empty for MOBI6.
+    #[serde(default)]
+    pub flow_resources: Vec<ParsedFlowResource>,
 }
 
 fn replacement_char_ratio(s: &str) -> f32 {
@@ -57,7 +81,7 @@ fn strip_tags(s: &str) -> String {
 /// PalmDoc LZ77 decompression — copied from the mobi crate because the
 /// crate's `decompress_palmdoc()` is `pub(crate)` and we need the raw bytes
 /// before any string conversion so we can try CJK encodings directly.
-fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
+pub(crate) fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
     let length = data.len();
     let mut pos: usize = 0;
     let mut text_pos: usize = 0;
@@ -75,19 +99,22 @@ fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
                 dist_len_bytes &= 0x3fff;
                 let offset = (dist_len_bytes >> 3) as usize;
                 let len = ((dist_len_bytes & 0x0007) + 3) as usize;
-                let start = if offset > text_pos {
+                let mut start = if offset > text_pos {
+                    if text_pos == 0 {
+                        return text;
+                    }
                     offset % text_pos
                 } else {
                     text_pos - offset
                 };
-                let end = if start + len >= text.len() {
-                    text.len()
-                } else {
-                    start + len
-                };
-                for i in start..end {
-                    text.push(text[i]);
+                // Copy len bytes, advancing `start` as `text` grows so
+                // overlapping back-references (repeated chars/phrases) copy
+                // the full run instead of freezing `end` at the old length.
+                for _ in 0..len {
+                    let byte = text[start];
+                    text.push(byte);
                     text_pos += 1;
+                    start += 1;
                 }
             }
             0x0 | 0x09..=0x7f => {
@@ -104,10 +131,11 @@ fn decompress_palmdoc(data: &[u8]) -> Vec<u8> {
                     pos += b;
                 }
             }
+            // Back-reference: the next byte completes it. (Was `pos >=
+            // text.len()` — input pos vs OUTPUT length — which cut every CJK
+            // record short, since escaped UTF-8 literals cost more input than
+            // they produce.)
             0x80..=0xbf => {
-                if pos >= text.len() {
-                    return text;
-                }
                 prev = Some(byte);
             }
             _ => {
@@ -128,7 +156,7 @@ struct HuffDict1Entry {
     maxcode: u32,
 }
 
-struct HuffCdic {
+pub(crate) struct HuffCdic {
     dict1: Vec<HuffDict1Entry>,
     mincode: Vec<u32>,
     maxcode: Vec<u32>,
@@ -136,7 +164,7 @@ struct HuffCdic {
 }
 
 impl HuffCdic {
-    fn load(huff_record: &[u8], cdic_records: &[&[u8]]) -> Result<Self, String> {
+    pub(crate) fn load(huff_record: &[u8], cdic_records: &[&[u8]]) -> Result<Self, String> {
         if huff_record.len() < 24 || &huff_record[0..8] != b"HUFF\x00\x00\x00\x18" {
             return Err("Invalid HUFF header".into());
         }
@@ -158,7 +186,7 @@ impl HuffCdic {
             let term = (v & 0x80) != 0;
             let maxcode_raw = v >> 8;
             let maxcode = if codelen > 0 {
-                ((maxcode_raw + 1) << (32 - codelen)).wrapping_sub(1)
+                ((maxcode_raw.wrapping_add(1)) << (32 - codelen)).wrapping_sub(1)
             } else {
                 0
             };
@@ -179,7 +207,11 @@ impl HuffCdic {
             ]);
             let cl = i + 1;
             mincode[cl] = min_raw << (32 - cl);
-            maxcode_table[cl] = ((max_raw + 1) << (32 - cl)).wrapping_sub(1);
+            // `max_raw + 1` can overflow u32 at cl=32 (max_raw=0xFFFFFFFF) — wrap,
+            // matching the `.wrapping_sub(1)` already used below (standard HUFF
+            // maxcode modular arithmetic). Without this large manga AZW3 files
+            // panic in debug builds ("attempt to add with overflow").
+            maxcode_table[cl] = ((max_raw.wrapping_add(1)) << (32 - cl)).wrapping_sub(1);
         }
 
         let mut dictionary: Vec<(Vec<u8>, bool)> = Vec::new();
@@ -209,7 +241,7 @@ impl HuffCdic {
         Ok(HuffCdic { dict1, mincode, maxcode: maxcode_table, dictionary })
     }
 
-    fn unpack(&mut self, data: &[u8]) -> Vec<u8> {
+    pub(crate) fn unpack(&mut self, data: &[u8]) -> Vec<u8> {
         let mut bitsleft = (data.len() as i64) * 8;
         let mut padded = data.to_vec();
         padded.extend_from_slice(&[0u8; 8]);
@@ -305,8 +337,7 @@ fn strip_mobi_control_chars(raw: &mut Vec<u8>) {
 /// Extract raw decompressed content bytes by parsing PalmDB directly,
 /// bypassing the mobi crate's record handling and string conversion.
 /// Returns (bytes, declared_encoding).
-/// declared_encoding: 1252 = CP1252, 65001 = UTF-8.
-fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)> {
+pub(crate) fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)> {
     use crate::kf8_parser::{parse_palmdb_records, strip_record_trailers};
 
     let (records, _title) = parse_palmdb_records(file_bytes).ok()?;
@@ -344,7 +375,7 @@ fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)>
         return None;
     }
 
-    let mut bytes = match compression {
+    let bytes = match compression {
         17480 => {
             // Huff/CDIC
             decompress_huffcdic(&records, rec0, text_record_count, extra_flags)?
@@ -363,8 +394,129 @@ fn extract_raw_content_bytes_direct(file_bytes: &[u8]) -> Option<(Vec<u8>, u32)>
         }
     };
 
+    // filepos values are offsets into the bytes as decompressed — anchor
+    // them before control-char stripping shifts anything.
+    let mut bytes = add_filepos_anchors(&bytes);
     strip_mobi_control_chars(&mut bytes);
     Some((bytes, text_encoding))
+}
+
+fn find_byte(hay: &[u8], b: u8, from: usize) -> Option<usize> {
+    hay.get(from..)?.iter().position(|&c| c == b).map(|i| i + from)
+}
+
+/// MOBI6 links are `<a filepos=N>`, N a byte offset into the decompressed
+/// text. After Calibre `MobiReader.add_anchors`: put `<a id="fileposN"></a>`
+/// at each target and turn each link into `href="#fileposN"`. One change
+/// from Calibre: a target on a tag gets the anchor just *inside* it (after
+/// its `>`, and past a following pagebreak), so a note's `<li>` contains it
+/// and a chapter link lands in the chapter, not the end of the one before.
+/// `at` inside `&name;` / `&#123;` → just past its `;`. An anchor spliced
+/// into an entity breaks it into literal text (Calibre moves it the same way).
+fn past_entity(raw: &[u8], at: usize) -> usize {
+    let name = |b: u8| b.is_ascii_alphanumeric() || b == b'#';
+    let back = raw[at.saturating_sub(32)..at].iter().rev().take_while(|&&b| name(b)).count();
+    if back == 0 || at < back + 1 || raw[at - back - 1] != b'&' {
+        return at;
+    }
+    let fwd = raw[at..].iter().take(32).take_while(|&&b| name(b)).count();
+    if raw.get(at + fwd) == Some(&b';') { at + fwd + 1 } else { at }
+}
+
+fn add_filepos_anchors(raw: &[u8]) -> Vec<u8> {
+    const KEY: &[u8] = b"filepos=";
+    let mut edits: Vec<(usize, usize, Vec<u8>)> = Vec::new(); // (at, replaced len, insert)
+    let mut targets = std::collections::BTreeSet::new();
+    let mut k = 0;
+    while k + KEY.len() <= raw.len() {
+        if !raw[k..k + KEY.len()].eq_ignore_ascii_case(KEY) {
+            k += 1;
+            continue;
+        }
+        let mut j = k + KEY.len();
+        let quoted = matches!(raw.get(j), Some(b'"' | b'\''));
+        j += quoted as usize;
+        let digits = j;
+        while j < raw.len() && raw[j].is_ascii_digit() {
+            j += 1;
+        }
+        // Only inside a tag: the nearest `<`/`>` before it must be `<`.
+        let in_tag = raw[..k].iter().rposition(|&c| c == b'<' || c == b'>').map(|p| raw[p]) == Some(b'<');
+        let n = std::str::from_utf8(&raw[digits..j]).ok().and_then(|s| s.parse::<usize>().ok());
+        if let (true, Some(n)) = (in_tag, n) {
+            if quoted && matches!(raw.get(j), Some(b'"' | b'\'')) {
+                j += 1;
+            }
+            edits.push((k, j - k, format!("href=\"#filepos{n}\"").into_bytes()));
+            if n > 0 && n < raw.len() {
+                targets.insert(n);
+            }
+        }
+        k = j.max(k + 1);
+    }
+    for n in targets {
+        let l = find_byte(raw, b'<', n);
+        let mut at = match find_byte(raw, b'>', n) {
+            // In a tag or right at one → just past its `>`.
+            Some(r) if l.map_or(true, |l| r < l || l == n) => r + 1,
+            _ => n,
+        };
+        if raw[at..].starts_with(b"<mbp:pagebreak") {
+            at = find_byte(raw, b'>', at).map_or(at, |g| g + 1);
+        }
+        at = past_entity(raw, at);
+        edits.push((at, 0, format!("<a id=\"filepos{n}\"></a>").into_bytes()));
+    }
+    if edits.is_empty() {
+        return raw.to_vec();
+    }
+    edits.sort_by_key(|e| e.0);
+    let mut out = Vec::with_capacity(raw.len() + edits.len() * 24);
+    let mut cur = 0;
+    for (at, len, ins) in edits {
+        if at < cur {
+            continue;
+        }
+        out.extend_from_slice(&raw[cur..at]);
+        out.extend_from_slice(&ins);
+        cur = at + len;
+    }
+    out.extend_from_slice(&raw[cur..]);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::add_filepos_anchors;
+
+    #[test]
+    fn filepos_links_get_anchors() {
+        let note = b"<p>x<sup><a filepos=0000000040>[1]</a></sup></p>"; // link
+        let mut raw = note.to_vec();
+        raw.resize(40, b' ');
+        raw.extend_from_slice(b"<li value=\"1\"><p>note</p></li></p><mbp:pagebreak/><h1>2</h1>");
+        let ch = raw.len() - b"</p><mbp:pagebreak/><h1>2</h1>".len();
+        raw.extend_from_slice(format!("<a filepos=\"{ch}\">2</a> filepos=9 stays").as_bytes());
+        let out = String::from_utf8(add_filepos_anchors(&raw)).unwrap();
+        assert!(out.starts_with("<p>x<sup><a href=\"#filepos40\">[1]</a>"), "{out}");
+        assert!(out.contains("<li value=\"1\"><a id=\"filepos40\"></a><p>note"), "{out}");
+        assert!(out.contains(&format!("<mbp:pagebreak/><a id=\"filepos{ch}\"></a><h1>")), "{out}");
+        assert!(out.contains(&format!("<a href=\"#filepos{ch}\">2</a> filepos=9 stays")), "{out}");
+    }
+
+    #[test]
+    fn filepos_anchor_never_splits_an_entity() {
+        // Links to a byte inside `&amp;`, and to the `x` after a bare `&`.
+        let body = b"<p>a&amp;b c &x</p>";
+        let link = |n: usize| format!("<a filepos={n:010}>1</a>");
+        let head = link(0).len() * 2;
+        let (in_amp, after_bare) = (head + 6, head + 14);
+        assert_eq!((body[6], body[14]), (b'm', b'x'));
+        let raw = [link(in_amp).into_bytes(), link(after_bare).into_bytes(), body.to_vec()].concat();
+        let out = String::from_utf8(add_filepos_anchors(&raw)).unwrap();
+        assert!(out.contains(&format!("a&amp;<a id=\"filepos{in_amp}\"></a>b")), "{out}");
+        assert!(out.contains(&format!("c &<a id=\"filepos{after_bare}\"></a>x</p>")), "{out}");
+    }
 }
 
 /// Decode UTF-8 bytes with CP1252 fallback for invalid sequences.
@@ -478,8 +630,22 @@ fn detect_image_ext(bytes: &[u8]) -> &'static str {
     }
 }
 
+/// Takes the file as the raw IPC body rather than a `Vec<u8>` argument: as a
+/// command argument the bytes arrived as a JSON array of numbers, so a 30 MB
+/// AZW3 became a thirty-million-element array to build and parse. The reply
+/// stays JSON — image payloads in `ParsedMobi` are already base64.
 #[tauri::command]
-pub fn parse_mobi(bytes: Vec<u8>) -> Result<ParsedMobi, String> {
+pub fn parse_mobi(request: tauri::ipc::Request<'_>) -> Result<ParsedMobi, String> {
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => parse_mobi_bytes(bytes),
+        _ => Err("parse_mobi 需要原始字节负载".into()),
+    }
+}
+
+/// The command minus the IPC envelope. Kept separate so the scan tests — which
+/// have a `Vec<u8>` in hand, not a `Request` — exercise exactly the same
+/// pipeline, panic guard included.
+pub fn parse_mobi_bytes(bytes: &[u8]) -> Result<ParsedMobi, String> {
     // Wrap the WHOLE pipeline. The mobi crate panics on certain malformed
     // files (esp. AZW3) at various stages — raw_records, palmdoc decode,
     // image extraction — not just Mobi::new. Without an outer catch_unwind,
@@ -553,17 +719,38 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
         decode_best(&raw_bytes)
     };
 
-    // Detect KF8:joint / pure KF8 and dispatch to dedicated parser
+    // Detect KF8:joint / pure KF8 and dispatch to dedicated parser.
+    // Pure KF8 (record 0 MOBI header format_version == 8) always goes
+    // to try_parse_kf8, even if the MOBI6 codepath above produced text —
+    // MOBI6 misreading a KF8 header often "works" (returns some bytes)
+    // but yields garbled content, especially for Huff/CDIC-compressed
+    // AZW3s where the flow / skeleton structure would otherwise get lost.
     let is_joint = records.iter().any(|r| r.starts_with(b"BOUNDARY"));
+    let is_pure_kf8 = rec0.len() >= 16 + 0x60
+        && &rec0[16..20] == b"MOBI"
+        && u32::from_be_bytes([rec0[16 + 0x58], rec0[16 + 0x59], rec0[16 + 0x5A], rec0[16 + 0x5B]]) == 8;
     let is_kf8_only = strip_tags(&html).trim().chars().count() < 50;
-    if is_joint || is_kf8_only {
+    if is_joint || is_pure_kf8 || is_kf8_only {
         match crate::kf8_parser::try_parse_kf8(bytes) {
             Ok(Some(parsed)) => return Ok(parsed),
             Ok(None) => {
-                return Err("本文件 MOBI6 段为空且未找到 KF8 段，文件可能损坏。".into());
+                // No BOUNDARY and not pure KF8 → genuine MOBI6-only (often
+                // image-heavy / scanned books with little text). Don't error;
+                // fall through to the MOBI6 extraction below so the user gets
+                // the book (text + images) instead of a "文件可能损坏" dead-end.
             }
             Err(e) => {
-                return Err(format!("KF8 解析失败: {e}"));
+                // KF8 parse failed. Only surface the error to the user if
+                // we have no MOBI6 fallback content — the pre-KF8-dispatch
+                // MOBI6 codepath sometimes produces readable output even
+                // for pure KF8 files (garbled but not empty). Preferring
+                // partial content over a dead-end error was the pattern
+                // established in 1.16.3 for image-heavy scanned MOBI6.
+                let mobi6_len = strip_tags(&html).trim().chars().count();
+                if is_joint || mobi6_len < 50 {
+                    return Err(format!("KF8 解析失败: {e}"));
+                }
+                // else: fall through with MOBI6-derived html
             }
         }
     }
@@ -598,7 +785,11 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
             });
         }
     }
+    // EXTH CoverOffset is a 0-based record number (+1 inside the parser), but
+    // images[].index is 1-based relative to `scan_start`. Convert the absolute
+    // record number into that relative space so the cover actually resolves.
     let cover_index = crate::kf8_parser::parse_exth_cover_offset(rec0)
+        .map(|abs_one_based| abs_one_based.saturating_sub(scan_start))
         .filter(|&idx| idx > 0 && idx <= images.len())
         .unwrap_or_else(|| if images.is_empty() { 0 } else { 1 });
 
@@ -609,5 +800,8 @@ fn parse_mobi_inner(bytes: &[u8]) -> Result<ParsedMobi, String> {
         html,
         images,
         cover_index,
+        // MOBI6 path — assume dirty (split-tag attribute leaks).
+        well_formed: false,
+        flow_resources: Vec::new(),
     })
 }

@@ -109,7 +109,11 @@ export class CharacterStatsCalculator {
   }
 
   calcExploredCharCount(customReadingPointScrollOffset = 0) {
-    return this.getCharCountByScrollPos(this.scrollPos + customReadingPointScrollOffset);
+    // +1: restoring a bookmark scrolls to a paragraph's exact bottom edge, and
+    // at DPR 1.5 the scroll offset snaps to a 2/3px grid that can land just
+    // short of it — the next save then counted the paragraph above, and every
+    // open→leave cycle walked the bookmark back one paragraph.
+    return this.getCharCountByScrollPos(this.scrollPos + customReadingPointScrollOffset + 1);
   }
 
   getCharCountByScrollPos(scrollPos: number) {

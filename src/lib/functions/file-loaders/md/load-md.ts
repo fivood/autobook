@@ -6,27 +6,19 @@
 
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { getFormattedElementMd } from '$lib/functions/file-loaders/md/generate-md-html';
+import { detectLanguage } from '$lib/functions/file-loaders/detect-language';
+import { detectAndDecode } from '$lib/functions/file-loaders/txt/extract-txt';
 
-function detectLanguage(text: string): string {
-  const sample = text.slice(0, 2000);
-  const hiragana = (sample.match(/[぀-ゟ]/g) || []).length;
-  const katakana = (sample.match(/[゠-ヿ]/g) || []).length;
-  const cjk = (sample.match(/[一-鿿]/g) || []).length;
-  const latin = (sample.match(/[a-zA-Z]/g) || []).length;
-  if (hiragana + katakana > 10) return 'ja';
-  if (latin > cjk) return 'en';
-  return 'zh';
-}
 
 async function readAsText(file: File): Promise<string> {
-  // Try UTF-8 first; if it lands on the U+FFFD replacement char a lot,
-  // fall back to GBK so Chinese .md files saved on Windows still render.
+  // Try UTF-8 first; if it lands on the U+FFFD replacement char a lot, the
+  // file is in a legacy encoding — detect it the way TXT does (Korean CP949,
+  // Shift-JIS, GB18030, Big5) instead of assuming GBK.
   const utf8 = await file.text();
   const replacements = (utf8.match(/�/g) || []).length;
   if (replacements < 5) return utf8;
   try {
-    const buf = await file.arrayBuffer();
-    return new TextDecoder('gbk').decode(buf);
+    return detectAndDecode(new Uint8Array(await file.arrayBuffer()));
   } catch {
     return utf8;
   }
@@ -41,6 +33,7 @@ export default async function loadMd(file: File, lastBookModified: number): Prom
     language: detectLanguage(data),
     styleSheet: '',
     elementHtml: element.innerHTML,
+    sourceText: data,
     blobs: {},
     coverImage: undefined,
     hasThumb: false,

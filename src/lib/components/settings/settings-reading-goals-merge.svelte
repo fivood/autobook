@@ -19,7 +19,7 @@
     getPreviousDayKey,
     secondsToMinutes
   } from '$lib/functions/statistic-util';
-  import { pluralize } from '$lib/functions/utils';
+  import { t, tImmediate } from '$lib/i18n';
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -53,7 +53,7 @@
   );
 
   $: readingGoalToReplaceMessage = readingGoalsToReplace.length
-    ? `${pluralize(readingGoalsToReplace.length, '项')} 将被替换`
+    ? $t('goals.merge.replaceCount', { n: readingGoalsToReplace.length })
     : '';
 
   $: if (selectedArchiveOptionObject) {
@@ -92,7 +92,7 @@
 
       showSpinner = false;
     } catch ({ message }: any) {
-      error = `刷新阅读目标失败 (${message})`;
+      error = tImmediate('goals.merge.refreshError', { detail: message });
       closeDialog();
     }
   }
@@ -182,7 +182,7 @@
         archivalMaxDate = readingGoalEnd;
 
         archivalOptions.push({
-          label: '自定义',
+          label: tImmediate('goals.merge.custom'),
           archivalStartDate: $readingGoal$.goalStartDate,
           archivalEndDate: readingGoalEnd,
           editable: true
@@ -194,7 +194,7 @@
           todayKey !== previousReadingGoalEnd
         ) {
           archivalOptions.push({
-            label: '关闭到最近的上一个结束',
+            label: tImmediate('goals.merge.toPreviousEnd'),
             archivalStartDate: $readingGoal$.goalStartDate,
             archivalEndDate: previousReadingGoalEnd,
             editable: false
@@ -203,7 +203,7 @@
 
         if (yesterDayKey >= $readingGoal$.goalStartDate) {
           archivalOptions.push({
-            label: '关闭到昨天',
+            label: tImmediate('goals.merge.toYesterday'),
             archivalStartDate: $readingGoal$.goalStartDate,
             archivalEndDate: yesterDayKey,
             editable: false
@@ -212,7 +212,7 @@
 
         if (todayKey >= $readingGoal$.goalStartDate) {
           archivalOptions.push({
-            label: '关闭到今天',
+            label: tImmediate('goals.merge.toToday'),
             archivalStartDate: $readingGoal$.goalStartDate,
             archivalEndDate: todayKey,
             editable: false
@@ -221,7 +221,7 @@
 
         if (readingGoalEnd !== todayKey) {
           archivalOptions.push({
-            label: '关闭到最近结束',
+            label: tImmediate('goals.merge.toLatestEnd'),
             archivalStartDate: $readingGoal$.goalStartDate,
             archivalEndDate: readingGoalEnd,
             editable: false
@@ -238,7 +238,7 @@
 
       showSpinner = false;
     } catch ({ message }: any) {
-      error = `设置上下文失败 (${message})`;
+      error = tImmediate('goals.merge.contextError', { detail: message });
       closeDialog();
     }
   }
@@ -272,11 +272,11 @@
   </div>
 {/if}
 <DialogTemplate>
-  <svelte:fragment slot="header">保存阅读目标</svelte:fragment>
+  <svelte:fragment slot="header">{$t('goals.merge.title')}</svelte:fragment>
   <svelte:fragment slot="content">
     {#if newReadingGoal.goalStartDate}
       <div>
-        <span>新阅读目标开始于</span>
+        <span>{$t('goals.merge.newStart')}</span>
         <input
           disabled
           class="mb-4 sm:ml-1"
@@ -289,7 +289,7 @@
     {#if archivalOptions.length}
       <input type="checkbox" bind:checked={archiveReadingGoal} on:change={checkDates} />
       <span class:opacity-50={!archiveReadingGoal}>
-        <span class="mr-2">归档阅读目标从</span>
+        <span class="mr-2">{$t('goals.merge.archiveFrom')}</span>
         <input
           class="w-full mt-2 sm:mt-0 md:w-[initial]"
           type="date"
@@ -332,10 +332,9 @@
         <summary>{readingGoalToReplaceMessage}</summary>
         {#each readingGoalsToReplace as goalToReplace (goalToReplace.goalStartDate)}
           <div class="my-2 p-1">
-            {getDateRangeLabel(goalToReplace.goalStartDate, goalToReplace.goalEndDate)} / {secondsToMinutes(
-              goalToReplace.timeGoal
-            )} min / {goalToReplace.characterGoal}
-            characters / {goalToReplace.goalFrequency}
+            {getDateRangeLabel(goalToReplace.goalStartDate, goalToReplace.goalEndDate)} /
+            {$t('goals.minutes', { n: secondsToMinutes(goalToReplace.timeGoal) })} /
+            {$t('goals.chars', { n: goalToReplace.characterGoal })} / {$t('goals.freq.' + goalToReplace.goalFrequency)}
           </div>
         {/each}
       </details>
@@ -343,11 +342,11 @@
   </svelte:fragment>
   <div class="flex grow justify-between" slot="footer">
     <button class={buttonClasses} on:click={() => closeDialog(true)}>
-      Cancel
+      {$t('dialog.cancel')}
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog()}>
-      确认
+      {$t('goals.merge.confirm')}
       <Ripple />
     </button>
   </div>

@@ -143,7 +143,7 @@ export class BackupStorageHandler extends BaseStorageHandler {
     return filename;
   }
 
-  async getBook() {
+  async getBook(onProgress?: (done: number, total: number) => void) {
     const { zipEntry, filename } = this.findEntry('bookdata_');
 
     if (!zipEntry) {
@@ -158,7 +158,7 @@ export class BackupStorageHandler extends BaseStorageHandler {
     );
 
     return this.isForBrowser
-      ? this.extractBookData(bookBlob, filename, 0.6)
+      ? this.extractBookData(bookBlob, filename, 0.6, onProgress)
       : new File([bookBlob], filename, { type: 'application/zip' });
   }
 

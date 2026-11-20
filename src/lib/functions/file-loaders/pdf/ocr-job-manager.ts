@@ -16,17 +16,96 @@
  */
 
 import { writable, type Readable } from 'svelte/store';
-import { database } from '$lib/data/store';
+import {
+  cacheStorageData$,
+  database,
+  pdfOcrSkippedBookIds$,
+  readingGoalsMergeMode$,
+  replicationSaveBehavior$,
+  statisticsMergeMode$
+} from '$lib/data/store';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import { runOcr, type OcrProgress } from './pdf-ocr-runner';
-import type { OcrLanguage } from './pdf-ocr';
+import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-types';
+import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
+import { mergeOcrResult, runOcr, type OcrProgress } from './pdf-ocr-runner';
+import { disposeOcrWorker, type OcrLanguage, type OcrModelProfile } from './pdf-ocr';
+export type { OcrLanguage, OcrModelProfile };
+
+/**
+ * Push the updated bookData (with new OCR-injected elementHtml + blobs) to
+ * the external storage source the book was imported from. Without this, the
+ * OCR result lives only in IDB; on next reload `saveExternalLastRead` would
+ * still find the stale pre-OCR copy on disk (current versions guard against
+ * the clobber, but other devices opening the same book see the unchanged
+ * scan). Best-effort — failures are logged, never surfaced to the user, so
+ * the local-IDB save still counts as success.
+ *
+ * Currently only handles Tauri FS — the most common desktop case. Dropbox
+ * et al. will get the same treatment in a follow-up; for now the export
+ * flow remains the fallback.
+ */
+async function pushOcrResultToExternalStorage(updated: BooksDbBookData): Promise<void> {
+  const source = updated.storageSource;
+  if (!source) return;
+  if (source !== InternalStorageSources.INTERNAL_TAURI_FS) {
+    console.info(`[ocr] not auto-pushing to ${source} (Tauri FS only for now)`);
+    return;
+  }
+  try {
+    const handler = getStorageHandler(
+      window,
+      StorageKey.TAURI_FS,
+      source,
+      true,
+      cacheStorageData$.getValue(),
+      replicationSaveBehavior$.getValue(),
+      statisticsMergeMode$.getValue(),
+      readingGoalsMergeMode$.getValue()
+    );
+    handler.startContext({
+      id: updated.id,
+      title: updated.title,
+      imagePath: updated.coverImage
+    });
+    // saveBook signature accepts Omit<BooksDbBookData, 'id'> | File; strip
+    // the id since file-name on FS is derived from title + metadata, not id.
+    const { id: _id, ...dataWithoutId } = updated;
+    await handler.saveBook(dataWithoutId, true);
+    console.info('[ocr] synced OCR result to Tauri FS');
+  } catch (err) {
+    console.warn('[ocr] failed to sync OCR result to external storage', err);
+  }
+}
+
+function markBookOcrComplete(bookId: number) {
+  // Belt-and-suspenders alongside the sentinel inserted by runOcr: once a
+  // book finishes OCR (regardless of result quality, or whether the user
+  // pressed "应用并刷新"), add it to the per-book skip list so the
+  // "detected scanned PDF" banner doesn't re-prompt on later opens. Covers
+  // edge cases where every page yielded empty text and the sentinel was
+  // somehow not picked up by isScannedPdf.
+  const raw = pdfOcrSkippedBookIds$.value || '';
+  const ids = new Set(raw.split(',').filter(Boolean).map(Number));
+  if (!ids.has(bookId)) {
+    ids.add(bookId);
+    pdfOcrSkippedBookIds$.next(Array.from(ids).join(','));
+  }
+}
 
 export type OcrJobStatus = 'running' | 'finished' | 'errored';
 
 export interface OcrJobState {
+  /** Pages that produced no text layer. `finished` with this equal to
+   *  `totalPages` means the run achieved nothing and nothing was saved. */
+  failedPages?: number;
+  /** Pages the run walked, for the banner to compare against. */
+  totalPages?: number;
+  /** Reason for the first failed page, for the banner to quote. */
+  firstFailure?: string;
   bookId: number;
   bookTitle: string;
   lang: OcrLanguage;
+  profile: OcrModelProfile;
   status: OcrJobStatus;
   progress: OcrProgress;
   /** Set when status is 'errored'; user-friendly message. */
@@ -48,7 +127,11 @@ export function isOcrJobRunning(): boolean {
  * should abort first). Doesn't return the job promise — fire-and-forget;
  * subscribe to `ocrJob$` to observe progress.
  */
-export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
+export function startOcrJob(
+  book: BooksDbBookData,
+  lang: OcrLanguage,
+  profile: OcrModelProfile
+): boolean {
   if (abortCtrl) return false;
   abortCtrl = new AbortController();
   const signal = abortCtrl.signal;
@@ -56,6 +139,7 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
     bookId: book.id,
     bookTitle: book.title,
     lang,
+    profile,
     status: 'running',
     progress: { page: 0, total: 0, text: '' },
     startedAt: Date.now()
@@ -63,22 +147,65 @@ export function startOcrJob(book: BooksDbBookData, lang: OcrLanguage): boolean {
 
   (async () => {
     try {
-      const updated = await runOcr(
+      const { book: updated, failedPages, totalPages, firstFailure } = await runOcr(
         book,
         lang,
+        profile,
         (p) => {
           _store.update((s) => (s ? { ...s, progress: p } : s));
         },
         signal
       );
+      // Nothing recognised at all: do not persist. runOcr still returns html
+      // with the sentinel `<p class="pdf-ocr-text" hidden>` prepended, and that
+      // sentinel is what stops isScannedPdf flagging the book — so writing it
+      // silences the banner just as surely as the skip list does. Keeping the
+      // book out of the skip list (below) was only half the job; this is the
+      // other half. Saving would also bump lastBookModified and set a bogus
+      // character count for a text layer that does not exist.
+      if (totalPages > 0 && failedPages >= totalPages) {
+        _store.update((s) =>
+          s ? { ...s, status: 'finished', failedPages, totalPages, firstFailure } : s
+        );
+        return;
+      }
+
       const db = await database.db;
-      await db.put('data', updated);
-      _store.update((s) => (s ? { ...s, status: 'finished' } : s));
+      // Re-read before writing, like every other writer of this row does.
+      // `updated` spreads the book snapshot taken when the job started, and a
+      // whole-book OCR runs for minutes with the banner on screen the whole
+      // time — the banner writes ocrLang, single-page re-OCR writes
+      // elementHtml. Putting the snapshot back reverted whatever the user did
+      // meanwhile. Only the fields this run actually produced are taken from
+      // it; everything else comes from the current row.
+      const fresh = await db.get('data', book.id);
+      const merged = mergeOcrResult(fresh ?? book, updated);
+      await db.put('data', merged);
+      // Only retire the "scanned PDF" banner when something actually came out.
+      // A run where every page failed used to land here all the same, and the
+      // skip list then made sure the banner never offered a retry again — the
+      // book was stuck textless with no route back from the UI.
+      if (failedPages < totalPages) {
+        markBookOcrComplete(book.id);
+      }
+      // Fire-and-forget the external-storage push so the "finished" state
+      // can flip immediately and the user can hit "应用并刷新" without
+      // waiting on disk I/O.
+      pushOcrResultToExternalStorage(merged).catch(() => {});
+      _store.update((s) =>
+        s ? { ...s, status: 'finished', failedPages, totalPages, firstFailure } : s
+      );
     } catch (err: any) {
       const msg = err?.name === 'AbortError' ? '已中止' : err?.message || String(err);
       _store.update((s) => (s ? { ...s, status: 'errored', error: msg } : s));
     } finally {
       abortCtrl = undefined;
+      // Whole-book OCR is the heavyweight path: PaddleOCR keeps the det/rec
+      // models plus the ORT WASM heap resident for the rest of the session
+      // otherwise. Re-init afterwards measured ~1.3s (models stay in the HTTP
+      // cache, so nothing re-downloads). Single-page OCR deliberately does
+      // NOT dispose — paying that on every right-click isn't worth it.
+      disposeOcrWorker().catch(() => {});
     }
   })();
 
