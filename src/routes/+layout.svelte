@@ -12,6 +12,7 @@
   import { checkForUpdate, pendingUpdate$ } from '$lib/functions/updater/check-for-update';
   import { recordHistoryEntry } from '$lib/functions/back-nav';
   import { syncAlwaysOnTop } from '$lib/functions/window-always-on-top';
+  import { setupNativeMenus } from '$lib/functions/native-menus';
   import { afterNavigate, goto } from '$app/navigation';
   import {
     customThemes$,
@@ -224,6 +225,7 @@
     if (!isTauri()) return;
 
     syncAlwaysOnTop();
+    setupNativeMenus();
 
     // Books opened via file association / CLI: queue paths and land on the
     // manager, which performs the actual import.

@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use tauri::{
-  menu::{Menu, MenuItem},
+  menu::{IsMenuItem, Menu, MenuItem},
   tray::{TrayIconBuilder, TrayIconEvent},
   Emitter, Manager, WindowEvent,
 };
@@ -28,6 +28,33 @@ mod mobi_scan_test;
 /// Set when the tray "退出" menu item is chosen so the WindowEvent handler
 /// knows to let the close request through instead of hiding to tray.
 static QUIT_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The tray menu's items, kept so the frontend can relabel them in the UI
+/// language (they are built here, before any locale is known). No reset on
+/// macOS: the menu-bar menu is one click away at all times, and the settings
+/// page already has the confirmed version of it.
+struct TrayItems {
+  show: MenuItem<tauri::Wry>,
+  tts: MenuItem<tauri::Wry>,
+  reset: Option<MenuItem<tauri::Wry>>,
+  quit: MenuItem<tauri::Wry>,
+}
+
+#[tauri::command]
+fn set_tray_labels(
+  items: tauri::State<TrayItems>,
+  show: String,
+  tts: String,
+  reset: String,
+  quit: String,
+) -> Result<(), String> {
+  items.show.set_text(show).map_err(|e| e.to_string())?;
+  items.tts.set_text(tts).map_err(|e| e.to_string())?;
+  if let Some(item) = &items.reset {
+    item.set_text(reset).map_err(|e| e.to_string())?;
+  }
+  items.quit.set_text(quit).map_err(|e| e.to_string())
+}
 
 fn request_quit(app: &tauri::AppHandle) {
   QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1006,6 +1033,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       take_launch_files,
       set_tts_shortcut,
+      set_tray_labels,
       sapi_list_voices,
       sapi_speak,
       custom_tts_synthesize,
@@ -1081,13 +1109,39 @@ pub fn run() {
         let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
         let tts =
           MenuItem::with_id(app, "tts", "播放 / 暂停朗读 (Ctrl+Alt+P)", true, None::<&str>)?;
-        let reset =
-          MenuItem::with_id(app, "reset", "重置 UI（保留书库）", true, None::<&str>)?;
+        let reset = if cfg!(target_os = "macos") {
+          None
+        } else {
+          Some(MenuItem::with_id(app, "reset", "重置 UI（保留书库）", true, None::<&str>)?)
+        };
         let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-        let menu = Menu::with_items(app, &[&show, &tts, &reset, &quit])?;
+        let mut entries: Vec<&dyn IsMenuItem<tauri::Wry>> = vec![&show, &tts];
+        if let Some(item) = &reset {
+          entries.push(item);
+        }
+        entries.push(&quit);
+        let menu = Menu::with_items(app, &entries)?;
 
-        TrayIconBuilder::new()
-          .icon(app.default_window_icon().unwrap().clone())
+        // macOS menu-bar icons are monochrome templates the system tints for
+        // light / dark bars; the full-colour app icon was the one coloured
+        // glyph in a row of grey ones. `cfg!` rather than `#[cfg]` so this
+        // branch still type-checks on the Windows build.
+        let tray = TrayIconBuilder::with_id("main");
+        let tray = if cfg!(target_os = "macos") {
+          tray
+            .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))?)
+            .icon_as_template(true)
+        } else {
+          tray.icon(app.default_window_icon().unwrap().clone())
+        };
+        app.manage(TrayItems {
+          show: show.clone(),
+          tts: tts.clone(),
+          reset: reset.clone(),
+          quit: quit.clone(),
+        });
+
+        tray
           .menu(&menu)
           .show_menu_on_left_click(false)
           .tooltip("AutoBook")
