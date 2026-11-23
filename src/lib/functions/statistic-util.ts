@@ -4,7 +4,6 @@
  * All rights reserved.
  */
 
-import type { BookStatistic } from '$lib/components/statistics/statistics-types';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
 
 export function getDate(referenceDateString: string, startOfDay = 0) {
@@ -65,18 +64,6 @@ export function getSecondsToDate(startOfDay: number, referenceDate = new Date())
   return Math.floor((dateObject.getTime() - targetDate.getTime()) / 1000);
 }
 
-export function getDaysBetween(
-  firstDay: Date | undefined,
-  secondDay: Date | undefined,
-  dayAdjustment = 1
-) {
-  if (!firstDay || !secondDay) {
-    return 0;
-  }
-
-  return Math.round((secondDay.getTime() - firstDay.getTime()) / 8.64e7) + dayAdjustment;
-}
-
 export function toTimeString(s: number) {
   const hours = Math.floor(s / 3600);
   const minutes = Math.floor((s - hours * 3600) / 60);
@@ -108,11 +95,6 @@ export function getDateTimeString(timeInMs: number) {
     2,
     '0'
   )}:${`${date.getMinutes()}`.padStart(2, '0')}:${`${date.getSeconds()}`.padStart(2, '0')}`;
-}
-
-export function getWeekNumber(referenceDate: number, startDate: number) {
-  const days = Math.floor((referenceDate - startDate) / (24 * 60 * 60 * 1000));
-  return Math.ceil(days / 7);
 }
 
 export function mergeStatistics(
@@ -184,8 +166,4 @@ export function updateStatisticToStore(
   statisticsToStore.sort((a, b) => (a.dateKey > b.dateKey ? 1 : -1));
 
   return { statisticsToStore, newStatisticModified: newStatisticModified || fallbackLastModified };
-}
-
-export function getNumberFromObject(data: BookStatistic, key: keyof BookStatistic) {
-  return data[key] as number;
 }

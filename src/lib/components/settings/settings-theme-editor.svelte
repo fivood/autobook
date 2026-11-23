@@ -9,10 +9,13 @@
    * theme by id; built-ins are saved as a same-id override in customThemes.
    */
   import Ripple from '$lib/components/ripple.svelte';
+  import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import SettingsCustomThemeInput from '$lib/components/settings/settings-custom-theme-input.svelte';
+  import { dialogManager } from '$lib/data/dialog-manager';
   import { customThemes$, theme$ } from '$lib/data/store';
   import { availableThemes, type CustomThemeValue, type ThemeOption } from '$lib/data/theme-option';
   import { createEventDispatcher, onMount } from 'svelte';
+  import { t, tImmediate } from '$lib/i18n';
 
   export let themeId: string;
 
@@ -127,94 +130,105 @@
 
   function handleDelete() {
     if (!isCustom) return;
-    if (!confirm(`确认删除主题「${themeId}」？`)) return;
-    const next = { ...$customThemes$ };
-    delete next[themeId];
-    $customThemes$ = next;
-    dispatch('deleted', themeId);
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: tImmediate('theme.delete'),
+          dialogMessage: tImmediate('theme.deleteConfirm', { name: themeId }),
+          resolver: (wasCanceled: boolean) => {
+            if (wasCanceled) return;
+            const next = { ...$customThemes$ };
+            delete next[themeId];
+            $customThemes$ = next;
+            dispatch('deleted', themeId);
+          }
+        }
+      }
+    ]);
   }
 </script>
 
-<div class="mt-2 rounded-lg border border-gray-400/40 p-4 bg-black/5">
+<div class="mt-2 rounded-lg border border-current/20 p-4 bg-soft-active">
   <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
     <div class="text-sm font-medium">
-      正在编辑：<span class="font-mono">{themeId}</span>
+      {$t('theme.editing')}<span class="font-mono">{themeId}</span>
       {#if !isCustom}
-        <span class="ml-2 text-xs opacity-70">（保存将覆盖内置主题）</span>
+        <span class="ml-2 text-xs text-muted">{$t('theme.overridesBuiltin')}</span>
       {/if}
     </div>
     <div class="flex items-center gap-2">
       <button
-        class="flex justify-center items-center rounded-md border-2 border-gray-400/60 p-2 text-base"
+        class="settings-btn"
         style={themeStyle}
-        title="预览"
+        title={$t('theme.preview')}
       >
-        中字
+        {$t('theme.sample')}
       </button>
     </div>
   </div>
   <div class="grid grid-cols-1 gap-2 items-center sm:grid-cols-[auto_auto_5rem] sm:gap-4">
-    <span class="hidden sm:block text-xs opacity-70">属性</span>
-    <span class="hidden sm:block text-xs opacity-70">颜色</span>
-    <span class="hidden sm:block text-xs opacity-70">透明度</span>
+    <span class="hidden sm:block text-xs text-muted">{$t('theme.col.attr')}</span>
+    <span class="hidden sm:block text-xs text-muted">{$t('theme.col.color')}</span>
+    <span class="hidden sm:block text-xs text-muted">{$t('theme.col.alpha')}</span>
     <SettingsCustomThemeInput
-      label="正文字体色"
+      label={$t('theme.attr.fontColor')}
       attribute="fontColor"
       values={customTheme.fontColor}
       on:color={handleColorChange}
       on:alpha={handleAlphaChange}
     />
     <SettingsCustomThemeInput
-      label="正文背景色"
+      label={$t('theme.attr.backgroundColor')}
       attribute="backgroundColor"
       values={customTheme.backgroundColor}
       on:color={handleColorChange}
       on:alpha={handleAlphaChange}
     />
     <SettingsCustomThemeInput
-      label="菜单背景色"
+      label={$t('theme.attr.menuBackgroundColor')}
       attribute="menuBackgroundColor"
       values={customTheme.menuBackgroundColor}
       on:color={handleColorChange}
       on:alpha={handleAlphaChange}
     />
     <SettingsCustomThemeInput
-      label="菜单文字色"
+      label={$t('theme.attr.menuFontColor')}
       attribute="menuFontColor"
       values={customTheme.menuFontColor}
       on:color={handleColorChange}
       on:alpha={handleAlphaChange}
     />
     <SettingsCustomThemeInput
-      label="按钮选中色"
+      label={$t('theme.attr.buttonSelectedColor')}
       attribute="buttonSelectedColor"
       values={customTheme.buttonSelectedColor}
       on:color={handleColorChange}
       on:alpha={handleAlphaChange}
     />
     <SettingsCustomThemeInput
-      label="按钮悬停色"
+      label={$t('theme.attr.buttonHoverColor')}
       attribute="buttonHoverColor"
       values={customTheme.buttonHoverColor}
       on:color={handleColorChange}
       on:alpha={handleAlphaChange}
     />
     <SettingsCustomThemeInput
-      label="选中文字背景"
+      label={$t('theme.attr.selectionBackgroundColor')}
       attribute="selectionBackgroundColor"
       values={customTheme.selectionBackgroundColor}
       on:color={handleColorChange}
       on:alpha={handleAlphaChange}
     />
     <SettingsCustomThemeInput
-      label="选中文字颜色"
+      label={$t('theme.attr.selectionFontColor')}
       attribute="selectionFontColor"
       values={customTheme.selectionFontColor}
       on:color={handleColorChange}
       on:alpha={handleAlphaChange}
     />
     <SettingsCustomThemeInput
-      label="超链接颜色"
+      label={$t('theme.attr.linkColor')}
       attribute="linkColor"
       values={customTheme.linkColor}
       on:color={handleColorChange}
@@ -224,35 +238,36 @@
   <div class="mt-4 flex flex-wrap justify-end gap-2">
     {#if isCustom}
       <button
-        class="rounded-md border-2 border-red-400 px-3 py-1 text-sm text-red-600"
+        class="settings-btn"
+        style="border-color:var(--danger-color);color:var(--danger-color);"
         on:click={handleDelete}
       >
-        删除
+        {$t('theme.delete')}
         <Ripple />
       </button>
     {:else}
       <button
-        class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
-        title="还原为内置主题的初始颜色"
+        class="settings-btn"
+        title={$t('theme.resetTitle')}
         on:click={handleReset}
       >
-        还原默认
+        {$t('theme.reset')}
         <Ripple />
       </button>
     {/if}
     <button
-      class="rounded-md border-2 border-gray-400 px-3 py-1 text-sm"
+      class="settings-btn"
       on:click={() => dispatch('close')}
     >
-      关闭
+      {$t('dialog.close')}
       <Ripple />
     </button>
     <button
-      class="rounded-md border-2 px-3 py-1 text-sm"
-      style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--menu-foreground);"
+      class="settings-btn"
+      style="background-color: var(--button-selected); border-color: var(--button-border, var(--button-selected)); color: var(--button-selected-text);"
       on:click={handleSave}
     >
-      保存
+      {$t('theme.save')}
       <Ripple />
     </button>
   </div>

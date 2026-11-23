@@ -1,62 +1,27 @@
 <script lang="ts">
+  import { t } from '$lib/i18n';
   import { onMount } from 'svelte';
   import { tap } from 'rxjs';
-  import { afterNavigate } from '$app/navigation';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import SettingsContent from '$lib/components/settings/settings-content.svelte';
-  import SettingsHeader from '$lib/components/settings/settings-header.svelte';
+  import SettingsHeader, { SETTINGS_TABS } from '$lib/components/settings/settings-header.svelte';
   import { pxScreen } from '$lib/css-classes';
   import {
     addCharactersOnCompletion$,
     adjustStatisticsAfterIdleTime$,
-    autoBookmark$,
-    autoBookmarkTime$,
-    autoPositionOnResize$,
     autoReplication$,
-    avoidPageBreak$,
     cacheStorageData$,
-    confirmClose$,
-    customReadingPointEnabled$,
-    disableWheelNavigation$,
-    enableFontVPAL$,
-    enableReaderWakeLock$,
-    enableTapEdgeToFlip$,
-    enableTextJustification$,
-    enableTextWrapPretty$,
-    enableVerticalFontKerning$,
-    firstDimensionMargin$,
-    fontFamilyGroupOne$,
-    fontFamilyGroupTwo$,
-    fontSize$,
-    fontWeight$,
-    furiganaStyle$,
     hideExternalReadHint$,
-    hideFurigana$,
-    hideSpoilerImage$,
     importHTMLFixMode$,
-    lineHeight$,
-    manualBookmark$,
-    keepLocalStatisticsOnDeletion$,
     openTrackerOnCompletion$,
     overwriteBookCompletion$,
-    pageColumns$,
-    pauseTrackerOnCustomPointChange$,
-    prioritizeReaderStyles$,
     replicationSaveBehavior$,
     restrictImportFixToAnchor$,
-    secondDimensionMaxValue$,
-    selectionToBookmarkEnabled$,
-    showCharacterCounter$,
-    showPercentage$,
-    showFooterChapterCharacterCounter$,
-    showFooterChapterPercentage$,
     showExternalPlaceholder$,
     startDayHoursForTracker$,
     statisticsEnabled$,
     statisticsMergeMode$,
-    swipeThreshold$,
-    textIndentation$,
-    textMarginMode$,
-    textMarginValue$,
     theme$,
     trackerAutoPause$,
     trackerBackwardSkipThreshold$,
@@ -65,14 +30,8 @@
     trackerIdleTime$,
     trackerPopupDetection$,
     trackerSkipThresholdAction$,
-    verticalTextOrientation$,
-    viewMode$,
-    writingMode$,
     readingGoalsMergeMode$,
-    hideSpoilerImageMode$
   } from '$lib/data/store';
-  import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
-  import { pagePath } from '$lib/data/env';
   import { storage } from '$lib/data/window/navigator/storage';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { writableSubject } from '$lib/functions/svelte/store';
@@ -85,19 +44,30 @@
     storage.persisted().then(setPersistentStorage);
 
     setStorageQuota();
+    mounted = true;
   });
 
-  let prevPage = `${pagePath}${mergeEntries.MANAGE.routeId}`;
+  // The tab lives in the URL so that coming back here (from 更新记录, or
+  // history back) lands on the tab you left, and so the reader's settings
+  // drawer can link straight to the matching tab.
+  const requestedTab = $page.url.searchParams.get('tab');
+  let activeSettings =
+    requestedTab && SETTINGS_TABS.some((tab) => tab.label === requestedTab) ? requestedTab : 'Reader';
+  let mounted = false;
+  $: if (mounted) syncTabToUrl(activeSettings);
 
-  let activeSettings = 'Reader';
+  function syncTabToUrl(tab: string) {
+    const url = new URL($page.url);
+    if (url.searchParams.get('tab') === tab) return;
+    url.searchParams.set('tab', tab);
+    url.hash = '';
+    // A real (replacing) navigation, not $app/navigation's shallow
+    // replaceState: on history back SvelteKit restores a shallow entry's
+    // original URL, which put you on the tab you entered with.
+    goto(url, { replaceState: true, noScroll: true, keepFocus: true });
+  }
 
   let storageQuota = '';
-
-  afterNavigate((navigation) => {
-    const { from } = navigation;
-    if (!from) return;
-    prevPage = `${from.url.pathname}${from.url.search}`;
-  });
 
   const setPersistentStorage$ = persistentStorage$.pipe(
     tap((value) => {
@@ -137,68 +107,25 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('设置')}</title>
+  <title>{formatPageTitle($t('pageTitle.settings'))}</title>
 </svelte:head>
 
-<div class="elevation-4 fixed inset-x-0 top-0 z-40">
-  <SettingsHeader leavePageLink={prevPage} bind:activeSettings />
-</div>
+<SettingsHeader bind:activeSettings />
 
-<div class="{pxScreen} h-full pt-16 xl:pt-14">
+<div class="settings-scope {pxScreen} h-full pt-16 xl:pt-14">
   <div class="max-w-5xl">
     <SettingsContent
       {activeSettings}
       {storageQuota}
       bind:selectedTheme={$theme$}
-      bind:fontFamilyGroupOne={$fontFamilyGroupOne$}
-      bind:fontFamilyGroupTwo={$fontFamilyGroupTwo$}
-      bind:fontWeight={$fontWeight$}
-      bind:fontSize={$fontSize$}
-      bind:lineHeight={$lineHeight$}
-      bind:textIndentation={$textIndentation$}
-      bind:textMarginValue={$textMarginValue$}
-      bind:blurImage={$hideSpoilerImage$}
-      bind:blurImageMode={$hideSpoilerImageMode$}
-      bind:hideFurigana={$hideFurigana$}
-      bind:furiganaStyle={$furiganaStyle$}
-      bind:writingMode={$writingMode$}
-      bind:enableFontKerning={$enableVerticalFontKerning$}
-      bind:enableFontVPAL={$enableFontVPAL$}
-      bind:verticalTextOrientation={$verticalTextOrientation$}
-      bind:prioritizeReaderStyles={$prioritizeReaderStyles$}
-      bind:enableTextJustification={$enableTextJustification$}
-      bind:enableTextWrapPretty={$enableTextWrapPretty$}
-      bind:textMarginMode={$textMarginMode$}
-      bind:enableReaderWakeLock={$enableReaderWakeLock$}
-      bind:showCharacterCounter={$showCharacterCounter$}
-      bind:showPercentage={$showPercentage$}
-      bind:showFooterChapterCharacterCounter={$showFooterChapterCharacterCounter$}
-      bind:showFooterChapterPercentage={$showFooterChapterPercentage$}
-      bind:viewMode={$viewMode$}
-      bind:secondDimensionMaxValue={$secondDimensionMaxValue$}
-      bind:firstDimensionMargin={$firstDimensionMargin$}
-      bind:swipeThreshold={$swipeThreshold$}
-      bind:disableWheelNavigation={$disableWheelNavigation$}
-      bind:autoPositionOnResize={$autoPositionOnResize$}
-      bind:avoidPageBreak={$avoidPageBreak$}
-      bind:pauseTrackerOnCustomPointChange={$pauseTrackerOnCustomPointChange$}
-      bind:customReadingPointEnabled={$customReadingPointEnabled$}
-      bind:selectionToBookmarkEnabled={$selectionToBookmarkEnabled$}
-      bind:enableTapEdgeToFlip={$enableTapEdgeToFlip$}
-      bind:pageColumns={$pageColumns$}
       bind:persistentStorage={$persistentStorage$}
       bind:hideExternalReadHint={$hideExternalReadHint$}
-      bind:confirmClose={$confirmClose$}
-      bind:manualBookmark={$manualBookmark$}
-      bind:autoBookmark={$autoBookmark$}
-      bind:autoBookmarkTime={$autoBookmarkTime$}
       bind:importHTMLFixMode={$importHTMLFixMode$}
       bind:restrictImportFixToAnchor={$restrictImportFixToAnchor$}
       bind:cacheStorageData={$cacheStorageData$}
       bind:replicationSaveBehavior={$replicationSaveBehavior$}
       bind:autoReplication={$autoReplication$}
       bind:showExternalPlaceholder={$showExternalPlaceholder$}
-      bind:keepLocalStatisticsOnDeletion={$keepLocalStatisticsOnDeletion$}
       bind:overwriteBookCompletion={$overwriteBookCompletion$}
       bind:startDayHoursForTracker={$startDayHoursForTracker$}
       bind:statisticsMergeMode={$statisticsMergeMode$}

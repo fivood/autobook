@@ -6,14 +6,14 @@
 
 import { BehaviorSubject, Subject } from 'rxjs';
 
-import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
+import type { ReaderSection } from '$lib/functions/rebase-sections';
 
-export const sectionList$ = new BehaviorSubject<Section[]>([]);
+export const sectionList$ = new BehaviorSubject<ReaderSection[]>([]);
 export const sectionProgress$ = new Subject<Map<string, SectionWithProgress>>();
 export const nextChapter$ = new Subject<string>();
 export const tocIsOpen$ = new Subject<boolean>();
 
-export type SectionWithProgress = Section & {
+export type SectionWithProgress = ReaderSection & {
   progress: number;
 };
 

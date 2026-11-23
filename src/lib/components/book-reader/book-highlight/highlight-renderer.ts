@@ -1,14 +1,9 @@
 import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
+import { normalizeHighlightSlot } from '$lib/data/highlight-color';
 
 const HL_ATTR = 'data-hl-id';
-const HL_CLASS_MAP: Record<string, string> = {
-  yellow: 'hl-yellow',
-  blue: 'hl-blue',
-  green: 'hl-green',
-  pink: 'hl-pink'
-};
 
-function textNodesUnder(root: Node): Text[] {
+export function textNodesUnder(root: Node): Text[] {
   const result: Text[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let node: Text | null;
@@ -19,12 +14,24 @@ function textNodesUnder(root: Node): Text[] {
   return result;
 }
 
+/**
+ * Book-global raw-text offset of the container's first character. Highlight
+ * offsets count over the whole book; the paginated reader only has the current
+ * section in the DOM, so it marks where that section starts. Counting from 0
+ * there drew nothing on any page past the first section and stored new
+ * highlights section-relative.
+ */
+function textBase(container: HTMLElement): number {
+  const el = container.closest('[data-text-start]') ?? container.querySelector('[data-text-start]');
+  return Number(el?.getAttribute('data-text-start')) || 0;
+}
+
 export function rangeToOffsets(
   container: HTMLElement,
   range: Range
 ): { start: number; end: number } | undefined {
   const nodes = textNodesUnder(container);
-  let offset = 0;
+  let offset = textBase(container);
   let start = -1;
   let end = -1;
   for (const node of nodes) {
@@ -42,7 +49,7 @@ export function rangeToOffsets(
   return { start, end };
 }
 
-export function clearHighlightMarks(container: HTMLElement): void {
+function clearHighlightMarks(container: HTMLElement): void {
   const marks = container.querySelectorAll<HTMLElement>(`mark[${HL_ATTR}]`);
   marks.forEach((mark) => {
     const parent = mark.parentNode!;
@@ -54,7 +61,7 @@ export function clearHighlightMarks(container: HTMLElement): void {
   container.normalize();
 }
 
-export function applyHighlightsToDOM(
+function applyHighlightsToDOM(
   container: HTMLElement,
   highlights: BooksDbHighlight[]
 ): void {
@@ -69,10 +76,11 @@ export function applyHighlightsToDOM(
     hlEnd: number;
     hlId: number;
     color: string;
+    hasMemo: boolean;
   }
 
   const ops: WrapOp[] = [];
-  let offset = 0;
+  let offset = textBase(container);
   let hlIdx = 0;
 
   for (const node of textNodes) {
@@ -84,7 +92,7 @@ export function applyHighlightsToDOM(
       if (hl.endOffset > offset) {
         const hlStart = Math.max(0, hl.startOffset - offset);
         const hlEnd = Math.min(len, hl.endOffset - offset);
-        ops.push({ node, hlStart, hlEnd, hlId: hl.id, color: hl.color });
+        ops.push({ node, hlStart, hlEnd, hlId: hl.id, color: hl.color, hasMemo: !!hl.memo?.trim() });
       }
       if (hl.endOffset <= nodeEnd) {
         hlIdx++;
@@ -98,8 +106,8 @@ export function applyHighlightsToDOM(
   }
 
   for (let i = ops.length - 1; i >= 0; i--) {
-    const { node, hlStart, hlEnd, hlId, color } = ops[i];
-    const cls = HL_CLASS_MAP[color] || HL_CLASS_MAP.yellow;
+    const { node, hlStart, hlEnd, hlId, color, hasMemo } = ops[i];
+    const cls = `hl-${normalizeHighlightSlot(color)}`;
 
     let target: Text = node;
     if (hlEnd < (node.textContent?.length || 0)) {
@@ -112,6 +120,10 @@ export function applyHighlightsToDOM(
     const mark = document.createElement('mark');
     mark.className = cls;
     mark.setAttribute(HL_ATTR, String(hlId));
+    // Lets the stylesheet mark annotated passages and the reader decide
+    // whether hovering should surface a memo card, without re-querying the
+    // store for every mouse move.
+    if (hasMemo) mark.setAttribute('data-hl-memo', '');
     target.parentNode!.insertBefore(mark, target);
     mark.appendChild(target);
   }

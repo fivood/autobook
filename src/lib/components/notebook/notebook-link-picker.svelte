@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, tick } from 'svelte';
+  import { t } from '$lib/i18n';
   import type { BooksDbHighlight } from '$lib/data/database/books-db/versions/books-db';
 
   export let source: BooksDbHighlight;
@@ -8,6 +9,9 @@
   const dispatch = createEventDispatcher<{ pick: number; cancel: void }>();
 
   let query = '';
+  let inputEl: HTMLInputElement | undefined;
+
+  tick().then(() => inputEl?.focus());
 
   $: filtered = candidates
     .filter((c) => c.id !== source.id && !(source.linkedIds || []).includes(c.id))
@@ -38,29 +42,33 @@
     class="flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg p-4 shadow-xl"
     style="background:var(--background-color,#fff);color:var(--font-color,#333);"
   >
-    <h3 class="mb-2 text-lg font-medium">链接到另一条</h3>
+    <h3 class="mb-2 text-lg font-medium">{$t('notebook.linkPicker.title')}</h3>
     <p class="mb-3 line-clamp-2 rounded bg-current/5 px-3 py-2 text-xs italic opacity-70">
-      源：{preview(source).slice(0, 100)}
+      {$t('notebook.linkPicker.source', { text: preview(source).slice(0, 100) })}
     </p>
     <input
       type="search"
       bind:value={query}
-      placeholder="搜索原文 / 备注 / 书名"
+      bind:this={inputEl}
+      placeholder={$t('notebook.linkPicker.search')}
       class="mb-2 w-full rounded border border-current/20 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-current/40"
-      autofocus
+      on:keydown={(ev) => {
+        if (ev.key === 'Escape') dispatch('cancel');
+        else if (ev.key === 'Enter' && filtered[0]) dispatch('pick', filtered[0].id);
+      }}
     />
     <div class="flex-1 overflow-y-auto">
       {#if !filtered.length}
-        <p class="py-6 text-center text-sm opacity-50">没有匹配项</p>
+        <p class="py-6 text-center text-sm text-muted">{$t('notebook.linkPicker.noMatch')}</p>
       {/if}
       {#each filtered as c (c.id)}
         <button
           type="button"
-          class="mb-1 w-full rounded px-3 py-2 text-left text-sm hover:bg-black/5"
+          class="mb-1 w-full rounded px-3 py-2 text-left text-sm hover-soft"
           on:click={() => dispatch('pick', c.id)}
         >
           <p class="line-clamp-2 break-all">{preview(c)}</p>
-          <p class="mt-0.5 text-xs opacity-50">{c.bookTitle || '独立笔记'}</p>
+          <p class="mt-0.5 text-xs text-muted">{c.bookTitle || $t('notebook.standalone')}</p>
         </button>
       {/each}
     </div>
@@ -69,7 +77,7 @@
         type="button"
         class="rounded px-4 py-1.5 text-sm opacity-70 hover:opacity-100"
         on:click={() => dispatch('cancel')}
-      >取消</button>
+      >{$t('dialog.cancel')}</button>
     </div>
   </div>
 </div>

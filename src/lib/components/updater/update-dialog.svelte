@@ -2,15 +2,21 @@
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { buttonClasses } from '$lib/css-classes';
+  import { t } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
   import type { UpdateInfo, ProgressEvent } from '$lib/functions/updater/check-for-update';
   import { relaunchApp } from '$lib/functions/updater/check-for-update';
+  import { submitReport } from '$lib/functions/report-error';
   import { marked } from 'marked';
+  import { sanitizeHtml } from '$lib/functions/sanitize-html';
 
   marked.setOptions({ breaks: true, gfm: true });
 
+  // marked passes raw HTML in the source straight through, and these notes
+  // arrive over the network from the update server, so they get the same
+  // treatment as book content before hitting `{@html}`.
   function renderMd(text: string): string {
-    return marked.parse(text || '') as string;
+    return sanitizeHtml(marked.parse(text || '') as string);
   }
 
   export let update: UpdateInfo;
@@ -83,6 +89,17 @@
     } catch (err: any) {
       phase = 'error';
       errorMessage = err?.message ?? String(err);
+      // Best-effort telemetry: let the operator know when auto-updates fail
+      // in the wild (installer locks, network, signature issues, etc.).
+      submitReport({
+        type: 'update',
+        message: errorMessage,
+        currentVersion: update.currentVersion,
+        targetVersion: update.version,
+        context: { name: err?.name, code: err?.code }
+      }).catch(() => {
+        /* silent: we already show the error in the dialog */
+      });
     }
   }
 
@@ -93,16 +110,16 @@
 </script>
 
 <DialogTemplate>
-  <svelte:fragment slot="header">发现新版本 {update.version}</svelte:fragment>
+  <svelte:fragment slot="header">{$t('update.header', { version: update.version })}</svelte:fragment>
   <svelte:fragment slot="content">
     <div class="space-y-3 max-w-lg">
       <p class="text-sm opacity-80">
-        当前版本 <span class="font-sans">{update.currentVersion}</span> → 新版本 <span class="font-sans">{update.version}</span>
+        {$t('update.currentToNew', { current: update.currentVersion, target: update.version })}
       </p>
 
       {#if aggregated.length > 1}
         <div class="border-t pt-2">
-          <p class="font-medium mb-1">更新内容（共 {aggregated.length} 个版本）</p>
+          <p class="font-medium mb-1">{$t('update.changelog.multi', { count: aggregated.length })}</p>
           <div class="max-h-56 overflow-y-auto space-y-3">
             {#each aggregated as entry (entry.version)}
               <div>
@@ -114,7 +131,7 @@
         </div>
       {:else if update.notes}
         <div class="border-t pt-2">
-          <p class="font-medium mb-1">更新内容</p>
+          <p class="font-medium mb-1">{$t('update.changelog.single')}</p>
           <div class="release-notes font-sans text-sm opacity-90 max-h-56 overflow-y-auto">{@html renderMd(update.notes)}</div>
         </div>
       {/if}
@@ -122,7 +139,7 @@
       {#if phase === 'downloading'}
         <div class="border-t pt-2">
           <div class="flex justify-between text-sm mb-1">
-            <span>正在下载…</span>
+            <span>{$t('update.downloading')}</span>
             <span>{downloadedMB} / {totalMB} MB ({percent}%)</span>
           </div>
           <div
@@ -133,12 +150,12 @@
           </div>
         </div>
       {:else if phase === 'installing'}
-        <p class="border-t pt-2 text-sm">正在安装，应用稍后会自动重启…</p>
+        <p class="border-t pt-2 text-sm">{$t('update.installing')}</p>
       {:else if phase === 'done'}
-        <p class="border-t pt-2 text-sm">安装完成，正在重启…</p>
+        <p class="border-t pt-2 text-sm">{$t('update.done')}</p>
       {:else if phase === 'error'}
-        <div class="border-t pt-2 text-sm text-red-600">
-          <p class="font-medium">更新失败</p>
+        <div class="border-t pt-2 text-sm text-danger">
+          <p class="font-medium">{$t('update.failed')}</p>
           <div class="font-sans whitespace-pre-wrap mt-1">{errorMessage}</div>
         </div>
       {/if}
@@ -150,12 +167,12 @@
       class:invisible={phase === 'downloading' || phase === 'installing'}
       on:click={close}
     >
-      {phase === 'error' ? '关闭' : '稍后'}
+      {phase === 'error' ? $t('dialog.close') : $t('update.later')}
       <Ripple />
     </button>
     {#if phase === 'idle' || phase === 'error'}
       <button class={buttonClasses} on:click={startUpdate}>
-        {phase === 'error' ? '重试' : '立即更新'}
+        {phase === 'error' ? $t('update.retry') : $t('update.installNow')}
         <Ripple />
       </button>
     {/if}

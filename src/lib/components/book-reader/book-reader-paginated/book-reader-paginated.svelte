@@ -2,6 +2,8 @@
   import { browser } from '$app/environment';
   import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
   import HtmlRenderer from '$lib/components/html-renderer.svelte';
+  import { pdfPageShell } from '$lib/functions/pdf-page-shell';
+  import { manualBookmarkView } from '$lib/functions/manual-bookmark';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
   import { SECTION_CHANGE } from '$lib/data/events';
   import { isStoredFont } from '$lib/data/fonts';
@@ -18,7 +20,11 @@
   import type { TextMarginMode } from '$lib/data/text-margin-mode';
   import { clearRange, createRange, pulseElement } from '$lib/functions/range-util';
   import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
+  import { getCharacterCount } from '$lib/functions/get-character-count';
+  import { getParagraphNodes } from '../get-paragraph-nodes';
+  import { textNodesUnder } from '../book-highlight/highlight-renderer';
   import { getExternalTargetElement, isMobile$ } from '$lib/functions/utils';
+  import { isTypingTarget } from '$lib/functions/is-typing-target';
   import { faBookmark, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import {
     BehaviorSubject,
@@ -37,8 +43,11 @@
   } from 'rxjs';
   import Fa from 'svelte-fa';
   import { swipe } from 'svelte-gestures';
-  import type { AutoReader, BookmarkManager, PageManager } from '../types';
+  import type { AutoReader, AutoScroller, BookmarkManager, PageManager } from '../types';
   import { createAutoReader } from '../auto-reader-factory';
+  import { AutoScrollerContinuous } from '../book-reader-continuous/auto-scroller-continuous';
+  import { domPositionToCharIndex } from '../auto-reader-shared';
+  import { ttsIndexToCalculatorIndex } from '../tts-calculator-index';
   import { ttsEngine$ } from '$lib/data/store';
   import { BookmarkManagerPaginated } from './bookmark-manager-paginated';
   import { PageManagerPaginated } from './page-manager-paginated';
@@ -119,6 +128,10 @@
 
   export let autoReader: AutoReader | undefined;
 
+  export let multiplier: number;
+
+  export let autoScroller: AutoScroller | undefined;
+
   export let currentSectionIndex = 0;
 
   export let sectionStartCharCount = 0;
@@ -141,7 +154,18 @@
 
   let calculator: SectionCharacterStatsCalculator | undefined;
 
-  let sections: Element[] = [];
+  interface SectionInfo {
+    id: string;
+    innerHTML: string;
+    charCount: number;
+    /** Book-global raw-text offset (the highlight basis) of its first character. */
+    textStart: number;
+    /** Markdown's heading/list/code styles hang off `.md-section`, the class
+     *  of the section wrapper this mode replaces with its own container. */
+    md: boolean;
+  }
+
+  let sections: SectionInfo[] = [];
 
   let concretePageManager: PageManagerPaginated | undefined;
 
@@ -152,6 +176,10 @@
   let allowDisplay = false;
 
   let displayedHtml = '';
+
+  let displayedTextStart = 0;
+
+  let displayedMd = false;
 
   let previousIntendedCount = 0;
 
@@ -168,6 +196,8 @@
   let fontLoadingAdded = false;
 
   let autoReaderConcrete: AutoReader | undefined;
+
+  let autoScrollerConcrete: AutoScrollerContinuous | undefined;
 
   let currentSectionId = '';
 
@@ -197,6 +227,43 @@
     autoReaderConcrete = createAutoReader($ttsEngine$, destroy$);
     if (language) autoReaderConcrete.lang = language;
     autoReader = autoReaderConcrete;
+
+    // The typewriter runs here too. Nothing about revealing characters is
+    // continuous-specific — hiding is `visibility`, so the columns never
+    // reflow and the page count stays fixed. Only "keep up with the frontier"
+    // differs, and that is the callback below.
+    autoScrollerConcrete = new AutoScrollerContinuous(
+      multiplier,
+      verticalMode,
+      destroy$,
+      document,
+      contentEl
+    );
+    autoScrollerConcrete.paginated = true;
+    autoScrollerConcrete.onFrontierRevealed = (span) => {
+      if (!contentEl || !concretePageManager) return;
+      // The frontier is a DOM position; the page manager counts characters its
+      // own way. Same two-step translation the voice's auto-page-flip uses.
+      const ttsIndex = domPositionToCharIndex(contentEl, span.firstChild ?? span, 0);
+      if (ttsIndex == null) return;
+      concretePageManager.ensureCharVisible(
+        ttsIndexToCalculatorIndex(contentEl, ttsIndex) + sectionStartCharCount
+      );
+    };
+    // The typewriter's content is one section here, not the book — the same
+    // advance the voice's auto-flip uses carries it into the next one.
+    autoScrollerConcrete.onContentEnd = () => concretePageManager?.advanceToNextSection() ?? false;
+    autoScroller = autoScrollerConcrete;
+
+    autoReaderConcrete.wasReaderEnabled$.subscribe((enabled) => {
+      if (enabled) {
+        // TTS and the typewriter are mutually exclusive: stop the typewriter
+        // and put the whole text back on screen, so the reader can page
+        // through freely while the voice runs.
+        autoScrollerConcrete?.revealAll();
+        autoScrollerConcrete?.off();
+      }
+    });
   });
 
   $: bookmarkData.then((data) => {
@@ -220,7 +287,22 @@
     if (browser) {
       const tempContainer = document.createElement('div');
       tempContainer.innerHTML = htmlContent;
-      sections = Array.from(tempContainer.children);
+      const textNodes = textNodesUnder(tempContainer);
+      let p = 0;
+      let textStart = 0;
+      sections = Array.from(tempContainer.children).map((section) => {
+        while (p < textNodes.length && section.compareDocumentPosition(textNodes[p]) & Node.DOCUMENT_POSITION_PRECEDING) {
+          textStart += textNodes[p].length;
+          p += 1;
+        }
+        return {
+          id: section.id,
+          innerHTML: section.innerHTML,
+          charCount: getSectionCharCount(section),
+          textStart,
+          md: section.classList.contains('md-section')
+        };
+      });
       sectionIndex$.next(0);
     }
   }
@@ -283,6 +365,11 @@
     }
     if (autoReaderConcrete && language) {
       autoReaderConcrete.lang = language;
+    }
+    if (autoScrollerConcrete) {
+      autoScrollerConcrete.multiplier = multiplier;
+      autoScrollerConcrete.verticalMode = verticalMode;
+      if (contentEl) autoScrollerConcrete.setContentEl(contentEl);
     }
   }
 
@@ -360,19 +447,29 @@
     }
   }
 
+  function getSectionCharCount(section: Element) {
+    return getParagraphNodes(section).reduce((acc, node) => acc + getCharacterCount(node), 0);
+  }
+
+  function getSectionElement(index: number): Element | undefined {
+    const section = sections[index];
+    if (!section) return undefined;
+
+    const container = document.createElement('div');
+    container.innerHTML = section.innerHTML;
+    return container;
+  }
+
   function getTargetSection(selector: string) {
-    let targetSection = -1;
+    for (let index = 0; index < sections.length; index += 1) {
+      const sectionElement = getSectionElement(index);
 
-    for (let index = 0, { length } = sections; index < length; index += 1) {
-      const element = getExternalTargetElement(sections[index], selector);
-
-      if (element) {
-        targetSection = index;
-        break;
+      if (sectionElement && getExternalTargetElement(sectionElement, selector)) {
+        return index;
       }
     }
 
-    return targetSection;
+    return -1;
   }
 
   function getTargetScrollPos(
@@ -466,6 +563,8 @@
   });
 
   currentSection$.pipe(takeUntil(destroy$)).subscribe((html) => {
+    const textStart = sections[sectionIndex$.getValue()]?.textStart ?? 0;
+    const md = !!sections[sectionIndex$.getValue()]?.md;
     const nestAnimationFrame = (fn: () => void, count: number) => {
       if (count === 0) {
         fn();
@@ -477,12 +576,17 @@
     // 2x for loading screen to render
     nestAnimationFrame(() => {
       displayedHtml = html;
+      displayedTextStart = textStart;
+      displayedMd = md;
     }, 2);
   });
 
   iffBrowser(() => fromEvent<WheelEvent>(document.body, 'wheel', { passive: true }))
     .pipe(
-      filter(() => !$disableWheelNavigation$ && !$skipKeyDownListener$),
+      // Ctrl+wheel is zoom (functions/reader-zoom.ts), not a page flip. The
+      // continuous reader's wheel path already ignored modified wheels; this
+      // one didn't, so a zoom tick used to turn the page on its way past.
+      filter((ev) => !ev.ctrlKey && !$disableWheelNavigation$ && !$skipKeyDownListener$),
       throttleTime(50),
       takeUntil(destroy$)
     )
@@ -519,10 +623,11 @@
     if (!scrollEl) return;
 
     autoReaderConcrete?.prepare();
+    autoScrollerConcrete?.markContentChanged();
 
     calculator = new SectionCharacterStatsCalculator(
       scrollEl,
-      sections,
+      sections.map((section) => section.charCount),
       virtualScrollPos$,
       () => width,
       () => height,
@@ -594,7 +699,8 @@
   }
 
   function updateBookmarkScreen(data: BooksDbBookmarkData | undefined) {
-    const bookmarkCharCount = data?.exploredCharCount;
+    // The ribbon marks where B was pressed, not the auto-saved resume spot.
+    const bookmarkCharCount = manualBookmarkView(data)?.exploredCharCount;
     if (!calculator || !bookmarkCharCount) return;
 
     const result = calculator.checkBookmarkOnScreen(bookmarkCharCount);
@@ -622,14 +728,14 @@
       setDefaultBookmarkPositions(0);
     }
 
-    if (result.isBookmarkScreen && data.exploredCharCount) {
+    if (result.isBookmarkScreen) {
       if (result.node && !useExploredCharCount && !result.isFirstNode) {
         updateSectionData(createRange(result.node));
       } else if (result.isFirstNode) {
         updateSectionData(undefined);
       }
 
-      exploredCharCount = useExploredCharCount ? exploredCharCount : data.exploredCharCount;
+      exploredCharCount = useExploredCharCount ? exploredCharCount : bookmarkCharCount;
       previousIntendedCount = exploredCharCount;
     }
 
@@ -673,6 +779,7 @@
     if (
       !concretePageManager ||
       $skipKeyDownListener$ ||
+      isTypingTarget(ev.target) ||
       ev.altKey ||
       ev.ctrlKey ||
       ev.shiftKey ||
@@ -680,13 +787,13 @@
       ev.repeat
     )
       return;
+    // Arrows only. A / D also turned pages (from the upstream baseline) while
+    // being the typewriter's faster / slower keys, so one press did both.
     switch (ev.code) {
       case 'ArrowLeft':
-      case 'KeyA':
         concretePageManager[verticalMode ? 'nextPage' : 'prevPage']();
         break;
       case 'ArrowRight':
-      case 'KeyD':
         concretePageManager[verticalMode ? 'prevPage' : 'nextPage']();
         break;
       case 'ArrowUp':
@@ -699,15 +806,38 @@
     }
   }
 
-  nextChapter$.pipe(takeUntil(destroy$)).subscribe((chapterId) => {
-    const nextSectionIndex = sections.findIndex(
-      (section) => section.id === chapterId || section.querySelector(`[id="${chapterId}"]`)
-    );
+  nextChapter$.pipe(takeUntil(destroy$)).subscribe(async (chapterId) => {
+    const selector = `[id="${CSS.escape(chapterId)}"]`;
+    const nextSectionIndex = sections.findIndex((section, index) => {
+      if (section.id === chapterId) return true;
+      return !!getSectionElement(index)?.querySelector(selector);
+    });
 
-    if (nextSectionIndex > -1) {
+    if (nextSectionIndex < 0) return;
+
+    // Same as the 'cue' action: open the section, then page to the anchor
+    // inside it. Stopping at the section start (the old behaviour) put a link
+    // into the end of a long chapter on its first page.
+    const isAnchor = sections[nextSectionIndex].id !== chapterId;
+    if (nextSectionIndex !== sectionIndex$.getValue()) {
+      const ready = new Promise<void>((resolve) => {
+        sectionReady$.pipe(take(1)).subscribe(() => resolve());
+      });
       sectionIndex$.next(nextSectionIndex);
       concretePageManager?.scrollTo(0, true);
+      if (!isAnchor) return;
+      await ready;
+    } else if (!isAnchor) {
+      concretePageManager?.scrollTo(0, true);
+      return;
     }
+
+    const target = contentEl?.querySelector(selector);
+    if (!target || !calculator || !concretePageManager) return;
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    const scrollPos = calculator.getScrollPosByCharCount(calculator.calcExploredCharCount(range));
+    if (scrollPos >= 0) concretePageManager.scrollTo(scrollPos, true);
   });
 </script>
 
@@ -764,7 +894,14 @@
   use:swipe={{ timeframe: 500, minSwipeDistance: $swipeThreshold$, touchAction: 'pan-y' }}
   on:swipe={onSwipe}
 >
-  <div class="book-content-container" id={currentSectionId || null} bind:this={contentEl}>
+  <div
+    class="book-content-container"
+    class:md-section={displayedMd}
+    id={currentSectionId || null}
+    data-text-start={displayedTextStart}
+    bind:this={contentEl}
+    use:pdfPageShell
+  >
     <HtmlRenderer html={displayedHtml} on:load={onHtmlLoad} />
   </div>
 </div>
@@ -794,7 +931,7 @@
 <svelte:window on:keydown={onKeydown} on:resize={() => (isResizing = true)} />
 
 <style lang="scss">
-  @import '../styles';
+  @use '../styles';
 
   .book-content {
     overflow: hidden;
@@ -811,15 +948,40 @@
     column-fill: auto;
     height: var(--book-content-child-height, 95vh);
 
-    :global(.ttu-illustration-container) {
+    // PDF page wrappers (`.pdf-page-shell` for HOCR'd pages, `.pdf-section`
+    // for legacy / non-OCR'd ones) carry an `aspect-ratio` that already
+    // sizes them correctly. Capping their max-height here truncates the
+    // image so the transparent OCR text layer no longer aligns with the
+    // visible scan.
+    :global(.ttu-illustration-container:not(.pdf-page-shell):not(.pdf-section)) {
       max-width: var(--book-content-image-max-width, 95vh) !important;
       max-height: var(--book-content-child-height, 95vh) !important;
+    }
+
+    // A comic / image-PDF page must fit one column whole. Sized by width
+    // alone (book-image-zoom's rule), a portrait page in a short window came
+    // out taller than the column: Blink ran it off the bottom, WebKit broke
+    // the rest into the next column — the Mac test's same-colour strip.
+    // auto + max-* keeps the aspect ratio and the box equal to the picture,
+    // which the comic translation overlay measures (object-fit would not).
+    // The label above takes ~2.1em, the section's bottom margin 1em. Zoom
+    // can still shrink; enlarging past the column is what broke it.
+    // Selected by the image's own class: paginated mode re-wraps each
+    // section in a bare <div>, so `.pdf-section` is gone by now. OCR'd PDF
+    // pages size through their shell's aspect-ratio and stay out of it.
+    :global(img.book-page-image:not(.pdf-page-shell img)) {
+      width: auto !important;
+      height: auto !important;
+      max-width: calc(100% * min(1, var(--book-image-scale, 1))) !important;
+      max-height: calc(
+        (var(--book-content-child-height, 95vh) - 3.5em) * min(1, var(--book-image-scale, 1))
+      ) !important;
     }
   }
 
   .book-content {
     :global(svg),
-    :global(img) {
+    :global(img:not(.pdf-page-img)) {
       max-width: var(--book-content-image-max-width, 100vw);
       max-height: var(--book-content-child-height, 100vh);
     }
