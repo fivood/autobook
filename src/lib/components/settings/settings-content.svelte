@@ -469,8 +469,14 @@
 
 </script>
 
-<div class="grid grid-cols-1 items-center sm:grid-cols-2 sm:gap-6 lg:md:gap-8 lg:grid-cols-3">
+<!-- items-start: a row's controls line up under their titles instead of
+     floating to the row's vertical middle. Row gap + the item's own pb-3 is
+     the spacing between rows; it used to be 32px + 12px. -->
+<div class="grid grid-cols-1 items-start gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
   {#if activeSettings === 'Appearance'}
+    <!-- Every other group on this tab sits under a section header; the first
+         one started bare, so 界面语言 read as a peer of 字体与排版. -->
+    <SettingsSectionHeader title={$t('settings.tab.appearance')} />
     <div class="lg:col-span-3">
       <SettingsItemGroup title={$t('locale.label')}>
         <ButtonToggleGroup options={optionsForLocale} bind:selectedOptionId={$locale$} />
@@ -605,16 +611,15 @@
     <SettingsTts />
 
   {:else if activeSettings === 'AI'}
-    <SettingsSectionHeader title={$t('settings.section.ai')} hint={$t('settings.section.aiHint')} />
+    <!-- One parent for both: their section headers are siblings, so only the
+         first drops its divider (:first-child). No tab-level header above —
+         it only repeated the tab's name over a run of real sections. -->
     <div class="lg:col-span-3">
       <SettingsModels />
-    </div>
-    <div class="lg:col-span-3">
       <SettingsAi />
     </div>
 
   {:else if activeSettings === 'OCR'}
-    <SettingsSectionHeader title={$t('settings.section.ocr')} hint={$t('settings.section.ocrHint')} />
     <div class="lg:col-span-3">
       <SettingsOcr />
     </div>

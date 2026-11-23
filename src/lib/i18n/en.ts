@@ -317,7 +317,7 @@ export default {
   'dict.count': '{n} dictionaries',
   'dict.pickFolderTooltip': 'Pick dictionary folder',
   'dict.emptyLine1': 'No dictionaries loaded yet.',
-  'dict.emptyLine2': 'Click 📂 above to pick a folder. Supports StarDict (.ifo + .idx + .dict[.dz]) and *.dict.json.',
+  'dict.emptyLine2': 'Click "Pick dictionary folder" above to choose a folder. Supports StarDict (.ifo + .idx + .dict[.dz]) and *.dict.json.',
   'dict.emptyLine3': 'Find StarDict packages like ECDICT / CC-CEDICT / JMdict on kaifa.baidu / SourceForge / GitHub.',
 
   'settings.tab.reader': 'Reader',
@@ -371,8 +371,6 @@ export default {
   'settings.section.miscReader': 'Misc',
   'settings.section.miscReaderHint': 'Keep screen on, close confirm, other misc toggles',
   // OCR section
-  'settings.section.ocr': 'OCR',
-  'settings.section.ocrHint': 'Defaults for scanned PDFs and comic translation; per-book settings win over these defaults',
   'settings.ocr.pdfHeading': 'Scanned PDFs',
   'settings.ocr.modelHeading': 'Recognition model',
   'settings.ocr.modelDescription': 'Scanned PDFs and comics share this PaddleOCR model. The selected model downloads on first use.',
@@ -402,7 +400,6 @@ export default {
   'settings.ocr.correctHeading': 'OCR correction',
   'settings.ocr.correctDescription': 'Fix glyph confusions and stray spaces in the OCR text layer with a model; page image unchanged.',
   // AI & model endpoints
-  'settings.section.ai': 'AI & models',
   'models.heading': 'Model management',
   'models.description': 'Models used by each feature: status, download progress, storage location and uninstall. Externally-managed (Ollama / LaMa) show cleanup guidance.',
   'models.ready': 'Ready',
@@ -421,7 +418,6 @@ export default {
   'models.llmOllamaPurpose': 'Local LLM for translation, OCR correction and the AI assistant (external process)',
   'models.inpaintLama': 'LaMa (comic inpainting)',
   'models.inpaintLamaPurpose': 'IOPaint sidecar for gradient/textured bubbles and SFX erasing',
-  'settings.section.aiHint': 'One place for local and cloud endpoints, and which feature uses which',
   'settings.ai.localHeading': 'Local model',
   'settings.ai.localDescription': 'Features light up when a local runtime (Ollama and friends) is found. AutoBook never prompts you to install one or download models — absent means silently skipped.',
   'settings.ai.localBaseUrl': 'Local endpoint',
@@ -936,7 +932,7 @@ export default {
   'dataPaths.migrateLeftovers': "All books reached the new folder, but some files in the old one couldn't be deleted (another program may be using them). You can remove them later: {from}",
   'dataPaths.meta.idb': 'IndexedDB · {size} · {n} profile(s)',
   'dataPaths.meta.localStorage': 'localStorage · WebView user directory',
-  'dataPaths.clearConfirm': "⚠ About to clear all local data:\n\n• All book content\n• All highlights / notebook / tags / folders\n• Reading stats / reading time / completion records\n• All UI settings / themes / sync tokens / API keys\n\nThis cannot be undone. Copies synced to Documents/AutoBook are preserved, but the IndexedDB main store is fully wiped. Continue?",
+  'dataPaths.clearConfirm': "About to clear all local data:\n\n• All book content\n• All highlights / notebook / tags / folders\n• Reading stats / reading time / completion records\n• All UI settings / themes / sync tokens / API keys\n\nThis cannot be undone. Copies synced to Documents/AutoBook are preserved, but the IndexedDB main store is fully wiped. Continue?",
   'dataPaths.clearConfirmAgain': 'One more time: really wipe it?',
 
   'sync.never': 'never',
@@ -1095,7 +1091,7 @@ export default {
     'These files carry no subject metadata and existing tags are complete. Configure a local model to generate tags from titles.',
   'stats.authors.header': 'Authors · {range} · {n} total',
   'stats.authors.unknown': 'Unknown author',
-  'stats.authors.unknownWarn': '{n} books have no author, so they are grouped under "Unknown author". EPUBs imported since 1.23 pick the author up from the OPF automatically; books imported earlier are not backfilled — re-import them, or fill in the metadata via the manual-entry dialog (top-right \u270f\ufe0f).',
+  'stats.authors.unknownWarn': '{n} books have no author, so they are grouped under "Unknown author". EPUBs imported since 1.23 pick the author up from the OPF automatically; books imported earlier are not backfilled — re-import them, or fill in the metadata via the "Manually add a reading record" button at the top right.',
   'stats.authors.bookCount': '{n} books',
   'stats.authors.stats': '{books} · {chars} chars · {days} days',
   'stats.authors.completedTail': ' · finished {n}',

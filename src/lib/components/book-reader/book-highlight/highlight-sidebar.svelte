@@ -111,7 +111,7 @@
               <div class="min-w-0 flex-1">
                 <p class="line-clamp-2 break-all">{hl.text}</p>
                 {#if hl.memo}
-                  <p class="mt-1 text-xs opacity-60 line-clamp-2 italic">📝 {hl.memo}</p>
+                  <p class="mt-1 text-xs opacity-60 line-clamp-2 italic">{hl.memo}</p>
                 {/if}
                 <div class="mt-1 flex items-center gap-2">
                   <span class="text-xs opacity-40">{formatTime(hl.createdAt)}</span>

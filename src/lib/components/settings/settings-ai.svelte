@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
   /**
    * One place for every model endpoint the app talks to.
    *
@@ -88,13 +89,11 @@
     (hasCloudCredentials($aiProvider$, $aiApiKey$, $aiBaseUrl$) ? $aiModel$ : '');
 </script>
 
-<div class="text-sm">
-  <!-- ── Local runtime ─────────────────────────────────────────────── -->
-  <h4 class="mb-1 font-medium">{$t('settings.ai.localHeading')}</h4>
-  <p class="mb-3 text-muted leading-relaxed">{$t('settings.ai.localDescription')}</p>
+<SettingsSectionHeader title={$t('settings.ai.localHeading')} hint={$t('settings.ai.localDescription')} />
+<div class="settings-fields">
 
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.ai.localBaseUrl')}</span>
+    <span class="settings-field-label">{$t('settings.ai.localBaseUrl')}</span>
     <input type="text" class={inputClasses} bind:value={$aiLocalBaseUrl$} spellcheck="false" />
   </label>
 
@@ -135,7 +134,7 @@
 
   {#if models.length}
     <label class="mb-3 block">
-      <span class="text-xs text-muted">{$t('settings.ai.localModel')}</span>
+      <span class="settings-field-label">{$t('settings.ai.localModel')}</span>
       <select class={inputClasses} bind:value={$aiLocalModel$}>
         <option value="">{$t('settings.ai.autoLargest', { model: autoPick })}</option>
         {#each models as m (m.id)}
@@ -149,12 +148,13 @@
     </label>
   {/if}
 
-  <!-- ── Cloud endpoint ────────────────────────────────────────────── -->
-  <h4 class="mb-1 mt-5 font-medium">{$t('settings.ai.cloudHeading')}</h4>
-  <p class="mb-3 text-muted leading-relaxed">{$t('settings.ai.cloudDescription')}</p>
+</div>
+
+<SettingsSectionHeader title={$t('settings.ai.cloudHeading')} hint={$t('settings.ai.cloudDescription')} />
+<div class="settings-fields">
 
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.ai.provider')}</span>
+    <span class="settings-field-label">{$t('settings.ai.provider')}</span>
     <select class={inputClasses} bind:value={$aiProvider$}>
       <option value="anthropic">Anthropic</option>
       <option value="openai">{$t('ai.providerOpenaiLabel')}</option>
@@ -162,7 +162,7 @@
   </label>
 
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.ai.apiKey')}</span>
+    <span class="settings-field-label">{$t('settings.ai.apiKey')}</span>
     <input
       type="password"
       class={inputClasses}
@@ -174,12 +174,12 @@
   </label>
 
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.ai.model')}</span>
+    <span class="settings-field-label">{$t('settings.ai.model')}</span>
     <input type="text" class={inputClasses} bind:value={$aiModel$} spellcheck="false" />
   </label>
 
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.ai.baseUrl')}</span>
+    <span class="settings-field-label">{$t('settings.ai.baseUrl')}</span>
     <input
       type="text"
       class={inputClasses}
@@ -197,18 +197,19 @@
 
   <div class="mb-3 grid gap-3 sm:grid-cols-2">
     <label class="block">
-      <span class="text-xs text-muted">{$t('settings.ai.maxTokens')}</span>
+      <span class="settings-field-label">{$t('settings.ai.maxTokens')}</span>
       <input type="number" class={inputClasses} min="256" max="32000" step="256" bind:value={$aiMaxTokens$} />
     </label>
     <label class="block">
-      <span class="text-xs text-muted">{$t('settings.ai.timeoutSec')}</span>
+      <span class="settings-field-label">{$t('settings.ai.timeoutSec')}</span>
       <input type="number" class={inputClasses} min="30" max="900" step="10" bind:value={$aiTimeoutSec$} />
     </label>
   </div>
 
-  <!-- ── Per-feature switches ──────────────────────────────────────── -->
-  <h4 class="mb-1 mt-5 font-medium">{$t('settings.ai.featuresHeading')}</h4>
-  <p class="mb-3 text-muted leading-relaxed">{$t('settings.ai.featuresDescription')}</p>
+</div>
+
+<SettingsSectionHeader title={$t('settings.ai.featuresHeading')} hint={$t('settings.ai.featuresDescription')} />
+<div class="settings-fields">
 
   <label class="mb-2 flex items-start gap-2">
     <input type="checkbox" class="mt-1" bind:checked={$aiGlossEnabled$} />
@@ -229,25 +230,26 @@
   <p class="mt-4 text-xs text-muted leading-relaxed">{$t('settings.ai.spoilerNote')}</p>
   <p class="mt-2 text-xs text-muted leading-relaxed">{$t('ai.localHint')}</p>
 
-  <!-- ── Translation workbench defaults ───────────────────────────── -->
-  <h4 class="mb-1 mt-5 font-medium">{$t('settings.translate.heading')}</h4>
-  <p class="mb-3 text-muted leading-relaxed">{$t('settings.translate.description')}</p>
+</div>
+
+<SettingsSectionHeader title={$t('settings.translate.heading')} hint={$t('settings.translate.description')} />
+<div class="settings-fields">
 
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.translate.targetLang')}</span>
+    <span class="settings-field-label">{$t('settings.translate.targetLang')}</span>
     <input type="text" class={inputClasses} bind:value={$translateTargetLang$} spellcheck="false" />
   </label>
 
   <div class="mb-3 grid gap-3 sm:grid-cols-2">
     <label class="block">
-      <span class="text-xs text-muted">{$t('settings.translate.draftSource')}</span>
+      <span class="settings-field-label">{$t('settings.translate.draftSource')}</span>
       <select class={inputClasses} bind:value={$translateDraftSource$}>
         <option value="local">{$t('translate.source.local')}</option>
         <option value="cloud">{$t('translate.source.cloud')}</option>
       </select>
     </label>
     <label class="block">
-      <span class="text-xs text-muted">{$t('settings.translate.reviewSource')}</span>
+      <span class="settings-field-label">{$t('settings.translate.reviewSource')}</span>
       <select class={inputClasses} bind:value={$translateReviewSource$}>
         <option value="local">{$t('translate.source.local')}</option>
         <option value="cloud">{$t('translate.source.cloud')}</option>
@@ -257,7 +259,7 @@
 
   {#if models.length}
     <label class="mb-3 block">
-      <span class="text-xs text-muted">{$t('settings.translate.localModel')}</span>
+      <span class="settings-field-label">{$t('settings.translate.localModel')}</span>
       <select class={inputClasses} bind:value={$translateLocalModel$}>
         <option value="">{$t('settings.ai.autoLargest', { model: autoPick })}</option>
         {#each models as m (m.id)}
@@ -268,35 +270,36 @@
   {/if}
 
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.translate.chunkChars')}</span>
+    <span class="settings-field-label">{$t('settings.translate.chunkChars')}</span>
     <input type="number" class={inputClasses} min="4000" max="100000" step="1000" bind:value={$translateChunkChars$} />
   </label>
 
   <div class="mb-3 grid gap-3 sm:grid-cols-2">
     <label class="block">
-      <span class="text-xs text-muted">{$t('settings.translate.batchSegments')}</span>
+      <span class="settings-field-label">{$t('settings.translate.batchSegments')}</span>
       <input type="number" class={inputClasses} min="1" max="50" step="1" bind:value={$translateBatchSegments$} />
     </label>
     <label class="block">
-      <span class="text-xs text-muted">{$t('settings.translate.maxSourceChars')}</span>
+      <span class="settings-field-label">{$t('settings.translate.maxSourceChars')}</span>
       <input type="number" class={inputClasses} min="500" max="60000" step="500" bind:value={$translateMaxSourceChars$} />
     </label>
   </div>
 
-  <!-- ── Qwen-MT draft provider ────────────────────────────────────── -->
-  <h4 class="mb-1 mt-5 font-medium">{$t('settings.ai.qwenMtHeading')}</h4>
-  <p class="mb-3 text-muted leading-relaxed">{$t('settings.ai.qwenMtDescription')}</p>
+</div>
+
+<SettingsSectionHeader title={$t('settings.ai.qwenMtHeading')} hint={$t('settings.ai.qwenMtDescription')} />
+<div class="settings-fields">
 
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.ai.qwenMtBaseUrl')}</span>
+    <span class="settings-field-label">{$t('settings.ai.qwenMtBaseUrl')}</span>
     <input type="text" class={inputClasses} bind:value={$qwenMtBaseUrl$} spellcheck="false" placeholder="https://…/compatible-mode/v1" />
   </label>
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.ai.qwenMtApiKey')}</span>
+    <span class="settings-field-label">{$t('settings.ai.qwenMtApiKey')}</span>
     <input type="password" class={inputClasses} bind:value={$qwenMtApiKey$} spellcheck="false" autocomplete="off" />
   </label>
   <label class="mb-3 block">
-    <span class="text-xs text-muted">{$t('settings.ai.qwenMtModel')}</span>
+    <span class="settings-field-label">{$t('settings.ai.qwenMtModel')}</span>
     <input type="text" class={inputClasses} bind:value={$qwenMtModel$} spellcheck="false" />
   </label>
 </div>

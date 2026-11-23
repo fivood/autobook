@@ -321,7 +321,7 @@ export default {
   'dict.count': '{n} 件の辞書',
   'dict.pickFolderTooltip': '辞書フォルダを選択',
   'dict.emptyLine1': 'まだ辞書が読み込まれていません。',
-  'dict.emptyLine2': '上の📂でフォルダを選択。StarDict（.ifo + .idx + .dict[.dz]）と *.dict.json をサポート。',
+  'dict.emptyLine2': '上の「辞書フォルダを選択」ボタンでフォルダを選択。StarDict（.ifo + .idx + .dict[.dz]）と *.dict.json をサポート。',
   'dict.emptyLine3': 'ECDICT / CC-CEDICT / JMdict などの StarDict パッケージは kaifa.baidu / SourceForge / GitHub で入手できます。',
 
   'settings.tab.reader': '読書',
@@ -375,8 +375,6 @@ export default {
   'settings.section.miscReader': 'その他',
   'settings.section.miscReaderHint': '画面ロック無効、終了確認などの雑多な設定',
   // OCR section
-  'settings.section.ocr': 'OCR',
-  'settings.section.ocrHint': 'スキャン PDF と漫画翻訳それぞれの言語デフォルト。本ごとの設定が優先されます',
   'settings.ocr.pdfHeading': 'スキャン PDF',
   'settings.ocr.modelHeading': '認識モデル',
   'settings.ocr.modelDescription': 'スキャン PDF と漫画で同じ PaddleOCR モデルを使用します。選択したモデルは初回使用時にダウンロードされます。',
@@ -406,7 +404,6 @@ export default {
   'settings.ocr.correctHeading': 'OCR 補正',
   'settings.ocr.correctDescription': 'モデルで OCR 文字レイヤーの誤字と余分な空白を修正します。ページ画像は変わりません。',
   // AI & model endpoints
-  'settings.section.ai': 'AI とモデル',
   'models.heading': 'モデル管理',
   'models.description': '各機能が使うモデルの状態・ダウンロード進捗・保存場所・アンインストール。外部プロセス管理（Ollama / LaMa）はクリーンアップ手順を表示します。',
   'models.ready': '準備完了',
@@ -425,7 +422,6 @@ export default {
   'models.llmOllamaPurpose': '翻訳・OCR 補正・AI アシスタント用のローカル大規模言語モデル（外部プロセス）',
   'models.inpaintLama': 'LaMa（漫画インペイント）',
   'models.inpaintLamaPurpose': 'IOPaint sidecar、グラデーション・テクスチャの吹き出しと SFX の消去',
-  'settings.section.aiHint': 'ローカル／クラウドのエンドポイントと、機能ごとの割り当てを一箇所で',
   'settings.ai.localHeading': 'ローカルモデル',
   'settings.ai.localDescription': 'ローカルランタイム（Ollama など）を検出したときだけ機能が有効になります。導入やモデルのダウンロードを促すことはありません。',
   'settings.ai.localBaseUrl': 'ローカルエンドポイント',
@@ -940,7 +936,7 @@ export default {
   'dataPaths.migrateLeftovers': '本はすべて新しいフォルダへ移りましたが、旧フォルダの一部のファイルを削除できませんでした（他のプログラムが使用中の可能性があります）。後で手動で削除できます：{from}',
   'dataPaths.meta.idb': 'IndexedDB · {size} · {n} プロファイル',
   'dataPaths.meta.localStorage': 'localStorage · WebView ユーザーディレクトリ',
-  'dataPaths.clearConfirm': '⚠ すべてのローカルデータを削除します：\n\n• すべての書籍内容\n• すべてのハイライト ／ ノート ／ タグ ／ フォルダ\n• 読書統計 ／ 読書時間 ／ 読了記録\n• すべての UI 設定 ／ テーマ ／ 同期トークン ／ API キー\n\nこの操作は取り消せません。Documents/AutoBook に同期されたコピーは削除されませんが、IndexedDB のメインストアは完全に消去されます。続行しますか？',
+  'dataPaths.clearConfirm': 'すべてのローカルデータを削除します：\n\n• すべての書籍内容\n• すべてのハイライト ／ ノート ／ タグ ／ フォルダ\n• 読書統計 ／ 読書時間 ／ 読了記録\n• すべての UI 設定 ／ テーマ ／ 同期トークン ／ API キー\n\nこの操作は取り消せません。Documents/AutoBook に同期されたコピーは削除されませんが、IndexedDB のメインストアは完全に消去されます。続行しますか？',
   'dataPaths.clearConfirmAgain': 'もう一度確認：本当に削除しますか？',
 
   'sync.never': 'なし',
@@ -1099,7 +1095,7 @@ export default {
     'これらのファイルには件名情報がなく、既存のタグも揃っています。ローカルモデルを設定すると書名からタグを生成できます。',
   'stats.authors.header': '著者 · {range} · 全 {n} 名',
   'stats.authors.unknown': '著者不明',
-  'stats.authors.unknownWarn': '{n} 冊に著者情報がなく「著者不明」にまとめられています。1.23 以降にインポートした EPUB は OPF から著者を自動取得しますが、それ以前にインポートした本は自動補完されません。再インポートするか、手動入力ダイアログ（右上の \u270f\ufe0f）でメタデータを入力してください。',
+  'stats.authors.unknownWarn': '{n} 冊に著者情報がなく「著者不明」にまとめられています。1.23 以降にインポートした EPUB は OPF から著者を自動取得しますが、それ以前にインポートした本は自動補完されません。再インポートするか、右上の「読書記録を手動追加」ボタンからメタデータを入力してください。',
   'stats.authors.bookCount': '{n} 冊',
   'stats.authors.stats': '{books} · {chars} 字 · {days} 日',
   'stats.authors.completedTail': ' · 完了 {n}',

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SettingsSectionHeader from '$lib/components/settings/settings-section-header.svelte';
   import { onDestroy, onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import Fa from 'svelte-fa';
@@ -100,16 +101,15 @@
   }
 </script>
 
-<div class="space-y-3">
-  <h4 class="font-medium">{$t('models.heading')}</h4>
-  <p class="mb-2 text-sm text-muted">{$t('models.description')}</p>
+<SettingsSectionHeader title={$t('models.heading')} hint={$t('models.description')} />
+<div class="settings-fields space-y-3">
 
   {#each MODELS as model}
     {@const st = $statuses[model.id]}
     <div class="rounded border border-current/20 bg-current/5 p-3">
       <div class="flex items-center justify-between gap-2">
         <div class="min-w-0">
-          <div class="font-medium">{$t(model.nameKey)}</div>
+          <div class="font-semibold">{$t(model.nameKey)}</div>
           <div class="text-xs text-muted">{$t(model.purposeKey)}</div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
@@ -132,7 +132,7 @@
         </div>
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-        <span>📍 {model.location}</span>
+        <span>{model.location}</span>
         <span>{model.size}</span>
         {#if model.uninstall}
           <button

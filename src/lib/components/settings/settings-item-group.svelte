@@ -8,7 +8,7 @@
   export let applyHeaderClasses = true;
 </script>
 
-<section class="pb-8 md:pb-3">
+<section class="pb-3">
   <div class="flex">
     <h2 class="mb-2" class:text-body={applyHeaderClasses} class:font-semibold={applyHeaderClasses}>
       {#if tooltip}

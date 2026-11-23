@@ -205,6 +205,21 @@
 .settings-scope .text-sm {
   font-size: var(--fs-body);
 }
+/* A field's name above its control in the form-style tabs (OCR, AI). Same
+   size and weight as a SettingsItemGroup title, so those tabs and the
+   grid-style ones read as one system: the names used to be 13px muted, the
+   same treatment as the hints under them. */
+.settings-field-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+/* The fields under a section header in those tabs. Capped: a full-width
+   select ran ~1500px across for a value like 「简体中文」. */
+.settings-fields {
+  margin-top: 0.75rem;
+  max-width: 42rem;
+}
 /* Inputs inherit the scale instead of the root size. */
 .settings-scope .settings-input {
   font-size: inherit;

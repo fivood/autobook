@@ -750,7 +750,7 @@
           </div>
           {#if kokoroIsStalled}
             <div class="text-xs mt-1" style="color:var(--danger-color)">
-              ⚠ {$t('settings.tts.kokoro.stall', { seconds: kokoroStallSeconds })}
+              {$t('settings.tts.kokoro.stall', { seconds: kokoroStallSeconds })}
               <button class="settings-btn settings-btn-icon ml-2" on:click={kokoroRetryLoad}>{$t('common.retry')}</button>
             </div>
           {/if}

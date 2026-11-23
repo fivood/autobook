@@ -742,7 +742,7 @@
                       {:else}
                         <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{@html highlightHtml(h.text, matchTerms)}</p>
                         {#if h.memo}
-                          <p class="mt-2 whitespace-pre-wrap break-words rounded bg-current/5 px-2 py-1.5 text-sm italic text-muted">📝 {@html highlightHtml(h.memo, matchTerms)}</p>
+                          <p class="mt-2 whitespace-pre-wrap break-words rounded bg-current/5 px-2 py-1.5 text-sm italic text-muted">{@html highlightHtml(h.memo, matchTerms)}</p>
                         {/if}
                       {/if}
                       {#if h.tags && h.tags.length}

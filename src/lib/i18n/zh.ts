@@ -447,7 +447,7 @@ export default {
   'dict.count': '{n} 个词典',
   'dict.pickFolderTooltip': '选择词典文件夹',
   'dict.emptyLine1': '还没有载入词典。',
-  'dict.emptyLine2': '点上方📂选择一个文件夹。支持 StarDict（.ifo + .idx + .dict[.dz]）以及 *.dict.json。',
+  'dict.emptyLine2': '点上方的「选择词典文件夹」按钮选一个文件夹。支持 StarDict（.ifo + .idx + .dict[.dz]）以及 *.dict.json。',
   'dict.emptyLine3': '可在 kaifa.baidu / SourceForge / GitHub 上找到 ECDICT / CC-CEDICT / JMdict 等 StarDict 包。',
 
   // Settings tabs
@@ -505,8 +505,6 @@ export default {
   'settings.section.miscReaderHint': '屏幕常亮、关闭确认等杂项开关',
   // TTS section
   // OCR section
-  'settings.section.ocr': 'OCR',
-  'settings.section.ocrHint': '扫描版 PDF 与漫画翻译各自的语言默认值；书本级设置优先于这里的默认值',
   'settings.ocr.pdfHeading': '扫描版 PDF',
   'settings.ocr.modelHeading': '识别模型',
   'settings.ocr.modelDescription': '扫描 PDF 与漫画共用此 PaddleOCR 模型。切换档位后首次识别会下载对应模型。',
@@ -536,7 +534,6 @@ export default {
   'settings.ocr.correctHeading': 'OCR 纠错',
   'settings.ocr.correctDescription': '用模型修正 OCR 文字层的形近字与多余空格，页面图像不变。',
   // AI & model endpoints
-  'settings.section.ai': 'AI 与模型',
   'models.heading': '模型管理',
   'models.description': '各功能用到的模型：就绪状态、下载进度、存储位置与卸载。外部进程管理的（Ollama / LaMa）给出清理指引。',
   'models.ready': '已就绪',
@@ -555,7 +552,6 @@ export default {
   'models.llmOllamaPurpose': '翻译、OCR 纠错、AI 助手用的本地大模型（外部进程）',
   'models.inpaintLama': 'LaMa（漫画抹字）',
   'models.inpaintLamaPurpose': 'IOPaint sidecar，处理渐变/纹理气泡与 SFX 的抹字',
-  'settings.section.aiHint': '统一配置本地与云端模型端点，以及各功能分别用哪个',
   'settings.ai.localHeading': '本地模型',
   'settings.ai.localDescription': '检测到本地运行时（Ollama 等）就启用相关功能。AutoBook 不会催你安装或下载模型——没有就静默跳过。',
   'settings.ai.localBaseUrl': '本地端点地址',
@@ -977,7 +973,7 @@ export default {
   'dataPaths.migrateLeftovers': '书已经全部搬到新位置，但旧文件夹里有些文件删不掉（可能正被其他程序占用），可以稍后手动清理：{from}',
   'dataPaths.meta.idb': 'IndexedDB · {size} · {n} profile',
   'dataPaths.meta.localStorage': 'localStorage · WebView 用户目录',
-  'dataPaths.clearConfirm': '⚠ 即将清除全部本地数据：\n\n• 所有书籍内容\n• 所有高亮 / 笔记本 / 标签 / 文件夹\n• 阅读统计 / 阅读时长 / 完成记录\n• 所有 UI 设置 / 主题 / 同步 token / API key\n\n此操作不可恢复。Documents/AutoBook 文件夹里同步过的副本不会被删，但 IndexedDB 主存储会彻底清空。继续？',
+  'dataPaths.clearConfirm': '即将清除全部本地数据：\n\n• 所有书籍内容\n• 所有高亮 / 笔记本 / 标签 / 文件夹\n• 阅读统计 / 阅读时长 / 完成记录\n• 所有 UI 设置 / 主题 / 同步 token / API key\n\n此操作不可恢复。Documents/AutoBook 文件夹里同步过的副本不会被删，但 IndexedDB 主存储会彻底清空。继续？',
   'dataPaths.clearConfirmAgain': '再确认一次：真的要清空吗？',
 
   // Sync settings (Settings → Data → sync section)
@@ -1136,7 +1132,7 @@ export default {
     '这些书的文件元数据里没有主题词，已有标签也都齐了。配置本地模型后可以按书名生成标签。',
   'stats.authors.header': '作者 · {range} · 共 {n} 位',
   'stats.authors.unknown': '未知作者',
-  'stats.authors.unknownWarn': '有 {n} 本书没有作者信息，都归到「未知作者」。1.23 起导入的 EPUB 会自动读取 OPF 里的作者；更早导入的书不会自动补上——重新导入一次，或打开手动录入 dialog（右上 ✏️）填写该书的元数据。',
+  'stats.authors.unknownWarn': '有 {n} 本书没有作者信息，都归到「未知作者」。1.23 起导入的 EPUB 会自动读取 OPF 里的作者；更早导入的书不会自动补上——重新导入一次，或点右上的「手动添加阅读记录」按钮，在弹出的对话框里填写该书的元数据。',
   'stats.authors.bookCount': '{n} 本书',
   'stats.authors.stats': '{books} · {chars} 字 · {days} 天',
   'stats.authors.completedTail': ' · 完成 {n}',

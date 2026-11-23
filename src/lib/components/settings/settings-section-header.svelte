@@ -18,12 +18,12 @@
   .section-header {
     /* Lands below the fixed page header when scrolled to by #id. */
     scroll-margin-top: 4.5rem;
-    margin: 1.75rem 0 0.5rem;
+    margin: 1rem 0 0.25rem;
     padding-top: 1.25rem;
     border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);
   }
   .section-header:first-child {
-    margin-top: 0.25rem;
+    margin-top: 0;
     padding-top: 0;
     border-top: none;
   }
@@ -36,6 +36,6 @@
   p {
     font-size: var(--fs-secondary);
     color: var(--muted-text);
-    margin: 0.35rem 0 0;
+    margin: 0.25rem 0 0;
   }
 </style>

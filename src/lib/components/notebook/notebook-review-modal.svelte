@@ -66,7 +66,7 @@
         {:else}
           <p class="whitespace-pre-wrap break-words text-base leading-relaxed">{current.text}</p>
           {#if current.memo}
-            <p class="mt-3 whitespace-pre-wrap break-words rounded bg-current/5 px-3 py-2 text-sm italic opacity-80">📝 {current.memo}</p>
+            <p class="mt-3 whitespace-pre-wrap break-words rounded bg-current/5 px-3 py-2 text-sm italic opacity-80">{current.memo}</p>
           {/if}
         {/if}
         {#if current.tags && current.tags.length}
