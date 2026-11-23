@@ -580,13 +580,60 @@ a:visited {
   color: var(--link-color, #2b5a69);
 }
 
-input[type='range'] {
-  // Recolor the native track/thumb to the current theme's accent (falls back
-  // to the sage-green palette when a theme doesn't set --accent-color).
+// Native controls take the theme's accent (+layout sets --accent-color per
+// theme) instead of the browser's default blue.
+input[type='range'],
+progress {
   accent-color: var(--accent-color, #5f7e7b);
 }
 
 @layer base {
+  /* @tailwindcss/forms repaints checkboxes and radios itself, in its blue
+     (#2563eb), with a white SVG tick. Give them back to the native control,
+     tinted with the theme's accent: the browser then picks a tick that
+     contrasts with it, which a white tick on a light accent (the dark themes')
+     would not. Same specificity as the plugin's own rules, later in the
+     cascade. */
+  [type='checkbox'],
+  [type='radio'],
+  [type='checkbox']:checked,
+  [type='radio']:checked,
+  [type='checkbox']:checked:hover,
+  [type='checkbox']:checked:focus,
+  [type='radio']:checked:hover,
+  [type='radio']:checked:focus,
+  [type='checkbox']:indeterminate {
+    appearance: auto;
+    accent-color: var(--accent-color, #5f7e7b);
+    background: none;
+    border: 0;
+  }
+  [type='checkbox']:focus,
+  [type='radio']:focus {
+    --tw-ring-color: color-mix(in srgb, var(--accent-color, #5f7e7b) 55%, transparent);
+    --tw-ring-offset-color: var(--background-color);
+  }
+  /* And every text field's focus ring / border, also the plugin's blue. Same
+     treatment the settings inputs and library search already use. */
+  [type='text']:focus,
+  input:where(:not([type])):focus,
+  [type='email']:focus,
+  [type='url']:focus,
+  [type='password']:focus,
+  [type='number']:focus,
+  [type='date']:focus,
+  [type='datetime-local']:focus,
+  [type='month']:focus,
+  [type='search']:focus,
+  [type='tel']:focus,
+  [type='time']:focus,
+  [type='week']:focus,
+  [multiple]:focus,
+  textarea:focus,
+  select:focus {
+    --tw-ring-color: color-mix(in srgb, currentColor 40%, transparent);
+    border-color: color-mix(in srgb, currentColor 55%, transparent);
+  }
   body {
     color: var(--font-color);
     background-color: var(--background-color);

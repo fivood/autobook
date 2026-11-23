@@ -92,6 +92,10 @@
     setVar('--menu-danger', towardContrast('#d95555', menu));
     const selected = theme.buttonSelectedColor || '#2b5a69';
     setVar('--button-selected-text', readableOn(selected, [theme.menuFontColor || '#f0efe6', '#ffffff', '#111111']));
+    // The accent behind checkboxes, sliders, progress bars and the statistics
+    // charts. No theme declares one, so it was app.scss's sage green on every
+    // theme; the selected-toggle colour is the theme's own "this is on".
+    setVar('--accent-color', selected);
     // Highlight slot treatment. Every decision lives in `highlightSlotStyles`
     // (pure, tested); this only mirrors the result onto :root for app.scss.
     // The light/dark split reuses the same luminance test the format colours

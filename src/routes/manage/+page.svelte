@@ -1830,7 +1830,8 @@
 
   {#if isDragOver}
     <div
-      class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-blue-500/10 border-4 border-dashed border-blue-400 rounded-lg"
+      class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center border-4 border-dashed rounded-lg"
+      style="border-color: var(--accent-color); background: color-mix(in srgb, var(--accent-color) 10%, transparent);"
     >
       <div class="text-xl font-semibold opacity-80">{$t('manager.dropToImport')}</div>
     </div>
